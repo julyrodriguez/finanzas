@@ -773,60 +773,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
               </div>
 
               {/* Mobile / Tablet Cards View */}
-              <div className="lg:hidden divide-y divide-white/10">
+              <div className="lg:hidden space-y-4">
                 {visibleOrdenes.map((orden) => {
                   const isPendingSend = orden.liberada && !orden.mandada;
                   const cardClass = isPendingSend
-                    ? "p-4 space-y-3 bg-red-500/5 border-l-2 border-l-red-500 transition-all duration-200"
-                    : "p-4 space-y-3 transition-all duration-200";
+                    ? "p-4 space-y-3 bg-red-500/5 border-l-4 border-l-red-500 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md"
+                    : "p-4 space-y-3 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
                   return (
                     <div key={orden.id} className={cardClass}>
-                      <div className="flex items-center justify-between">
-                        {/* Tildes */}
+                      {/* Top Row: Empresa, OC number and Actions (Copiar/Editar) */}
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleToggleLiberada(orden)}
-                            className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
-                              orden.liberada
-                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                : "bg-white/5 text-gray-500 border-white/10"
-                            }`}
-                          >
-                            <Check className="w-3 h-3" />
-                            Liberada
-                          </button>
-
-                          <button
-                            onClick={() => handleToggleMandada(orden)}
-                            className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 transition-all ${
-                              orden.mandada
-                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
-                                : isPendingSend
-                                  ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
-                                  : "bg-white/5 text-gray-500 border-white/10"
-                            }`}
-                          >
-                            <Send className="w-3 h-3" />
-                            Mandada
-                          </button>
-
-                          {/* Tilde Entregada (Visible en filtro de Todas, Liberadas o Entregadas) */}
-                          {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
-                            <button
-                              onClick={() => handleToggleEntregada(orden)}
-                              className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 transition-all ${
-                                orden.entregada
-                                  ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
-                                  : "bg-white/5 text-gray-500 border-white/10"
-                              }`}
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Entregada
-                            </button>
-                          )}
-
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                               orden.empresa === "Hoyts"
                                 ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
                                 : "bg-teal-500/15 text-teal-300 border-teal-500/30"
@@ -834,69 +793,120 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                           >
                             {orden.empresa}
                           </span>
+                          <span className="font-mono text-emerald-400 font-bold text-xs">
+                            #{orden.numOC}
+                          </span>
                         </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleCopy(orden)}
-                          className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copiar</span>
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditModal(orden)}
-                          className="px-2 py-1 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-xs font-medium flex items-center gap-1"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Editar</span>
-                        </button>
+                        {/* Actions (Copiar & Editar) */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleCopy(orden)}
+                            className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                            title="Copiar resumen"
+                          >
+                            <Copy className="w-3 h-3" />
+                            <span>Copiar</span>
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(orden)}
+                            className="px-2 py-1 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Edit3 className="w-3 h-3 text-emerald-400" />
+                            <span>Editar</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-mono text-emerald-400 font-bold text-sm">
-                          OC: {orden.numOC}
-                        </span>
-                        <span className="text-gray-400 text-[11px] flex items-center gap-1">
+                      {/* Middle Details (Proveedor, Monto, Forma Pago) */}
+                      <div className="space-y-1.5 pt-1">
+                        <p className="text-xs font-semibold text-white truncate">
+                          <span className="text-gray-400 font-normal">Proveedor: </span>
+                          {orden.razonSocial}
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
+                          <div>
+                            <span className="text-gray-400 block text-[10px]">Monto</span>
+                            <span className="font-bold text-emerald-300 text-xs">
+                              {typeof orden.monto === "number"
+                                ? `$ ${orden.monto.toLocaleString("es-AR")}`
+                                : orden.monto}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block text-[10px]">Forma de Pago</span>
+                            <span className="text-gray-200 font-medium">{orden.formaPago || "30DFF"}</span>
+                          </div>
+                        </div>
+
+                        {orden.motivo && (
+                          <div className="pt-1 text-[11px] text-gray-400 truncate">
+                            <span className="text-gray-500">Detalle: </span>
+                            {orden.motivo}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-gray-500 flex items-center gap-1 pt-1">
                           <UserIcon className="w-3 h-3 text-emerald-400" />
-                          {orden.creadoPor || "Usuario"}
-                        </span>
+                          <span>Creado por: {orden.creadoPor || "Usuario"}</span>
+                        </div>
                       </div>
-                      <p className="text-sm font-semibold text-white">
-                        Proveedor: {orden.razonSocial}
-                      </p>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/5">
-                      <div>
-                        <span className="text-gray-400 text-[11px] block">Monto</span>
-                        <span className="font-semibold text-emerald-300">
-                          {typeof orden.monto === "number"
-                            ? `$ ${orden.monto.toLocaleString("es-AR")}`
-                            : orden.monto}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 text-[11px] block">Forma de Pago</span>
-                        <span className="text-gray-200 font-medium">{orden.formaPago || "30DFF"}</span>
-                      </div>
-                    </div>
+                      {/* Bottom Row: Status Checkboxes & Notes Button */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
+                        {/* Status Checkbox Toggles */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleToggleLiberada(orden)}
+                            className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
+                              orden.liberada
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                : "bg-white/5 text-gray-500 border-white/10"
+                            }`}
+                          >
+                            <Check className="w-2.5 h-2.5" />
+                            <span>Lib</span>
+                          </button>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs">
-                      <span className="text-gray-400 text-[11px] truncate max-w-[200px]">
-                        {orden.motivo}
-                      </span>
-                      <button
-                        onClick={() => setActiveNotesOrden(orden)}
-                        className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-amber-300 text-[10px] font-semibold flex items-center gap-1"
-                      >
-                        <MessageSquare className="w-3 h-3" />
-                        <span>Notas ({orden.notas?.length || 0})</span>
-                      </button>
+                          <button
+                            onClick={() => handleToggleMandada(orden)}
+                            className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
+                              orden.mandada
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                                : isPendingSend
+                                  ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
+                                  : "bg-white/5 text-gray-500 border-white/10"
+                            }`}
+                          >
+                            <Send className="w-2.5 h-2.5" />
+                            <span>Mand</span>
+                          </button>
+
+                          {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
+                            <button
+                              onClick={() => handleToggleEntregada(orden)}
+                              className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
+                                orden.entregada
+                                  ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
+                                  : "bg-white/5 text-gray-500 border-white/10"
+                              }`}
+                            >
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              <span>Entreg</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Internal Notes Button */}
+                        <button
+                          onClick={() => setActiveNotesOrden(orden)}
+                          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <MessageSquare className="w-3 h-3 text-emerald-400" />
+                          <span>Notas ({orden.notas?.length || 0})</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
                   );
                 })}
               </div>
