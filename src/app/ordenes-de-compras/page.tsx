@@ -10,8 +10,6 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  query, 
-  orderBy, 
   serverTimestamp 
 } from "firebase/firestore";
 import { 
@@ -78,14 +76,35 @@ export default function OrdenesDeComprasPage() {
     }
 
     try {
-      const q = query(collection(db, "ordenes_compra"), orderBy("createdAt", "desc"));
+      // Direct collection query without orderBy to ensure older docs without createdAt field are also fetched
+      const colRef = collection(db, "ordenes_compra");
       const unsubscribe = onSnapshot(
-        q,
+        colRef,
         (snapshot) => {
-          const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => ({
-            id: docSnap.id,
-            ...(docSnap.data() as Omit<OrdenCompra, "id">),
-          }));
+          const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              empresa: data.empresa || "Hoyts",
+              numSolicitud: data.numSolicitud || "",
+              numOC: data.numOC || "",
+              razonSocial: data.razonSocial || "",
+              monto: data.monto ?? "",
+              motivo: data.motivo || "",
+              formaPago: data.formaPago || "Transferencia",
+              liberada: Boolean(data.liberada),
+              mandada: Boolean(data.mandada),
+              createdAt: data.createdAt || null,
+            };
+          });
+
+          // Sort manually on client to handle missing createdAt fields cleanly
+          docs.sort((a, b) => {
+            const timeA = a.createdAt?.seconds || 0;
+            const timeB = b.createdAt?.seconds || 0;
+            return timeB - timeA;
+          });
+
           setOrdenes(docs);
           setLoading(false);
         },
