@@ -16,7 +16,8 @@ import {
   X,
   LogOut,
   User as UserIcon,
-  Loader2
+  Loader2,
+  ChevronRight
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -27,6 +28,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -95,6 +97,8 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
     );
   }
 
+  const isExpanded = sidebarOpen || isHovered;
+
   return (
     <div className="flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
       {/* Mobile Backdrop Overlay */}
@@ -105,26 +109,35 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
         />
       )}
 
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation (Hover to expand, Auto-collapse when mouse leaves) */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-72 bg-[#0d131f] border-r border-white/10 flex flex-col justify-between transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          setSidebarOpen(false);
+        }}
+        className={`fixed lg:static inset-y-0 left-0 z-50 bg-[#0d131f] border-r border-white/10 flex flex-col justify-between transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-hidden ${
+          sidebarOpen
+            ? "translate-x-0 w-72"
+            : "-translate-x-full lg:translate-x-0"
+        } ${
+          isHovered ? "lg:w-72" : "lg:w-20"
         }`}
       >
         {/* Top Header / Branding */}
-        <div className="p-5 sm:p-6">
+        <div className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex-shrink-0">
                 <div className="h-full w-full bg-[#0d131f] rounded-[10px] flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-emerald-400" />
                 </div>
               </div>
-              <div>
-                <h1 className="font-bold text-lg text-white tracking-tight">
+              <div className={`transition-opacity duration-200 min-w-0 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
+                <h1 className="font-bold text-lg text-white tracking-tight truncate">
                   Finanzas
                 </h1>
-                <p className="text-xs text-gray-400">Gestión Corporativa</p>
+                <p className="text-xs text-gray-400 truncate">Gestión Corporativa</p>
               </div>
             </div>
 
@@ -139,13 +152,13 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
           </div>
 
           {/* Section Title */}
-          <div className="px-3 mb-2 flex items-center justify-between text-xs font-semibold text-gray-400 tracking-wider uppercase">
+          <div className={`px-2 mb-2 flex items-center justify-between text-xs font-semibold text-gray-400 tracking-wider uppercase transition-opacity duration-200 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
             <span>Navegación</span>
             <Sparkles className="w-3.5 h-3.5 text-amber-400/80" />
           </div>
 
           {/* Navigation Items */}
-          <nav className="space-y-1.5">
+          <nav className="space-y-2">
             {menuItems.map((item) => {
               const active = isActive(item.href, item.exact);
               const Icon = item.icon;
@@ -153,29 +166,31 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`group relative flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    setIsHovered(false);
+                  }}
+                  className={`group relative flex items-center px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                     active
                       ? "bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 text-emerald-300 border border-emerald-500/30 shadow-sm"
                       : "text-gray-400 hover:text-gray-100 hover:bg-white/5 border border-transparent"
                   }`}
+                  title={!isExpanded ? item.name : undefined}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
-                        active
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-[#0d131f] text-gray-400 group-hover:text-white group-hover:bg-white/10"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <span className="truncate">{item.name}</span>
+                  <div
+                    className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                      active
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-[#0d131f] text-gray-400 group-hover:text-white group-hover:bg-white/10"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className={`ml-3 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-200 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
+                    <span className="truncate">{item.name}</span>
                     <span
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ${
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
                         active
                           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                           : "bg-amber-500/10 text-amber-300 border-amber-500/20"
@@ -194,7 +209,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
         {/* Footer Info & Profile */}
         <div className="p-4 border-t border-white/10 space-y-4">
           {/* Status Box */}
-          <div className="p-3.5 rounded-xl glass-card border border-white/5 space-y-2">
+          <div className={`p-3.5 rounded-xl glass-card border border-white/5 space-y-2 transition-opacity duration-200 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-400 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -219,7 +234,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
                 {getCleanUsername()[0]?.toUpperCase() || "U"}
               </div>
-              <div className="min-w-0">
+              <div className={`min-w-0 transition-opacity duration-200 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
                 <p className="text-xs font-semibold text-gray-200 truncate">
                   {getCleanUsername()}
                 </p>
@@ -232,7 +247,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
             <button
               onClick={handleLogout}
               title="Cerrar Sesión"
-              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
+              className={`p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors ${isExpanded ? "" : "lg:hidden"}`}
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -245,11 +260,12 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
         {/* Sticky Header with Mobile Hamburger Menu */}
         <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Hamburger Button for Mobile */}
+            {/* Hamburger Button for Mobile and Desktop Toggle */}
             <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0"
               aria-label="Abrir menú"
+              title="Abrir menú lateral"
             >
               <Menu className="w-5 h-5" />
             </button>
