@@ -56,28 +56,28 @@
 }
 
 /* ==========================================
-   PINK THEME (MODO ROSA)
+   PINK THEME (MODO ROSA OSCURO / WINE-PLUM)
    ========================================== */
 
 /* Page Background & Base Color override */
 .pink-theme {
-  background-color: #fff0f3 !important;
-  color: #334155 !important;
-  background-image: radial-gradient(at 0% 0%, hsla(343, 100%, 98%, 1) 0px, transparent 50%),
-                    radial-gradient(at 50% 0%, hsla(340, 100%, 97%, 1) 0px, transparent 50%),
-                    radial-gradient(at 100% 0%, hsla(335, 100%, 96%, 1) 0px, transparent 50%) !important;
+  background-color: #1a0510 !important;
+  color: #f3f4f6 !important;
+  background-image: radial-gradient(at 0% 0%, hsla(335, 80%, 15%, 1) 0px, transparent 50%),
+                    radial-gradient(at 50% 0%, hsla(340, 75%, 10%, 1) 0px, transparent 50%),
+                    radial-gradient(at 100% 0%, hsla(330, 80%, 12%, 1) 0px, transparent 50%) !important;
 }
 
 /* Sidebar & Header overrides */
 .pink-theme aside {
-  background-color: #ffe4e6 !important; /* rose-100 */
-  border-color: rgba(244, 63, 94, 0.15) !important;
-  box-shadow: 10px 0 30px -15px rgba(244, 63, 94, 0.1) !important;
+  background-color: #12020a !important; /* deep black-wine */
+  border-color: rgba(236, 72, 153, 0.15) !important;
+  box-shadow: 10px 0 30px -15px rgba(236, 72, 153, 0.15) !important;
 }
 
 .pink-theme header {
-  background-color: rgba(255, 240, 243, 0.8) !important;
-  border-color: rgba(244, 63, 94, 0.15) !important;
+  background-color: rgba(26, 5, 16, 0.85) !important;
+  border-color: rgba(236, 72, 153, 0.15) !important;
   backdrop-filter: blur(12px) !important;
 }
 
@@ -88,101 +88,101 @@
 .pink-theme h4,
 .pink-theme th,
 .pink-theme .text-white {
-  color: #9f1239 !important; /* rose-800 */
+  color: #fbcfe8 !important; /* rose-200 */
 }
 
 .pink-theme .text-gray-100 {
-  color: #1e293b !important; /* slate-800 */
+  color: #f3f4f6 !important;
 }
 
 .pink-theme .text-gray-200,
 .pink-theme .text-gray-300,
 .pink-theme .text-gray-400 {
-  color: #475569 !important; /* slate-600 */
+  color: #fda4af !important; /* rose-300 */
 }
 
 /* Glass cards override */
 .pink-theme .glass-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%) !important;
-  border-color: rgba(244, 63, 94, 0.15) !important;
-  box-shadow: 0 10px 30px -5px rgba(244, 63, 94, 0.08) !important;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.05) 0%, rgba(236, 72, 153, 0.02) 100%) !important;
+  border-color: rgba(236, 72, 153, 0.2) !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* Override inputs and selects */
 .pink-theme input,
 .pink-theme select,
 .pink-theme textarea {
-  background-color: #ffffff !important;
-  border-color: rgba(244, 63, 94, 0.25) !important;
-  color: #1e293b !important;
+  background-color: rgba(26, 5, 16, 0.6) !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
+  color: #f3f4f6 !important;
 }
 
 .pink-theme input:focus,
 .pink-theme select:focus,
 .pink-theme textarea:focus {
   border-color: #ec4899 !important; /* pink-500 */
-  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.15) !important;
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2) !important;
 }
 
 .pink-theme input::placeholder,
 .pink-theme textarea::placeholder {
-  color: #94a3b8 !important;
+  color: rgba(244, 63, 94, 0.4) !important;
 }
 
 /* Active links in sidebar */
 .pink-theme aside a[class*="from-emerald-500"] {
-  background: linear-gradient(to right, rgba(244, 63, 94, 0.15), rgba(244, 63, 94, 0.05)) !important;
-  border-color: rgba(244, 63, 94, 0.3) !important;
-  color: #db2777 !important; /* pink-600 */
+  background: linear-gradient(to right, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.05)) !important;
+  border-color: rgba(236, 72, 153, 0.4) !important;
+  color: #f472b6 !important; /* pink-400 */
 }
 
 /* Sidebar navigation icons colors */
 .pink-theme aside nav a svg {
-  color: #db2777 !important;
+  color: #f472b6 !important;
 }
 
 .pink-theme aside nav a:hover svg {
-  color: #ec4899 !important;
+  color: #fbcfe8 !important;
 }
 
 .pink-theme aside nav a[class*="from-emerald-500"] svg {
-  color: #db2777 !important;
+  color: #f472b6 !important;
 }
 
 .pink-theme aside a div[class*="bg-emerald-500/20"] {
-  background-color: rgba(244, 63, 94, 0.2) !important;
-  color: #db2777 !important;
+  background-color: rgba(236, 72, 153, 0.25) !important;
+  color: #f472b6 !important;
 }
 
 .pink-theme aside a div[class*="text-emerald-400"] {
-  color: #db2777 !important;
+  color: #f472b6 !important;
 }
 
 .pink-theme aside a div[class*="text-gray-400"]:hover,
 .pink-theme aside a:hover {
-  background-color: rgba(244, 63, 94, 0.08) !important;
-  color: #db2777 !important;
+  background-color: rgba(236, 72, 153, 0.1) !important;
+  color: #fbcfe8 !important;
 }
 
 .pink-theme aside a span[class*="bg-emerald-500/20"] {
-  background-color: rgba(244, 63, 94, 0.15) !important;
-  color: #db2777 !important;
-  border-color: rgba(244, 63, 94, 0.2) !important;
+  background-color: rgba(236, 72, 153, 0.2) !important;
+  color: #f472b6 !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
 }
 
 /* Table header and row coloring */
 .pink-theme th {
-  background-color: #ffe4e6 !important;
-  color: #9f1239 !important;
-  border-bottom: 2px solid rgba(244, 63, 94, 0.15) !important;
+  background-color: #270617 !important;
+  color: #fbcfe8 !important;
+  border-bottom: 2px solid rgba(236, 72, 153, 0.3) !important;
 }
 
 .pink-theme tr {
-  border-color: rgba(244, 63, 94, 0.1) !important;
+  border-color: rgba(236, 72, 153, 0.15) !important;
 }
 
 .pink-theme tr:hover {
-  background-color: rgba(244, 63, 94, 0.03) !important;
+  background-color: rgba(236, 72, 153, 0.04) !important;
 }
 
 /* Buttons primary (Nueva Orden, Entrar, etc.) */
@@ -190,7 +190,7 @@
 .pink-theme button[class*="bg-gradient-to-r"] {
   background: linear-gradient(to right, #ec4899, #f43f5e) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 15px -3px rgba(236, 72, 153, 0.3) !important;
+  box-shadow: 0 4px 15px -3px rgba(236, 72, 153, 0.4) !important;
 }
 
 .pink-theme button[class*="from-emerald-500"]:hover,
@@ -205,8 +205,8 @@
 }
 
 .pink-theme .bg-white\/5 {
-  background-color: rgba(244, 63, 94, 0.04) !important;
-  border-color: rgba(244, 63, 94, 0.15) !important;
+  background-color: rgba(236, 72, 153, 0.06) !important;
+  border-color: rgba(236, 72, 153, 0.2) !important;
 }
 
 /* Ambient glow blobs removal or adjustments */
@@ -214,70 +214,60 @@
 .pink-theme div[class*="bg-teal-500/15"],
 .pink-theme div[class*="bg-emerald-500/10"],
 .pink-theme div[class*="bg-teal-500/10"] {
-  background-color: rgba(244, 63, 94, 0.08) !important;
+  background-color: rgba(236, 72, 153, 0.12) !important;
 }
 
 /* Scrollbar overrides */
 .pink-theme ::-webkit-scrollbar-track {
-  background: rgba(244, 63, 94, 0.05);
+  background: rgba(236, 72, 153, 0.05);
 }
 
 .pink-theme ::-webkit-scrollbar-thumb {
-  background: rgba(244, 63, 94, 0.2);
+  background: rgba(236, 72, 153, 0.25);
 }
 
 .pink-theme ::-webkit-scrollbar-thumb:hover {
-  background: rgba(244, 63, 94, 0.35);
+  background: rgba(236, 72, 153, 0.4);
 }
 
 /* Modal and dialogs */
 .pink-theme div[class*="bg-black/70"] {
-  background-color: rgba(76, 29, 47, 0.3) !important;
+  background-color: rgba(26, 5, 16, 0.8) !important;
 }
 
 .pink-theme .glass-card button[class*="bg-red-500/10"] {
-  background-color: #ffe4e6 !important;
-  color: #e11d48 !important;
-  border-color: rgba(225, 29, 72, 0.2) !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
 }
 
 .pink-theme .glass-card button[class*="bg-red-500/10"]:hover {
-  background-color: #fecdd3 !important;
-}
-
-/* Emerald text color contrast overrides */
-.pink-theme .text-emerald-400,
-.pink-theme .text-emerald-300,
-.pink-theme .text-emerald-500,
-.pink-theme font-bold[class*="text-emerald-400"],
-.pink-theme span[class*="text-emerald-400"],
-.pink-theme span[class*="text-emerald-300"] {
-  color: #047857 !important; /* dark green */
+  background-color: rgba(239, 68, 68, 0.25) !important;
 }
 
 /* Custom indicator states: */
 .pink-theme span[class*="bg-emerald-500/15"] {
-  background-color: rgba(4, 120, 87, 0.1) !important;
-  color: #047857 !important;
-  border-color: rgba(4, 120, 87, 0.25) !important;
+  background-color: rgba(236, 72, 153, 0.2) !important;
+  color: #f472b6 !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
 }
 
 .pink-theme span[class*="bg-teal-500/15"] {
-  background-color: rgba(20, 184, 166, 0.1) !important;
-  color: #0f766e !important;
-  border-color: rgba(20, 184, 166, 0.2) !important;
+  background-color: rgba(20, 184, 166, 0.15) !important;
+  color: #2dd4bf !important;
+  border-color: rgba(20, 184, 166, 0.3) !important;
 }
 
 .pink-theme button[class*="bg-emerald-500/20"] {
-  background-color: rgba(4, 120, 87, 0.1) !important;
-  color: #047857 !important;
-  border-color: rgba(4, 120, 87, 0.25) !important;
+  background-color: rgba(236, 72, 153, 0.25) !important;
+  color: #f472b6 !important;
+  border-color: rgba(236, 72, 153, 0.4) !important;
 }
 
 /* Pending sends (red highlights) - keep high contrast */
 .pink-theme tr[class*="bg-red-500/5"] {
-  background-color: rgba(239, 68, 68, 0.08) !important;
-  border-left: 3px solid #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-left: 3px solid #f87171 !important;
 }
 
 /* User profile initials box */
@@ -287,39 +277,62 @@
 
 /* Hoyts & CMK label and Selected States overrides in Pink theme */
 .pink-theme span[class*="bg-purple-500/15"] {
-  background-color: rgba(107, 33, 168, 0.1) !important;
-  color: #6b21a8 !important; /* dark purple */
-  border-color: rgba(107, 33, 168, 0.25) !important;
+  background-color: rgba(216, 180, 254, 0.15) !important;
+  color: #c084fc !important; /* light purple */
+  border-color: rgba(216, 180, 254, 0.3) !important;
 }
 
 .pink-theme span[class*="bg-teal-500/15"],
 .pink-theme span[class*="text-teal-300"] {
-  background-color: rgba(15, 118, 110, 0.1) !important;
-  color: #0f766e !important; /* dark teal */
-  border-color: rgba(15, 118, 110, 0.25) !important;
+  background-color: rgba(45, 212, 191, 0.15) !important;
+  color: #2dd4bf !important; /* light teal */
+  border-color: rgba(45, 212, 191, 0.3) !important;
 }
 
 /* Modal Form Empresa Selected/Unselected overrides */
 .pink-theme form button[class*="border-white/10"] {
-  background-color: #f1f5f9 !important; /* slate-100 */
-  color: #64748b !important; /* slate-500 */
-  border-color: #e2e8f0 !important; /* slate-200 */
+  background-color: rgba(236, 72, 153, 0.05) !important;
+  color: #fda4af !important;
+  border-color: rgba(236, 72, 153, 0.2) !important;
 }
 
 .pink-theme form button[class*="border-white/10"]:hover {
-  background-color: #e2e8f0 !important; /* slate-200 */
+  background-color: rgba(236, 72, 153, 0.1) !important;
 }
 
 .pink-theme form button[class*="bg-purple-500/20"] {
-  background-color: #6b21a8 !important; /* dark purple-800 */
+  background-color: #7c3aed !important;
   color: #ffffff !important;
-  border-color: #6b21a8 !important;
-  box-shadow: 0 4px 12px rgba(107, 33, 168, 0.2) !important;
+  border-color: #7c3aed !important;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3) !important;
 }
 
 .pink-theme form button[class*="bg-teal-500/20"] {
-  background-color: #0f766e !important; /* dark teal-800 */
+  background-color: #0d9488 !important;
   color: #ffffff !important;
-  border-color: #0f766e !important;
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2) !important;
+  border-color: #0d9488 !important;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
+}
+
+/* Emerald text color contrast overrides in dark background */
+.pink-theme .text-emerald-400,
+.pink-theme .text-emerald-300,
+.pink-theme .text-emerald-500,
+.pink-theme font-bold[class*="text-emerald-400"],
+.pink-theme span[class*="text-emerald-400"],
+.pink-theme span[class*="text-emerald-300"] {
+  color: #34d399 !important; /* restore beautiful bright green for dark bg readability */
+}
+
+.pink-theme span[class*="bg-emerald-500/10"],
+.pink-theme span[class*="bg-emerald-500/15"] {
+  background-color: rgba(52, 211, 153, 0.15) !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+  color: #34d399 !important;
+}
+
+.pink-theme button[class*="bg-emerald-500/20"] {
+  background-color: rgba(52, 211, 153, 0.15) !important;
+  color: #34d399 !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
 }
