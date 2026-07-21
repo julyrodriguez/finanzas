@@ -9,16 +9,18 @@ import {
   Lock, 
   ArrowRight, 
   AlertCircle, 
-  Loader2
+  Loader2,
+  UserPlus
 } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { loginWithEmail } = useAuth();
+  const { loginWithEmail, registerWithEmail } = useAuth();
   const router = useRouter();
 
   // Helper function to build email transparently
@@ -36,18 +38,26 @@ export default function LoginPage() {
     const fullEmail = formatEmail(username);
 
     try {
-      await loginWithEmail(fullEmail, password);
+      if (isRegister) {
+        await registerWithEmail(fullEmail, password);
+      } else {
+        await loginWithEmail(fullEmail, password);
+      }
       router.push("/");
     } catch (err: any) {
       console.error(err);
-      if (
+      if (err.code === "auth/email-already-in-use") {
+        setError("El usuario ya existe en el sistema.");
+      } else if (err.code === "auth/weak-password") {
+        setError("La contraseña debe tener al menos 6 caracteres.");
+      } else if (
         err.code === "auth/invalid-credential" || 
         err.code === "auth/user-not-found" || 
         err.code === "auth/wrong-password"
       ) {
         setError("Usuario o contraseña incorrectos.");
       } else {
-        setError("Error de autenticación. Inténtalo de nuevo.");
+        setError("Error al procesar la solicitud. Inténtalo de nuevo.");
       }
     } finally {
       setLoading(false);
@@ -81,9 +91,37 @@ export default function LoginPage() {
 
         {/* Card Form */}
         <div className="glass-card border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl backdrop-blur-xl">
-          <h2 className="text-lg font-bold text-white text-center mb-6">
-            Iniciar Sesión
-          </h2>
+          {/* Form Tabs */}
+          <div className="flex border-b border-white/10 mb-6">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(false);
+                setError(null);
+              }}
+              className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition-all ${
+                !isRegister
+                  ? "border-emerald-500 text-white"
+                  : "border-transparent text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              Iniciar Sesión
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(true);
+                setError(null);
+              }}
+              className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition-all ${
+                isRegister
+                  ? "border-emerald-500 text-white"
+                  : "border-transparent text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              Registrarse
+            </button>
+          </div>
 
           {/* Error Alert */}
           {error && (
@@ -137,6 +175,11 @@ export default function LoginPage() {
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isRegister ? (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Crear Cuenta y Entrar</span>
+                </>
               ) : (
                 <>
                   <span>Entrar a la Plataforma</span>
@@ -145,6 +188,22 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Toggle Link below */}
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setError(null);
+              }}
+              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+            >
+              {isRegister
+                ? "¿Ya tienes una cuenta? Inicia sesión"
+                : "¿No tienes una cuenta? Regístrate aquí"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

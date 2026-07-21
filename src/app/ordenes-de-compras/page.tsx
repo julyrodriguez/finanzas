@@ -352,7 +352,7 @@ export default function OrdenesDeComprasPage() {
       : orden.monto;
 
     const notasPart = orden.notas && orden.notas.length > 0
-      ? "\nNotas:\n" + orden.notas.map(n => `- [${n.autor}]: ${n.texto}`).join("\n")
+      ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
       : "";
 
     const copyText = `OC ${orden.numOC} ${orden.empresa}
