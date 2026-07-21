@@ -16,8 +16,7 @@ import {
   X,
   LogOut,
   User as UserIcon,
-  Loader2,
-  ChevronRight
+  Loader2
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -255,10 +254,10 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
         </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Content Area (Wide Container) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
         {/* Sticky Header with Mobile Hamburger Menu */}
-        <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             {/* Hamburger Button for Mobile and Desktop Toggle */}
             <button
@@ -294,8 +293,8 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-5xl w-full mx-auto">
+        {/* Page Content - Full Width Max 1800px */}
+        <main className="flex-1 p-4 sm:p-6 md:p-8 w-full max-w-[1800px] mx-auto">
           {children}
         </main>
       </div>
