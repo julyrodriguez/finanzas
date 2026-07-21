@@ -9,7 +9,7 @@ import {
   signInWithPopup, 
   signOut 
 } from "firebase/auth";
-import { auth, googleProvider } from "@/lib/firebase";
+import { getFirebaseAuth, googleProvider } from "@/lib/firebase";
 
 interface AuthContextType {
   user: User | null;
@@ -34,6 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -42,19 +48,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithEmail = async (email: string, pass: string) => {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error("Firebase Auth no está inicializado. Configura las variables de entorno en Vercel.");
+    }
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const registerWithEmail = async (email: string, pass: string) => {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error("Firebase Auth no está inicializado. Configura las variables de entorno en Vercel.");
+    }
     await createUserWithEmailAndPassword(auth, email, pass);
   };
 
   const loginWithGoogle = async () => {
+    const auth = getFirebaseAuth();
+    if (!auth) {
+      throw new Error("Firebase Auth no está inicializado. Configura las variables de entorno en Vercel.");
+    }
     await signInWithPopup(auth, googleProvider);
   };
 
   const logout = async () => {
-    await signOut(auth);
+    const auth = getFirebaseAuth();
+    if (auth) {
+      await signOut(auth);
+    }
+    setUser(null);
   };
 
   return (

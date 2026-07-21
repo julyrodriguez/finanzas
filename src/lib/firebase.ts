@@ -1,8 +1,5 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { 
-  getAuth, 
-  GoogleAuthProvider 
-} from "firebase/auth";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider, Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -13,9 +10,36 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
 };
 
-// Initialize Firebase only once
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
+let cachedApp: FirebaseApp | null = null;
+let cachedAuth: Auth | null = null;
 
-export { app, auth, googleProvider };
+export const getFirebaseApp = (): FirebaseApp | null => {
+  if (cachedApp) return cachedApp;
+  try {
+    if (getApps().length > 0) {
+      cachedApp = getApp();
+    } else if (firebaseConfig.apiKey) {
+      cachedApp = initializeApp(firebaseConfig);
+    }
+    return cachedApp;
+  } catch (error) {
+    console.warn("Firebase App initialization warning:", error);
+    return null;
+  }
+};
+
+export const getFirebaseAuth = (): Auth | null => {
+  if (cachedAuth) return cachedAuth;
+  try {
+    const app = getFirebaseApp();
+    if (app) {
+      cachedAuth = getAuth(app);
+    }
+    return cachedAuth;
+  } catch (error) {
+    console.warn("Firebase Auth initialization warning:", error);
+    return null;
+  }
+};
+
+export const googleProvider = new GoogleAuthProvider();
