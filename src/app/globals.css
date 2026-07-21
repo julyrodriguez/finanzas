@@ -284,3 +284,42 @@
 .pink-theme div[class*="bg-gradient-to-tr from-emerald-500 to-teal-500"] {
   background: linear-gradient(to right, #ec4899, #f43f5e) !important;
 }
+
+/* Hoyts & CMK label and Selected States overrides in Pink theme */
+.pink-theme span[class*="bg-purple-500/15"] {
+  background-color: rgba(107, 33, 168, 0.1) !important;
+  color: #6b21a8 !important; /* dark purple */
+  border-color: rgba(107, 33, 168, 0.25) !important;
+}
+
+.pink-theme span[class*="bg-teal-500/15"],
+.pink-theme span[class*="text-teal-300"] {
+  background-color: rgba(15, 118, 110, 0.1) !important;
+  color: #0f766e !important; /* dark teal */
+  border-color: rgba(15, 118, 110, 0.25) !important;
+}
+
+/* Modal Form Empresa Selected/Unselected overrides */
+.pink-theme form button[class*="border-white/10"] {
+  background-color: #f1f5f9 !important; /* slate-100 */
+  color: #64748b !important; /* slate-500 */
+  border-color: #e2e8f0 !important; /* slate-200 */
+}
+
+.pink-theme form button[class*="border-white/10"]:hover {
+  background-color: #e2e8f0 !important; /* slate-200 */
+}
+
+.pink-theme form button[class*="bg-purple-500/20"] {
+  background-color: #6b21a8 !important; /* dark purple-800 */
+  color: #ffffff !important;
+  border-color: #6b21a8 !important;
+  box-shadow: 0 4px 12px rgba(107, 33, 168, 0.2) !important;
+}
+
+.pink-theme form button[class*="bg-teal-500/20"] {
+  background-color: #0f766e !important; /* dark teal-800 */
+  color: #ffffff !important;
+  border-color: #0f766e !important;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2) !important;
+}
