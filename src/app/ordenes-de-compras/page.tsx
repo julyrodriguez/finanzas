@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
 import { 
   collection, 
   addDoc, 
@@ -24,8 +25,19 @@ import {
   Loader2,
   AlertCircle,
   Check,
-  Send
+  Send,
+  MessageSquare,
+  User as UserIcon,
+  Clock,
+  SendHorizontal
 } from "lucide-react";
+
+export interface Nota {
+  id: string;
+  texto: string;
+  autor: string;
+  fecha: string;
+}
 
 export interface OrdenCompra {
   id?: string;
@@ -38,10 +50,13 @@ export interface OrdenCompra {
   formaPago: string;
   liberada: boolean;
   mandada: boolean;
+  creadoPor?: string;
+  notas?: Nota[];
   createdAt?: any;
 }
 
 export default function OrdenesDeComprasPage() {
+  const { user } = useAuth();
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,6 +67,11 @@ export default function OrdenesDeComprasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenCompra | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Modal state for Notes
+  const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
+  const [newNotaText, setNewNotaText] = useState("");
+  const [savingNota, setSavingNota] = useState(false);
 
   // Form State
   const [empresa, setEmpresa] = useState<"Hoyts" | "CMK">("Hoyts");
@@ -67,6 +87,16 @@ export default function OrdenesDeComprasPage() {
   // Notification Toast State for Clipboard Copy & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Get current clean username without @equipo.local
+  const getCleanUsername = () => {
+    if (!user) return "Usuario";
+    if (user.displayName) return user.displayName;
+    if (user.email) {
+      return user.email.split("@")[0];
+    }
+    return "Usuario";
+  };
+
   // Load Firestore real-time data
   useEffect(() => {
     const db = getFirebaseDb();
@@ -76,7 +106,6 @@ export default function OrdenesDeComprasPage() {
     }
 
     try {
-      // Direct collection query without orderBy to ensure older docs without createdAt field are also fetched
       const colRef = collection(db, "ordenes_compra");
       const unsubscribe = onSnapshot(
         colRef,
@@ -94,6 +123,8 @@ export default function OrdenesDeComprasPage() {
               formaPago: data.formaPago || "Transferencia",
               liberada: Boolean(data.liberada),
               mandada: Boolean(data.mandada),
+              creadoPor: data.creadoPor || "Usuario",
+              notas: data.notas || [],
               createdAt: data.createdAt || null,
             };
           });
@@ -147,6 +178,8 @@ export default function OrdenesDeComprasPage() {
     e.preventDefault();
     setSubmitting(true);
 
+    const authorName = getCleanUsername();
+
     const dataToSave = {
       empresa,
       numSolicitud: numSolicitud.trim(),
@@ -157,6 +190,7 @@ export default function OrdenesDeComprasPage() {
       formaPago: formaPago.trim(),
       liberada,
       mandada,
+      creadoPor: editingOrden?.creadoPor || authorName,
     };
 
     const db = getFirebaseDb();
@@ -180,6 +214,7 @@ export default function OrdenesDeComprasPage() {
       // Add new order
       const newOrden: Omit<OrdenCompra, "id"> = {
         ...dataToSave,
+        notas: [],
         createdAt: serverTimestamp(),
       };
 
@@ -211,6 +246,46 @@ export default function OrdenesDeComprasPage() {
     setFormaPago("Transferencia");
     setLiberada(false);
     setMandada(false);
+  };
+
+  // Add Note to Order
+  const handleAddNota = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNotaText.trim() || !activeNotesOrden || !activeNotesOrden.id) return;
+
+    setSavingNota(true);
+
+    const now = new Date();
+    const formattedDate = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`;
+
+    const nuevaNota: Nota = {
+      id: Date.now().toString(),
+      texto: newNotaText.trim(),
+      autor: getCleanUsername(),
+      fecha: formattedDate,
+    };
+
+    const updatedNotas = [...(activeNotesOrden.notas || []), nuevaNota];
+
+    // Optimistic UI update
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === activeNotesOrden.id ? { ...item, notas: updatedNotas } : item))
+    );
+    setActiveNotesOrden((prev) => (prev ? { ...prev, notas: updatedNotas } : null));
+
+    const db = getFirebaseDb();
+    if (db && activeNotesOrden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", activeNotesOrden.id);
+        await updateDoc(docRef, { notas: updatedNotas });
+        showToast("Nota agregada");
+      } catch (err) {
+        console.error("Error al agregar nota:", err);
+      }
+    }
+
+    setNewNotaText("");
+    setSavingNota(false);
   };
 
   // Toggle Liberada Status
@@ -293,7 +368,8 @@ Forma de Pago: ${orden.formaPago}`;
       orden.numOC.toLowerCase().includes(searchQuery.toLowerCase()) ||
       orden.numSolicitud.toLowerCase().includes(searchQuery.toLowerCase()) ||
       orden.razonSocial.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orden.motivo.toLowerCase().includes(searchQuery.toLowerCase());
+      orden.motivo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (orden.creadoPor && orden.creadoPor.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesEmpresa =
       filterEmpresa === "Todas" || orden.empresa === filterEmpresa;
@@ -310,7 +386,7 @@ Forma de Pago: ${orden.formaPago}`;
   return (
     <AppLayout 
       title="Órdenes de Compra" 
-      subtitle="Gestión, edición, tildes de estado y copia rápida de solicitudes"
+      subtitle="Gestión, edición, notas internas y copia rápida de solicitudes"
     >
       {/* Toast Notification */}
       {toastMessage && (
@@ -352,7 +428,7 @@ Forma de Pago: ${orden.formaPago}`;
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por N° OC, N° Solicitud, Proveedor o Motivo..."
+                placeholder="Buscar por N° OC, Solicitud, Proveedor, Usuario o Motivo..."
                 className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
               />
               {searchQuery && (
@@ -430,10 +506,10 @@ Forma de Pago: ${orden.formaPago}`;
                     <th className="px-4 py-3.5">Empresa</th>
                     <th className="px-4 py-3.5">N° Solicitud</th>
                     <th className="px-4 py-3.5">N° OC & Copiar</th>
+                    <th className="px-4 py-3.5">Creado Por</th>
                     <th className="px-4 py-3.5">Proveedor</th>
                     <th className="px-4 py-3.5">Monto</th>
-                    <th className="px-4 py-3.5">Forma Pago</th>
-                    <th className="px-4 py-3.5">Detalle / Motivo</th>
+                    <th className="px-4 py-3.5">Notas</th>
                     <th className="px-4 py-3.5 text-right">Acciones</th>
                   </tr>
                 </thead>
@@ -505,6 +581,14 @@ Forma de Pago: ${orden.formaPago}`;
                         </div>
                       </td>
 
+                      {/* Creado Por */}
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 font-medium text-[11px]">
+                          <UserIcon className="w-3 h-3 text-emerald-400" />
+                          {orden.creadoPor || "Usuario"}
+                        </span>
+                      </td>
+
                       {/* Proveedor */}
                       <td className="px-4 py-4 font-medium text-white max-w-xs truncate">
                         {orden.razonSocial}
@@ -517,14 +601,15 @@ Forma de Pago: ${orden.formaPago}`;
                           : orden.monto}
                       </td>
 
-                      {/* Forma Pago */}
-                      <td className="px-4 py-4 text-gray-300">
-                        {orden.formaPago}
-                      </td>
-
-                      {/* Detalle / Motivo */}
-                      <td className="px-4 py-4 text-gray-400 max-w-xs truncate" title={orden.motivo}>
-                        {orden.motivo}
+                      {/* Botón Ver/Agregar Notas */}
+                      <td className="px-4 py-4">
+                        <button
+                          onClick={() => setActiveNotesOrden(orden)}
+                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Notas ({orden.notas?.length || 0})</span>
+                        </button>
                       </td>
 
                       {/* Actions: Edit & Delete */}
@@ -622,8 +707,9 @@ Forma de Pago: ${orden.formaPago}`;
                       <span className="font-mono text-emerald-400 font-bold text-sm">
                         OC: {orden.numOC}
                       </span>
-                      <span className="font-mono text-gray-400 text-[11px]">
-                        Sol: {orden.numSolicitud || "-"}
+                      <span className="text-gray-400 text-[11px] flex items-center gap-1">
+                        <UserIcon className="w-3 h-3 text-emerald-400" />
+                        {orden.creadoPor || "Usuario"}
                       </span>
                     </div>
                     <p className="text-sm font-semibold text-white">
@@ -646,9 +732,17 @@ Forma de Pago: ${orden.formaPago}`;
                     </div>
                   </div>
 
-                  <div className="text-xs bg-white/5 p-2 rounded-xl border border-white/5">
-                    <span className="text-gray-400 text-[11px] block">Detalle / Motivo</span>
-                    <span className="text-gray-300">{orden.motivo}</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs">
+                    <span className="text-gray-400 text-[11px] truncate max-w-[200px]">
+                      {orden.motivo}
+                    </span>
+                    <button
+                      onClick={() => setActiveNotesOrden(orden)}
+                      className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-amber-300 text-[10px] font-semibold flex items-center gap-1"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span>Notas ({orden.notas?.length || 0})</span>
+                    </button>
                   </div>
                 </div>
               ))}
@@ -656,6 +750,87 @@ Forma de Pago: ${orden.formaPago}`;
           </div>
         )}
       </div>
+
+      {/* Modal para Ver y Agregar Notas de la Orden */}
+      {activeNotesOrden && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-amber-400" />
+                  Notas de la OC {activeNotesOrden.numOC} ({activeNotesOrden.empresa})
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Proveedor: {activeNotesOrden.razonSocial}
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveNotesOrden(null)}
+                className="p-1 rounded-xl bg-white/5 text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Listado de Notas Existentes */}
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+              {!activeNotesOrden.notas || activeNotesOrden.notas.length === 0 ? (
+                <div className="p-6 text-center bg-white/5 rounded-2xl border border-white/5 text-gray-400 text-xs">
+                  Aún no hay notas registradas para esta orden. ¡Agrega la primera abajo!
+                </div>
+              ) : (
+                activeNotesOrden.notas.map((nota) => (
+                  <div key={nota.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-gray-400 text-[11px]">
+                      <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                        <UserIcon className="w-3 h-3" />
+                        {nota.autor}
+                      </span>
+                      <span className="flex items-center gap-1 text-gray-500">
+                        <Clock className="w-3 h-3" />
+                        {nota.fecha}
+                      </span>
+                    </div>
+                    <p className="text-gray-200 leading-relaxed">{nota.texto}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Formulario para agregar una nueva Nota */}
+            <form onSubmit={handleAddNota} className="pt-3 border-t border-white/10 space-y-3">
+              <label className="block text-xs font-semibold text-gray-300">
+                Agregar nueva nota
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  required
+                  value={newNotaText}
+                  onChange={(e) => setNewNotaText(e.target.value)}
+                  placeholder="Escribe un comentario o nota sobre esta orden..."
+                  className="flex-1 px-3.5 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50"
+                />
+                <button
+                  type="submit"
+                  disabled={savingNota || !newNotaText.trim()}
+                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingNota ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <SendHorizontal className="w-4 h-4" />
+                      <span className="hidden sm:inline">Enviar</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal / Form para Agregar o Editar Solicitud de OC */}
       {isModalOpen && (
