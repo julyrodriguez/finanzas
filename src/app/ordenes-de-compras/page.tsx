@@ -62,7 +62,7 @@ export default function OrdenesDeComprasPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Pendientes">("Todas");
+  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Liberadas y Mandadas" | "Mandadas" | "Pendientes">("Todas");
   
   // Pagination State: Limit initial view to 10
   const [displayLimit, setDisplayLimit] = useState(10);
@@ -381,6 +381,7 @@ Forma de Pago: ${orden.formaPago}`;
     const matchesEstado =
       filterEstado === "Todas" ||
       (filterEstado === "Liberadas" && orden.liberada) ||
+      (filterEstado === "Liberadas y Mandadas" && orden.liberada && orden.mandada) ||
       (filterEstado === "Mandadas" && orden.mandada) ||
       (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
 
@@ -429,8 +430,8 @@ Forma de Pago: ${orden.formaPago}`;
         {/* Buscador & Filters Bar */}
         <div className="glass-card border border-white/10 p-4 rounded-2xl space-y-3">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-            {/* Buscador Search Input */}
-            <div className="relative flex-1">
+            {/* Buscador Search Input (achicado) */}
+            <div className="relative w-full lg:max-w-xs">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
@@ -439,7 +440,7 @@ Forma de Pago: ${orden.formaPago}`;
                   setSearchQuery(e.target.value);
                   setDisplayLimit(10); // Reset limit when searching
                 }}
-                placeholder="Buscar por N° OC, Solicitud, Proveedor, Usuario o Motivo..."
+                placeholder="Buscar..."
                 className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
               />
               {searchQuery && (
@@ -456,7 +457,7 @@ Forma de Pago: ${orden.formaPago}`;
             </div>
 
             {/* Filter Pills for Empresa */}
-            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs">
+            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Empresa:</span>
               {(["Todas", "Hoyts", "CMK"] as const).map((emp) => (
                 <button
@@ -477,9 +478,9 @@ Forma de Pago: ${orden.formaPago}`;
             </div>
 
             {/* Filter Pills for Estado */}
-            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs">
+            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Liberadas", "Mandadas", "Pendientes"] as const).map((est) => (
+              {(["Todas", "Liberadas", "Liberadas y Mandadas", "Mandadas", "Pendientes"] as const).map((est) => (
                 <button
                   key={est}
                   onClick={() => {
