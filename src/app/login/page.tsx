@@ -5,51 +5,58 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { 
   TrendingUp, 
-  Mail, 
+  User as UserIcon, 
   Lock, 
   ArrowRight, 
   AlertCircle, 
-  CheckCircle2, 
-  Loader2,
-  Sparkles
+  Loader2
 } from "lucide-react";
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const { loginWithEmail, registerWithEmail, loginWithGoogle } = useAuth();
-  const router = Router();
+  const router = useRouter();
 
-  function Router() {
-    return useRouter();
-  }
+  // Helper function to build email transparently
+  const formatEmail = (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return "";
+    return trimmed.includes("@") ? trimmed : `${trimmed}@equipo.local`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
+    const fullEmail = formatEmail(username);
+
     try {
       if (isRegister) {
-        await registerWithEmail(email, password);
+        await registerWithEmail(fullEmail, password);
       } else {
-        await loginWithEmail(email, password);
+        await loginWithEmail(fullEmail, password);
       }
       router.push("/");
     } catch (err: any) {
       console.error(err);
-      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-        setError("Credenciales incorrectas. Verifica tu correo y contraseña.");
+      if (
+        err.code === "auth/invalid-credential" || 
+        err.code === "auth/user-not-found" || 
+        err.code === "auth/wrong-password"
+      ) {
+        setError("Usuario o contraseña incorrectos.");
       } else if (err.code === "auth/email-already-in-use") {
-        setError("Este correo electrónico ya se encuentra registrado.");
+        setError("Este nombre de usuario ya está registrado.");
       } else if (err.code === "auth/weak-password") {
         setError("La contraseña debe tener al menos 6 caracteres.");
       } else {
-        setError("Ocurrió un error al intentar autenticar. Asegúrate de haber configurado las variables de Firebase.");
+        setError("Error de autenticación. Inténtalo de nuevo.");
       }
     } finally {
       setLoading(false);
@@ -64,7 +71,7 @@ export default function LoginPage() {
       router.push("/");
     } catch (err: any) {
       console.error(err);
-      setError("Error al iniciar sesión con Google. Revisa la configuración de Firebase.");
+      setError("Error al iniciar sesión con Google.");
     } finally {
       setLoading(false);
     }
@@ -139,16 +146,16 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-1.5">
-                Correo Electrónico
+                Usuario
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <UserIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="usuario@finanzas.com"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Ingresa tu usuario"
                   className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all"
                 />
               </div>
@@ -224,11 +231,6 @@ export default function LoginPage() {
             <span>Iniciar con Google</span>
           </button>
         </div>
-
-        {/* Footer info */}
-        <p className="text-center text-[11px] text-gray-500">
-          Autenticación asegurada con Firebase Auth
-        </p>
       </div>
     </div>
   );

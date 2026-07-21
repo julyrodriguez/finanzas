@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -17,8 +17,7 @@ import {
   Search,
   Bell,
   LogOut,
-  User as UserIcon,
-  Loader2
+  User as UserIcon
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -32,7 +31,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { user, loading, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const menuItems = [
     {
@@ -61,6 +60,17 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const handleLogout = async () => {
     await logout();
     router.push("/login");
+  };
+
+  // Format display name or username cleanly without @equipo.local domain
+  const getCleanUsername = () => {
+    if (!user) return "Modo Invitado";
+    if (user.displayName) return user.displayName;
+    if (user.email) {
+      const parts = user.email.split("@");
+      return parts[0];
+    }
+    return "Usuario";
   };
 
   return (
@@ -136,7 +146,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
                       className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
                         active
                           ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-white/5 text-gray-400 group-hover:text-white group-hover:bg-white/10"
+                          : "bg-[#0d131f] text-gray-400 group-hover:text-white group-hover:bg-white/10"
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -169,7 +179,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-400 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                Firebase Auth
+                Estado Sistema
               </span>
               <span className="flex h-2 w-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -177,7 +187,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
               </span>
             </div>
             <p className="text-xs text-gray-300 font-medium truncate">
-              {user ? user.email : "Modo Invitado / Demo"}
+              {getCleanUsername()}
             </p>
             <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
               <div className="bg-emerald-500 h-full w-full rounded-full" />
@@ -188,11 +198,11 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
           <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/5">
             <div className="flex items-center gap-3 min-w-0">
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
-                {user?.email ? user.email[0].toUpperCase() : "U"}
+                {getCleanUsername()[0].toUpperCase()}
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-gray-200 truncate">
-                  {user?.displayName || user?.email?.split("@")[0] || "Usuario"}
+                  {getCleanUsername()}
                 </p>
                 <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-400" /> Activo
