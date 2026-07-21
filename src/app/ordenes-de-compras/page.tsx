@@ -511,7 +511,7 @@ Forma de Pago: ${orden.formaPago}`;
                     <th className="px-4 py-3.5">Monto</th>
                     <th className="px-4 py-3.5">Forma Pago</th>
                     <th className="px-4 py-3.5">Notas</th>
-                    <th className="px-4 py-3.5 text-right">Acciones</th>
+                    <th className="px-4 py-3.5 text-right">Editar</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-gray-300">
@@ -618,24 +618,16 @@ Forma de Pago: ${orden.formaPago}`;
                         </button>
                       </td>
 
-                      {/* Actions: Edit & Delete */}
+                      {/* Action: Open Edit Form */}
                       <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleOpenEditModal(orden)}
-                            className="p-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors"
-                            title="Editar orden"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(orden.id)}
-                            className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors"
-                            title="Eliminar orden"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => handleOpenEditModal(orden)}
+                          className="px-3 py-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 font-semibold flex items-center justify-end gap-1.5 ml-auto transition-colors"
+                          title="Editar orden (Incluye eliminar)"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Editar</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -695,15 +687,10 @@ Forma de Pago: ${orden.formaPago}`;
                       </button>
                       <button
                         onClick={() => handleOpenEditModal(orden)}
-                        className="p-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10"
+                        className="px-2 py-1 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-xs font-medium flex items-center gap-1"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(orden.id)}
-                        className="p-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Editar</span>
                       </button>
                     </div>
                   </div>
@@ -1015,29 +1002,47 @@ Forma de Pago: ${orden.formaPago}`;
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      {editingOrden ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                      <span>{editingOrden ? "Guardar Cambios" : "Guardar Orden"}</span>
-                    </>
-                  )}
-                </button>
+              {/* Action Buttons: Delete (when editing) + Cancel + Save */}
+              <div className="pt-4 flex items-center justify-between gap-3 border-t border-white/10">
+                {editingOrden ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      handleDelete(editingOrden.id);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar Orden</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {submitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        {editingOrden ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        <span>{editingOrden ? "Guardar Cambios" : "Guardar Orden"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
