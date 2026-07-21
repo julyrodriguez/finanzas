@@ -311,6 +311,11 @@ export default function OrdenesDeComprasPage() {
   // Toggle Liberada Status
   const handleToggleLiberada = async (orden: OrdenCompra) => {
     const newLiberada = !orden.liberada;
+    const msg = orden.liberada
+      ? `¿Estás seguro de marcar la OC ${orden.numOC} como NO liberada?`
+      : `¿Estás seguro de marcar la OC ${orden.numOC} como LIBERADA?`;
+    if (!confirm(msg)) return;
+
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, liberada: newLiberada } : item))
     );
@@ -329,6 +334,11 @@ export default function OrdenesDeComprasPage() {
   // Toggle Mandada Status
   const handleToggleMandada = async (orden: OrdenCompra) => {
     const newMandada = !orden.mandada;
+    const msg = orden.mandada
+      ? `¿Estás seguro de marcar la OC ${orden.numOC} como NO mandada?`
+      : `¿Estás seguro de marcar la OC ${orden.numOC} como MANDADA?`;
+    if (!confirm(msg)) return;
+
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, mandada: newMandada } : item))
     );
@@ -347,6 +357,11 @@ export default function OrdenesDeComprasPage() {
   // Toggle Entregada Status
   const handleToggleEntregada = async (orden: OrdenCompra) => {
     const newEntregada = !orden.entregada;
+    const msg = orden.entregada
+      ? `¿Estás seguro de marcar la OC ${orden.numOC} como NO entregada?`
+      : `¿Estás seguro de marcar la OC ${orden.numOC} como ENTREGADA?`;
+    if (!confirm(msg)) return;
+
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, entregada: newEntregada } : item))
     );
