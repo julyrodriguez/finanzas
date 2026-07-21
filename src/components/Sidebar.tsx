@@ -78,11 +78,8 @@ export function Sidebar() {
               </div>
             </div>
             <div>
-              <h1 className="font-bold text-lg text-white tracking-tight flex items-center gap-1.5">
+              <h1 className="font-bold text-lg text-white tracking-tight">
                 Finanzas
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  PRO
-                </span>
               </h1>
               <p className="text-xs text-gray-400">Gestión Corporativa</p>
             </div>

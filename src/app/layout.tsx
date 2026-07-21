@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Finanzas PRO - Plataforma Corporativa",
+  title: "Finanzas - Plataforma Corporativa",
   description: "Sistema de gestión financiera y órdenes de compra",
 };
 

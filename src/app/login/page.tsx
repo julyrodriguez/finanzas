@@ -13,13 +13,12 @@ import {
 } from "lucide-react";
 
 export default function LoginPage() {
-  const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { loginWithEmail, registerWithEmail, loginWithGoogle } = useAuth();
+  const { loginWithEmail } = useAuth();
   const router = useRouter();
 
   // Helper function to build email transparently
@@ -37,11 +36,7 @@ export default function LoginPage() {
     const fullEmail = formatEmail(username);
 
     try {
-      if (isRegister) {
-        await registerWithEmail(fullEmail, password);
-      } else {
-        await loginWithEmail(fullEmail, password);
-      }
+      await loginWithEmail(fullEmail, password);
       router.push("/");
     } catch (err: any) {
       console.error(err);
@@ -51,27 +46,9 @@ export default function LoginPage() {
         err.code === "auth/wrong-password"
       ) {
         setError("Usuario o contraseña incorrectos.");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Este nombre de usuario ya está registrado.");
-      } else if (err.code === "auth/weak-password") {
-        setError("La contraseña debe tener al menos 6 caracteres.");
       } else {
         setError("Error de autenticación. Inténtalo de nuevo.");
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      await loginWithGoogle();
-      router.push("/");
-    } catch (err: any) {
-      console.error(err);
-      setError("Error al iniciar sesión con Google.");
     } finally {
       setLoading(false);
     }
@@ -93,8 +70,8 @@ export default function LoginPage() {
             </div>
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
-              Finanzas <span className="text-emerald-400">PRO</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Finanzas
             </h1>
             <p className="text-xs sm:text-sm text-gray-400 mt-1">
               Plataforma de gestión financiera corporativa
@@ -104,35 +81,9 @@ export default function LoginPage() {
 
         {/* Card Form */}
         <div className="glass-card border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl backdrop-blur-xl">
-          {/* Tabs Toggle */}
-          <div className="grid grid-cols-2 p-1 bg-white/5 rounded-2xl border border-white/5 mb-6 text-xs font-semibold">
-            <button
-              onClick={() => {
-                setIsRegister(false);
-                setError(null);
-              }}
-              className={`py-2 rounded-xl transition-all ${
-                !isRegister
-                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Iniciar Sesión
-            </button>
-            <button
-              onClick={() => {
-                setIsRegister(true);
-                setError(null);
-              }}
-              className={`py-2 rounded-xl transition-all ${
-                isRegister
-                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Registrarse
-            </button>
-          </div>
+          <h2 className="text-lg font-bold text-white text-center mb-6">
+            Iniciar Sesión
+          </h2>
 
           {/* Error Alert */}
           {error && (
@@ -188,48 +139,12 @@ export default function LoginPage() {
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <span>{isRegister ? "Crear Cuenta" : "Entrar a la Plataforma"}</span>
+                  <span>Entrar a la Plataforma</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
-
-          <div className="relative my-6 text-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10" />
-            </div>
-            <span className="relative px-3 bg-[#0d131f] text-[10px] text-gray-500 uppercase tracking-wider">
-              o continúa con
-            </span>
-          </div>
-
-          {/* Google Button */}
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 text-xs font-medium transition-colors flex items-center justify-center gap-2.5"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="#EA4335"
-                d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"
-              />
-              <path
-                fill="#4285F4"
-                d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.3-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
-              />
-            </svg>
-            <span>Iniciar con Google</span>
-          </button>
         </div>
       </div>
     </div>
