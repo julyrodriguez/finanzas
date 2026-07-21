@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, Auth } from "firebase/auth";
+import { getFirestore, Firestore } from "firebase/firestore";
 
 const getFirebaseConfig = () => ({
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -12,6 +13,7 @@ const getFirebaseConfig = () => ({
 
 let cachedApp: FirebaseApp | null = null;
 let cachedAuth: Auth | null = null;
+let cachedDb: Firestore | null = null;
 
 export const getFirebaseApp = (): FirebaseApp | null => {
   if (cachedApp) return cachedApp;
@@ -41,6 +43,20 @@ export const getFirebaseAuth = (): Auth | null => {
     return cachedAuth;
   } catch (error) {
     console.warn("Firebase Auth initialization warning:", error);
+    return null;
+  }
+};
+
+export const getFirebaseDb = (): Firestore | null => {
+  if (cachedDb) return cachedDb;
+  try {
+    const app = getFirebaseApp();
+    if (app) {
+      cachedDb = getFirestore(app);
+    }
+    return cachedDb;
+  } catch (error) {
+    console.warn("Firestore initialization warning:", error);
     return null;
   }
 };
