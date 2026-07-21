@@ -1,21 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { 
   Home, 
   ShoppingBag, 
   TrendingUp, 
   Sparkles, 
   Clock, 
-  ChevronRight,
   ShieldCheck,
   Building2,
   Menu,
   X,
   Search,
-  Bell
+  Bell,
+  LogOut,
+  User as UserIcon,
+  Loader2
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -27,6 +30,9 @@ interface AppLayoutProps {
 export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  const { user, loading, logout } = useAuth();
 
   const menuItems = [
     {
@@ -50,6 +56,11 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
       return pathname === href || pathname === "/inicio";
     }
     return pathname.startsWith(href);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.push("/login");
   };
 
   return (
@@ -158,7 +169,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-400 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                Módulo Activo
+                Firebase Auth
               </span>
               <span className="flex h-2 w-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -166,27 +177,46 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
               </span>
             </div>
             <p className="text-xs text-gray-300 font-medium truncate">
-              Plataforma de Finanzas v1.0
+              {user ? user.email : "Modo Invitado / Demo"}
             </p>
             <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-emerald-500 h-full w-3/4 rounded-full" />
+              <div className="bg-emerald-500 h-full w-full rounded-full" />
             </div>
-            <p className="text-[10px] text-gray-400 text-right">Próximamente disponible</p>
           </div>
 
-          {/* User Profile */}
-          <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors">
-            <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md">
-              F
+          {/* User Profile & Logout */}
+          <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
+                {user?.email ? user.email[0].toUpperCase() : "U"}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-200 truncate">
+                  {user?.displayName || user?.email?.split("@")[0] || "Usuario"}
+                </p>
+                <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" /> Activo
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-200 truncate">
-                Usuario Finanzas
-              </p>
-              <p className="text-xs text-gray-400 truncate flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" /> Administrador
-              </p>
-            </div>
+
+            {user ? (
+              <button
+                onClick={handleLogout}
+                title="Cerrar Sesión"
+                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                title="Iniciar Sesión"
+                className="p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors"
+              >
+                <UserIcon className="w-4 h-4" />
+              </Link>
+            )}
           </div>
         </div>
       </aside>
@@ -219,27 +249,23 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <div className="hidden md:flex relative w-48 lg:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                className="w-full pl-9 pr-4 py-1.5 text-xs rounded-xl bg-white/5 border border-white/10 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-              />
-            </div>
-
-            <button
-              className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors relative"
-              title="Notificaciones"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500" />
-            </button>
-
-            <div className="px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">Finanzas</span>
-            </div>
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
+              >
+                <LogOut className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden sm:inline">Salir</span>
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Ingresar</span>
+              </Link>
+            )}
           </div>
         </header>
 
