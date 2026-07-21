@@ -31,9 +31,7 @@ export default function InicioPage() {
               Sección Inicio
             </h2>
 
-            <p className="text-gray-300 text-sm sm:text-base max-w-md mx-auto leading-relaxed">
-              Esta pestaña se encuentra en desarrollo. Muy pronto estará disponible con métricas y resúmenes financieros.
-            </p>
+
           </div>
 
           {/* Quick link to other tab */}
