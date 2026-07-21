@@ -29,7 +29,8 @@ import {
   MessageSquare,
   User as UserIcon,
   Clock,
-  SendHorizontal
+  SendHorizontal,
+  ChevronDown
 } from "lucide-react";
 
 export interface Nota {
@@ -63,6 +64,9 @@ export default function OrdenesDeComprasPage() {
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Pendientes">("Todas");
   
+  // Pagination State: Limit initial view to 10
+  const [displayLimit, setDisplayLimit] = useState(10);
+
   // Modal state for Add/Edit Order
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenCompra | null>(null);
@@ -383,6 +387,10 @@ Forma de Pago: ${orden.formaPago}`;
     return matchesSearch && matchesEmpresa && matchesEstado;
   });
 
+  // Limit visible items to displayLimit
+  const visibleOrdenes = filteredOrdenes.slice(0, displayLimit);
+  const hasMore = filteredOrdenes.length > displayLimit;
+
   return (
     <AppLayout 
       title="Órdenes de Compra" 
@@ -405,7 +413,7 @@ Forma de Pago: ${orden.formaPago}`;
               Solicitudes de Órdenes
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Total: {ordenes.length} órdenes ({ordenes.filter(o => o.liberada).length} liberadas, {ordenes.filter(o => o.mandada).length} mandadas)
+              Mostrando {visibleOrdenes.length} de {filteredOrdenes.length} órdenes ({ordenes.filter(o => o.liberada).length} liberadas, {ordenes.filter(o => o.mandada).length} mandadas)
             </p>
           </div>
 
@@ -427,13 +435,19 @@ Forma de Pago: ${orden.formaPago}`;
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setDisplayLimit(10); // Reset limit when searching
+                }}
                 placeholder="Buscar por N° OC, Solicitud, Proveedor, Usuario o Motivo..."
                 className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDisplayLimit(10);
+                  }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -447,7 +461,10 @@ Forma de Pago: ${orden.formaPago}`;
               {(["Todas", "Hoyts", "CMK"] as const).map((emp) => (
                 <button
                   key={emp}
-                  onClick={() => setFilterEmpresa(emp)}
+                  onClick={() => {
+                    setFilterEmpresa(emp);
+                    setDisplayLimit(10);
+                  }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEmpresa === emp
                       ? "bg-emerald-500 text-white shadow-sm"
@@ -465,7 +482,10 @@ Forma de Pago: ${orden.formaPago}`;
               {(["Todas", "Liberadas", "Mandadas", "Pendientes"] as const).map((est) => (
                 <button
                   key={est}
-                  onClick={() => setFilterEstado(est)}
+                  onClick={() => {
+                    setFilterEstado(est);
+                    setDisplayLimit(10);
+                  }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEstado === est
                       ? "bg-emerald-500 text-white shadow-sm"
@@ -485,7 +505,7 @@ Forma de Pago: ${orden.formaPago}`;
             <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
             <p className="text-xs">Cargando órdenes de compra de Firestore...</p>
           </div>
-        ) : filteredOrdenes.length === 0 ? (
+        ) : visibleOrdenes.length === 0 ? (
           <div className="py-16 text-center rounded-3xl glass-card border border-white/10 p-8 space-y-3">
             <AlertCircle className="w-10 h-10 text-gray-500 mx-auto" />
             <h3 className="text-base font-bold text-white">No se encontraron órdenes</h3>
@@ -496,62 +516,179 @@ Forma de Pago: ${orden.formaPago}`;
             </p>
           </div>
         ) : (
-          <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
-            {/* Desktop Table View */}
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-semibold">
-                  <tr>
-                    <th className="px-4 py-3.5">Estados</th>
-                    <th className="px-4 py-3.5">Empresa</th>
-                    <th className="px-4 py-3.5">N° Solicitud</th>
-                    <th className="px-4 py-3.5">N° OC & Copiar</th>
-                    <th className="px-4 py-3.5">Creado Por</th>
-                    <th className="px-4 py-3.5">Proveedor</th>
-                    <th className="px-4 py-3.5">Monto</th>
-                    <th className="px-4 py-3.5">Forma Pago</th>
-                    <th className="px-4 py-3.5">Notas</th>
-                    <th className="px-4 py-3.5 text-right">Editar</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-gray-300">
-                  {filteredOrdenes.map((orden) => (
-                    <tr key={orden.id} className="hover:bg-white/[0.02] transition-colors">
-                      {/* Tildes: Liberada & Mandada */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5">
-                          {/* Tilde Liberada */}
-                          <button
-                            onClick={() => handleToggleLiberada(orden)}
-                            className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                              orden.liberada
-                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                            }`}
-                            title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
-                          >
-                            <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
-                          </button>
+          <div className="space-y-4">
+            <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-semibold">
+                    <tr>
+                      <th className="px-4 py-3.5">Estados</th>
+                      <th className="px-4 py-3.5">Empresa</th>
+                      <th className="px-4 py-3.5">N° Solicitud</th>
+                      <th className="px-4 py-3.5">N° OC & Copiar</th>
+                      <th className="px-4 py-3.5">Creado Por</th>
+                      <th className="px-4 py-3.5">Proveedor</th>
+                      <th className="px-4 py-3.5">Monto</th>
+                      <th className="px-4 py-3.5">Forma Pago</th>
+                      <th className="px-4 py-3.5">Notas</th>
+                      <th className="px-4 py-3.5 text-right">Editar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-gray-300">
+                    {visibleOrdenes.map((orden) => (
+                      <tr key={orden.id} className="hover:bg-white/[0.02] transition-colors">
+                        {/* Tildes: Liberada & Mandada */}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-1.5">
+                            {/* Tilde Liberada */}
+                            <button
+                              onClick={() => handleToggleLiberada(orden)}
+                              className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                orden.liberada
+                                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                  : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                              }`}
+                              title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
+                            >
+                              <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
+                            </button>
 
-                          {/* Tilde Mandada */}
-                          <button
-                            onClick={() => handleToggleMandada(orden)}
-                            className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                              orden.mandada
-                                ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
-                                : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                            }`}
-                            title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
-                          >
-                            <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : "opacity-40"}`} />
-                          </button>
-                        </div>
-                      </td>
+                            {/* Tilde Mandada */}
+                            <button
+                              onClick={() => handleToggleMandada(orden)}
+                              className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                orden.mandada
+                                  ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                                  : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                              }`}
+                              title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
+                            >
+                              <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : "opacity-40"}`} />
+                            </button>
+                          </div>
+                        </td>
 
-                      {/* Empresa Pill */}
-                      <td className="px-4 py-4">
+                        {/* Empresa Pill */}
+                        <td className="px-4 py-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                              orden.empresa === "Hoyts"
+                                ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                                : "bg-teal-500/15 text-teal-300 border-teal-500/30"
+                            }`}
+                          >
+                            {orden.empresa}
+                          </span>
+                        </td>
+
+                        {/* N° Solicitud (Opcional) */}
+                        <td className="px-4 py-4 font-mono text-gray-300">
+                          {orden.numSolicitud || "-"}
+                        </td>
+
+                        {/* N° OC + Copy Button */}
+                        <td className="px-4 py-4">
+                          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
+                            <span className="font-mono font-bold text-emerald-400">
+                              {orden.numOC}
+                            </span>
+                            <button
+                              onClick={() => handleCopy(orden)}
+                              className="p-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white transition-colors"
+                              title="Copiar resumen de OC"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Creado Por */}
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 font-medium text-[11px]">
+                            <UserIcon className="w-3 h-3 text-emerald-400" />
+                            {orden.creadoPor || "Usuario"}
+                          </span>
+                        </td>
+
+                        {/* Proveedor */}
+                        <td className="px-4 py-4 font-medium text-white max-w-xs truncate">
+                          {orden.razonSocial}
+                        </td>
+
+                        {/* Monto */}
+                        <td className="px-4 py-4 font-semibold text-emerald-300">
+                          {typeof orden.monto === "number"
+                            ? `$ ${orden.monto.toLocaleString("es-AR")}`
+                            : orden.monto}
+                        </td>
+
+                        {/* Forma Pago */}
+                        <td className="px-4 py-4 text-gray-300 font-medium">
+                          {orden.formaPago || "30DFF"}
+                        </td>
+
+                        {/* Botón Ver/Agregar Notas */}
+                        <td className="px-4 py-4">
+                          <button
+                            onClick={() => setActiveNotesOrden(orden)}
+                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Notas ({orden.notas?.length || 0})</span>
+                          </button>
+                        </td>
+
+                        {/* Action: Open Edit Form */}
+                        <td className="px-4 py-4 text-right">
+                          <button
+                            onClick={() => handleOpenEditModal(orden)}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 font-semibold flex items-center justify-end gap-1.5 ml-auto transition-colors"
+                            title="Editar orden (Incluye eliminar)"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Editar</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile / Tablet Cards View */}
+              <div className="lg:hidden divide-y divide-white/10">
+                {visibleOrdenes.map((orden) => (
+                  <div key={orden.id} className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      {/* Tildes */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleLiberada(orden)}
+                          className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
+                            orden.liberada
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                              : "bg-white/5 text-gray-500 border-white/10"
+                          }`}
+                        >
+                          <Check className="w-3 h-3" />
+                          Liberada
+                        </button>
+
+                        <button
+                          onClick={() => handleToggleMandada(orden)}
+                          className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
+                            orden.mandada
+                              ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                              : "bg-white/5 text-gray-500 border-white/10"
+                          }`}
+                        >
+                          <Send className="w-3 h-3" />
+                          Mandada
+                        </button>
+
                         <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                             orden.empresa === "Hoyts"
                               ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
                               : "bg-teal-500/15 text-teal-300 border-teal-500/30"
@@ -559,187 +696,85 @@ Forma de Pago: ${orden.formaPago}`;
                         >
                           {orden.empresa}
                         </span>
-                      </td>
+                      </div>
 
-                      {/* N° Solicitud (Opcional) */}
-                      <td className="px-4 py-4 font-mono text-gray-300">
-                        {orden.numSolicitud || "-"}
-                      </td>
-
-                      {/* N° OC + Copy Button */}
-                      <td className="px-4 py-4">
-                        <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
-                          <span className="font-mono font-bold text-emerald-400">
-                            {orden.numOC}
-                          </span>
-                          <button
-                            onClick={() => handleCopy(orden)}
-                            className="p-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white transition-colors"
-                            title="Copiar resumen de OC"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-
-                      {/* Creado Por */}
-                      <td className="px-4 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 font-medium text-[11px]">
-                          <UserIcon className="w-3 h-3 text-emerald-400" />
-                          {orden.creadoPor || "Usuario"}
-                        </span>
-                      </td>
-
-                      {/* Proveedor */}
-                      <td className="px-4 py-4 font-medium text-white max-w-xs truncate">
-                        {orden.razonSocial}
-                      </td>
-
-                      {/* Monto */}
-                      <td className="px-4 py-4 font-semibold text-emerald-300">
-                        {typeof orden.monto === "number"
-                          ? `$ ${orden.monto.toLocaleString("es-AR")}`
-                          : orden.monto}
-                      </td>
-
-                      {/* Forma Pago */}
-                      <td className="px-4 py-4 text-gray-300 font-medium">
-                        {orden.formaPago || "30DFF"}
-                      </td>
-
-                      {/* Botón Ver/Agregar Notas */}
-                      <td className="px-4 py-4">
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => setActiveNotesOrden(orden)}
-                          className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+                          onClick={() => handleCopy(orden)}
+                          className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1"
                         >
-                          <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Notas ({orden.notas?.length || 0})</span>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copiar</span>
                         </button>
-                      </td>
-
-                      {/* Action: Open Edit Form */}
-                      <td className="px-4 py-4 text-right">
                         <button
                           onClick={() => handleOpenEditModal(orden)}
-                          className="px-3 py-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 font-semibold flex items-center justify-end gap-1.5 ml-auto transition-colors"
-                          title="Editar orden (Incluye eliminar)"
+                          className="px-2 py-1 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-xs font-medium flex items-center gap-1"
                         >
                           <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
                           <span>Editar</span>
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-mono text-emerald-400 font-bold text-sm">
+                          OC: {orden.numOC}
+                        </span>
+                        <span className="text-gray-400 text-[11px] flex items-center gap-1">
+                          <UserIcon className="w-3 h-3 text-emerald-400" />
+                          {orden.creadoPor || "Usuario"}
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-white">
+                        Proveedor: {orden.razonSocial}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/5">
+                      <div>
+                        <span className="text-gray-400 text-[11px] block">Monto</span>
+                        <span className="font-semibold text-emerald-300">
+                          {typeof orden.monto === "number"
+                            ? `$ ${orden.monto.toLocaleString("es-AR")}`
+                            : orden.monto}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 text-[11px] block">Forma de Pago</span>
+                        <span className="text-gray-200 font-medium">{orden.formaPago || "30DFF"}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs">
+                      <span className="text-gray-400 text-[11px] truncate max-w-[200px]">
+                        {orden.motivo}
+                      </span>
+                      <button
+                        onClick={() => setActiveNotesOrden(orden)}
+                        className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-amber-300 text-[10px] font-semibold flex items-center gap-1"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>Notas ({orden.notas?.length || 0})</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Mobile / Tablet Cards View */}
-            <div className="lg:hidden divide-y divide-white/10">
-              {filteredOrdenes.map((orden) => (
-                <div key={orden.id} className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    {/* Tildes */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleToggleLiberada(orden)}
-                        className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
-                          orden.liberada
-                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                            : "bg-white/5 text-gray-500 border-white/10"
-                        }`}
-                      >
-                        <Check className="w-3 h-3" />
-                        Liberada
-                      </button>
-
-                      <button
-                        onClick={() => handleToggleMandada(orden)}
-                        className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
-                          orden.mandada
-                            ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
-                            : "bg-white/5 text-gray-500 border-white/10"
-                        }`}
-                      >
-                        <Send className="w-3 h-3" />
-                        Mandada
-                      </button>
-
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                          orden.empresa === "Hoyts"
-                            ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                            : "bg-teal-500/15 text-teal-300 border-teal-500/30"
-                        }`}
-                      >
-                        {orden.empresa}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => handleCopy(orden)}
-                        className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copiar</span>
-                      </button>
-                      <button
-                        onClick={() => handleOpenEditModal(orden)}
-                        className="px-2 py-1 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-xs font-medium flex items-center gap-1"
-                      >
-                        <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Editar</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-mono text-emerald-400 font-bold text-sm">
-                        OC: {orden.numOC}
-                      </span>
-                      <span className="text-gray-400 text-[11px] flex items-center gap-1">
-                        <UserIcon className="w-3 h-3 text-emerald-400" />
-                        {orden.creadoPor || "Usuario"}
-                      </span>
-                    </div>
-                    <p className="text-sm font-semibold text-white">
-                      Proveedor: {orden.razonSocial}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/5">
-                    <div>
-                      <span className="text-gray-400 text-[11px] block">Monto</span>
-                      <span className="font-semibold text-emerald-300">
-                        {typeof orden.monto === "number"
-                          ? `$ ${orden.monto.toLocaleString("es-AR")}`
-                          : orden.monto}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400 text-[11px] block">Forma de Pago</span>
-                      <span className="text-gray-200 font-medium">{orden.formaPago || "30DFF"}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs">
-                    <span className="text-gray-400 text-[11px] truncate max-w-[200px]">
-                      {orden.motivo}
-                    </span>
-                    <button
-                      onClick={() => setActiveNotesOrden(orden)}
-                      className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-amber-300 text-[10px] font-semibold flex items-center gap-1"
-                    >
-                      <MessageSquare className="w-3 h-3" />
-                      <span>Notas ({orden.notas?.length || 0})</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Botón Cargar Más */}
+            {hasMore && (
+              <div className="py-4 text-center">
+                <button
+                  onClick={() => setDisplayLimit((prev) => prev + 10)}
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 group"
+                >
+                  <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                  <span>Cargar más órdenes ({filteredOrdenes.length - visibleOrdenes.length} restantes)</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
