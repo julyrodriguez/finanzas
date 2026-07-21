@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -14,10 +14,9 @@ import {
   Building2,
   Menu,
   X,
-  Search,
-  Bell,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  Loader2
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -31,7 +30,14 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
+
+  // Strict Protected Route Guard: If not logged in, redirect immediately to /login
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
 
   const menuItems = [
     {
@@ -63,7 +69,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   };
 
   const getCleanUsername = () => {
-    if (!user) return "Modo Invitado";
+    if (!user) return "Usuario";
     if (user.displayName) return user.displayName;
     if (user.email) {
       const parts = user.email.split("@");
@@ -71,6 +77,23 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
     }
     return "Usuario";
   };
+
+  // If checking authentication or unauthenticated, block rendering and show loader
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4 p-8 rounded-3xl glass-card border border-white/10 text-center">
+          <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-white font-bold text-base">Verificando sesión...</h3>
+            <p className="text-xs text-gray-400">Acceso protegido a la plataforma de Finanzas</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
@@ -194,7 +217,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
           <div className="flex items-center justify-between gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/5">
             <div className="flex items-center gap-3 min-w-0">
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
-                {getCleanUsername()[0].toUpperCase()}
+                {getCleanUsername()[0]?.toUpperCase() || "U"}
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-gray-200 truncate">
@@ -206,23 +229,13 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
               </div>
             </div>
 
-            {user ? (
-              <button
-                onClick={handleLogout}
-                title="Cerrar Sesión"
-                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                title="Iniciar Sesión"
-                className="p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors"
-              >
-                <UserIcon className="w-4 h-4" />
-              </Link>
-            )}
+            <button
+              onClick={handleLogout}
+              title="Cerrar Sesión"
+              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>
@@ -255,23 +268,13 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {user ? (
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
-              >
-                <LogOut className="w-3.5 h-3.5 text-red-400" />
-                <span className="hidden sm:inline">Salir</span>
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2"
-              >
-                <UserIcon className="w-3.5 h-3.5" />
-                <span>Ingresar</span>
-              </Link>
-            )}
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
+            >
+              <LogOut className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
           </div>
         </header>
 

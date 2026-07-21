@@ -20,16 +20,13 @@ import {
   Copy, 
   CheckCircle2, 
   X, 
-  Filter, 
   ShoppingBag, 
-  Building2, 
-  DollarSign, 
-  CreditCard, 
-  FileText, 
   Trash2, 
+  Edit3, 
   Loader2,
   AlertCircle,
-  Check
+  Check,
+  Send
 } from "lucide-react";
 
 export interface OrdenCompra {
@@ -42,6 +39,7 @@ export interface OrdenCompra {
   motivo: string;
   formaPago: string;
   liberada: boolean;
+  mandada: boolean;
   createdAt?: any;
 }
 
@@ -50,10 +48,11 @@ export default function OrdenesDeComprasPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Pendientes">("Todas");
+  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Pendientes">("Todas");
   
-  // Modal state for New Order
+  // Modal state for Add/Edit Order
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingOrden, setEditingOrden] = useState<OrdenCompra | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Form State
@@ -65,8 +64,9 @@ export default function OrdenesDeComprasPage() {
   const [motivo, setMotivo] = useState("");
   const [formaPago, setFormaPago] = useState("Transferencia");
   const [liberada, setLiberada] = useState(false);
+  const [mandada, setMandada] = useState(false);
 
-  // Notification Toast State for Clipboard Copy
+  // Notification Toast State for Clipboard Copy & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Load Firestore real-time data
@@ -101,12 +101,34 @@ export default function OrdenesDeComprasPage() {
     }
   }, []);
 
-  // Handle Add Order
-  const handleCreateOrden = async (e: React.FormEvent) => {
+  // Open Modal for Add
+  const handleOpenAddModal = () => {
+    setEditingOrden(null);
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  // Open Modal for Edit
+  const handleOpenEditModal = (orden: OrdenCompra) => {
+    setEditingOrden(orden);
+    setEmpresa(orden.empresa || "Hoyts");
+    setNumSolicitud(orden.numSolicitud || "");
+    setNumOC(orden.numOC || "");
+    setRazonSocial(orden.razonSocial || "");
+    setMonto(orden.monto?.toString() || "");
+    setMotivo(orden.motivo || "");
+    setFormaPago(orden.formaPago || "Transferencia");
+    setLiberada(Boolean(orden.liberada));
+    setMandada(Boolean(orden.mandada));
+    setIsModalOpen(true);
+  };
+
+  // Handle Save (Add or Edit)
+  const handleSaveOrden = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
-    const newOrden: Omit<OrdenCompra, "id"> = {
+    const dataToSave = {
       empresa,
       numSolicitud: numSolicitud.trim(),
       numOC: numOC.trim(),
@@ -115,26 +137,46 @@ export default function OrdenesDeComprasPage() {
       motivo: motivo.trim(),
       formaPago: formaPago.trim(),
       liberada,
-      createdAt: serverTimestamp(),
+      mandada,
     };
 
     const db = getFirebaseDb();
-    if (db) {
-      try {
-        await addDoc(collection(db, "ordenes_compra"), newOrden);
-        showToast("¡Orden de compra agregada exitosamente!");
-      } catch (err) {
-        console.error("Error al agregar orden:", err);
-        // Fallback local addition if db error
-        setOrdenes((prev) => [{ id: Date.now().toString(), ...newOrden }, ...prev]);
-        showToast("Agregada localmente");
+
+    if (editingOrden && editingOrden.id) {
+      // Update existing order
+      setOrdenes((prev) =>
+        prev.map((item) => (item.id === editingOrden.id ? { ...item, ...dataToSave } : item))
+      );
+
+      if (db) {
+        try {
+          const docRef = doc(db, "ordenes_compra", editingOrden.id);
+          await updateDoc(docRef, dataToSave);
+          showToast("¡Orden de compra actualizada!");
+        } catch (err) {
+          console.error("Error al actualizar orden:", err);
+        }
       }
     } else {
-      setOrdenes((prev) => [{ id: Date.now().toString(), ...newOrden }, ...prev]);
-      showToast("Agregada en memoria local");
+      // Add new order
+      const newOrden: Omit<OrdenCompra, "id"> = {
+        ...dataToSave,
+        createdAt: serverTimestamp(),
+      };
+
+      if (db) {
+        try {
+          await addDoc(collection(db, "ordenes_compra"), newOrden);
+          showToast("¡Orden de compra agregada!");
+        } catch (err) {
+          console.error("Error al agregar orden:", err);
+          setOrdenes((prev) => [{ id: Date.now().toString(), ...newOrden }, ...prev]);
+        }
+      } else {
+        setOrdenes((prev) => [{ id: Date.now().toString(), ...newOrden }, ...prev]);
+      }
     }
 
-    // Reset Form
     resetForm();
     setIsModalOpen(false);
     setSubmitting(false);
@@ -149,13 +191,12 @@ export default function OrdenesDeComprasPage() {
     setMotivo("");
     setFormaPago("Transferencia");
     setLiberada(false);
+    setMandada(false);
   };
 
   // Toggle Liberada Status
   const handleToggleLiberada = async (orden: OrdenCompra) => {
     const newLiberada = !orden.liberada;
-
-    // Optimistic UI update
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, liberada: newLiberada } : item))
     );
@@ -166,7 +207,25 @@ export default function OrdenesDeComprasPage() {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, { liberada: newLiberada });
       } catch (err) {
-        console.error("Error al actualizar estado liberada:", err);
+        console.error("Error al actualizar liberada:", err);
+      }
+    }
+  };
+
+  // Toggle Mandada Status
+  const handleToggleMandada = async (orden: OrdenCompra) => {
+    const newMandada = !orden.mandada;
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === orden.id ? { ...item, mandada: newMandada } : item))
+    );
+
+    const db = getFirebaseDb();
+    if (db && orden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", orden.id);
+        await updateDoc(docRef, { mandada: newMandada });
+      } catch (err) {
+        console.error("Error al actualizar mandada:", err);
       }
     }
   };
@@ -223,7 +282,8 @@ Forma de Pago: ${orden.formaPago}`;
     const matchesEstado =
       filterEstado === "Todas" ||
       (filterEstado === "Liberadas" && orden.liberada) ||
-      (filterEstado === "Pendientes" && !orden.liberada);
+      (filterEstado === "Mandadas" && orden.mandada) ||
+      (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
 
     return matchesSearch && matchesEmpresa && matchesEstado;
   });
@@ -231,7 +291,7 @@ Forma de Pago: ${orden.formaPago}`;
   return (
     <AppLayout 
       title="Órdenes de Compra" 
-      subtitle="Gestión, filtrado y copia rápida de solicitudes de compra"
+      subtitle="Gestión, edición, tildes de estado y copia rápida de solicitudes"
     >
       {/* Toast Notification */}
       {toastMessage && (
@@ -250,12 +310,12 @@ Forma de Pago: ${orden.formaPago}`;
               Solicitudes de Órdenes
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Total: {ordenes.length} órdenes ({ordenes.filter(o => o.liberada).length} liberadas)
+              Total: {ordenes.length} órdenes ({ordenes.filter(o => o.liberada).length} liberadas, {ordenes.filter(o => o.mandada).length} mandadas)
             </p>
           </div>
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -265,7 +325,7 @@ Forma de Pago: ${orden.formaPago}`;
 
         {/* Buscador & Filters Bar */}
         <div className="glass-card border border-white/10 p-4 rounded-2xl space-y-3">
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
             {/* Buscador Search Input */}
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -304,10 +364,10 @@ Forma de Pago: ${orden.formaPago}`;
               ))}
             </div>
 
-            {/* Filter Pills for Estado Liberada */}
+            {/* Filter Pills for Estado */}
             <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Liberadas", "Pendientes"] as const).map((est) => (
+              {(["Todas", "Liberadas", "Mandadas", "Pendientes"] as const).map((est) => (
                 <button
                   key={est}
                   onClick={() => setFilterEstado(est)}
@@ -347,37 +407,53 @@ Forma de Pago: ${orden.formaPago}`;
               <table className="w-full text-left text-xs">
                 <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-semibold">
                   <tr>
-                    <th className="px-5 py-3.5">Liberada</th>
-                    <th className="px-5 py-3.5">Empresa</th>
-                    <th className="px-5 py-3.5">N° Solicitud</th>
-                    <th className="px-5 py-3.5">N° OC & Copiar</th>
-                    <th className="px-5 py-3.5">Proveedor</th>
-                    <th className="px-5 py-3.5">Monto</th>
-                    <th className="px-5 py-3.5">Forma Pago</th>
-                    <th className="px-5 py-3.5">Detalle / Motivo</th>
-                    <th className="px-5 py-3.5 text-right">Acciones</th>
+                    <th className="px-4 py-3.5">Estados</th>
+                    <th className="px-4 py-3.5">Empresa</th>
+                    <th className="px-4 py-3.5">N° Solicitud</th>
+                    <th className="px-4 py-3.5">N° OC & Copiar</th>
+                    <th className="px-4 py-3.5">Proveedor</th>
+                    <th className="px-4 py-3.5">Monto</th>
+                    <th className="px-4 py-3.5">Forma Pago</th>
+                    <th className="px-4 py-3.5">Detalle / Motivo</th>
+                    <th className="px-4 py-3.5 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-gray-300">
                   {filteredOrdenes.map((orden) => (
                     <tr key={orden.id} className="hover:bg-white/[0.02] transition-colors">
-                      {/* Tilde / Liberada Checkbox Toggle */}
-                      <td className="px-5 py-4">
-                        <button
-                          onClick={() => handleToggleLiberada(orden)}
-                          className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                            orden.liberada
-                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                              : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                          }`}
-                          title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
-                        >
-                          <Check className={`w-4 h-4 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
-                        </button>
+                      {/* Tildes: Liberada & Mandada */}
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-1.5">
+                          {/* Tilde Liberada */}
+                          <button
+                            onClick={() => handleToggleLiberada(orden)}
+                            className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                              orden.liberada
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                            }`}
+                            title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
+                          >
+                            <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
+                          </button>
+
+                          {/* Tilde Mandada */}
+                          <button
+                            onClick={() => handleToggleMandada(orden)}
+                            className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                              orden.mandada
+                                ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                                : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                            }`}
+                            title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
+                          >
+                            <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : "opacity-40"}`} />
+                          </button>
+                        </div>
                       </td>
 
                       {/* Empresa Pill */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-4">
                         <span
                           className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
                             orden.empresa === "Hoyts"
@@ -390,12 +466,12 @@ Forma de Pago: ${orden.formaPago}`;
                       </td>
 
                       {/* N° Solicitud */}
-                      <td className="px-5 py-4 font-mono text-gray-300">
+                      <td className="px-4 py-4 font-mono text-gray-300">
                         {orden.numSolicitud || "-"}
                       </td>
 
                       {/* N° OC + Copy Button */}
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-4">
                         <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
                           <span className="font-mono font-bold text-emerald-400">
                             {orden.numOC}
@@ -411,36 +487,45 @@ Forma de Pago: ${orden.formaPago}`;
                       </td>
 
                       {/* Proveedor */}
-                      <td className="px-5 py-4 font-medium text-white max-w-xs truncate">
+                      <td className="px-4 py-4 font-medium text-white max-w-xs truncate">
                         {orden.razonSocial}
                       </td>
 
                       {/* Monto */}
-                      <td className="px-5 py-4 font-semibold text-emerald-300">
+                      <td className="px-4 py-4 font-semibold text-emerald-300">
                         {typeof orden.monto === "number"
                           ? `$ ${orden.monto.toLocaleString("es-AR")}`
                           : orden.monto}
                       </td>
 
                       {/* Forma Pago */}
-                      <td className="px-5 py-4 text-gray-300">
+                      <td className="px-4 py-4 text-gray-300">
                         {orden.formaPago}
                       </td>
 
                       {/* Detalle / Motivo */}
-                      <td className="px-5 py-4 text-gray-400 max-w-xs truncate" title={orden.motivo}>
+                      <td className="px-4 py-4 text-gray-400 max-w-xs truncate" title={orden.motivo}>
                         {orden.motivo}
                       </td>
 
-                      {/* Actions */}
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          onClick={() => handleDelete(orden.id)}
-                          className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors"
-                          title="Eliminar orden"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Actions: Edit & Delete */}
+                      <td className="px-4 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditModal(orden)}
+                            className="p-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 transition-colors"
+                            title="Editar orden"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(orden.id)}
+                            className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors"
+                            title="Eliminar orden"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -453,19 +538,34 @@ Forma de Pago: ${orden.formaPago}`;
               {filteredOrdenes.map((orden) => (
                 <div key={orden.id} className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
+                    {/* Tildes */}
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleToggleLiberada(orden)}
-                        className={`p-1.5 rounded-lg border transition-all ${
+                        className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
                           orden.liberada
                             ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
                             : "bg-white/5 text-gray-500 border-white/10"
                         }`}
                       >
-                        <Check className="w-4 h-4" />
+                        <Check className="w-3 h-3" />
+                        Liberada
                       </button>
+
+                      <button
+                        onClick={() => handleToggleMandada(orden)}
+                        className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
+                          orden.mandada
+                            ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
+                            : "bg-white/5 text-gray-500 border-white/10"
+                        }`}
+                      >
+                        <Send className="w-3 h-3" />
+                        Mandada
+                      </button>
+
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                           orden.empresa === "Hoyts"
                             ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
                             : "bg-teal-500/15 text-teal-300 border-teal-500/30"
@@ -475,13 +575,19 @@ Forma de Pago: ${orden.formaPago}`;
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => handleCopy(orden)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5"
+                        className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1"
                       >
                         <Copy className="w-3.5 h-3.5" />
                         <span>Copiar</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenEditModal(orden)}
+                        className="p-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => handleDelete(orden.id)}
@@ -532,14 +638,23 @@ Forma de Pago: ${orden.formaPago}`;
         )}
       </div>
 
-      {/* Modal / Form para Agregar Solicitud de OC */}
+      {/* Modal / Form para Agregar o Editar Solicitud de OC */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-8">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Plus className="w-5 h-5 text-emerald-400" />
-                Agregar Solicitud de OC
+                {editingOrden ? (
+                  <>
+                    <Edit3 className="w-5 h-5 text-emerald-400" />
+                    Editar Orden de Compra
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-5 h-5 text-emerald-400" />
+                    Agregar Solicitud de OC
+                  </>
+                )}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -549,7 +664,7 @@ Forma de Pago: ${orden.formaPago}`;
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrden} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveOrden} className="space-y-4 text-xs">
               {/* Selección de Empresa: Hoyts vs CMK */}
               <div>
                 <label className="block text-gray-300 font-medium mb-1.5">Empresa</label>
@@ -672,18 +787,33 @@ Forma de Pago: ${orden.formaPago}`;
                 />
               </div>
 
-              {/* Checkbox Liberada */}
-              <div className="flex items-center gap-3 pt-1">
-                <input
-                  type="checkbox"
-                  id="liberadaCheckbox"
-                  checked={liberada}
-                  onChange={(e) => setLiberada(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500/40"
-                />
-                <label htmlFor="liberadaCheckbox" className="text-gray-300 font-medium cursor-pointer">
-                  Marcar como Liberada
-                </label>
+              {/* Checkboxes: Liberada & Mandada */}
+              <div className="grid grid-cols-2 gap-4 pt-1 border-t border-white/5">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="liberadaCheckbox"
+                    checked={liberada}
+                    onChange={(e) => setLiberada(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500/40"
+                  />
+                  <label htmlFor="liberadaCheckbox" className="text-gray-300 font-medium cursor-pointer">
+                    Liberada
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="mandadaCheckbox"
+                    checked={mandada}
+                    onChange={(e) => setMandada(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-cyan-500 focus:ring-cyan-500/40"
+                  />
+                  <label htmlFor="mandadaCheckbox" className="text-gray-300 font-medium cursor-pointer">
+                    Mandada
+                  </label>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -704,8 +834,8 @@ Forma de Pago: ${orden.formaPago}`;
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
-                      <Plus className="w-4 h-4" />
-                      <span>Guardar Orden</span>
+                      {editingOrden ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                      <span>{editingOrden ? "Guardar Cambios" : "Guardar Orden"}</span>
                     </>
                   )}
                 </button>
