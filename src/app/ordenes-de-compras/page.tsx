@@ -11,7 +11,10 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  serverTimestamp 
+  serverTimestamp,
+  query,
+  orderBy,
+  limit
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -65,8 +68,8 @@ export default function OrdenesDeComprasPage() {
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes">("Todas");
   
-  // Pagination State: Limit initial view to 10
-  const [displayLimit, setDisplayLimit] = useState(10);
+  // Pagination State: Limit initial query reads to 15
+  const [queryLimit, setQueryLimit] = useState(15);
 
   // Modal state for Add/Edit Order
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,7 +105,7 @@ export default function OrdenesDeComprasPage() {
     return "Usuario";
   };
 
-  // Load Firestore real-time data
+  // Load Firestore real-time data with query limits
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
@@ -112,8 +115,11 @@ export default function OrdenesDeComprasPage() {
 
     try {
       const colRef = collection(db, "ordenes_compra");
+      // Query queryLimit + 1 documents to determine if there are more remaining
+      const q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
+
       const unsubscribe = onSnapshot(
-        colRef,
+        q,
         (snapshot) => {
           const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
             const data = docSnap.data();
@@ -155,7 +161,7 @@ export default function OrdenesDeComprasPage() {
       console.warn("Firestore collection error:", err);
       setLoading(false);
     }
-  }, []);
+  }, [queryLimit]);
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
@@ -413,9 +419,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
     return matchesSearch && matchesEmpresa && matchesEstado;
   });
 
-  // Limit visible items to displayLimit
-  const visibleOrdenes = filteredOrdenes.slice(0, displayLimit);
-  const hasMore = filteredOrdenes.length > displayLimit;
+  // Limit visible items to queryLimit (slicing off the extra placeholder item we fetched to check hasMore)
+  const visibleOrdenes = filteredOrdenes.slice(0, queryLimit);
+  const hasMore = ordenes.length > queryLimit;
 
   return (
     <AppLayout 
@@ -463,7 +469,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
-                  setDisplayLimit(10); // Reset limit when searching
+                  setQueryLimit(15); // Reset limit when searching
                 }}
                 placeholder="Buscar..."
                 className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
@@ -472,7 +478,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                 <button
                   onClick={() => {
                     setSearchQuery("");
-                    setDisplayLimit(10);
+                    setQueryLimit(15);
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                 >
@@ -489,7 +495,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                   key={emp}
                   onClick={() => {
                     setFilterEmpresa(emp);
-                    setDisplayLimit(10);
+                    setQueryLimit(15);
                   }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEmpresa === emp
@@ -510,7 +516,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                   key={est}
                   onClick={() => {
                     setFilterEstado(est);
-                    setDisplayLimit(10);
+                    setQueryLimit(15);
                   }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEstado === est
@@ -856,11 +862,11 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
             {hasMore && (
               <div className="py-4 text-center">
                 <button
-                  onClick={() => setDisplayLimit((prev) => prev + 10)}
+                  onClick={() => setQueryLimit((prev) => prev + 15)}
                   className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 group"
                 >
                   <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
-                  <span>Cargar más órdenes ({filteredOrdenes.length - visibleOrdenes.length} restantes)</span>
+                  <span>Cargar más órdenes</span>
                 </button>
               </div>
             )}
