@@ -412,7 +412,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
     const matchesEstado =
       filterEstado === "Todas" ||
       (filterEstado === "Liberadas" && orden.liberada && !orden.entregada) ||
-      (filterEstado === "Mandadas" && orden.mandada) ||
+      (filterEstado === "Mandadas" && orden.mandada && !orden.liberada) ||
       (filterEstado === "Entregadas" && orden.entregada) ||
       (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
 
