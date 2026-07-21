@@ -54,3 +54,210 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+/* ==========================================
+   PINK THEME (MODO ROSA)
+   ========================================== */
+
+/* Page Background & Base Color override */
+.pink-theme {
+  background-color: #fff0f3 !important;
+  color: #334155 !important;
+  background-image: radial-gradient(at 0% 0%, hsla(343, 100%, 98%, 1) 0px, transparent 50%),
+                    radial-gradient(at 50% 0%, hsla(340, 100%, 97%, 1) 0px, transparent 50%),
+                    radial-gradient(at 100% 0%, hsla(335, 100%, 96%, 1) 0px, transparent 50%) !important;
+}
+
+/* Sidebar & Header overrides */
+.pink-theme aside {
+  background-color: #ffe4e6 !important; /* rose-100 */
+  border-color: rgba(244, 63, 94, 0.15) !important;
+  box-shadow: 10px 0 30px -15px rgba(244, 63, 94, 0.1) !important;
+}
+
+.pink-theme header {
+  background-color: rgba(255, 240, 243, 0.8) !important;
+  border-color: rgba(244, 63, 94, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Override text color classes for headings and subheadings */
+.pink-theme h1,
+.pink-theme h2,
+.pink-theme h3,
+.pink-theme h4,
+.pink-theme th,
+.pink-theme .text-white {
+  color: #9f1239 !important; /* rose-800 */
+}
+
+.pink-theme .text-gray-100 {
+  color: #1e293b !important; /* slate-800 */
+}
+
+.pink-theme .text-gray-200,
+.pink-theme .text-gray-300,
+.pink-theme .text-gray-400 {
+  color: #475569 !important; /* slate-600 */
+}
+
+/* Glass cards override */
+.pink-theme .glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%) !important;
+  border-color: rgba(244, 63, 94, 0.15) !important;
+  box-shadow: 0 10px 30px -5px rgba(244, 63, 94, 0.08) !important;
+}
+
+/* Override inputs and selects */
+.pink-theme input,
+.pink-theme select,
+.pink-theme textarea {
+  background-color: #ffffff !important;
+  border-color: rgba(244, 63, 94, 0.25) !important;
+  color: #1e293b !important;
+}
+
+.pink-theme input:focus,
+.pink-theme select:focus,
+.pink-theme textarea:focus {
+  border-color: #ec4899 !important; /* pink-500 */
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.15) !important;
+}
+
+.pink-theme input::placeholder,
+.pink-theme textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Active links in sidebar */
+.pink-theme aside a[class*="from-emerald-500"] {
+  background: linear-gradient(to right, rgba(244, 63, 94, 0.15), rgba(244, 63, 94, 0.05)) !important;
+  border-color: rgba(244, 63, 94, 0.3) !important;
+  color: #db2777 !important; /* pink-600 */
+}
+
+.pink-theme aside a div[class*="bg-emerald-500/20"] {
+  background-color: rgba(244, 63, 94, 0.2) !important;
+  color: #db2777 !important;
+}
+
+.pink-theme aside a div[class*="text-emerald-400"] {
+  color: #db2777 !important;
+}
+
+.pink-theme aside a div[class*="text-gray-400"]:hover,
+.pink-theme aside a:hover {
+  background-color: rgba(244, 63, 94, 0.08) !important;
+  color: #db2777 !important;
+}
+
+.pink-theme aside a span[class*="bg-emerald-500/20"] {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  color: #db2777 !important;
+  border-color: rgba(244, 63, 94, 0.2) !important;
+}
+
+/* Table header and row coloring */
+.pink-theme th {
+  background-color: #ffe4e6 !important;
+  color: #9f1239 !important;
+  border-bottom: 2px solid rgba(244, 63, 94, 0.15) !important;
+}
+
+.pink-theme tr {
+  border-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+.pink-theme tr:hover {
+  background-color: rgba(244, 63, 94, 0.03) !important;
+}
+
+/* Buttons primary (Nueva Orden, Entrar, etc.) */
+.pink-theme button[class*="from-emerald-500"],
+.pink-theme button[class*="bg-gradient-to-r"] {
+  background: linear-gradient(to right, #ec4899, #f43f5e) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 15px -3px rgba(236, 72, 153, 0.3) !important;
+}
+
+.pink-theme button[class*="from-emerald-500"]:hover,
+.pink-theme button[class*="bg-gradient-to-r"]:hover {
+  background: linear-gradient(to right, #db2777, #e11d48) !important;
+}
+
+/* State filter pills */
+.pink-theme button[class*="bg-emerald-500"] {
+  background-color: #ec4899 !important;
+  color: #ffffff !important;
+}
+
+.pink-theme .bg-white\/5 {
+  background-color: rgba(244, 63, 94, 0.04) !important;
+  border-color: rgba(244, 63, 94, 0.15) !important;
+}
+
+/* Ambient glow blobs removal or adjustments */
+.pink-theme div[class*="bg-emerald-500/15"],
+.pink-theme div[class*="bg-teal-500/15"],
+.pink-theme div[class*="bg-emerald-500/10"],
+.pink-theme div[class*="bg-teal-500/10"] {
+  background-color: rgba(244, 63, 94, 0.08) !important;
+}
+
+/* Scrollbar overrides */
+.pink-theme ::-webkit-scrollbar-track {
+  background: rgba(244, 63, 94, 0.05);
+}
+
+.pink-theme ::-webkit-scrollbar-thumb {
+  background: rgba(244, 63, 94, 0.2);
+}
+
+.pink-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 63, 94, 0.35);
+}
+
+/* Modal and dialogs */
+.pink-theme div[class*="bg-black/70"] {
+  background-color: rgba(76, 29, 47, 0.3) !important;
+}
+
+.pink-theme .glass-card button[class*="bg-red-500/10"] {
+  background-color: #ffe4e6 !important;
+  color: #e11d48 !important;
+  border-color: rgba(225, 29, 72, 0.2) !important;
+}
+
+.pink-theme .glass-card button[class*="bg-red-500/10"]:hover {
+  background-color: #fecdd3 !important;
+}
+
+/* Custom indicator states: */
+.pink-theme span[class*="bg-emerald-500/15"] {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+  color: #be123c !important;
+  border-color: rgba(244, 63, 94, 0.2) !important;
+}
+
+.pink-theme span[class*="bg-teal-500/15"] {
+  background-color: rgba(20, 184, 166, 0.1) !important;
+  color: #0f766e !important;
+  border-color: rgba(20, 184, 166, 0.2) !important;
+}
+
+.pink-theme button[class*="bg-emerald-500/20"] {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+  color: #db2777 !important;
+  border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+/* Pending sends (red highlights) - keep high contrast */
+.pink-theme tr[class*="bg-red-500/5"] {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+  border-left: 3px solid #ef4444 !important;
+}
+
+/* User profile initials box */
+.pink-theme div[class*="bg-gradient-to-tr from-emerald-500 to-teal-500"] {
+  background: linear-gradient(to right, #ec4899, #f43f5e) !important;
+}

@@ -30,6 +30,20 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const [theme, setTheme] = useState<"dark" | "pink">("dark");
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("app-theme");
+    if (savedTheme === "pink") {
+      setTheme("pink");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "pink" : "dark";
+    setTheme(newTheme);
+    localStorage.setItem("app-theme", newTheme);
+  };
 
   const { user, loading, logout } = useAuth();
 
@@ -99,7 +113,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   const isExpanded = sidebarOpen || isHovered;
 
   return (
-    <div className="flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 ${theme === "pink" ? "pink-theme" : ""}`}>
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div
@@ -297,6 +311,25 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {/* Theme Switcher Button */}
+            <button
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Cambiar a Modo Rosa" : "Cambiar a Modo Oscuro"}
+              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+            >
+              {theme === "dark" ? (
+                <>
+                  <span className="text-xs">🌸</span>
+                  <span className="hidden sm:inline">Modo Rosa</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs">🌙</span>
+                  <span className="hidden sm:inline">Modo Oscuro</span>
+                </>
+              )}
+            </button>
+
             <button
               onClick={handleLogout}
               className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
