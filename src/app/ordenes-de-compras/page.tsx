@@ -63,7 +63,7 @@ export default function OrdenesDeComprasPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Pendientes">("Todas");
+  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes">("Todas");
   
   // Pagination State: Limit initial view to 10
   const [displayLimit, setDisplayLimit] = useState(10);
@@ -407,6 +407,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
       filterEstado === "Todas" ||
       (filterEstado === "Liberadas" && orden.liberada) ||
       (filterEstado === "Mandadas" && orden.mandada) ||
+      (filterEstado === "Entregadas" && orden.entregada) ||
       (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
 
     return matchesSearch && matchesEmpresa && matchesEstado;
@@ -504,7 +505,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
             {/* Filter Pills for Estado */}
             <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Liberadas", "Mandadas", "Pendientes"] as const).map((est) => (
+              {(["Todas", "Liberadas", "Mandadas", "Entregadas", "Pendientes"] as const).map((est) => (
                 <button
                   key={est}
                   onClick={() => {
