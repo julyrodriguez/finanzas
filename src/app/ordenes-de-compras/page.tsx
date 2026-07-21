@@ -405,7 +405,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
 
     const matchesEstado =
       filterEstado === "Todas" ||
-      (filterEstado === "Liberadas" && orden.liberada) ||
+      (filterEstado === "Liberadas" && orden.liberada && !orden.entregada) ||
       (filterEstado === "Mandadas" && orden.mandada) ||
       (filterEstado === "Entregadas" && orden.entregada) ||
       (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
@@ -600,8 +600,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                                 <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : isPendingSend ? "stroke-[2.5]" : "opacity-40"}`} />
                               </button>
 
-                              {/* Tilde Entregada (Solo visible en filtro de Liberadas) */}
-                              {filterEstado === "Liberadas" && (
+                              {/* Tilde Entregada (Visible en filtro de Liberadas o Entregadas) */}
+                              {(filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
                                 <button
                                   onClick={() => handleToggleEntregada(orden)}
                                   className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
@@ -743,8 +743,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                             Mandada
                           </button>
 
-                          {/* Tilde Entregada (Solo visible en filtro de Liberadas) */}
-                          {filterEstado === "Liberadas" && (
+                          {/* Tilde Entregada (Visible en filtro de Liberadas o Entregadas) */}
+                          {(filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
                             <button
                               onClick={() => handleToggleEntregada(orden)}
                               className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 transition-all ${
