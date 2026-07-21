@@ -62,7 +62,7 @@ export default function OrdenesDeComprasPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Liberadas y Mandadas" | "Mandadas" | "Pendientes">("Todas");
+  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Pendientes">("Todas");
   
   // Pagination State: Limit initial view to 10
   const [displayLimit, setDisplayLimit] = useState(10);
@@ -351,11 +351,15 @@ export default function OrdenesDeComprasPage() {
       ? `$ ${orden.monto.toLocaleString("es-AR")}`
       : orden.monto;
 
+    const notasPart = orden.notas && orden.notas.length > 0
+      ? "\nNotas:\n" + orden.notas.map(n => `- [${n.autor}]: ${n.texto}`).join("\n")
+      : "";
+
     const copyText = `OC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
-Forma de Pago: ${orden.formaPago}`;
+Forma de Pago: ${orden.formaPago}${notasPart}`;
 
     navigator.clipboard.writeText(copyText);
     showToast(`¡Copiado OC ${orden.numOC} ${orden.empresa}!`);
@@ -381,7 +385,6 @@ Forma de Pago: ${orden.formaPago}`;
     const matchesEstado =
       filterEstado === "Todas" ||
       (filterEstado === "Liberadas" && orden.liberada) ||
-      (filterEstado === "Liberadas y Mandadas" && orden.liberada && orden.mandada) ||
       (filterEstado === "Mandadas" && orden.mandada) ||
       (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
 
@@ -480,7 +483,7 @@ Forma de Pago: ${orden.formaPago}`;
             {/* Filter Pills for Estado */}
             <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Liberadas", "Liberadas y Mandadas", "Mandadas", "Pendientes"] as const).map((est) => (
+              {(["Todas", "Liberadas", "Mandadas", "Pendientes"] as const).map((est) => (
                 <button
                   key={est}
                   onClick={() => {
@@ -537,38 +540,45 @@ Forma de Pago: ${orden.formaPago}`;
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-gray-300">
-                    {visibleOrdenes.map((orden) => (
-                      <tr key={orden.id} className="hover:bg-white/[0.02] transition-colors">
-                        {/* Tildes: Liberada & Mandada */}
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-1.5">
-                            {/* Tilde Liberada */}
-                            <button
-                              onClick={() => handleToggleLiberada(orden)}
-                              className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                orden.liberada
-                                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                  : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                              }`}
-                              title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
-                            >
-                              <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
-                            </button>
+                    {visibleOrdenes.map((orden) => {
+                      const isPendingSend = orden.liberada && !orden.mandada;
+                      const rowClass = isPendingSend
+                        ? "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500 transition-all duration-200"
+                        : "hover:bg-white/[0.02] transition-all duration-200";
+                      return (
+                        <tr key={orden.id} className={rowClass}>
+                          {/* Tildes: Liberada & Mandada */}
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-1.5">
+                              {/* Tilde Liberada */}
+                              <button
+                                onClick={() => handleToggleLiberada(orden)}
+                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                  orden.liberada
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                    : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                                }`}
+                                title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
+                              >
+                                <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
+                              </button>
 
-                            {/* Tilde Mandada */}
-                            <button
-                              onClick={() => handleToggleMandada(orden)}
-                              className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                orden.mandada
-                                  ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
-                                  : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                              }`}
-                              title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
-                            >
-                              <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : "opacity-40"}`} />
-                            </button>
-                          </div>
-                        </td>
+                              {/* Tilde Mandada */}
+                              <button
+                                onClick={() => handleToggleMandada(orden)}
+                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                  orden.mandada
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                                    : isPendingSend
+                                      ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
+                                      : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                                }`}
+                                title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
+                              >
+                                <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : isPendingSend ? "stroke-[2.5]" : "opacity-40"}`} />
+                              </button>
+                            </div>
+                          </td>
 
                         {/* Empresa Pill */}
                         <td className="px-4 py-4">
@@ -652,52 +662,60 @@ Forma de Pago: ${orden.formaPago}`;
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
               {/* Mobile / Tablet Cards View */}
               <div className="lg:hidden divide-y divide-white/10">
-                {visibleOrdenes.map((orden) => (
-                  <div key={orden.id} className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      {/* Tildes */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleToggleLiberada(orden)}
-                          className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
-                            orden.liberada
-                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                              : "bg-white/5 text-gray-500 border-white/10"
-                          }`}
-                        >
-                          <Check className="w-3 h-3" />
-                          Liberada
-                        </button>
+                {visibleOrdenes.map((orden) => {
+                  const isPendingSend = orden.liberada && !orden.mandada;
+                  const cardClass = isPendingSend
+                    ? "p-4 space-y-3 bg-red-500/5 border-l-2 border-l-red-500 transition-all duration-200"
+                    : "p-4 space-y-3 transition-all duration-200";
+                  return (
+                    <div key={orden.id} className={cardClass}>
+                      <div className="flex items-center justify-between">
+                        {/* Tildes */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleToggleLiberada(orden)}
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
+                              orden.liberada
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                : "bg-white/5 text-gray-500 border-white/10"
+                            }`}
+                          >
+                            <Check className="w-3 h-3" />
+                            Liberada
+                          </button>
 
-                        <button
-                          onClick={() => handleToggleMandada(orden)}
-                          className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 ${
-                            orden.mandada
-                              ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40"
-                              : "bg-white/5 text-gray-500 border-white/10"
-                          }`}
-                        >
-                          <Send className="w-3 h-3" />
-                          Mandada
-                        </button>
+                          <button
+                            onClick={() => handleToggleMandada(orden)}
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 transition-all ${
+                              orden.mandada
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                                : isPendingSend
+                                  ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
+                                  : "bg-white/5 text-gray-500 border-white/10"
+                            }`}
+                          >
+                            <Send className="w-3 h-3" />
+                            Mandada
+                          </button>
 
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            orden.empresa === "Hoyts"
-                              ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                              : "bg-teal-500/15 text-teal-300 border-teal-500/30"
-                          }`}
-                        >
-                          {orden.empresa}
-                        </span>
-                      </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              orden.empresa === "Hoyts"
+                                ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                                : "bg-teal-500/15 text-teal-300 border-teal-500/30"
+                            }`}
+                          >
+                            {orden.empresa}
+                          </span>
+                        </div>
 
                       <div className="flex items-center gap-1.5">
                         <button
@@ -760,7 +778,8 @@ Forma de Pago: ${orden.formaPago}`;
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
