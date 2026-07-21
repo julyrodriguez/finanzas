@@ -523,6 +523,27 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
               ))}
             </div>
           </div>
+
+          {/* Leyenda de Estados */}
+          <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
+            <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px] mr-1">Guía de Estados:</span>
+            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium">
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>🟢 Liberada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/20 font-medium animate-pulse">
+              <Send className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>🔴 Pendiente de Envío</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium">
+              <Send className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>🟢 Mandada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>🔵 Entregada</span>
+            </span>
+          </div>
         </div>
 
         {/* Table / List View */}
