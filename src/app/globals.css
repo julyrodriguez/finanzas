@@ -136,6 +136,19 @@
   color: #db2777 !important; /* pink-600 */
 }
 
+/* Sidebar navigation icons colors */
+.pink-theme aside nav a svg {
+  color: #db2777 !important;
+}
+
+.pink-theme aside nav a:hover svg {
+  color: #ec4899 !important;
+}
+
+.pink-theme aside nav a[class*="from-emerald-500"] svg {
+  color: #db2777 !important;
+}
+
 .pink-theme aside a div[class*="bg-emerald-500/20"] {
   background-color: rgba(244, 63, 94, 0.2) !important;
   color: #db2777 !important;
@@ -232,11 +245,21 @@
   background-color: #fecdd3 !important;
 }
 
+/* Emerald text color contrast overrides */
+.pink-theme .text-emerald-400,
+.pink-theme .text-emerald-300,
+.pink-theme .text-emerald-500,
+.pink-theme font-bold[class*="text-emerald-400"],
+.pink-theme span[class*="text-emerald-400"],
+.pink-theme span[class*="text-emerald-300"] {
+  color: #047857 !important; /* dark green */
+}
+
 /* Custom indicator states: */
 .pink-theme span[class*="bg-emerald-500/15"] {
-  background-color: rgba(244, 63, 94, 0.1) !important;
-  color: #be123c !important;
-  border-color: rgba(244, 63, 94, 0.2) !important;
+  background-color: rgba(4, 120, 87, 0.1) !important;
+  color: #047857 !important;
+  border-color: rgba(4, 120, 87, 0.25) !important;
 }
 
 .pink-theme span[class*="bg-teal-500/15"] {
@@ -246,9 +269,9 @@
 }
 
 .pink-theme button[class*="bg-emerald-500/20"] {
-  background-color: rgba(244, 63, 94, 0.15) !important;
-  color: #db2777 !important;
-  border-color: rgba(244, 63, 94, 0.3) !important;
+  background-color: rgba(4, 120, 87, 0.1) !important;
+  color: #047857 !important;
+  border-color: rgba(4, 120, 87, 0.25) !important;
 }
 
 /* Pending sends (red highlights) - keep high contrast */
