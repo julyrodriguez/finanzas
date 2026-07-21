@@ -106,6 +106,8 @@ export default function OrdenesDeComprasPage() {
     return "Usuario";
   };
 
+  const isSearching = searchQuery.trim() !== "";
+
   // Load Firestore real-time data with query limits
   useEffect(() => {
     const db = getFirebaseDb();
@@ -116,8 +118,12 @@ export default function OrdenesDeComprasPage() {
 
     try {
       const colRef = collection(db, "ordenes_compra");
-      // Query queryLimit + 1 documents to determine if there are more remaining
-      const q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
+      // Query queryLimit + 1 documents, or 300 documents if actively searching to allow deep searching
+      const q = query(
+        colRef, 
+        orderBy("createdAt", "desc"), 
+        limit(isSearching ? 300 : queryLimit + 1)
+      );
 
       const unsubscribe = onSnapshot(
         q,
@@ -162,7 +168,7 @@ export default function OrdenesDeComprasPage() {
       console.warn("Firestore collection error:", err);
       setLoading(false);
     }
-  }, [queryLimit]);
+  }, [queryLimit, isSearching]);
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
@@ -436,8 +442,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
   });
 
   // Limit visible items to queryLimit (slicing off the extra placeholder item we fetched to check hasMore)
-  const visibleOrdenes = filteredOrdenes.slice(0, queryLimit);
-  const hasMore = ordenes.length > queryLimit;
+  // Bypass slice when actively searching so they can see all matched items up to 300 documents
+  const visibleOrdenes = isSearching ? filteredOrdenes : filteredOrdenes.slice(0, queryLimit);
+  const hasMore = isSearching ? false : ordenes.length > queryLimit;
 
   return (
     <AppLayout 
