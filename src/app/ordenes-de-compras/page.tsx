@@ -531,10 +531,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
               <Check className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>🟢 Liberada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/20 font-medium animate-pulse">
-              <Send className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>🔴 Pendiente de Envío</span>
-            </span>
             <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium">
               <Send className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>🟢 Mandada</span>
@@ -621,8 +617,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                                 <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : isPendingSend ? "stroke-[2.5]" : "opacity-40"}`} />
                               </button>
 
-                              {/* Tilde Entregada (Visible en filtro de Liberadas o Entregadas) */}
-                              {(filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
+                              {/* Tilde Entregada (Visible en filtro de Todas, Liberadas o Entregadas) */}
+                              {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
                                 <button
                                   onClick={() => handleToggleEntregada(orden)}
                                   className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
@@ -764,8 +760,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                             Mandada
                           </button>
 
-                          {/* Tilde Entregada (Visible en filtro de Liberadas o Entregadas) */}
-                          {(filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
+                          {/* Tilde Entregada (Visible en filtro de Todas, Liberadas o Entregadas) */}
+                          {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
                             <button
                               onClick={() => handleToggleEntregada(orden)}
                               className={`px-2 py-1 rounded-lg border text-[10px] font-semibold flex items-center gap-1 transition-all ${
