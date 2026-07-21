@@ -65,6 +65,7 @@ export default function OrdenesDeComprasPage() {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchField, setSearchField] = useState<"todos" | "numSolicitud" | "numOC" | "razonSocial">("todos");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes">("Todas");
   
@@ -399,12 +400,27 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
 
   // Filtered list
   const filteredOrdenes = ordenes.filter((orden) => {
-    const matchesSearch =
-      orden.numOC.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orden.numSolicitud.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orden.razonSocial.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      orden.motivo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (orden.creadoPor && orden.creadoPor.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = (() => {
+      if (!searchQuery.trim()) return true;
+      const queryText = searchQuery.toLowerCase();
+      switch (searchField) {
+        case "numSolicitud":
+          return orden.numSolicitud.toLowerCase().includes(queryText);
+        case "numOC":
+          return orden.numOC.toLowerCase().includes(queryText);
+        case "razonSocial":
+          return orden.razonSocial.toLowerCase().includes(queryText);
+        case "todos":
+        default:
+          return (
+            orden.numOC.toLowerCase().includes(queryText) ||
+            orden.numSolicitud.toLowerCase().includes(queryText) ||
+            orden.razonSocial.toLowerCase().includes(queryText) ||
+            orden.motivo.toLowerCase().includes(queryText) ||
+            (orden.creadoPor && orden.creadoPor.toLowerCase().includes(queryText))
+          );
+      }
+    })();
 
     const matchesEmpresa =
       filterEmpresa === "Todas" || orden.empresa === filterEmpresa;
@@ -461,30 +477,51 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
         {/* Buscador & Filters Bar */}
         <div className="glass-card border border-white/10 p-4 rounded-2xl space-y-3">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-            {/* Buscador Search Input (achicado) */}
-            <div className="relative w-full lg:max-w-xs">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setQueryLimit(15); // Reset limit when searching
-                }}
-                placeholder="Buscar..."
-                className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => {
-                    setSearchQuery("");
+            {/* Buscador Search Input Group */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-xl">
+              {/* Dropdown de campo */}
+              <div className="relative flex-shrink-0">
+                <select
+                  value={searchField}
+                  onChange={(e) => {
+                    setSearchField(e.target.value as any);
                     setQueryLimit(15);
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  className="w-full sm:w-auto pl-3 pr-8 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none"
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+                  <option value="todos" className="bg-[#0d131f] text-white">Todos los campos</option>
+                  <option value="numOC" className="bg-[#0d131f] text-white">N° OC</option>
+                  <option value="numSolicitud" className="bg-[#0d131f] text-white">N° Solicitud</option>
+                  <option value="razonSocial" className="bg-[#0d131f] text-white">Proveedor</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+
+              {/* Input de búsqueda */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setQueryLimit(15);
+                  }}
+                  placeholder="Buscar..."
+                  className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setQueryLimit(15);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Filter Pills for Empresa */}
