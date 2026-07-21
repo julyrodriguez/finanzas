@@ -1,14 +1,14 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, Auth } from "firebase/auth";
 
-const firebaseConfig = {
+const getFirebaseConfig = () => ({
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
-};
+});
 
 let cachedApp: FirebaseApp | null = null;
 let cachedAuth: Auth | null = null;
@@ -18,8 +18,11 @@ export const getFirebaseApp = (): FirebaseApp | null => {
   try {
     if (getApps().length > 0) {
       cachedApp = getApp();
-    } else if (firebaseConfig.apiKey) {
-      cachedApp = initializeApp(firebaseConfig);
+    } else {
+      const config = getFirebaseConfig();
+      if (config.apiKey) {
+        cachedApp = initializeApp(config);
+      }
     }
     return cachedApp;
   } catch (error) {
