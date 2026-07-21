@@ -80,7 +80,7 @@ export default function OrdenesDeComprasPage() {
   const [razonSocial, setRazonSocial] = useState("");
   const [monto, setMonto] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [formaPago, setFormaPago] = useState("Transferencia");
+  const [formaPago, setFormaPago] = useState("30DFF");
   const [liberada, setLiberada] = useState(false);
   const [mandada, setMandada] = useState(false);
 
@@ -120,7 +120,7 @@ export default function OrdenesDeComprasPage() {
               razonSocial: data.razonSocial || "",
               monto: data.monto ?? "",
               motivo: data.motivo || "",
-              formaPago: data.formaPago || "Transferencia",
+              formaPago: data.formaPago || "30DFF",
               liberada: Boolean(data.liberada),
               mandada: Boolean(data.mandada),
               creadoPor: data.creadoPor || "Usuario",
@@ -167,7 +167,7 @@ export default function OrdenesDeComprasPage() {
     setRazonSocial(orden.razonSocial || "");
     setMonto(orden.monto?.toString() || "");
     setMotivo(orden.motivo || "");
-    setFormaPago(orden.formaPago || "Transferencia");
+    setFormaPago(orden.formaPago || "30DFF");
     setLiberada(Boolean(orden.liberada));
     setMandada(Boolean(orden.mandada));
     setIsModalOpen(true);
@@ -187,7 +187,7 @@ export default function OrdenesDeComprasPage() {
       razonSocial: razonSocial.trim(),
       monto: Number(monto) || monto,
       motivo: motivo.trim(),
-      formaPago: formaPago.trim(),
+      formaPago: formaPago.trim() || "30DFF",
       liberada,
       mandada,
       creadoPor: editingOrden?.creadoPor || authorName,
@@ -243,7 +243,7 @@ export default function OrdenesDeComprasPage() {
     setRazonSocial("");
     setMonto("");
     setMotivo("");
-    setFormaPago("Transferencia");
+    setFormaPago("30DFF");
     setLiberada(false);
     setMandada(false);
   };
@@ -509,6 +509,7 @@ Forma de Pago: ${orden.formaPago}`;
                     <th className="px-4 py-3.5">Creado Por</th>
                     <th className="px-4 py-3.5">Proveedor</th>
                     <th className="px-4 py-3.5">Monto</th>
+                    <th className="px-4 py-3.5">Forma Pago</th>
                     <th className="px-4 py-3.5">Notas</th>
                     <th className="px-4 py-3.5 text-right">Acciones</th>
                   </tr>
@@ -560,7 +561,7 @@ Forma de Pago: ${orden.formaPago}`;
                         </span>
                       </td>
 
-                      {/* N° Solicitud */}
+                      {/* N° Solicitud (Opcional) */}
                       <td className="px-4 py-4 font-mono text-gray-300">
                         {orden.numSolicitud || "-"}
                       </td>
@@ -599,6 +600,11 @@ Forma de Pago: ${orden.formaPago}`;
                         {typeof orden.monto === "number"
                           ? `$ ${orden.monto.toLocaleString("es-AR")}`
                           : orden.monto}
+                      </td>
+
+                      {/* Forma Pago */}
+                      <td className="px-4 py-4 text-gray-300 font-medium">
+                        {orden.formaPago || "30DFF"}
                       </td>
 
                       {/* Botón Ver/Agregar Notas */}
@@ -728,7 +734,7 @@ Forma de Pago: ${orden.formaPago}`;
                     </div>
                     <div>
                       <span className="text-gray-400 text-[11px] block">Forma de Pago</span>
-                      <span className="text-gray-200">{orden.formaPago}</span>
+                      <span className="text-gray-200 font-medium">{orden.formaPago || "30DFF"}</span>
                     </div>
                   </div>
 
@@ -888,18 +894,17 @@ Forma de Pago: ${orden.formaPago}`;
                 </div>
               </div>
 
-              {/* N° Solicitud & N° OC */}
+              {/* N° Solicitud (Opcional) & N° OC (Obligatorio) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-300 font-medium mb-1">
-                    N° Solicitud de Orden
+                    N° Solicitud de Orden <span className="text-gray-500 font-normal">(Opcional)</span>
                   </label>
                   <input
                     type="text"
-                    required
                     value={numSolicitud}
                     onChange={(e) => setNumSolicitud(e.target.value)}
-                    placeholder="ej: SOL-1002"
+                    placeholder="ej: SOL-1002 (Opcional)"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
                   />
                 </div>
@@ -934,7 +939,7 @@ Forma de Pago: ${orden.formaPago}`;
                 />
               </div>
 
-              {/* Monto & Forma de Pago */}
+              {/* Monto & Forma de Pago (Predeterminado 30DFF) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-300 font-medium mb-1">
@@ -960,7 +965,7 @@ Forma de Pago: ${orden.formaPago}`;
                     required
                     value={formaPago}
                     onChange={(e) => setFormaPago(e.target.value)}
-                    placeholder="ej: Transferencia, Cheque..."
+                    placeholder="ej: 30DFF"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
                   />
                 </div>
