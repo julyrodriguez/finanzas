@@ -430,22 +430,27 @@ export default function OrdenesDeComprasPage() {
 
   // Copy Order Format to Clipboard
   const handleCopy = (orden: OrdenCompra) => {
-    const formattedMonto = typeof orden.monto === "number"
-      ? `$ ${orden.monto.toLocaleString("es-AR")}`
-      : orden.monto;
+    let copyText = "";
+    if (filterEstado === "Liberadas") {
+      copyText = `OC 0${orden.numOC} - ${orden.razonSocial}`;
+    } else {
+      const formattedMonto = typeof orden.monto === "number"
+        ? `$ ${orden.monto.toLocaleString("es-AR")}`
+        : orden.monto;
 
-    const notasPart = orden.notas && orden.notas.length > 0
-      ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
-      : "";
+      const notasPart = orden.notas && orden.notas.length > 0
+        ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
+        : "";
 
-    const copyText = `OC ${orden.numOC} ${orden.empresa}
+      copyText = `OC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
 Forma de Pago: ${orden.formaPago}${notasPart}`;
+    }
 
     navigator.clipboard.writeText(copyText);
-    showToast(`¡Copiado OC ${orden.numOC} ${orden.empresa}!`);
+    showToast(`¡Copiado OC ${orden.numOC}!`);
   };
 
   const showToast = (msg: string) => {
@@ -759,7 +764,11 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                             </span>
                             <button
                               onClick={() => handleCopy(orden)}
-                              className="p-1 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white transition-colors"
+                              className={`p-1 rounded transition-colors ${
+                                filterEstado === "Liberadas"
+                                  ? "bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
+                                  : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white"
+                              }`}
                               title="Copiar resumen de OC"
                             >
                               <Copy className="w-3.5 h-3.5" />
@@ -851,7 +860,11 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => handleCopy(orden)}
-                            className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                              filterEstado === "Liberadas"
+                                ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-300"
+                                : "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
+                            }`}
                             title="Copiar resumen"
                           >
                             <Copy className="w-3 h-3" />
