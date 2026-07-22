@@ -232,7 +232,7 @@ export default function OrdenesDeComprasPage() {
     setIsModalOpen(true);
   };
 
-  // Sync Bidirectional relationships for OCs in Firestore
+  // Sync Bidirectional relationships for OCs in Firestore (Full Clique/Transitive Sync)
   const syncBidirectional = async (
     currentOC: string,
     oldOC: string,
@@ -245,7 +245,6 @@ export default function OrdenesDeComprasPage() {
     const newOcs = newRelatedStr.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean);
     const oldOcs = oldRelatedStr.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean);
 
-    // If the OC number itself changed, we need to clean up oldOC reference from all OCs
     const hasNameChanged = oldOC && oldOC !== currentOC;
 
     const colRef = collection(db, "ordenes_compra");
@@ -261,84 +260,80 @@ export default function OrdenesDeComprasPage() {
       return Array.from(new Set(searchValues));
     };
 
-    // 1. Sync target OCs (Self-healing bidirectional check)
-    for (const targetOC of newOcs) {
+    // Calculate cliques
+    const newClique = Array.from(new Set([currentOC, ...newOcs]));
+    const oldClique = oldOC ? Array.from(new Set([oldOC, ...oldOcs])) : [];
+
+    // OCs that were removed from the relationship
+    const removedOcs = oldClique.filter(x => !newClique.includes(x));
+
+    // 1. Sync all active members of the new clique so they all list each other
+    for (const member of newClique) {
       try {
-        const uniqueSearchValues = getSearchValues(targetOC);
+        const uniqueSearchValues = getSearchValues(member);
         const q = query(colRef, where("numOC", "in", uniqueSearchValues));
         const querySnapshot = await getDocs(q);
-        
+
+        const linksToAdd = newClique.filter(x => x !== member);
+
         for (const docSnap of querySnapshot.docs) {
           const data = docSnap.data();
-          let relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-          
-          // Remove old reference if name changed
-          if (hasNameChanged) {
-            relList = relList.filter((x: string) => {
-              const cleanX = x.trim();
-              return cleanX !== oldOC && Number(cleanX) !== Number(oldOC);
-            });
+          let relList = (data.relatedOC || "").split(/[\s,/\-]+/).map((s: string) => s.trim()).filter(Boolean);
+
+          // Clean old reference if name changed
+          if (hasNameChanged && oldOC) {
+            relList = relList.filter((x: string) => x !== oldOC && Number(x) !== Number(oldOC));
           }
 
-          // Check if currentOC is already linked (using string or number formats)
-          const hasCurrentOC = relList.some((x: string) => {
-            const cleanX = x.trim();
-            return cleanX === currentOC || Number(cleanX) === Number(currentOC);
+          // Clean any removed member references
+          for (const rem of removedOcs) {
+            relList = relList.filter((x: string) => x !== rem && Number(x) !== Number(rem));
+          }
+
+          // Add links from new clique
+          for (const link of linksToAdd) {
+            const hasLink = relList.some((x: string) => x === link || Number(x) === Number(link));
+            if (!hasLink) {
+              relList.push(link);
+            }
+          }
+
+          await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+            relatedOC: relList.join(", ")
           });
-
-          if (!hasCurrentOC) {
-            relList.push(currentOC);
-            await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
-              relatedOC: relList.join(", ")
-            });
-          } else if (hasNameChanged) {
-            // Save modified list without old reference
-            await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
-              relatedOC: relList.join(", ")
-            });
-          }
         }
       } catch (err) {
-        console.error("Error syncing bidirectional add:", err);
+        console.error("Error syncing clique member:", err);
       }
     }
 
-    // 2. Remove reference from removed relationships or old name cleanup
-    const ocsToRemoveFrom = [...oldOcs.filter((x: string) => !newOcs.includes(x))];
-    
-    // If the name changed, we also search all old related OCs to scrub the old name
-    if (hasNameChanged) {
-      ocsToRemoveFrom.push(...newOcs); // scrub old name from current related list
-    }
-
-    const uniqueOcsToRemoveFrom = Array.from(new Set(ocsToRemoveFrom));
-
-    for (const targetOC of uniqueOcsToRemoveFrom) {
+    // 2. Remove references from the removed OCs
+    for (const rem of removedOcs) {
       try {
-        const uniqueSearchValues = getSearchValues(targetOC);
+        const uniqueSearchValues = getSearchValues(rem);
         const q = query(colRef, where("numOC", "in", uniqueSearchValues));
         const querySnapshot = await getDocs(q);
-        
+
         for (const docSnap of querySnapshot.docs) {
           const data = docSnap.data();
-          const relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-          
-          const updatedList = relList.filter((x: string) => {
-            const cleanX = x.trim();
-            // Remove both old name and current name if it was a removed relationship
-            const isOld = oldOC && (cleanX === oldOC || Number(cleanX) === Number(oldOC));
-            const isRemoved = !newOcs.includes(targetOC) && (cleanX === currentOC || Number(cleanX) === Number(currentOC));
-            return !isOld && !isRemoved;
-          });
-          
-          if (relList.length !== updatedList.length) {
-            await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
-              relatedOC: updatedList.join(", ")
-            });
+          let relList = (data.relatedOC || "").split(/[\s,/\-]+/).map((s: string) => s.trim()).filter(Boolean);
+
+          // Remove all members of the new clique from the removed OC
+          for (const member of newClique) {
+            relList = relList.filter((x: string) => x !== member && Number(x) !== Number(member));
           }
+
+          // Also remove oldOC if name changed
+          if (oldOC) {
+            relList = relList.filter((x: string) => x !== oldOC && Number(x) !== Number(oldOC));
+          }
+
+          await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+            relatedOC: relList.join(", ")
+          });
         }
       } catch (err) {
-        console.error("Error syncing bidirectional remove:", err);
+        console.error("Error cleaning removed clique member:", err);
       }
     }
   };
