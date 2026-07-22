@@ -14,7 +14,9 @@ import {
   serverTimestamp,
   query,
   orderBy,
-  limit
+  limit,
+  where,
+  QueryConstraint
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -108,7 +110,7 @@ export default function OrdenesDeComprasPage() {
 
   const isSearching = searchQuery.trim() !== "";
 
-  // Load Firestore real-time data with query limits
+  // Load Firestore real-time data with query limits and status filters
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
@@ -116,59 +118,91 @@ export default function OrdenesDeComprasPage() {
       return;
     }
 
-    try {
-      const colRef = collection(db, "ordenes_compra");
-      // Query queryLimit + 1 documents, or 300 documents if actively searching to allow deep searching
-      const q = query(
-        colRef, 
-        orderBy("createdAt", "desc"), 
-        limit(isSearching ? 300 : queryLimit + 1)
-      );
+    let unsubscribe: () => void = () => {};
 
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return {
-              id: docSnap.id,
-              empresa: data.empresa || "Hoyts",
-              numSolicitud: data.numSolicitud || "",
-              numOC: data.numOC || "",
-              razonSocial: data.razonSocial || "",
-              monto: data.monto ?? "",
-              motivo: data.motivo || "",
-              formaPago: data.formaPago || "30DFF",
-              liberada: Boolean(data.liberada),
-              mandada: Boolean(data.mandada),
-              entregada: Boolean(data.entregada),
-              creadoPor: data.creadoPor || "Usuario",
-              notas: data.notas || [],
-              createdAt: data.createdAt || null,
-            };
-          });
+    const startListener = (useFilters: boolean) => {
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        let q;
 
-          // Sort manually on client to handle missing createdAt fields cleanly
-          docs.sort((a, b) => {
-            const timeA = a.createdAt?.seconds || 0;
-            const timeB = b.createdAt?.seconds || 0;
-            return timeB - timeA;
-          });
+        if (isSearching) {
+          q = query(colRef, orderBy("createdAt", "desc"), limit(300));
+        } else if (useFilters) {
+          // Dynamic status filtering in Firestore to only read matching documents
+          const constraints: QueryConstraint[] = [orderBy("createdAt", "desc")];
+          
+          if (filterEstado === "Liberadas") {
+            constraints.unshift(where("liberada", "==", true));
+          } else if (filterEstado === "Mandadas") {
+            constraints.unshift(where("mandada", "==", true));
+          } else if (filterEstado === "Entregadas") {
+            constraints.unshift(where("entregada", "==", true));
+          } else if (filterEstado === "Pendientes") {
+            // Pendientes are !liberada && !mandada, query by liberada === false
+            constraints.unshift(where("liberada", "==", false));
+          }
 
-          setOrdenes(docs);
-          setLoading(false);
-        },
-        (error) => {
-          console.warn("Firestore snapshot listener error:", error);
-          setLoading(false);
+          constraints.push(limit(queryLimit + 1));
+          q = query(colRef, ...constraints);
+        } else {
+          // Fallback query (or when state is 'Todas')
+          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 100));
         }
-      );
-      return () => unsubscribe();
-    } catch (err) {
-      console.warn("Firestore collection error:", err);
-      setLoading(false);
-    }
-  }, [queryLimit, isSearching]);
+
+        unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
+              const data = docSnap.data();
+              return {
+                id: docSnap.id,
+                empresa: data.empresa || "Hoyts",
+                numSolicitud: data.numSolicitud || "",
+                numOC: data.numOC || "",
+                razonSocial: data.razonSocial || "",
+                monto: data.monto ?? "",
+                motivo: data.motivo || "",
+                formaPago: data.formaPago || "30DFF",
+                liberada: Boolean(data.liberada),
+                mandada: Boolean(data.mandada),
+                entregada: Boolean(data.entregada),
+                creadoPor: data.creadoPor || "Usuario",
+                notas: data.notas || [],
+                createdAt: data.createdAt || null,
+              };
+            });
+
+            // Sort manually on client to handle missing createdAt fields cleanly
+            docs.sort((a, b) => {
+              const timeA = a.createdAt?.seconds || 0;
+              const timeB = b.createdAt?.seconds || 0;
+              return timeB - timeA;
+            });
+
+            setOrdenes(docs);
+            setLoading(false);
+          },
+          (error: any) => {
+            // Check if error is due to missing index
+            if (useFilters && error.message && error.message.includes("index")) {
+              console.warn("Firestore index missing. Falling back to client-side filtering query...", error);
+              // Retry without Firestore status filters (fall back to client-side filtering)
+              startListener(false);
+            } else {
+              console.warn("Firestore snapshot listener error:", error);
+              setLoading(false);
+            }
+          }
+        );
+      } catch (err) {
+        console.warn("Firestore collection error:", err);
+        setLoading(false);
+      }
+    };
+
+    startListener(true);
+    return () => unsubscribe();
+  }, [queryLimit, isSearching, filterEstado]);
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
