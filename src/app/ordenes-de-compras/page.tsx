@@ -650,6 +650,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>🔵 Entregada</span>
             </span>
+            <span className="inline-flex items-center gap-1.5 bg-purple-500/15 text-purple-300 px-2.5 py-1 rounded-xl border border-purple-500/30 font-medium">
+              <Link2 className="w-3.5 h-3.5" />
+              <span>Ref: Solicitadas por la misma persona</span>
+            </span>
           </div>
         </div>
 
