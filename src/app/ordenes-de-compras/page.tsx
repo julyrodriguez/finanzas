@@ -233,28 +233,66 @@ export default function OrdenesDeComprasPage() {
   };
 
   // Sync Bidirectional relationships for OCs in Firestore
-  const syncBidirectional = async (currentOC: string, newRelatedStr: string, oldRelatedStr: string) => {
+  const syncBidirectional = async (
+    currentOC: string,
+    oldOC: string,
+    newRelatedStr: string,
+    oldRelatedStr: string
+  ) => {
     const db = getFirebaseDb();
     if (!db) return;
 
     const newOcs = newRelatedStr.split(",").map(s => s.trim()).filter(Boolean);
     const oldOcs = oldRelatedStr.split(",").map(s => s.trim()).filter(Boolean);
 
-    const addedOcs = newOcs.filter(x => !oldOcs.includes(x));
-    const removedOcs = oldOcs.filter(x => !newOcs.includes(x));
+    // If the OC number itself changed, we need to clean up oldOC reference from all OCs
+    const hasNameChanged = oldOC && oldOC !== currentOC;
 
     const colRef = collection(db, "ordenes_compra");
 
-    // Add currentOC to new relationships
-    for (const targetOC of addedOcs) {
+    // Helper to get search values for any format (string/number/leading zeros)
+    const getSearchValues = (val: string) => {
+      const searchValues: (string | number)[] = [val];
+      const numVal = Number(val);
+      if (!isNaN(numVal)) {
+        searchValues.push(numVal);
+        searchValues.push(numVal.toString());
+      }
+      return Array.from(new Set(searchValues));
+    };
+
+    // 1. Sync target OCs (Self-healing bidirectional check)
+    for (const targetOC of newOcs) {
       try {
-        const q = query(colRef, where("numOC", "==", targetOC));
+        const uniqueSearchValues = getSearchValues(targetOC);
+        const q = query(colRef, where("numOC", "in", uniqueSearchValues));
         const querySnapshot = await getDocs(q);
+        
         for (const docSnap of querySnapshot.docs) {
           const data = docSnap.data();
-          const relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-          if (!relList.includes(currentOC)) {
+          let relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+          
+          // Remove old reference if name changed
+          if (hasNameChanged) {
+            relList = relList.filter((x: string) => {
+              const cleanX = x.trim();
+              return cleanX !== oldOC && Number(cleanX) !== Number(oldOC);
+            });
+          }
+
+          // Check if currentOC is already linked (using string or number formats)
+          const hasCurrentOC = relList.some((x: string) => {
+            const cleanX = x.trim();
+            return cleanX === currentOC || Number(cleanX) === Number(currentOC);
+          });
+
+          if (!hasCurrentOC) {
             relList.push(currentOC);
+            await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+              relatedOC: relList.join(", ")
+            });
+          } else if (hasNameChanged) {
+            // Save modified list without old reference
             await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
               relatedOC: relList.join(", ")
             });
@@ -265,16 +303,35 @@ export default function OrdenesDeComprasPage() {
       }
     }
 
-    // Remove currentOC from removed relationships
-    for (const targetOC of removedOcs) {
+    // 2. Remove reference from removed relationships or old name cleanup
+    const ocsToRemoveFrom = [...oldOcs.filter((x: string) => !newOcs.includes(x))];
+    
+    // If the name changed, we also search all old related OCs to scrub the old name
+    if (hasNameChanged) {
+      ocsToRemoveFrom.push(...newOcs); // scrub old name from current related list
+    }
+
+    const uniqueOcsToRemoveFrom = Array.from(new Set(ocsToRemoveFrom));
+
+    for (const targetOC of uniqueOcsToRemoveFrom) {
       try {
-        const q = query(colRef, where("numOC", "==", targetOC));
+        const uniqueSearchValues = getSearchValues(targetOC);
+        const q = query(colRef, where("numOC", "in", uniqueSearchValues));
         const querySnapshot = await getDocs(q);
+        
         for (const docSnap of querySnapshot.docs) {
           const data = docSnap.data();
           const relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-          if (relList.includes(currentOC)) {
-            const updatedList = relList.filter((x: string) => x !== currentOC);
+          
+          const updatedList = relList.filter((x: string) => {
+            const cleanX = x.trim();
+            // Remove both old name and current name if it was a removed relationship
+            const isOld = oldOC && (cleanX === oldOC || Number(cleanX) === Number(oldOC));
+            const isRemoved = !newOcs.includes(targetOC) && (cleanX === currentOC || Number(cleanX) === Number(currentOC));
+            return !isOld && !isRemoved;
+          });
+          
+          if (relList.length !== updatedList.length) {
             await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
               relatedOC: updatedList.join(", ")
             });
@@ -321,7 +378,7 @@ export default function OrdenesDeComprasPage() {
           const docRef = doc(db, "ordenes_compra", editingOrden.id);
           await updateDoc(docRef, dataToSave);
           // Sync bidirectional relationships in Firestore
-          syncBidirectional(numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
+          syncBidirectional(numOC.trim(), editingOrden.numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
           showToast("¡Orden de compra actualizada!");
         } catch (err) {
           console.error("Error al actualizar orden:", err);
@@ -339,7 +396,7 @@ export default function OrdenesDeComprasPage() {
         try {
           await addDoc(collection(db, "ordenes_compra"), newOrden);
           // Sync bidirectional relationships in Firestore
-          syncBidirectional(numOC.trim(), relatedOC.trim(), "");
+          syncBidirectional(numOC.trim(), numOC.trim(), relatedOC.trim(), "");
           showToast("¡Orden de compra agregada!");
         } catch (err) {
           console.error("Error al agregar orden:", err);
