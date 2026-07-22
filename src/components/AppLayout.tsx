@@ -129,7 +129,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
           setIsHovered(false);
           setSidebarOpen(false);
         }}
-        className={`fixed lg:static inset-y-0 left-0 z-50 bg-[#0d131f] border-r border-white/10 flex flex-col justify-between transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-hidden ${
+        className={`fixed lg:sticky lg:top-0 lg:h-screen inset-y-0 left-0 z-50 bg-[#0d131f] border-r border-white/10 flex flex-col justify-between transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-hidden ${
           sidebarOpen
             ? "translate-x-0 w-72"
             : "-translate-x-full lg:translate-x-0"
