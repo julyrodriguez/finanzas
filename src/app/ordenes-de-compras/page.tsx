@@ -242,8 +242,8 @@ export default function OrdenesDeComprasPage() {
     const db = getFirebaseDb();
     if (!db) return;
 
-    const newOcs = newRelatedStr.split(",").map(s => s.trim()).filter(Boolean);
-    const oldOcs = oldRelatedStr.split(",").map(s => s.trim()).filter(Boolean);
+    const newOcs = newRelatedStr.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean);
+    const oldOcs = oldRelatedStr.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean);
 
     // If the OC number itself changed, we need to clean up oldOC reference from all OCs
     const hasNameChanged = oldOC && oldOC !== currentOC;
@@ -590,13 +590,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
         case "numSolicitud":
           return orden.numSolicitud.toLowerCase().includes(queryText);
         case "numOC":
-          return orden.numOC.toLowerCase().includes(queryText);
+          return (
+            orden.numOC.toLowerCase().includes(queryText) ||
+            (orden.relatedOC && orden.relatedOC.toLowerCase().includes(queryText))
+          );
         case "razonSocial":
           return orden.razonSocial.toLowerCase().includes(queryText);
         case "todos":
         default:
           return (
             orden.numOC.toLowerCase().includes(queryText) ||
+            (orden.relatedOC && orden.relatedOC.toLowerCase().includes(queryText)) ||
             orden.numSolicitud.toLowerCase().includes(queryText) ||
             orden.razonSocial.toLowerCase().includes(queryText) ||
             orden.motivo.toLowerCase().includes(queryText) ||
@@ -904,7 +908,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                             </div>
                             {orden.relatedOC && (
                               <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
-                                {orden.relatedOC.split(",").map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
+                                {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
                                   <button
                                     key={idx}
                                     onClick={() => setSearchQuery(ocNum)}
@@ -1000,7 +1004,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                           </span>
                           {orden.relatedOC && (
                             <div className="flex flex-wrap items-center gap-1 ml-1.5">
-                              {orden.relatedOC.split(",").map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
+                              {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
                                 <button
                                   key={idx}
                                   onClick={() => setSearchQuery(ocNum)}
