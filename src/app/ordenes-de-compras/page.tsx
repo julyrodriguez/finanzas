@@ -16,7 +16,8 @@ import {
   orderBy,
   limit,
   where,
-  QueryConstraint
+  QueryConstraint,
+  getDocs
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -231,6 +232,60 @@ export default function OrdenesDeComprasPage() {
     setIsModalOpen(true);
   };
 
+  // Sync Bidirectional relationships for OCs in Firestore
+  const syncBidirectional = async (currentOC: string, newRelatedStr: string, oldRelatedStr: string) => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    const newOcs = newRelatedStr.split(",").map(s => s.trim()).filter(Boolean);
+    const oldOcs = oldRelatedStr.split(",").map(s => s.trim()).filter(Boolean);
+
+    const addedOcs = newOcs.filter(x => !oldOcs.includes(x));
+    const removedOcs = oldOcs.filter(x => !newOcs.includes(x));
+
+    const colRef = collection(db, "ordenes_compra");
+
+    // Add currentOC to new relationships
+    for (const targetOC of addedOcs) {
+      try {
+        const q = query(colRef, where("numOC", "==", targetOC));
+        const querySnapshot = await getDocs(q);
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          const relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+          if (!relList.includes(currentOC)) {
+            relList.push(currentOC);
+            await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+              relatedOC: relList.join(", ")
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error syncing bidirectional add:", err);
+      }
+    }
+
+    // Remove currentOC from removed relationships
+    for (const targetOC of removedOcs) {
+      try {
+        const q = query(colRef, where("numOC", "==", targetOC));
+        const querySnapshot = await getDocs(q);
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          const relList = (data.relatedOC || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+          if (relList.includes(currentOC)) {
+            const updatedList = relList.filter((x: string) => x !== currentOC);
+            await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+              relatedOC: updatedList.join(", ")
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error syncing bidirectional remove:", err);
+      }
+    }
+  };
+
   // Handle Save (Add or Edit)
   const handleSaveOrden = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +320,8 @@ export default function OrdenesDeComprasPage() {
         try {
           const docRef = doc(db, "ordenes_compra", editingOrden.id);
           await updateDoc(docRef, dataToSave);
+          // Sync bidirectional relationships in Firestore
+          syncBidirectional(numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
           showToast("¡Orden de compra actualizada!");
         } catch (err) {
           console.error("Error al actualizar orden:", err);
@@ -281,6 +338,8 @@ export default function OrdenesDeComprasPage() {
       if (db) {
         try {
           await addDoc(collection(db, "ordenes_compra"), newOrden);
+          // Sync bidirectional relationships in Firestore
+          syncBidirectional(numOC.trim(), relatedOC.trim(), "");
           showToast("¡Orden de compra agregada!");
         } catch (err) {
           console.error("Error al agregar orden:", err);
@@ -787,14 +846,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                               </button>
                             </div>
                             {orden.relatedOC && (
-                              <button
-                                onClick={() => setSearchQuery(orden.relatedOC || "")}
-                                className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all"
-                                title="Click para buscar la OC relacionada"
-                              >
-                                <Link2 className="w-2.5 h-2.5" />
-                                <span>Ref: OC {orden.relatedOC}</span>
-                              </button>
+                              <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
+                                {orden.relatedOC.split(",").map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => setSearchQuery(ocNum)}
+                                    className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all"
+                                    title={`Click para buscar la OC ${ocNum}`}
+                                  >
+                                    <Link2 className="w-2.5 h-2.5" />
+                                    <span>Ref: OC {ocNum}</span>
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </td>
@@ -878,14 +942,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                             #{orden.numOC}
                           </span>
                           {orden.relatedOC && (
-                            <button
-                              onClick={() => setSearchQuery(orden.relatedOC || "")}
-                              className="flex items-center gap-1 text-[9px] text-purple-300 font-bold bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/20 active:bg-purple-500/30 transition-all"
-                              title="Click para buscar la OC relacionada"
-                            >
-                              <Link2 className="w-2.5 h-2.5" />
-                              <span>Ref: {orden.relatedOC}</span>
-                            </button>
+                            <div className="flex flex-wrap items-center gap-1 ml-1.5">
+                              {orden.relatedOC.split(",").map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => setSearchQuery(ocNum)}
+                                  className="flex items-center gap-1 text-[8px] text-purple-300 font-bold bg-purple-500/15 px-1 rounded border border-purple-500/20 active:bg-purple-500/30 transition-all"
+                                  title={`Click para buscar la OC ${ocNum}`}
+                                >
+                                  <Link2 className="w-2 h-2" />
+                                  <span>Ref: {ocNum}</span>
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
 
