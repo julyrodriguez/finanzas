@@ -35,7 +35,8 @@ import {
   User as UserIcon,
   Clock,
   SendHorizontal,
-  ChevronDown
+  ChevronDown,
+  Link2
 } from "lucide-react";
 
 export interface Nota {
@@ -60,6 +61,7 @@ export interface OrdenCompra {
   creadoPor?: string;
   notas?: Nota[];
   createdAt?: any;
+  relatedOC?: string;
 }
 
 export default function OrdenesDeComprasPage() {
@@ -94,6 +96,7 @@ export default function OrdenesDeComprasPage() {
   const [formaPago, setFormaPago] = useState("30DFF");
   const [liberada, setLiberada] = useState(false);
   const [mandada, setMandada] = useState(false);
+  const [relatedOC, setRelatedOC] = useState("");
 
   // Notification Toast State for Clipboard Copy & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -169,6 +172,7 @@ export default function OrdenesDeComprasPage() {
                 creadoPor: data.creadoPor || "Usuario",
                 notas: data.notas || [],
                 createdAt: data.createdAt || null,
+                relatedOC: data.relatedOC || "",
               };
             });
 
@@ -223,6 +227,7 @@ export default function OrdenesDeComprasPage() {
     setFormaPago(orden.formaPago || "30DFF");
     setLiberada(Boolean(orden.liberada));
     setMandada(Boolean(orden.mandada));
+    setRelatedOC(orden.relatedOC || "");
     setIsModalOpen(true);
   };
 
@@ -245,6 +250,7 @@ export default function OrdenesDeComprasPage() {
       mandada,
       entregada: editingOrden ? Boolean(editingOrden.entregada) : false,
       creadoPor: editingOrden?.creadoPor || authorName,
+      relatedOC: relatedOC.trim(),
     };
 
     const db = getFirebaseDb();
@@ -300,6 +306,7 @@ export default function OrdenesDeComprasPage() {
     setFormaPago("30DFF");
     setLiberada(false);
     setMandada(false);
+    setRelatedOC("");
   };
 
   // Add Note to Order
@@ -758,21 +765,33 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
 
                         {/* N° OC + Copy Button */}
                         <td className="px-4 py-4">
-                          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
-                            <span className="font-mono font-bold text-emerald-400">
-                              {orden.numOC}
-                            </span>
-                            <button
-                              onClick={() => handleCopy(orden)}
-                              className={`p-1 rounded transition-colors ${
-                                filterEstado === "Liberadas"
-                                  ? "bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
-                                  : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white"
-                              }`}
-                              title="Copiar resumen de OC"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="flex flex-col items-start gap-1">
+                            <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
+                              <span className="font-mono font-bold text-emerald-400">
+                                {orden.numOC}
+                              </span>
+                              <button
+                                onClick={() => handleCopy(orden)}
+                                className={`p-1 rounded transition-colors ${
+                                  filterEstado === "Liberadas"
+                                    ? "bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
+                                    : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white"
+                                }`}
+                                title="Copiar resumen de OC"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {orden.relatedOC && (
+                              <button
+                                onClick={() => setSearchQuery(orden.relatedOC || "")}
+                                className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all"
+                                title="Click para buscar la OC relacionada"
+                              >
+                                <Link2 className="w-2.5 h-2.5" />
+                                <span>Ref: OC {orden.relatedOC}</span>
+                              </button>
+                            )}
                           </div>
                         </td>
 
@@ -854,6 +873,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                           <span className="font-mono text-emerald-400 font-bold text-xs">
                             #{orden.numOC}
                           </span>
+                          {orden.relatedOC && (
+                            <button
+                              onClick={() => setSearchQuery(orden.relatedOC || "")}
+                              className="flex items-center gap-1 text-[9px] text-purple-300 font-bold bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/20 active:bg-purple-500/30 transition-all"
+                              title="Click para buscar la OC relacionada"
+                            >
+                              <Link2 className="w-2.5 h-2.5" />
+                              <span>Ref: {orden.relatedOC}</span>
+                            </button>
+                          )}
                         </div>
 
                         {/* Actions (Copiar & Editar) */}
@@ -1202,6 +1231,20 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                     className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
                   />
                 </div>
+              </div>
+
+              {/* OC Relacionada (Opcional) */}
+              <div>
+                <label className="block text-gray-300 font-medium mb-1">
+                  OC Relacionada (Opcional - Para mandar juntas)
+                </label>
+                <input
+                  type="text"
+                  value={relatedOC}
+                  onChange={(e) => setRelatedOC(e.target.value)}
+                  placeholder="ej: 04859 (N° de OC vinculada)"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
+                />
               </div>
 
               {/* Detalle / Motivo */}
