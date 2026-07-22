@@ -287,10 +287,10 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
         {/* Sticky Header with Mobile Hamburger Menu */}
         <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Hamburger Button for Mobile and Desktop Toggle */}
+            {/* Hamburger Button for Mobile only */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0"
+              className="lg:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0"
               aria-label="Abrir menú"
               title="Abrir menú lateral"
             >
