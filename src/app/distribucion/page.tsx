@@ -52,7 +52,33 @@ const INITIAL_COMPLEJOS: Complejo[] = [
   { codigo: "02007", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts", attendance: 581342 },
   { codigo: "02008", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 482515 },
   { codigo: "02009", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 426372 },
-  { codigo: "02010", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts", attendance: 249983 }
+];
+
+const CUSTOM_ORDER = [
+  "00730",
+  "00732",
+  "00733",
+  "00734",
+  "00739",
+  "00749",
+  "00745",
+  "00748",
+  "00756",
+  "02013",
+  "02014",
+  "02015",
+  "02016",
+  "02000",
+  "02001",
+  "02002",
+  "02003",
+  "02004",
+  "02005",
+  "02006",
+  "02007",
+  "02008",
+  "02009",
+  "02010"
 ];
 
 export default function DistribucionPage() {
@@ -187,8 +213,12 @@ export default function DistribucionPage() {
     };
   });
 
-  // Sort rows: first cines sorted by code, then Oficina Central at the bottom
-  tableRows.sort((a, b) => a.codigo.localeCompare(b.codigo));
+  // Sort rows: first cines sorted by custom historical sequence order
+  tableRows.sort((a, b) => {
+    const idxA = CUSTOM_ORDER.indexOf(a.codigo);
+    const idxB = CUSTOM_ORDER.indexOf(b.codigo);
+    return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+  });
 
   // Add Oficina Central row at the bottom if present
   if (percentOficina > 0) {
