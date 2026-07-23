@@ -236,13 +236,14 @@ export default function DistribucionPage() {
     });
   }
 
-  // Apply rounding to multiples of 10 if active (without losing total value)
+  // Apply rounding to multiples of 10 or 50 if active (without losing total value)
   if (redondear) {
-    const targetTotal = Math.round(numMontoTotal / 10) * 10;
+    const baseVal = numMontoTotal >= 1000000 ? 50 : 10;
+    const targetTotal = Math.round(numMontoTotal / baseVal) * baseVal;
     let sumFloors = 0;
     const items = tableRows.map((r, idx) => {
       const exact = r.montoProrrateado;
-      const floorVal = Math.floor(exact / 10) * 10;
+      const floorVal = Math.floor(exact / baseVal) * baseVal;
       sumFloors += floorVal;
       return {
         idx,
@@ -253,18 +254,18 @@ export default function DistribucionPage() {
     });
 
     const diff = targetTotal - sumFloors;
-    const bills = Math.round(diff / 10);
+    const bills = Math.round(diff / baseVal);
 
     if (bills > 0) {
       items.sort((a, b) => b.remainder - a.remainder || a.idx - b.idx);
       for (let i = 0; i < bills; i++) {
-        items[i % items.length].floorVal += 10;
+        items[i % items.length].floorVal += baseVal;
       }
     } else if (bills < 0) {
       const billsToSubtract = Math.abs(bills);
       items.sort((a, b) => a.remainder - b.remainder || a.idx - b.idx);
       for (let i = 0; i < billsToSubtract; i++) {
-        items[i % items.length].floorVal -= 10;
+        items[i % items.length].floorVal -= baseVal;
       }
     }
 
