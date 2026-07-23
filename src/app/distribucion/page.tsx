@@ -87,6 +87,7 @@ export default function DistribucionPage() {
   const [ambitoFilter, setAmbitoFilter] = useState<
     "todos" | "todos_oficina" | "caba" | "gba" | "amba" | "amba_oficina" | "interior"
   >("todos");
+  const [redondear, setRedondear] = useState<boolean>(false);
 
   const [complejos, setComplejos] = useState<Complejo[]>(INITIAL_COMPLEJOS);
   const [editableComplejos, setEditableComplejos] = useState<Complejo[]>(INITIAL_COMPLEJOS);
@@ -234,6 +235,47 @@ export default function DistribucionPage() {
     });
   }
 
+  // Apply rounding to multiples of 10 if active (without losing total value)
+  if (redondear) {
+    const targetTotal = Math.round(numMontoTotal / 10) * 10;
+    let sumFloors = 0;
+    const items = tableRows.map((r, idx) => {
+      const exact = r.montoProrrateado;
+      const floorVal = Math.floor(exact / 10) * 10;
+      sumFloors += floorVal;
+      return {
+        idx,
+        exact,
+        floorVal,
+        remainder: exact - floorVal
+      };
+    });
+
+    const diff = targetTotal - sumFloors;
+    const bills = Math.round(diff / 10);
+
+    if (bills > 0) {
+      items.sort((a, b) => b.remainder - a.remainder || a.idx - b.idx);
+      for (let i = 0; i < bills; i++) {
+        items[i % items.length].floorVal += 10;
+      }
+    } else if (bills < 0) {
+      const billsToSubtract = Math.abs(bills);
+      items.sort((a, b) => a.remainder - b.remainder || a.idx - b.idx);
+      for (let i = 0; i < billsToSubtract; i++) {
+        items[i % items.length].floorVal -= 10;
+      }
+    }
+
+    items.sort((a, b) => a.idx - b.idx);
+
+    tableRows.forEach((r, idx) => {
+      const roundedVal = items[idx].floorVal;
+      r.montoProrrateado = roundedVal;
+      r.percentage = targetTotal > 0 ? (roundedVal / targetTotal) * 100 : 0;
+    });
+  }
+
   // Summary counts
   const complexesCount = filteredComplejos.length;
   const distributedToCines = tableRows.filter(r => !r.isOficina).reduce((sum, r) => sum + r.montoProrrateado, 0);
@@ -359,6 +401,22 @@ export default function DistribucionPage() {
                 Ingresa el importe total que se subdividirá proporcionalmente entre los cines.
               </p>
             </div>
+            
+            <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+              <input
+                id="checkbox-redondear"
+                type="checkbox"
+                checked={redondear}
+                onChange={(e) => setRedondear(e.target.checked)}
+                className="rounded border-white/10 bg-white/5 text-emerald-500 focus:ring-emerald-500/50 w-4 h-4 cursor-pointer"
+              />
+              <label 
+                htmlFor="checkbox-redondear" 
+                className="text-[11px] text-gray-300 font-semibold cursor-pointer select-none flex items-center gap-1"
+              >
+                <span>Redondear Montos (Múltiplos de 10, sin decimales)</span>
+              </label>
+            </div>
           </div>
 
           {/* Filters Selector Card */}
@@ -425,21 +483,30 @@ export default function DistribucionPage() {
           <div className="p-4 rounded-2xl glass-card border border-white/10 print-card space-y-1">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Asignado a Complejos</span>
             <div className="text-xl lg:text-2xl font-extrabold text-emerald-400">
-              ${distributedToCines.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${distributedToCines.toLocaleString("es-AR", { 
+                minimumFractionDigits: redondear ? 0 : 2, 
+                maximumFractionDigits: redondear ? 0 : 2 
+              })}
             </div>
           </div>
 
           <div className="p-4 rounded-2xl glass-card border border-white/10 print-card space-y-1">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Asignado a Oficina Central</span>
             <div className="text-xl lg:text-2xl font-extrabold text-purple-400">
-              ${distributedToOficina.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${distributedToOficina.toLocaleString("es-AR", { 
+                minimumFractionDigits: redondear ? 0 : 2, 
+                maximumFractionDigits: redondear ? 0 : 2 
+              })}
             </div>
           </div>
 
           <div className="p-4 rounded-2xl glass-card border border-white/10 print-card space-y-1">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Distribuido (100%)</span>
             <div className="text-xl lg:text-2xl font-extrabold text-white">
-              ${sumDistributed.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${sumDistributed.toLocaleString("es-AR", { 
+                minimumFractionDigits: redondear ? 0 : 2, 
+                maximumFractionDigits: redondear ? 0 : 2 
+              })}
             </div>
           </div>
         </div>
@@ -580,7 +647,10 @@ export default function DistribucionPage() {
 
                     {/* Calculated Amount */}
                     <td className="px-4 py-4 text-right font-mono font-bold text-emerald-300 text-sm">
-                      ${row.montoProrrateado.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${row.montoProrrateado.toLocaleString("es-AR", { 
+                        minimumFractionDigits: redondear ? 0 : 2, 
+                        maximumFractionDigits: redondear ? 0 : 2 
+                      })}
                     </td>
                   </tr>
                 ))}
@@ -602,7 +672,10 @@ export default function DistribucionPage() {
                     {sumPercentage.toFixed(2)}%
                   </td>
                   <td className="px-4 py-4 text-right font-mono text-emerald-400 text-base">
-                    ${sumDistributed.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${sumDistributed.toLocaleString("es-AR", { 
+                      minimumFractionDigits: redondear ? 0 : 2, 
+                      maximumFractionDigits: redondear ? 0 : 2 
+                    })}
                   </td>
                 </tr>
               </tfoot>
