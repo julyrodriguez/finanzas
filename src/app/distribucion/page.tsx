@@ -5,8 +5,6 @@ import { AppLayout } from "@/components/AppLayout";
 import { 
   Percent, 
   Calculator, 
-  Download, 
-  Printer, 
   Lock, 
   Unlock, 
   ShieldAlert, 
@@ -16,7 +14,8 @@ import {
   Sparkles, 
   CheckCircle,
   HelpCircle,
-  TrendingUp
+  TrendingUp,
+  Copy
 } from "lucide-react";
 
 interface Complejo {
@@ -212,45 +211,14 @@ export default function DistribucionPage() {
   const sumPercentage = tableRows.reduce((sum, r) => sum + r.percentage, 0);
   const sumDistributed = tableRows.reduce((sum, r) => sum + r.montoProrrateado, 0);
 
-  // Export to CSV
-  const handleExportCSV = () => {
-    const headers = ["Codigo", "Complejo", "Region", "Cadena", "Attendance 2026", "% Asignacion", "Monto Asignado ($)"];
-    const csvRows = tableRows.map(r => [
-      r.codigo,
-      r.nombre,
-      r.isOficina ? "-" : r.region,
-      r.isOficina ? "-" : r.cadena,
-      r.isOficina ? "-" : r.attendance.toString(),
-      r.percentage.toFixed(4) + "%",
-      r.montoProrrateado.toFixed(2)
-    ]);
+  // Copy prorated amounts to clipboard (one per line, formatted with comma for Spanish Excel)
+  const handleCopyMontos = () => {
+    const textToCopy = tableRows
+      .map(r => r.montoProrrateado.toFixed(2).replace(".", ","))
+      .join("\n");
 
-    // Summary line
-    csvRows.push([
-      "TOTAL",
-      `${complexesCount} complejos + Oficina Central`,
-      "-",
-      "-",
-      totalAttendance.toString(),
-      sumPercentage.toFixed(2) + "%",
-      sumDistributed.toFixed(2)
-    ]);
-
-    const csvContent = [headers, ...csvRows].map(e => e.join(";")).join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Distribucion_Gastos_2026_${cadenaFilter}_${ambitoFilter}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("📥 Excel (CSV) exportado con éxito");
-  };
-
-  // Export to PDF / Print Dialog
-  const handlePrint = () => {
-    window.print();
+    navigator.clipboard.writeText(textToCopy);
+    showToast("📋 Montos copiados al portapapeles");
   };
 
   return (
@@ -491,20 +459,13 @@ export default function DistribucionPage() {
               </button>
             )}
 
-            {/* Export buttons */}
+            {/* Copy button */}
             <button
-              onClick={handleExportCSV}
-              className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 flex items-center gap-1.5 transition-colors"
+              onClick={handleCopyMontos}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Exportar Excel</span>
-            </button>
-            <button
-              onClick={handlePrint}
-              className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-300 flex items-center gap-1.5 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Imprimir / PDF</span>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar Montos</span>
             </button>
           </div>
         </div>
