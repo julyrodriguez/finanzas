@@ -16,7 +16,8 @@ import {
   X,
   LogOut,
   User as UserIcon,
-  Loader2
+  Loader2,
+  Percent
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -68,6 +69,13 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
       icon: ShoppingBag,
       exact: false,
       badge: "Próximamente",
+    },
+    {
+      name: "Distribución",
+      href: "/distribucion",
+      icon: Percent,
+      exact: false,
+      badge: "Nuevo",
     },
   ];
 
