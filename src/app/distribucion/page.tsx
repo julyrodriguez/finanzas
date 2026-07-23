@@ -315,6 +315,11 @@ export default function DistribucionPage() {
             margin-bottom: 5px !important;
           }
         }
+        /* Custom dropdown options override for Dark Mode browser visibility */
+        select option {
+          background-color: #0d131f !important;
+          color: white !important;
+        }
       `}</style>
 
       <div className="space-y-6 print-full">
@@ -394,15 +399,15 @@ export default function DistribucionPage() {
                 <select
                   value={ambitoFilter}
                   onChange={(e: any) => setAmbitoFilter(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500/50"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
                 >
-                  <option value="todos">Todos los Cines (100% complejos)</option>
-                  <option value="todos_oficina">Todos los Cines + Oficina Central (8.34% fijo)</option>
-                  <option value="caba">Solo CABA</option>
-                  <option value="gba">Solo GBA</option>
-                  <option value="amba">CABA y GBA (AMBA)</option>
-                  <option value="amba_oficina">CABA y GBA + Oficina Central (10.13% fijo)</option>
-                  <option value="interior">Interior</option>
+                  <option value="todos" className="bg-[#0d131f] text-white">Todos los Cines (100% complejos)</option>
+                  <option value="todos_oficina" className="bg-[#0d131f] text-white">Todos los Cines + Oficina Central (8.34% fijo)</option>
+                  <option value="caba" className="bg-[#0d131f] text-white">Solo CABA</option>
+                  <option value="gba" className="bg-[#0d131f] text-white">Solo GBA</option>
+                  <option value="amba" className="bg-[#0d131f] text-white">CABA y GBA (AMBA)</option>
+                  <option value="amba_oficina" className="bg-[#0d131f] text-white">CABA y GBA + Oficina Central (10.13% fijo)</option>
+                  <option value="interior" className="bg-[#0d131f] text-white">Interior</option>
                 </select>
               </div>
             </div>
