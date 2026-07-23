@@ -236,10 +236,14 @@ export default function DistribucionPage() {
     });
   }
 
-  // Apply rounding to multiples of 10 or 50 if active (without losing total value)
-  if (redondear) {
-    const baseVal = numMontoTotal >= 1000000 ? 50 : 10;
-    const targetTotal = Math.round(numMontoTotal / baseVal) * baseVal;
+  // Only apply if the total distributed amount is a multiple of the base value.
+  // Otherwise, if it can't be rounded, we display standard decimals to match the total.
+  const baseVal = numMontoTotal >= 1000000 ? 50 : 10;
+  const isDivisible = numMontoTotal % baseVal === 0;
+  const isRoundingApplied = redondear && isDivisible;
+
+  if (isRoundingApplied) {
+    const targetTotal = numMontoTotal;
     let sumFloors = 0;
     const items = tableRows.map((r, idx) => {
       const exact = r.montoProrrateado;
@@ -288,7 +292,12 @@ export default function DistribucionPage() {
   // Copy prorated amounts to clipboard (one per line, formatted with comma for Spanish Excel)
   const handleCopyMontos = () => {
     const textToCopy = tableRows
-      .map(r => r.montoProrrateado.toFixed(2).replace(".", ","))
+      .map(r => {
+        if (isRoundingApplied) {
+          return r.montoProrrateado.toFixed(0);
+        }
+        return r.montoProrrateado.toFixed(2).replace(".", ",");
+      })
       .join("\n");
 
     navigator.clipboard.writeText(textToCopy);
@@ -486,8 +495,8 @@ export default function DistribucionPage() {
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Asignado a Complejos</span>
             <div className="text-xl lg:text-2xl font-extrabold text-emerald-400">
               ${distributedToCines.toLocaleString("es-AR", { 
-                minimumFractionDigits: redondear ? 0 : 2, 
-                maximumFractionDigits: redondear ? 0 : 2 
+                minimumFractionDigits: isRoundingApplied ? 0 : 2, 
+                maximumFractionDigits: isRoundingApplied ? 0 : 2 
               })}
             </div>
           </div>
@@ -496,8 +505,8 @@ export default function DistribucionPage() {
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Asignado a Oficina Central</span>
             <div className="text-xl lg:text-2xl font-extrabold text-purple-400">
               ${distributedToOficina.toLocaleString("es-AR", { 
-                minimumFractionDigits: redondear ? 0 : 2, 
-                maximumFractionDigits: redondear ? 0 : 2 
+                minimumFractionDigits: isRoundingApplied ? 0 : 2, 
+                maximumFractionDigits: isRoundingApplied ? 0 : 2 
               })}
             </div>
           </div>
@@ -506,8 +515,8 @@ export default function DistribucionPage() {
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Distribuido (100%)</span>
             <div className="text-xl lg:text-2xl font-extrabold text-white">
               ${sumDistributed.toLocaleString("es-AR", { 
-                minimumFractionDigits: redondear ? 0 : 2, 
-                maximumFractionDigits: redondear ? 0 : 2 
+                minimumFractionDigits: isRoundingApplied ? 0 : 2, 
+                maximumFractionDigits: isRoundingApplied ? 0 : 2 
               })}
             </div>
           </div>
@@ -650,8 +659,8 @@ export default function DistribucionPage() {
                     {/* Calculated Amount */}
                     <td className="px-4 py-4 text-right font-mono font-bold text-emerald-300 text-sm">
                       ${row.montoProrrateado.toLocaleString("es-AR", { 
-                        minimumFractionDigits: redondear ? 0 : 2, 
-                        maximumFractionDigits: redondear ? 0 : 2 
+                        minimumFractionDigits: isRoundingApplied ? 0 : 2, 
+                        maximumFractionDigits: isRoundingApplied ? 0 : 2 
                       })}
                     </td>
                   </tr>
@@ -675,8 +684,8 @@ export default function DistribucionPage() {
                   </td>
                   <td className="px-4 py-4 text-right font-mono text-emerald-400 text-base">
                     ${sumDistributed.toLocaleString("es-AR", { 
-                      minimumFractionDigits: redondear ? 0 : 2, 
-                      maximumFractionDigits: redondear ? 0 : 2 
+                      minimumFractionDigits: isRoundingApplied ? 0 : 2, 
+                      maximumFractionDigits: isRoundingApplied ? 0 : 2 
                     })}
                   </td>
                 </tr>
