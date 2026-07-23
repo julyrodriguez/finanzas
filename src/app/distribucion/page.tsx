@@ -52,6 +52,7 @@ const INITIAL_COMPLEJOS: Complejo[] = [
   { codigo: "02007", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts", attendance: 581342 },
   { codigo: "02008", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 482515 },
   { codigo: "02009", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 426372 },
+  { codigo: "02010", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts", attendance: 249983 }
 ];
 
 const CUSTOM_ORDER = [
