@@ -40,7 +40,7 @@ const INITIAL_COMPLEJOS: Complejo[] = [
   { codigo: "02013", nombre: "Hiper Libertad Salta ARG", region: "Interior", cadena: "Cinemark", attendance: 325506 },
   { codigo: "02014", nombre: "Alto Comahue Neuquen ARG", region: "Interior", cadena: "Cinemark", attendance: 450751 },
   { codigo: "02015", nombre: "Alto Avellaneda ARG", region: "GBA", cadena: "Cinemark", attendance: 777473 },
-  { codigo: "02016", nombre: "Parque Brown ARG", region: "GBA", cadena: "Cinemark", attendance: 203000 },
+  { codigo: "02016", nombre: "Parque Brown ARG", region: "CABA", cadena: "Cinemark", attendance: 203000 },
   // Hoyts complexes
   { codigo: "02000", nombre: "Unicenter Shopping Martinez ARG", region: "GBA", cadena: "Hoyts", attendance: 1562399 },
   { codigo: "02001", nombre: "Plaza Oeste Moron ARG", region: "GBA", cadena: "Hoyts", attendance: 809703 },
@@ -109,8 +109,20 @@ export default function DistribucionPage() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length === INITIAL_COMPLEJOS.length) {
-          setComplejos(parsed);
-          setEditableComplejos(parsed);
+          const synced = parsed.map((savedC: Complejo) => {
+            const initial = INITIAL_COMPLEJOS.find(i => i.codigo === savedC.codigo);
+            if (initial) {
+              return {
+                ...savedC,
+                nombre: initial.nombre,
+                region: initial.region,
+                cadena: initial.cadena
+              };
+            }
+            return savedC;
+          });
+          setComplejos(synced);
+          setEditableComplejos(synced);
         }
       } catch (err) {
         console.error("Error parsing saved attendance:", err);
