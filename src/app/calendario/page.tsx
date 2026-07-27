@@ -16,6 +16,15 @@ import {
   Sparkles,
   Info
 } from "lucide-react";
+import { getFirebaseDb } from "@/lib/firebase";
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  deleteDoc 
+} from "firebase/firestore";
 
 interface CalendarEvent {
   id: string;
@@ -83,99 +92,160 @@ export default function CalendarioPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 1. Initial Load of Events from localStorage & Preloaded Mock Data
-  useEffect(() => {
-    const saved = localStorage.getItem("finanzas-calendar-events");
-    if (saved) {
-      try {
-        setEvents(JSON.parse(saved));
-      } catch (e) {
-        console.error("Error parsing saved events:", e);
+  // Helper to construct mock events
+  const getMockEvents = () => {
+    const today = new Date();
+    const formatOffsetDate = (daysOffset: number) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + daysOffset);
+      return d.toISOString().split("T")[0];
+    };
+    return [
+      {
+        id: "mock-1",
+        title: "Revisión de Flujo de Caja",
+        description: "Análisis mensual de ingresos y egresos de los complejos de cine.",
+        date: formatOffsetDate(0),
+        startTime: "09:00",
+        endTime: "10:30",
+        category: "finanzas",
+      },
+      {
+        id: "mock-2",
+        title: "Reunión de Equipo Semanal",
+        description: "Seguimiento de tareas pendientes y novedades de Finanzas.",
+        date: formatOffsetDate(0),
+        startTime: "14:00",
+        endTime: "15:30",
+        category: "reunion",
+      },
+      {
+        id: "mock-3",
+        title: "Aprobación de Órdenes de Compra",
+        description: "Autorización de facturas urgentes de Hoyts Unicenter y Abasto.",
+        date: formatOffsetDate(1),
+        startTime: "11:00",
+        endTime: "12:00",
+        category: "finanzas",
+      },
+      {
+        id: "mock-4",
+        title: "Mantenimiento Servidor / DB",
+        description: "Actualización de índices de base de datos de auditoría.",
+        date: formatOffsetDate(1),
+        startTime: "16:30",
+        endTime: "18:00",
+        category: "operaciones",
+      },
+      {
+        id: "mock-5",
+        title: "Conciliación Bancaria",
+        description: "Cierre de cuentas del mes anterior.",
+        date: formatOffsetDate(-1),
+        startTime: "10:00",
+        endTime: "12:00",
+        category: "finanzas",
+      },
+      {
+        id: "mock-6",
+        title: "Planificación Mensual",
+        description: "Proyecciones y metas financieras del próximo mes.",
+        date: formatOffsetDate(3),
+        startTime: "15:00",
+        endTime: "16:30",
+        category: "reunion",
+      },
+      {
+        id: "mock-7",
+        title: "Almuerzo de Equipo",
+        description: "Festejo de cumpleaños del sector.",
+        date: formatOffsetDate(4),
+        startTime: "13:00",
+        endTime: "14:30",
+        category: "personal",
       }
-    } else {
-      // Preload mock data matching today's month/week
-      const today = new Date();
-      const formatOffsetDate = (daysOffset: number) => {
-        const d = new Date(today);
-        d.setDate(today.getDate() + daysOffset);
-        return d.toISOString().split("T")[0];
-      };
-
-      const mockEvents: CalendarEvent[] = [
-        {
-          id: "mock-1",
-          title: "Revisión de Flujo de Caja",
-          description: "Análisis mensual de ingresos y egresos de los complejos de cine.",
-          date: formatOffsetDate(0), // Today
-          startTime: "09:00",
-          endTime: "10:30",
-          category: "finanzas",
-        },
-        {
-          id: "mock-2",
-          title: "Reunión de Equipo Semanal",
-          description: "Seguimiento de tareas pendientes y novedades de Finanzas.",
-          date: formatOffsetDate(0), // Today
-          startTime: "14:00",
-          endTime: "15:30",
-          category: "reunion",
-        },
-        {
-          id: "mock-3",
-          title: "Aprobación de Órdenes de Compra",
-          description: "Autorización de facturas urgentes de Hoyts Unicenter y Abasto.",
-          date: formatOffsetDate(1), // Tomorrow
-          startTime: "11:00",
-          endTime: "12:00",
-          category: "finanzas",
-        },
-        {
-          id: "mock-4",
-          title: "Mantenimiento Servidor / DB",
-          description: "Actualización de índices de base de datos de auditoría.",
-          date: formatOffsetDate(1), // Tomorrow
-          startTime: "16:30",
-          endTime: "18:00",
-          category: "operaciones",
-        },
-        {
-          id: "mock-5",
-          title: "Conciliación Bancaria",
-          description: "Cierre de cuentas del mes anterior.",
-          date: formatOffsetDate(-1), // Yesterday
-          startTime: "10:00",
-          endTime: "12:00",
-          category: "finanzas",
-        },
-        {
-          id: "mock-6",
-          title: "Planificación Mensual",
-          description: "Proyecciones y metas financieras del próximo mes.",
-          date: formatOffsetDate(3), // 3 days from now
-          startTime: "15:00",
-          endTime: "16:30",
-          category: "reunion",
-        },
-        {
-          id: "mock-7",
-          title: "Almuerzo de Equipo",
-          description: "Festejo de cumpleaños del sector.",
-          date: formatOffsetDate(4), // 4 days from now
-          startTime: "13:00",
-          endTime: "14:30",
-          category: "personal",
-        }
-      ];
-      setEvents(mockEvents);
-      localStorage.setItem("finanzas-calendar-events", JSON.stringify(mockEvents));
-    }
-  }, []);
-
-  // Save events helper
-  const saveEvents = (newEvents: CalendarEvent[]) => {
-    setEvents(newEvents);
-    localStorage.setItem("finanzas-calendar-events", JSON.stringify(newEvents));
+    ] as CalendarEvent[];
   };
+
+  const loadLocalMockEvents = () => {
+    const mock = getMockEvents();
+    setEvents(mock);
+    localStorage.setItem("finanzas-calendar-events", JSON.stringify(mock));
+  };
+
+  const preloadMockEventsToFirestore = async (db: any) => {
+    localStorage.setItem("preloaded-firestore-calendar", "true");
+    const mocks = getMockEvents();
+    for (const evt of mocks) {
+      try {
+        const { id, ...data } = evt;
+        await setDoc(doc(db, "calendar_events", id), data);
+      } catch (err) {
+        console.error("Failed to upload mock event to Firestore:", err);
+      }
+    }
+  };
+
+  // 1. Initial Load of Events (Firestore real-time listener + LocalStorage fallback)
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) {
+      // LocalStorage Fallback
+      const saved = localStorage.getItem("finanzas-calendar-events");
+      if (saved) {
+        try {
+          setEvents(JSON.parse(saved));
+        } catch (e) {
+          console.error("Error parsing saved events:", e);
+        }
+      } else {
+        loadLocalMockEvents();
+      }
+      return;
+    }
+
+    // Firestore Listener
+    const colRef = collection(db, "calendar_events");
+    const q = query(colRef);
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs: CalendarEvent[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            title: data.title || "",
+            description: data.description || "",
+            date: data.date || "",
+            startTime: data.startTime || "",
+            endTime: data.endTime || "",
+            category: data.category || "finanzas",
+          };
+        });
+
+        if (docs.length === 0) {
+          const preloadedFlag = localStorage.getItem("preloaded-firestore-calendar");
+          if (!preloadedFlag) {
+            preloadMockEventsToFirestore(db);
+          }
+        }
+
+        setEvents(docs);
+      },
+      (error) => {
+        console.error("Firestore loading error, using local fallback:", error);
+        const saved = localStorage.getItem("finanzas-calendar-events");
+        if (saved) {
+          try {
+            setEvents(JSON.parse(saved));
+          } catch (e) {}
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   // 2. Navigation Helpers
   const handlePrev = () => {
@@ -247,7 +317,7 @@ export default function CalendarioPage() {
     setShowEventModal(true);
   };
 
-  const handleSaveEvent = (e: React.FormEvent) => {
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -262,37 +332,68 @@ export default function CalendarioPage() {
       return;
     }
 
-    const eventData: CalendarEvent = {
-      id: editingEvent ? editingEvent.id : `evt-${Date.now()}`,
+    const eventId = editingEvent ? editingEvent.id : `evt-${Date.now()}`;
+    const eventData = {
       title: formTitle.trim(),
-      description: formDescription.trim() || undefined,
+      description: formDescription.trim() || "",
       date: formDate,
       startTime: formStartTime,
       endTime: formEndTime,
       category: formCategory,
     };
 
-    let updatedEvents: CalendarEvent[];
-    if (editingEvent) {
-      updatedEvents = events.map(e => e.id === editingEvent.id ? eventData : e);
-      showToast("📝 Evento modificado");
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await setDoc(doc(db, "calendar_events", eventId), eventData);
+        showToast(editingEvent ? "📝 Evento guardado en BD" : "➕ Evento creado en BD");
+      } catch (err) {
+        console.error("Error saving event to Firestore:", err);
+        setFormError("Error al guardar el evento en la base de datos.");
+        return;
+      }
     } else {
-      updatedEvents = [...events, eventData];
-      showToast("➕ Evento añadido");
+      // LocalStorage Fallback
+      const newLocalEvent: CalendarEvent = { id: eventId, ...eventData };
+      let updatedEvents: CalendarEvent[];
+      if (editingEvent) {
+        updatedEvents = events.map(e => e.id === editingEvent.id ? newLocalEvent : e);
+        showToast("📝 Evento modificado localmente");
+      } else {
+        updatedEvents = [...events, newLocalEvent];
+        showToast("➕ Evento añadido localmente");
+      }
+      setEvents(updatedEvents);
+      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
     }
 
-    saveEvents(updatedEvents);
     setShowEventModal(false);
     setEditingEvent(null);
   };
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
     if (!editingEvent) return;
-    const updatedEvents = events.filter(e => e.id !== editingEvent.id);
-    saveEvents(updatedEvents);
+
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await deleteDoc(doc(db, "calendar_events", editingEvent.id));
+        showToast("🗑️ Evento eliminado de BD");
+      } catch (err) {
+        console.error("Error deleting event from Firestore:", err);
+        setFormError("Error al eliminar el evento de la base de datos.");
+        return;
+      }
+    } else {
+      // LocalStorage Fallback
+      const updatedEvents = events.filter(e => e.id !== editingEvent.id);
+      setEvents(updatedEvents);
+      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
+      showToast("🗑️ Evento eliminado localmente");
+    }
+
     setShowEventModal(false);
     setEditingEvent(null);
-    showToast("🗑️ Evento eliminado");
   };
 
   // 4. Date Math for Month View
