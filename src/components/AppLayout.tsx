@@ -17,7 +17,8 @@ import {
   LogOut,
   User as UserIcon,
   Loader2,
-  Percent
+  Percent,
+  Calendar
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -75,6 +76,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       name: "Distribución",
       href: "/distribucion",
       icon: Percent,
+      exact: false,
+      badge: "Nuevo",
+    },
+    {
+      name: "Calendario",
+      href: "/calendario",
+      icon: Calendar,
       exact: false,
       badge: "Nuevo",
     },
