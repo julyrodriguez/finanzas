@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { 
   TrendingUp, 
   User as UserIcon, 
@@ -10,7 +11,8 @@ import {
   ArrowRight, 
   AlertCircle, 
   Loader2,
-  UserPlus
+  UserPlus,
+  Percent
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -190,7 +192,7 @@ export default function LoginPage() {
           </form>
 
           {/* Toggle Link below */}
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-4">
             <button
               type="button"
               onClick={() => {
@@ -203,6 +205,20 @@ export default function LoginPage() {
                 ? "¿Ya tienes una cuenta? Inicia sesión"
                 : "¿No tienes una cuenta? Regístrate aquí"}
             </button>
+
+            <div className="relative flex py-2 items-center justify-center">
+              <div className="flex-grow border-t border-white/5"></div>
+              <span className="flex-shrink mx-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">o continuar como</span>
+              <div className="flex-grow border-t border-white/5"></div>
+            </div>
+
+            <Link
+              href="/distribucion"
+              className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 group"
+            >
+              <Percent className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span>Acceder a Distribución Pública</span>
+            </Link>
           </div>
         </div>
       </div>

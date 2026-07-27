@@ -320,6 +320,7 @@ export default function DistribucionPage() {
     <AppLayout 
       title="Distribución de Gastos" 
       subtitle="Prorrateo de montos corporativos entre complejos en base a Attendance 2026"
+      publicRoute={true}
     >
       {/* Toast Notification */}
       {toastMessage && (

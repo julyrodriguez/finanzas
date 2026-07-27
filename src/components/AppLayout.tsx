@@ -24,9 +24,10 @@ interface AppLayoutProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  publicRoute?: boolean;
 }
 
-export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
+export function AppLayout({ title, subtitle, children, publicRoute = false }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
@@ -48,12 +49,12 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
 
   const { user, loading, logout } = useAuth();
 
-  // Strict Protected Route Guard: If not logged in, redirect immediately to /login
+  // Strict Protected Route Guard: If not logged in and not public, redirect immediately to /login
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !publicRoute) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, publicRoute]);
 
   const menuItems = [
     {
@@ -102,7 +103,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
   };
 
   // If checking authentication or unauthenticated, block rendering and show loader
-  if (loading || !user) {
+  if (loading || (!user && !publicRoute)) {
     return (
       <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4 p-8 rounded-3xl glass-card border border-white/10 text-center">
@@ -251,7 +252,7 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
                 </span>
               </div>
               <p className="text-xs text-gray-300 font-medium truncate">
-                {getCleanUsername()}
+                {user ? getCleanUsername() : "Acceso Público"}
               </p>
               <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
                 <div className="bg-emerald-500 h-full w-full rounded-full" />
@@ -263,28 +264,46 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
           <div className={`flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
             <div className="flex items-center gap-3 min-w-0">
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
-                {getCleanUsername()[0]?.toUpperCase() || "U"}
+                {user ? getCleanUsername()[0]?.toUpperCase() : "P"}
               </div>
               {isExpanded && (
                 <div className="min-w-0 transition-opacity duration-200">
                   <p className="text-xs font-semibold text-gray-200 truncate">
-                    {getCleanUsername()}
+                    {user ? getCleanUsername() : "Público"}
                   </p>
                   <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" /> Activo
+                    {user ? (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Activo
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Modo Consulta
+                      </>
+                    )}
                   </p>
                 </div>
               )}
             </div>
 
             {isExpanded && (
-              <button
-                onClick={handleLogout}
-                title="Cerrar Sesión"
-                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              user ? (
+                <button
+                  onClick={handleLogout}
+                  title="Cerrar Sesión"
+                  className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  title="Iniciar Sesión"
+                  className="p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center"
+                >
+                  <UserIcon className="w-4 h-4" />
+                </Link>
+              )
             )}
           </div>
         </div>
@@ -338,13 +357,23 @@ export function AppLayout({ title, subtitle, children }: AppLayoutProps) {
               )}
             </button>
 
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
-            >
-              <LogOut className="w-3.5 h-3.5 text-red-400" />
-              <span className="hidden sm:inline">Salir</span>
-            </button>
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
+              >
+                <LogOut className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden sm:inline">Salir</span>
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs text-emerald-400 transition-colors flex items-center gap-2"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Ingresar</span>
+              </Link>
+            )}
           </div>
         </header>
 
