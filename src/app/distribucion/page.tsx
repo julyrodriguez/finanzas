@@ -316,6 +316,21 @@ export default function DistribucionPage() {
     showToast("📋 Montos copiados al portapapeles");
   };
 
+  // Copy cinema ID and prorated amount (Tab-separated for direct Excel column pasting)
+  const handleCopyMontosYIds = () => {
+    const textToCopy = tableRows
+      .map(r => {
+        const amountStr = isRoundingApplied
+          ? r.montoProrrateado.toFixed(0)
+          : r.montoProrrateado.toFixed(2).replace(".", ",");
+        return `${r.codigo}\t${amountStr}`;
+      })
+      .join("\n");
+
+    navigator.clipboard.writeText(textToCopy);
+    showToast("📋 IDs y Montos copiados al portapapeles");
+  };
+
   return (
     <AppLayout 
       title="Distribución de Gastos" 
@@ -583,10 +598,21 @@ export default function DistribucionPage() {
             {/* Copy button */}
             <button
               onClick={handleCopyMontos}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition-all"
+              title="Copia solo los importes listados (un valor por renglón)"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Copiar Montos</span>
+            </button>
+
+            {/* Copy IDs & Montos button */}
+            <button
+              onClick={handleCopyMontosYIds}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
+              title="Copia Código de Cine y Monto tabulados, ideal para pegar en Excel"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar IDs y Montos</span>
             </button>
           </div>
         </div>
