@@ -70,7 +70,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       href: "/ordenes-de-compras",
       icon: ShoppingBag,
       exact: false,
-      badge: "Próximamente",
     },
     {
       name: "Distribución",
@@ -219,16 +218,18 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                   {isExpanded && (
                     <div className="ml-3 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-200">
                       <span className="truncate">{item.name}</span>
-                      <span
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
-                          active
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                            : "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                        }`}
-                      >
-                        <Clock className="w-2.5 h-2.5" />
-                        {item.badge}
-                      </span>
+                      {item.badge && (
+                        <span
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
+                            active
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                              : "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                          }`}
+                        >
+                          <Clock className="w-2.5 h-2.5" />
+                          {item.badge}
+                        </span>
+                      )}
                     </div>
                   )}
                 </Link>
