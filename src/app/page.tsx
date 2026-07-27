@@ -611,7 +611,7 @@ export default function CalendarioPage() {
                 </div>
 
                 {/* Day cells grid */}
-                <div className="grid grid-cols-7 grid-rows-6 auto-rows-fr min-h-[550px] divide-x divide-y divide-white/5 bg-[#090d16]/30">
+                <div className="grid grid-cols-7 grid-rows-6 auto-rows-fr min-h-[320px] md:min-h-[550px] divide-x divide-y divide-white/5 bg-[#090d16]/30">
                   {monthDays.map((cell) => {
                     const isSelected = isSameDay(cell.date, selectedDate);
                     const isToday = isSameDay(cell.date, new Date());
@@ -621,7 +621,7 @@ export default function CalendarioPage() {
                       <div
                         key={cell.key}
                         onClick={() => setSelectedDate(cell.date)}
-                        className={`p-2 transition-all cursor-pointer relative min-h-[90px] flex flex-col justify-between ${
+                        className={`p-1.5 md:p-2 transition-all cursor-pointer relative min-h-[50px] md:min-h-[90px] flex flex-col justify-between ${
                           cell.isCurrentMonth ? "text-white" : "text-gray-600 bg-white/[0.01]"
                         } ${
                           isSelected ? "bg-emerald-500/5 ring-1 ring-emerald-500/30" : "hover:bg-white/[0.02]"
@@ -630,7 +630,7 @@ export default function CalendarioPage() {
                         {/* Day Number */}
                         <div className="flex justify-between items-center mb-1">
                           <span
-                            className={`flex items-center justify-center text-xs font-bold w-6 h-6 rounded-lg ${
+                            className={`flex items-center justify-center text-[11px] md:text-xs font-bold w-5 h-5 md:w-6 md:h-6 rounded-lg ${
                               isToday
                                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
                                 : cell.isCurrentMonth
@@ -641,21 +641,36 @@ export default function CalendarioPage() {
                             {cell.date.getDate()}
                           </span>
 
-                          {/* "+" quick add link shown on hover */}
+                          {/* "+" quick add link shown on hover (Desktop only) */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               openAddModal(getFormattedDateStr(cell.date));
                             }}
-                            className="opacity-0 hover:opacity-100 group-hover:opacity-100 p-0.5 rounded bg-white/5 text-gray-400 hover:text-white hover:bg-emerald-500/20 transition-all text-[10px]"
+                            className="hidden md:inline-flex opacity-0 hover:opacity-100 group-hover:opacity-100 p-0.5 rounded bg-white/5 text-gray-400 hover:text-white hover:bg-emerald-500/20 transition-all text-[10px]"
                             title="Añadir evento en este día"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
 
-                        {/* Events list inside day cell */}
-                        <div className="flex-1 flex flex-col gap-1 overflow-hidden">
+                        {/* Event dot indicators (Mobile only, replaces text list) */}
+                        {dayEvents.length > 0 && (
+                          <div className="flex md:hidden justify-center gap-0.5 mt-0.5 pb-0.5">
+                            {dayEvents.slice(0, 3).map((evt) => {
+                              const styles = CATEGORY_STYLES[evt.category] || CATEGORY_STYLES.finanzas;
+                              return (
+                                <span key={evt.id} className={`w-1 h-1 rounded-full ${styles.dot}`} />
+                              );
+                            })}
+                            {dayEvents.length > 3 && (
+                              <span className="w-1 h-1 rounded-full bg-gray-400" />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Events list inside day cell (Desktop only) */}
+                        <div className="hidden md:flex flex-1 flex-col gap-1 overflow-hidden">
                           {dayEvents.slice(0, 3).map((event) => {
                             const styles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.finanzas;
                             return (
@@ -686,8 +701,8 @@ export default function CalendarioPage() {
             {viewMode === "week" && (
               <div className="rounded-3xl glass-card border border-white/10 overflow-hidden shadow-2xl bg-[#090d16]/20">
                 
-                {/* Scrollable container for Week Timeline */}
-                <div className="overflow-x-auto">
+                {/* 2.1 Desktop Week View (7 columns side-by-side) */}
+                <div className="hidden md:block overflow-x-auto">
                   <div className="min-w-[700px] flex flex-col">
                     
                     {/* Header Columns */}
@@ -763,7 +778,6 @@ export default function CalendarioPage() {
                               }`}
                               // Click empty space in timeline to create an event at that day/hour!
                               onClick={(e) => {
-                                // Calculate clicked hour based on click Y coordinate relative to column
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const clickY = e.clientY - rect.top;
                                 const percentY = clickY / rect.height;
@@ -774,24 +788,21 @@ export default function CalendarioPage() {
                             >
                               {/* Render events inside this day column */}
                               {dayEvents.map((event) => {
-                                // Parse event times
                                 const [sH, sM] = event.startTime.split(":").map(Number);
                                 const [eH, eM] = event.endTime.split(":").map(Number);
                                 const startDec = sH + sM / 60;
                                 const endDec = eH + eM / 60;
                                 
-                                // Clamping to timeline hours (8 to 22)
                                 const timelineStart = 8;
                                 const timelineEnd = 22;
                                 
                                 if (startDec >= timelineEnd || endDec <= timelineStart) {
-                                  return null; // Skip event if completely out of bounds
+                                  return null;
                                 }
                                 
                                 const startClamped = Math.max(timelineStart, startDec);
                                 const endClamped = Math.min(timelineEnd, endDec);
                                 
-                                // Height & Top positioning percentages
                                 const topPercent = ((startClamped - timelineStart) / (timelineEnd - timelineStart)) * 100;
                                 const heightPercent = ((endClamped - startClamped) / (timelineEnd - timelineStart)) * 100;
                                 
@@ -819,7 +830,6 @@ export default function CalendarioPage() {
                                       </h4>
                                     </div>
                                     
-                                    {/* Show category indicator badge */}
                                     <div className="flex items-center mt-1">
                                       <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${styles.badge}`}>
                                         {styles.label}
@@ -833,6 +843,125 @@ export default function CalendarioPage() {
                         })}
                       </div>
 
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2.2 Mobile Single-Day Timeline View (Slide selector at top + wide column below) */}
+                <div className="block md:hidden w-full flex flex-col">
+                  {/* Horizontal week slider tabs */}
+                  <div className="flex bg-white/5 border-b border-white/10 p-2 gap-1 overflow-x-auto justify-between">
+                    {weekDays.map((day) => {
+                      const isToday = isSameDay(day, new Date());
+                      const isSelected = isSameDay(day, selectedDate);
+                      return (
+                        <button
+                          key={day.toString()}
+                          onClick={() => setSelectedDate(day)}
+                          className={`flex-1 min-w-[46px] py-2 rounded-2xl flex flex-col items-center justify-center transition-all ${
+                            isSelected
+                              ? "bg-gradient-to-tr from-emerald-500 to-teal-500 text-white font-bold shadow-lg"
+                              : "bg-white/[0.02] border border-white/5 text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          <span className="text-[8px] uppercase font-bold tracking-wider">
+                            {day.toLocaleString("es-AR", { weekday: "short" })}
+                          </span>
+                          <span className={`text-sm font-extrabold mt-0.5 ${isToday && !isSelected ? "text-emerald-400" : ""}`}>
+                            {day.getDate()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Single Column Hourly Grid */}
+                  <div className="relative flex" style={{ height: "550px" }}>
+                    
+                    {/* Hours Y-Axis sidebar */}
+                    <div className="w-14 flex-shrink-0 border-r border-white/10 bg-white/[0.01] flex flex-col justify-between text-right pr-2 text-[10px] font-mono text-gray-500 py-1">
+                      {HOURS.map((hour) => (
+                        <div key={hour} style={{ height: `${550 / HOURS.length}px` }} className="flex items-start justify-end pt-1">
+                          {hour.toString().padStart(2, "0")}:00
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Single column area containing events for selectedDate only */}
+                    <div
+                      className="flex-1 relative h-full bg-[#0d131f]/20"
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const clickY = e.clientY - rect.top;
+                        const percentY = clickY / rect.height;
+                        const clickedHourDecimal = 8 + percentY * 14;
+                        const roundedHour = Math.floor(clickedHourDecimal);
+                        openAddModal(getFormattedDateStr(selectedDate), Math.min(21, Math.max(8, roundedHour)));
+                      }}
+                    >
+                      {/* Background Grid Lines (Horizontal hour spans) */}
+                      <div className="absolute inset-0 flex flex-col pointer-events-none divide-y divide-white/5">
+                        {HOURS.map((hour) => (
+                          <div key={hour} style={{ height: `${550 / HOURS.length}px` }} />
+                        ))}
+                      </div>
+
+                      {/* Render events for selected day only */}
+                      {getEventsForDate(selectedDate).map((event) => {
+                        const [sH, sM] = event.startTime.split(":").map(Number);
+                        const [eH, eM] = event.endTime.split(":").map(Number);
+                        const startDec = sH + sM / 60;
+                        const endDec = eH + eM / 60;
+                        
+                        const timelineStart = 8;
+                        const timelineEnd = 22;
+                        
+                        if (startDec >= timelineEnd || endDec <= timelineStart) {
+                          return null;
+                        }
+                        
+                        const startClamped = Math.max(timelineStart, startDec);
+                        const endClamped = Math.min(timelineEnd, endDec);
+                        
+                        const topPercent = ((startClamped - timelineStart) / (timelineEnd - timelineStart)) * 100;
+                        const heightPercent = ((endClamped - startClamped) / (timelineEnd - timelineStart)) * 100;
+                        
+                        const styles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.finanzas;
+
+                        return (
+                          <div
+                            key={event.id}
+                            onClick={(e) => openEditModal(event, e)}
+                            style={{
+                              top: `${topPercent}%`,
+                              height: `${heightPercent}%`,
+                              width: "94%",
+                              left: "3%",
+                            }}
+                            className={`absolute rounded-xl border p-2 flex flex-col justify-between text-left overflow-hidden cursor-pointer shadow-lg transition-all ${styles.bg}`}
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1 text-[9px] font-bold opacity-85 font-mono">
+                                <Clock className="w-2.5 h-2.5" />
+                                <span>{event.startTime} - {event.endTime}</span>
+                              </div>
+                              <h4 className="text-[11px] font-bold leading-tight">
+                                {event.title}
+                              </h4>
+                              {event.description && (
+                                <p className="text-[9px] text-gray-400 line-clamp-1 leading-normal">
+                                  {event.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center mt-1">
+                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${styles.badge}`}>
+                                {styles.label}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
