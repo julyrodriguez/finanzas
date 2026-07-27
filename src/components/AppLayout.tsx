@@ -59,11 +59,11 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
   const menuItems = [
     {
-      name: "Inicio",
+      name: "Calendario",
       href: "/",
-      icon: Home,
+      icon: Calendar,
       exact: true,
-      badge: "Próximamente",
+      badge: "Nuevo",
     },
     {
       name: "Órdenes de Compra",
@@ -79,18 +79,11 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       exact: false,
       badge: "Nuevo",
     },
-    {
-      name: "Calendario",
-      href: "/calendario",
-      icon: Calendar,
-      exact: false,
-      badge: "Nuevo",
-    },
   ];
 
   const isActive = (href: string, exact: boolean) => {
     if (exact) {
-      return pathname === href || pathname === "/inicio";
+      return pathname === href || pathname === "/inicio" || pathname === "/calendario";
     }
     return pathname.startsWith(href);
   };
