@@ -237,7 +237,7 @@ export default function DistribucionPage() {
   // Add Oficina Central row at the bottom if present
   if (percentOficina > 0) {
     tableRows.push({
-      codigo: "OF.CENTRAL",
+      codigo: "00643",
       nombre: "Oficina Central (Administrativo)",
       region: "-" as any,
       cadena: "-" as any,
