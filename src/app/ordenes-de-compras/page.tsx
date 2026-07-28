@@ -74,7 +74,7 @@ export default function OrdenesDeComprasPage() {
   const [searchField, setSearchField] = useState<"todos" | "numSolicitud" | "numOC" | "razonSocial">("todos");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [filterEstado, setFilterEstado] = useState<
-    "Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes" | "Canceladas"
+    "Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes"
   >("Todas");
   
   // Pagination State: Limit initial query reads to 15
@@ -148,8 +148,6 @@ export default function OrdenesDeComprasPage() {
           } else if (filterEstado === "Pendientes") {
             // Pendientes are !liberada && !mandada, query by liberada === false
             constraints.unshift(where("liberada", "==", false));
-          } else if (filterEstado === "Canceladas") {
-            constraints.unshift(where("cancelada", "==", true));
           }
 
           constraints.push(limit(queryLimit + 1));
@@ -619,7 +617,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
 
     const matchesEstado = (() => {
       if (filterEstado === "Todas") return true;
-      if (filterEstado === "Canceladas") return Boolean(orden.cancelada);
       
       // If filtering for other active states, exclude cancelled orders
       if (orden.cancelada) return false;
@@ -749,7 +746,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
             {/* Filter Pills for Estado */}
             <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Pendientes", "Mandadas", "Liberadas", "Entregadas", "Canceladas"] as const).map((est) => (
+              {(["Todas", "Pendientes", "Mandadas", "Liberadas", "Entregadas"] as const).map((est) => (
                 <button
                   key={est}
                   onClick={() => {
