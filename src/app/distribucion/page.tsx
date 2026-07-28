@@ -51,7 +51,7 @@ const INITIAL_COMPLEJOS: Complejo[] = [
   { codigo: "02005", codigoCuenta: "00709", nombre: "Temperley ARG", region: "GBA", cadena: "Hoyts", attendance: 673657 },
   { codigo: "02006", codigoCuenta: "00711", nombre: "Shopping Nine Moreno ARG", region: "GBA", cadena: "Hoyts", attendance: 510706 },
   { codigo: "02007", codigoCuenta: "00708", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts", attendance: 581342 },
-  { codigo: "02008", codigoCuenta: "02008", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 482515 },
+  { codigo: "02008", codigoCuenta: "00706", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 482515 },
   { codigo: "02009", codigoCuenta: "00707", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 426372 },
   { codigo: "02010", codigoCuenta: "00714", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts", attendance: 249983 }
 ];
@@ -331,7 +331,17 @@ export default function DistribucionPage() {
       .join("\n");
 
     navigator.clipboard.writeText(textToCopy);
-    showToast("📋 IDs y Montos copiados al portapapeles");
+    showToast("📋 Cuentas y Montos copiados al portapapeles");
+  };
+
+  // Copy account IDs to clipboard (one per line)
+  const handleCopyCuentas = () => {
+    const textToCopy = tableRows
+      .map(r => r.codigoCuenta)
+      .join("\n");
+
+    navigator.clipboard.writeText(textToCopy);
+    showToast("📋 Cuentas copiadas al portapapeles");
   };
 
   return (
@@ -608,14 +618,24 @@ export default function DistribucionPage() {
               <span>Copiar Montos</span>
             </button>
 
-            {/* Copy IDs & Montos button */}
+            {/* Copy Cuentas button */}
+            <button
+              onClick={handleCopyCuentas}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition-all"
+              title="Copia solo las cuentas listadas (un valor por renglón)"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar Cuentas</span>
+            </button>
+
+            {/* Copy Cuenta y Monto button */}
             <button
               onClick={handleCopyMontosYIds}
               className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
               title="Copia Código de Cuenta y Monto tabulados, ideal para pegar en Excel"
             >
               <Copy className="w-3.5 h-3.5" />
-              <span>Copiar IDs y Montos</span>
+              <span>Copiar Cuenta y Monto</span>
             </button>
           </div>
         </div>
