@@ -59,6 +59,7 @@ export interface OrdenCompra {
   liberada: boolean;
   mandada: boolean;
   entregada?: boolean;
+  cancelada?: boolean;
   creadoPor?: string;
   notas?: Nota[];
   createdAt?: any;
@@ -72,7 +73,9 @@ export default function OrdenesDeComprasPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchField, setSearchField] = useState<"todos" | "numSolicitud" | "numOC" | "razonSocial">("todos");
   const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [filterEstado, setFilterEstado] = useState<"Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes">("Todas");
+  const [filterEstado, setFilterEstado] = useState<
+    "Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes" | "Canceladas"
+  >("Todas");
   
   // Pagination State: Limit initial query reads to 15
   const [queryLimit, setQueryLimit] = useState(15);
@@ -97,6 +100,7 @@ export default function OrdenesDeComprasPage() {
   const [formaPago, setFormaPago] = useState("30DFF");
   const [liberada, setLiberada] = useState(false);
   const [mandada, setMandada] = useState(false);
+  const [cancelada, setCancelada] = useState(false);
   const [relatedOC, setRelatedOC] = useState("");
 
   // Notification Toast State for Clipboard Copy & Actions
@@ -144,6 +148,8 @@ export default function OrdenesDeComprasPage() {
           } else if (filterEstado === "Pendientes") {
             // Pendientes are !liberada && !mandada, query by liberada === false
             constraints.unshift(where("liberada", "==", false));
+          } else if (filterEstado === "Canceladas") {
+            constraints.unshift(where("cancelada", "==", true));
           }
 
           constraints.push(limit(queryLimit + 1));
@@ -170,6 +176,7 @@ export default function OrdenesDeComprasPage() {
                 liberada: Boolean(data.liberada),
                 mandada: Boolean(data.mandada),
                 entregada: Boolean(data.entregada),
+                cancelada: Boolean(data.cancelada),
                 creadoPor: data.creadoPor || "Usuario",
                 notas: data.notas || [],
                 createdAt: data.createdAt || null,
@@ -228,6 +235,7 @@ export default function OrdenesDeComprasPage() {
     setFormaPago(orden.formaPago || "30DFF");
     setLiberada(Boolean(orden.liberada));
     setMandada(Boolean(orden.mandada));
+    setCancelada(Boolean(orden.cancelada));
     setRelatedOC(orden.relatedOC || "");
     setIsModalOpen(true);
   };
@@ -356,6 +364,7 @@ export default function OrdenesDeComprasPage() {
       liberada,
       mandada,
       entregada: editingOrden ? Boolean(editingOrden.entregada) : false,
+      cancelada,
       creadoPor: editingOrden?.creadoPor || authorName,
       relatedOC: relatedOC.trim(),
     };
@@ -417,6 +426,7 @@ export default function OrdenesDeComprasPage() {
     setFormaPago("30DFF");
     setLiberada(false);
     setMandada(false);
+    setCancelada(false);
     setRelatedOC("");
   };
 
@@ -607,12 +617,20 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
     const matchesEmpresa =
       filterEmpresa === "Todas" || orden.empresa === filterEmpresa;
 
-    const matchesEstado =
-      filterEstado === "Todas" ||
-      (filterEstado === "Liberadas" && orden.liberada && !orden.entregada) ||
-      (filterEstado === "Mandadas" && orden.mandada && !orden.liberada) ||
-      (filterEstado === "Entregadas" && orden.entregada) ||
-      (filterEstado === "Pendientes" && !orden.liberada && !orden.mandada);
+    const matchesEstado = (() => {
+      if (filterEstado === "Todas") return true;
+      if (filterEstado === "Canceladas") return Boolean(orden.cancelada);
+      
+      // If filtering for other active states, exclude cancelled orders
+      if (orden.cancelada) return false;
+      
+      if (filterEstado === "Liberadas") return orden.liberada && !orden.entregada;
+      if (filterEstado === "Mandadas") return orden.mandada && !orden.liberada;
+      if (filterEstado === "Entregadas") return Boolean(orden.entregada);
+      if (filterEstado === "Pendientes") return !orden.liberada && !orden.mandada;
+      
+      return true;
+    })();
 
     return matchesSearch && matchesEmpresa && matchesEstado;
   });
@@ -731,7 +749,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
             {/* Filter Pills for Estado */}
             <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
               <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Pendientes", "Mandadas", "Liberadas", "Entregadas"] as const).map((est) => (
+              {(["Todas", "Pendientes", "Mandadas", "Liberadas", "Entregadas", "Canceladas"] as const).map((est) => (
                 <button
                   key={est}
                   onClick={() => {
@@ -764,6 +782,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
             <span className="inline-flex items-center gap-1.5 bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-medium">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>🔵 Entregada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/20 font-medium">
+              <X className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>🔴 Cancelada</span>
             </span>
             <span className="inline-flex items-center gap-1.5 bg-purple-500/15 text-purple-300 px-2.5 py-1 rounded-xl border border-purple-500/30 font-medium">
               <Link2 className="w-3.5 h-3.5" />
@@ -811,55 +833,67 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                   <tbody className="divide-y divide-white/5 text-gray-300">
                     {visibleOrdenes.map((orden) => {
                       const isPendingSend = orden.liberada && !orden.mandada;
-                      const rowClass = isPendingSend
-                        ? "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500 transition-all duration-200"
-                        : "hover:bg-white/[0.02] transition-all duration-200";
+                      let rowClass = "hover:bg-white/[0.02] transition-all duration-200";
+                      
+                      if (orden.cancelada) {
+                        rowClass = "bg-red-950/10 opacity-60 hover:opacity-80 border-l-4 border-l-red-600 transition-all duration-200";
+                      } else if (isPendingSend) {
+                        rowClass = "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500 transition-all duration-200";
+                      }
                       return (
                         <tr key={orden.id} className={rowClass}>
                           {/* Tildes: Liberada & Mandada */}
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-1.5">
-                              {/* Tilde Liberada */}
-                              <button
-                                onClick={() => handleToggleLiberada(orden)}
-                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                  orden.liberada
-                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                    : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                                }`}
-                                title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
-                              >
-                                <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
-                              </button>
+                              {orden.cancelada ? (
+                                <span className="px-2.5 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold uppercase tracking-wider">
+                                  Cancelada
+                                </span>
+                              ) : (
+                                <>
+                                  {/* Tilde Liberada */}
+                                  <button
+                                    onClick={() => handleToggleLiberada(orden)}
+                                    className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                      orden.liberada
+                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                        : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                                    }`}
+                                    title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
+                                  >
+                                    <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
+                                  </button>
 
-                              {/* Tilde Mandada */}
-                              <button
-                                onClick={() => handleToggleMandada(orden)}
-                                className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                  orden.mandada
-                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
-                                    : isPendingSend
-                                      ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
-                                      : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                                }`}
-                                title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
-                              >
-                                <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : isPendingSend ? "stroke-[2.5]" : "opacity-40"}`} />
-                              </button>
+                                  {/* Tilde Mandada */}
+                                  <button
+                                    onClick={() => handleToggleMandada(orden)}
+                                    className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                      orden.mandada
+                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                                        : isPendingSend
+                                          ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
+                                          : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                                    }`}
+                                    title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
+                                  >
+                                    <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : isPendingSend ? "stroke-[2.5]" : "opacity-40"}`} />
+                                  </button>
 
-                              {/* Tilde Entregada (Visible en filtro de Todas, Liberadas o Entregadas) */}
-                              {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
-                                <button
-                                  onClick={() => handleToggleEntregada(orden)}
-                                  className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                    orden.entregada
-                                      ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
-                                      : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                                  }`}
-                                  title={orden.entregada ? "Entregada (Click para desmarcar)" : "Marcar como Entregada"}
-                                >
-                                  <CheckCircle2 className={`w-3.5 h-3.5 ${orden.entregada ? "stroke-[2]" : "opacity-40"}`} />
-                                </button>
+                                  {/* Tilde Entregada (Visible en filtro de Todas, Liberadas o Entregadas) */}
+                                  {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
+                                    <button
+                                      onClick={() => handleToggleEntregada(orden)}
+                                      className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
+                                        orden.entregada
+                                          ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
+                                          : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
+                                      }`}
+                                      title={orden.entregada ? "Entregada (Click para desmarcar)" : "Marcar como Entregada"}
+                                    >
+                                      <CheckCircle2 className={`w-3.5 h-3.5 ${orden.entregada ? "stroke-[2]" : "opacity-40"}`} />
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>
@@ -928,8 +962,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                         </td>
 
                         {/* Proveedor */}
-                        <td className="px-4 py-4 font-medium text-white max-w-xs truncate">
-                          {orden.razonSocial}
+                        <td className="px-4 py-4 max-w-xs">
+                          <div className="font-medium text-white truncate">
+                            {orden.razonSocial}
+                          </div>
+                          {orden.cancelada && (
+                            <div className="text-[10px] text-red-400 mt-1 bg-red-950/20 border border-red-500/20 px-2 py-1 rounded-lg">
+                              <span className="font-bold">Motivo Cancelación:</span>{" "}
+                              {orden.notas && orden.notas.length > 0
+                                ? orden.notas[orden.notas.length - 1].texto
+                                : "(Sin notas registradas)"}
+                            </div>
+                          )}
                         </td>
 
                         {/* Monto */}
@@ -977,9 +1021,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
               <div className="lg:hidden space-y-4">
                 {visibleOrdenes.map((orden) => {
                   const isPendingSend = orden.liberada && !orden.mandada;
-                  const cardClass = isPendingSend
-                    ? "p-4 space-y-3 bg-red-500/5 border-l-4 border-l-red-500 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md"
-                    : "p-4 space-y-3 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  let cardClass = "p-4 space-y-3 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  if (orden.cancelada) {
+                    cardClass = "p-4 space-y-3 bg-red-950/10 opacity-60 border-l-4 border-l-red-600 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  } else if (isPendingSend) {
+                    cardClass = "p-4 space-y-3 bg-red-500/5 border-l-4 border-l-red-500 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  }
                   return (
                     <div key={orden.id} className={cardClass}>
                       {/* Top Row: Empresa, OC number and Actions (Copiar/Editar) */}
@@ -1045,6 +1092,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                           {orden.razonSocial}
                         </p>
                         
+                        {orden.cancelada && (
+                          <div className="p-2.5 rounded-xl bg-red-950/20 border border-red-500/20 text-red-400 text-xs mt-1.5">
+                            <span className="font-bold block text-[10px] uppercase tracking-wider">Motivo de Cancelación:</span>
+                            <span className="block mt-0.5 text-gray-300">
+                              {orden.notas && orden.notas.length > 0
+                                ? orden.notas[orden.notas.length - 1].texto
+                                : "(Sin notas registradas)"}
+                            </span>
+                          </div>
+                        )}
+                        
                         <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
                           <div>
                             <span className="text-gray-400 block text-[10px]">Monto</span>
@@ -1076,44 +1134,52 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
                         {/* Status Checkbox Toggles */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <button
-                            onClick={() => handleToggleLiberada(orden)}
-                            className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
-                              orden.liberada
-                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                : "bg-white/5 text-gray-500 border-white/10"
-                            }`}
-                          >
-                            <Check className="w-2.5 h-2.5" />
-                            <span>Lib</span>
-                          </button>
+                          {orden.cancelada ? (
+                            <span className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold uppercase tracking-wider">
+                              Cancelada
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleToggleLiberada(orden)}
+                                className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
+                                  orden.liberada
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                                    : "bg-white/5 text-gray-500 border-white/10"
+                                }`}
+                              >
+                                <Check className="w-2.5 h-2.5" />
+                                <span>Lib</span>
+                              </button>
 
-                          <button
-                            onClick={() => handleToggleMandada(orden)}
-                            className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
-                              orden.mandada
-                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
-                                : isPendingSend
-                                  ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
-                                  : "bg-white/5 text-gray-500 border-white/10"
-                            }`}
-                          >
-                            <Send className="w-2.5 h-2.5" />
-                            <span>Mand</span>
-                          </button>
+                              <button
+                                onClick={() => handleToggleMandada(orden)}
+                                className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
+                                  orden.mandada
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                                    : isPendingSend
+                                      ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
+                                      : "bg-white/5 text-gray-500 border-white/10"
+                                }`}
+                              >
+                                <Send className="w-2.5 h-2.5" />
+                                <span>Mand</span>
+                              </button>
 
-                          {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
-                            <button
-                              onClick={() => handleToggleEntregada(orden)}
-                              className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
-                                orden.entregada
-                                  ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
-                                  : "bg-white/5 text-gray-500 border-white/10"
-                              }`}
-                            >
-                              <CheckCircle2 className="w-2.5 h-2.5" />
-                              <span>Entreg</span>
-                            </button>
+                              {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
+                                <button
+                                  onClick={() => handleToggleEntregada(orden)}
+                                  className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
+                                    orden.entregada
+                                      ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
+                                      : "bg-white/5 text-gray-500 border-white/10"
+                                  }`}
+                                >
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                  <span>Entreg</span>
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
 
@@ -1391,8 +1457,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                 />
               </div>
 
-              {/* Checkboxes: Liberada & Mandada */}
-              <div className="grid grid-cols-2 gap-4 pt-1 border-t border-white/5">
+              {/* Checkboxes: Liberada & Mandada & Cancelada */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-1 border-t border-white/5">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -1418,6 +1484,21 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                     Mandada
                   </label>
                 </div>
+
+                {editingOrden && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="canceladaCheckbox"
+                      checked={cancelada}
+                      onChange={(e) => setCancelada(e.target.checked)}
+                      className="w-4 h-4 rounded border-white/20 bg-white/5 text-red-500 focus:ring-red-500/40"
+                    />
+                    <label htmlFor="canceladaCheckbox" className="text-red-400 font-semibold cursor-pointer">
+                      Cancelada
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons: Delete (when editing) + Cancel + Save */}
