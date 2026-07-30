@@ -29,31 +29,31 @@ interface Complejo {
 
 const INITIAL_COMPLEJOS: Complejo[] = [
   // Cinemark complexes
-  { codigo: "00730", codigoCuenta: "00730", nombre: "Puerto Madero 8 ARG", region: "CABA", cadena: "Cinemark", attendance: 315551 },
-  { codigo: "00732", codigoCuenta: "00732", nombre: "Mendoza 10 ARG", region: "Interior", cadena: "Cinemark", attendance: 522051 },
-  { codigo: "00733", codigoCuenta: "00733", nombre: "Beruti Bulnes 10 RDLP", region: "CABA", cadena: "Cinemark", attendance: 814624 },
-  { codigo: "00734", codigoCuenta: "00734", nombre: "Caballito 6 ARG", region: "CABA", cadena: "Cinemark", attendance: 393878 },
-  { codigo: "00739", codigoCuenta: "00739", nombre: "Soleil 9 ARG", region: "GBA", cadena: "Cinemark", attendance: 393545 },
-  { codigo: "00749", codigoCuenta: "00749", nombre: "San Miguel 10 ARG", region: "GBA", cadena: "Cinemark", attendance: 891887 },
-  { codigo: "00745", codigoCuenta: "00745", nombre: "Puerto Santa Fe Mall 6 ARG", region: "Interior", cadena: "Cinemark", attendance: 489685 },
-  { codigo: "00748", codigoCuenta: "00748", nombre: "San Justo 5 ARG", region: "GBA", cadena: "Cinemark", attendance: 691997 },
-  { codigo: "00756", codigoCuenta: "00756", nombre: "Tortugas Open BA Mall 7 ARG", region: "GBA", cadena: "Cinemark", attendance: 705413 },
-  { codigo: "02013", codigoCuenta: "00780", nombre: "Hiper Libertad Salta ARG", region: "Interior", cadena: "Cinemark", attendance: 325506 },
-  { codigo: "02014", codigoCuenta: "00781", nombre: "Alto Comahue Neuquen ARG", region: "Interior", cadena: "Cinemark", attendance: 450751 },
-  { codigo: "02015", codigoCuenta: "00783", nombre: "Alto Avellaneda ARG", region: "GBA", cadena: "Cinemark", attendance: 777473 },
-  { codigo: "02016", codigoCuenta: "00784", nombre: "Parque Brown ARG", region: "CABA", cadena: "Cinemark", attendance: 203000 },
+  { codigo: "00730", codigoCuenta: "730", nombre: "Puerto Madero 8 ARG", region: "CABA", cadena: "Cinemark", attendance: 315551 },
+  { codigo: "00732", codigoCuenta: "732", nombre: "Mendoza 10 ARG", region: "Interior", cadena: "Cinemark", attendance: 522051 },
+  { codigo: "00733", codigoCuenta: "733", nombre: "Beruti Bulnes 10 RDLP", region: "CABA", cadena: "Cinemark", attendance: 814624 },
+  { codigo: "00734", codigoCuenta: "734", nombre: "Caballito 6 ARG", region: "CABA", cadena: "Cinemark", attendance: 393878 },
+  { codigo: "00739", codigoCuenta: "739", nombre: "Soleil 9 ARG", region: "GBA", cadena: "Cinemark", attendance: 393545 },
+  { codigo: "00749", codigoCuenta: "749", nombre: "San Miguel 10 ARG", region: "GBA", cadena: "Cinemark", attendance: 891887 },
+  { codigo: "00745", codigoCuenta: "745", nombre: "Puerto Santa Fe Mall 6 ARG", region: "Interior", cadena: "Cinemark", attendance: 489685 },
+  { codigo: "00748", codigoCuenta: "748", nombre: "San Justo 5 ARG", region: "GBA", cadena: "Cinemark", attendance: 691997 },
+  { codigo: "00756", codigoCuenta: "756", nombre: "Tortugas Open BA Mall 7 ARG", region: "GBA", cadena: "Cinemark", attendance: 705413 },
+  { codigo: "02013", codigoCuenta: "780", nombre: "Hiper Libertad Salta ARG", region: "Interior", cadena: "Cinemark", attendance: 325506 },
+  { codigo: "02014", codigoCuenta: "781", nombre: "Alto Comahue Neuquen ARG", region: "Interior", cadena: "Cinemark", attendance: 450751 },
+  { codigo: "02015", codigoCuenta: "783", nombre: "Alto Avellaneda ARG", region: "GBA", cadena: "Cinemark", attendance: 777473 },
+  { codigo: "02016", codigoCuenta: "784", nombre: "Parque Brown ARG", region: "CABA", cadena: "Cinemark", attendance: 203000 },
   // Hoyts complexes
-  { codigo: "02000", codigoCuenta: "00702", nombre: "Unicenter Shopping Martinez ARG", region: "GBA", cadena: "Hoyts", attendance: 1562399 },
-  { codigo: "02001", codigoCuenta: "00703", nombre: "Plaza Oeste Moron ARG", region: "GBA", cadena: "Hoyts", attendance: 809703 },
-  { codigo: "02002", codigoCuenta: "00701", nombre: "Quilmes ARG", region: "GBA", cadena: "Hoyts", attendance: 744305 },
-  { codigo: "02003", codigoCuenta: "00712", nombre: "Dot Mall Buenos Aires ARG", region: "CABA", cadena: "Hoyts", attendance: 846344 },
-  { codigo: "02004", codigoCuenta: "00705", nombre: "Abasto Shopping Buenos Aires ARG", region: "CABA", cadena: "Hoyts", attendance: 1372869 },
-  { codigo: "02005", codigoCuenta: "00709", nombre: "Temperley ARG", region: "GBA", cadena: "Hoyts", attendance: 673657 },
-  { codigo: "02006", codigoCuenta: "00711", nombre: "Shopping Nine Moreno ARG", region: "GBA", cadena: "Hoyts", attendance: 510706 },
-  { codigo: "02007", codigoCuenta: "00708", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts", attendance: 581342 },
-  { codigo: "02008", codigoCuenta: "00706", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 482515 },
-  { codigo: "02009", codigoCuenta: "00707", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 426372 },
-  { codigo: "02010", codigoCuenta: "00714", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts", attendance: 249983 }
+  { codigo: "02000", codigoCuenta: "702", nombre: "Unicenter Shopping Martinez ARG", region: "GBA", cadena: "Hoyts", attendance: 1562399 },
+  { codigo: "02001", codigoCuenta: "703", nombre: "Plaza Oeste Moron ARG", region: "GBA", cadena: "Hoyts", attendance: 809703 },
+  { codigo: "02002", codigoCuenta: "701", nombre: "Quilmes ARG", region: "GBA", cadena: "Hoyts", attendance: 744305 },
+  { codigo: "02003", codigoCuenta: "712", nombre: "Dot Mall Buenos Aires ARG", region: "CABA", cadena: "Hoyts", attendance: 846344 },
+  { codigo: "02004", codigoCuenta: "705", nombre: "Abasto Shopping Buenos Aires ARG", region: "CABA", cadena: "Hoyts", attendance: 1372869 },
+  { codigo: "02005", codigoCuenta: "709", nombre: "Temperley ARG", region: "GBA", cadena: "Hoyts", attendance: 673657 },
+  { codigo: "02006", codigoCuenta: "711", nombre: "Shopping Nine Moreno ARG", region: "GBA", cadena: "Hoyts", attendance: 510706 },
+  { codigo: "02007", codigoCuenta: "708", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts", attendance: 581342 },
+  { codigo: "02008", codigoCuenta: "706", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 482515 },
+  { codigo: "02009", codigoCuenta: "707", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts", attendance: 426372 },
+  { codigo: "02010", codigoCuenta: "714", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts", attendance: 249983 }
 ];
 
 const CUSTOM_ORDER = [
@@ -240,7 +240,7 @@ export default function DistribucionPage() {
   if (percentOficina > 0) {
     tableRows.push({
       codigo: "00643",
-      codigoCuenta: "00643",
+      codigoCuenta: "643",
       nombre: "Oficina Central (Administrativo)",
       region: "-" as any,
       cadena: "-" as any,
