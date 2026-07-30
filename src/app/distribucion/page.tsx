@@ -87,12 +87,15 @@ export default function DistribucionPage() {
   const [montoTotal, setMontoTotal] = useState<string>("1000000"); // Preloaded with 1,000,000 as default
   const [cadenaFilter, setCadenaFilter] = useState<"Cinemark" | "Hoyts" | "Consolidados">("Consolidados");
   const [ambitoFilter, setAmbitoFilter] = useState<
-    "todos" | "todos_oficina" | "caba" | "gba" | "amba" | "amba_oficina" | "interior"
+    "todos" | "todos_oficina" | "caba" | "gba" | "amba" | "amba_oficina" | "interior" | "personalizado"
   >("todos");
   const [redondear, setRedondear] = useState<boolean>(false);
 
   const [complejos, setComplejos] = useState<Complejo[]>(INITIAL_COMPLEJOS);
   const [editableComplejos, setEditableComplejos] = useState<Complejo[]>(INITIAL_COMPLEJOS);
+  const [selectedCustomComplejos, setSelectedCustomComplejos] = useState<string[]>(
+    INITIAL_COMPLEJOS.map(c => c.codigo)
+  );
   
   // Security locks
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -175,6 +178,29 @@ export default function DistribucionPage() {
     );
   };
 
+  // Toggle handlers for custom geographic selection
+  const handleToggleCustomComplejo = (codigo: string) => {
+    setSelectedCustomComplejos(prev =>
+      prev.includes(codigo)
+        ? prev.filter(c => c !== codigo)
+        : [...prev, codigo]
+    );
+  };
+
+  const handleToggleAllCustomComplejos = () => {
+    const currentFilteredCodes = filteredComplejos.map(c => c.codigo);
+    const allFilteredAreSelected = currentFilteredCodes.every(code => selectedCustomComplejos.includes(code));
+
+    if (allFilteredAreSelected) {
+      setSelectedCustomComplejos(prev => prev.filter(code => !currentFilteredCodes.includes(code)));
+    } else {
+      setSelectedCustomComplejos(prev => {
+        const union = new Set([...prev, ...currentFilteredCodes]);
+        return Array.from(union);
+      });
+    }
+  };
+
   // Calculate distributions based on rules
   const activeComplejosList = isUnlocked ? editableComplejos : complejos;
 
@@ -186,6 +212,10 @@ export default function DistribucionPage() {
     }
 
     // 2. Geographic filter
+    if (ambitoFilter === "personalizado") {
+      return true; // Show all matching complexes to allow custom selection checkboxes
+    }
+
     switch (ambitoFilter) {
       case "caba":
         return c.region === "CABA";
@@ -203,8 +233,17 @@ export default function DistribucionPage() {
     }
   });
 
+  const isComplexActive = (codigo: string) => {
+    if (ambitoFilter === "personalizado") {
+      return selectedCustomComplejos.includes(codigo);
+    }
+    return true;
+  };
+
   // Sum of attendance of active/filtered complexes
-  const totalAttendance = filteredComplejos.reduce((sum, c) => sum + c.attendance, 0);
+  const totalAttendance = filteredComplejos
+    .filter(c => isComplexActive(c.codigo))
+    .reduce((sum, c) => sum + c.attendance, 0);
 
   // Oficina Central fixed assignment
   let percentOficina = 0;
@@ -219,13 +258,15 @@ export default function DistribucionPage() {
 
   // Generate table rows
   const tableRows = filteredComplejos.map((c) => {
-    const percentage = totalAttendance > 0 ? (c.attendance / totalAttendance) * percentCines : 0;
+    const isActive = isComplexActive(c.codigo);
+    const percentage = (isActive && totalAttendance > 0) ? (c.attendance / totalAttendance) * percentCines : 0;
     const montoProrrateado = numMontoTotal * (percentage / 100);
     return {
       ...c,
       percentage,
       montoProrrateado,
-      isOficina: false
+      isOficina: false,
+      isActive
     };
   });
 
@@ -247,7 +288,8 @@ export default function DistribucionPage() {
       attendance: 0,
       percentage: percentOficina,
       montoProrrateado: numMontoTotal * (percentOficina / 100),
-      isOficina: true
+      isOficina: true,
+      isActive: true
     });
   }
 
@@ -298,7 +340,7 @@ export default function DistribucionPage() {
   }
 
   // Summary counts
-  const complexesCount = filteredComplejos.length;
+  const complexesCount = filteredComplejos.filter(c => isComplexActive(c.codigo)).length;
   const distributedToCines = tableRows.filter(r => !r.isOficina).reduce((sum, r) => sum + r.montoProrrateado, 0);
   const distributedToOficina = tableRows.filter(r => r.isOficina).reduce((sum, r) => sum + r.montoProrrateado, 0);
   const sumPercentage = tableRows.reduce((sum, r) => sum + r.percentage, 0);
@@ -307,6 +349,7 @@ export default function DistribucionPage() {
   // Copy prorated amounts to clipboard (one per line, formatted with comma for Spanish Excel)
   const handleCopyMontos = () => {
     const textToCopy = tableRows
+      .filter(r => r.isOficina || r.isActive)
       .map(r => {
         if (isRoundingApplied) {
           return r.montoProrrateado.toFixed(0);
@@ -322,6 +365,7 @@ export default function DistribucionPage() {
   // Copy cinema ID and prorated amount (Tab-separated for direct Excel column pasting)
   const handleCopyMontosYIds = () => {
     const textToCopy = tableRows
+      .filter(r => r.isOficina || r.isActive)
       .map(r => {
         const amountStr = isRoundingApplied
           ? r.montoProrrateado.toFixed(0)
@@ -337,6 +381,7 @@ export default function DistribucionPage() {
   // Copy account IDs to clipboard (one per line)
   const handleCopyCuentas = () => {
     const textToCopy = tableRows
+      .filter(r => r.isOficina || r.isActive)
       .map(r => r.codigoCuenta)
       .join("\n");
 
@@ -347,6 +392,7 @@ export default function DistribucionPage() {
   // Copy Solomon account IDs to clipboard (one per line, format: cleanId-17zeros)
   const handleCopyCuentasSolomon = () => {
     const textToCopy = tableRows
+      .filter(r => r.isOficina || r.isActive)
       .map(r => {
         const cleanId = r.codigoCuenta.replace(/^0+/, "") || "0";
         return `${cleanId}-00000000000000000`;
@@ -529,6 +575,7 @@ export default function DistribucionPage() {
                   <option value="amba" className="bg-[#0d131f] text-white">CABA y GBA (AMBA)</option>
                   <option value="amba_oficina" className="bg-[#0d131f] text-white">CABA y GBA + Oficina Central (10.13% fijo)</option>
                   <option value="interior" className="bg-[#0d131f] text-white">Interior</option>
+                  <option value="personalizado" className="bg-[#0d131f] text-white">Personalizado (Elegir cines manualmente)</option>
                 </select>
               </div>
             </div>
@@ -669,6 +716,18 @@ export default function DistribucionPage() {
             <table className="w-full text-left text-xs">
               <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-bold">
                 <tr>
+                  <th className="px-4 py-3.5 text-center w-12 no-print">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredComplejos.length > 0 &&
+                        filteredComplejos.every(c => selectedCustomComplejos.includes(c.codigo))
+                      }
+                      onChange={handleToggleAllCustomComplejos}
+                      disabled={ambitoFilter !== "personalizado"}
+                      className="rounded border-white/10 bg-white/5 text-emerald-500 focus:ring-emerald-500/50 w-4 h-4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    />
+                  </th>
                   <th className="px-4 py-3.5">Cód. Cuenta</th>
                   <th className="px-4 py-3.5">Cód. Complejo</th>
                   <th className="px-4 py-3.5">Complejo de Cine</th>
@@ -686,9 +745,26 @@ export default function DistribucionPage() {
                     className={`transition-colors duration-150 ${
                       row.isOficina 
                         ? "bg-purple-950/10 hover:bg-purple-950/20 font-semibold text-purple-200" 
-                        : "hover:bg-white/[0.01]"
+                        : !row.isActive
+                          ? "opacity-35 hover:bg-white/[0.005] line-through text-gray-500"
+                          : "hover:bg-white/[0.01]"
                     }`}
                   >
+                    {/* Selection checkbox */}
+                    <td className="px-4 py-4 text-center no-print">
+                      {row.isOficina ? (
+                        <span className="text-gray-500">-</span>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={row.isActive}
+                          onChange={() => handleToggleCustomComplejo(row.codigo)}
+                          disabled={ambitoFilter !== "personalizado"}
+                          className="rounded border-white/10 bg-white/5 text-emerald-500 focus:ring-emerald-500/50 w-4 h-4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        />
+                      )}
+                    </td>
+                    
                     {/* Account Code */}
                     <td className="px-4 py-4 font-mono font-bold text-gray-400">
                       {row.codigoCuenta}
@@ -761,7 +837,7 @@ export default function DistribucionPage() {
               {/* Table Footer / Summary Row */}
               <tfoot className="bg-white/5 border-t-2 border-white/10 font-bold text-white">
                 <tr>
-                  <td className="px-4 py-4" colSpan={5}>
+                  <td className="px-4 py-4" colSpan={6}>
                     <span>Total General</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-2">
                       ({complexesCount} complejos {percentOficina > 0 ? "+ Oficina Central" : ""})
