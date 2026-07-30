@@ -344,6 +344,19 @@ export default function DistribucionPage() {
     showToast("📋 Cuentas copiadas al portapapeles");
   };
 
+  // Copy Solomon account IDs to clipboard (one per line, format: cleanId-17zeros)
+  const handleCopyCuentasSolomon = () => {
+    const textToCopy = tableRows
+      .map(r => {
+        const cleanId = r.codigoCuenta.replace(/^0+/, "") || "0";
+        return `${cleanId}-00000000000000000`;
+      })
+      .join("\n");
+
+    navigator.clipboard.writeText(textToCopy);
+    showToast("📋 Cuentas Solomon copiadas al portapapeles");
+  };
+
   return (
     <AppLayout 
       title="Distribución de Gastos" 
@@ -626,6 +639,16 @@ export default function DistribucionPage() {
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Copiar Cuentas</span>
+            </button>
+
+            {/* Copy Cuentas Solomon button */}
+            <button
+              onClick={handleCopyCuentasSolomon}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition-all"
+              title="Copia las cuentas en formato Solomon (sin ceros adelante y con subcuenta de 17 ceros)"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar Cuentas Solomon</span>
             </button>
 
             {/* Copy Cuenta y Monto button */}
