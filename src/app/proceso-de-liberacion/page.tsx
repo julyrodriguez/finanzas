@@ -16,7 +16,9 @@ import {
   Check, 
   Loader2, 
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Search,
+  X
 } from "lucide-react";
 import type { OrdenCompra } from "@/app/ordenes-de-compras/page";
 
@@ -24,6 +26,18 @@ export default function ProcesoDeLiberacionPage() {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredOrdenes = ordenes.filter((o) => {
+    if (!searchQuery.trim()) return true;
+    const queryLower = searchQuery.toLowerCase().trim();
+    return (
+      o.numOC.toLowerCase().includes(queryLower) ||
+      o.numSolicitud.toLowerCase().includes(queryLower) ||
+      o.razonSocial.toLowerCase().includes(queryLower) ||
+      o.motivo.toLowerCase().includes(queryLower)
+    );
+  });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -162,7 +176,7 @@ export default function ProcesoDeLiberacionPage() {
 
       <div className="space-y-6">
         <div className="glass-card border border-white/10 p-5 rounded-3xl space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-amber-400" />
               <div>
@@ -170,10 +184,32 @@ export default function ProcesoDeLiberacionPage() {
                 <p className="text-[11px] text-gray-400">Verificación y firmas para habilitar su liberación</p>
               </div>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-[10px] font-bold text-amber-400">
-              {ordenes.length} Pendientes
+            <span className="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-[10px] font-bold text-amber-400 self-start sm:self-auto">
+              {filteredOrdenes.length} Pendientes
             </span>
           </div>
+
+          {/* Buscador */}
+          {!loading && ordenes.length > 0 && (
+            <div className="relative w-full max-w-md">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por OC, Solicitud, Proveedor o Motivo..."
+                className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-3">
@@ -188,9 +224,17 @@ export default function ProcesoDeLiberacionPage() {
                 Todas las órdenes en estado &quot;Mandada&quot; ya han sido debidamente liberadas.
               </p>
             </div>
+          ) : filteredOrdenes.length === 0 ? (
+            <div className="py-16 text-center rounded-3xl border border-white/5 bg-white/[0.01] p-8 space-y-3">
+              <AlertCircle className="w-10 h-10 text-gray-500 mx-auto" />
+              <h3 className="text-base font-bold text-white">Sin resultados</h3>
+              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                No se encontraron órdenes que coincidan con &quot;{searchQuery}&quot;.
+              </p>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {ordenes.map((orden) => {
+              {filteredOrdenes.map((orden) => {
                 const isEnviado = Boolean(orden.enviado);
                 const isFirmado1 = Boolean(orden.firmado1);
                 const isFirmado2 = Boolean(orden.firmado2);
