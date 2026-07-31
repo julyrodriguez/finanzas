@@ -130,20 +130,32 @@ export default function ProcesoDeLiberacionPage() {
     const currentValue = Boolean(orden[paso]);
     const newValue = !currentValue;
 
+    const updates: Partial<OrdenCompra> = { [paso]: newValue };
+    
+    // Auto-complete firmado1 if firmado2 is being set to true and enviado is already true
+    const autoCompletesFirmado1 = (paso === "firmado2" && newValue && Boolean(orden.enviado));
+    if (autoCompletesFirmado1) {
+      updates.firmado1 = true;
+    }
+
     // Optimistic update
     setOrdenes((prev) =>
-      prev.map((o) => (o.id === orden.id ? { ...o, [paso]: newValue } : o))
+      prev.map((o) => (o.id === orden.id ? { ...o, ...updates } : o))
     );
 
     try {
       const docRef = doc(db, "ordenes_compra", orden.id);
-      await updateDoc(docRef, { [paso]: newValue });
+      await updateDoc(docRef, updates);
       showToast(`Estado '${paso === 'enviado' ? 'Enviado' : paso === 'firmado1' ? 'Firmado 1' : 'Firmado 2'}' actualizado`);
     } catch (err) {
       console.error("Error al actualizar paso de liberación:", err);
       // Rollback
       setOrdenes((prev) =>
-        prev.map((o) => (o.id === orden.id ? { ...o, [paso]: currentValue } : o))
+        prev.map((o) => (o.id === orden.id ? { 
+          ...o, 
+          [paso]: currentValue,
+          ...(autoCompletesFirmado1 ? { firmado1: Boolean(orden.firmado1) } : {})
+        } : o))
       );
     }
   };
