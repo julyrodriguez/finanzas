@@ -75,7 +75,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       href: "/proceso-de-liberacion",
       icon: Clock,
       exact: false,
-      badge: "Nuevo",
     },
     {
       name: "Distribución",
