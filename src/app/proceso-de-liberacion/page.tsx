@@ -27,16 +27,29 @@ export default function ProcesoDeLiberacionPage() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterEnvio, setFilterEnvio] = useState<"Todas" | "Enviadas" | "No Enviadas">("Todas");
 
   const filteredOrdenes = ordenes.filter((o) => {
-    if (!searchQuery.trim()) return true;
-    const queryLower = searchQuery.toLowerCase().trim();
-    return (
-      o.numOC.toLowerCase().includes(queryLower) ||
-      o.numSolicitud.toLowerCase().includes(queryLower) ||
-      o.razonSocial.toLowerCase().includes(queryLower) ||
-      o.motivo.toLowerCase().includes(queryLower)
-    );
+    // 1. Filter by search query
+    if (searchQuery.trim()) {
+      const queryLower = searchQuery.toLowerCase().trim();
+      const matchesSearch = (
+        o.numOC.toLowerCase().includes(queryLower) ||
+        o.numSolicitud.toLowerCase().includes(queryLower) ||
+        o.razonSocial.toLowerCase().includes(queryLower) ||
+        o.motivo.toLowerCase().includes(queryLower)
+      );
+      if (!matchesSearch) return false;
+    }
+
+    // 2. Filter by envio status
+    if (filterEnvio === "Enviadas") {
+      return o.enviado === true;
+    } else if (filterEnvio === "No Enviadas") {
+      return !o.enviado;
+    }
+
+    return true;
   });
 
   const showToast = (msg: string) => {
@@ -189,25 +202,46 @@ export default function ProcesoDeLiberacionPage() {
             </span>
           </div>
 
-          {/* Buscador */}
+          {/* Buscador y Filtros */}
           {!loading && ordenes.length > 0 && (
-            <div className="relative w-full max-w-md">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por OC, Solicitud, Proveedor o Motivo..."
-                className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 transition-all"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+              {/* Buscador */}
+              <div className="relative w-full max-w-md">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por OC, Solicitud, Proveedor o Motivo..."
+                  className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtros de Envío */}
+              <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-[11px] flex-wrap">
+                <span className="text-gray-400 px-2 font-medium">Envío:</span>
+                {(["Todas", "Enviadas", "No Enviadas"] as const).map((filterOpt) => (
+                  <button
+                    key={filterOpt}
+                    onClick={() => setFilterEnvio(filterOpt)}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                      filterEnvio === filterOpt
+                        ? "bg-amber-500 text-[#0d131f] shadow-sm font-bold"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {filterOpt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -229,7 +263,7 @@ export default function ProcesoDeLiberacionPage() {
               <AlertCircle className="w-10 h-10 text-gray-500 mx-auto" />
               <h3 className="text-base font-bold text-white">Sin resultados</h3>
               <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                No se encontraron órdenes que coincidan con &quot;{searchQuery}&quot;.
+                No se encontraron órdenes que coincidan con la búsqueda o filtros aplicados.
               </p>
             </div>
           ) : (
