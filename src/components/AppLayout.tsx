@@ -57,7 +57,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     }
   }, [user, loading, router, publicRoute]);
 
-  const menuItems = [
+  const menuItems: {
+    name: string;
+    href: string;
+    icon: any;
+    exact: boolean;
+    badge?: string;
+  }[] = [
     {
       name: "Calendario",
       href: "/",
