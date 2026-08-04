@@ -906,6 +906,102 @@ export default function CotizacionesPage() {
     }
   };
 
+  const handleCopyExcelFormat = () => {
+    try {
+      let tsv = "";
+
+      // Row 1: Main Headers
+      const row1 = ["Nombre del Ítem", "Cantidad"];
+      providers.forEach(prov => {
+        row1.push(prov.name, ""); // Leave empty column for spacing (since each provider has Unitario & Total)
+      });
+      tsv += row1.join("\t") + "\n";
+
+      // Row 2: Sub-headers
+      const row2 = ["", ""];
+      providers.forEach(() => {
+        row2.push("Unitario", "Total");
+      });
+      tsv += row2.join("\t") + "\n";
+
+      // Item Rows
+      items.forEach(item => {
+        const row = [
+          item.name || "Ítem sin nombre",
+          `${item.targetQuantity} ${item.baseUnit}`
+        ];
+
+        providers.forEach(prov => {
+          const quote = prov.quotes[item.id];
+          const hasQuote = quote && quote.price > 0;
+
+          if (hasQuote) {
+            const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+            const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+
+            const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
+            const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
+
+            const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
+            const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
+
+            // Formatted Unit
+            let unitText = formatCurrencyValue(displayUnitCost, displayUnitCurrency);
+            if (convertCurrencies && quote.currency !== baseCurrency) {
+              unitText += ` (${quote.currency === "ARS" ? "$" : "USD"} ${trueUnitRateRaw.toFixed(2)})`;
+            }
+
+            // Formatted Total
+            let totalText = formatCurrencyValue(displayTotalCost, displayTotalCurrency);
+            if (quote.presentationType === "package") {
+              totalText += ` (${quote.presentationName || `Lote x${quote.unitsPerPresentation}`})`;
+            }
+
+            row.push(unitText, totalText);
+          } else {
+            row.push("-", "-");
+          }
+        });
+
+        tsv += row.join("\t") + "\n";
+      });
+
+      // Row 4: Summary Totals
+      const totalRow = ["TOTAL GENERAL", useRealLots ? "(Lotes comp.)" : "(Fraccional)"];
+      providers.forEach(prov => {
+        const totalData = providerTotals.find(t => t.providerId === prov.id);
+        if (totalData) {
+          const hasARS = totalData.totalARS > 0;
+          const hasUSD = totalData.totalUSD > 0;
+          
+          let totalText = "";
+          if (hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) {
+            totalText += formatCurrencyValue(totalData.totalARS, "ARS");
+          }
+          if (hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) {
+            if (totalText) totalText += " / ";
+            totalText += formatCurrencyValue(totalData.totalUSD, "USD");
+          }
+          if (!totalData.allQuoted) {
+            totalText += " (Parcial)";
+          }
+
+          totalRow.push("-", totalText);
+        } else {
+          totalRow.push("-", "-");
+        }
+      });
+      tsv += totalRow.join("\t") + "\n";
+
+      // Write to Clipboard
+      navigator.clipboard.writeText(tsv);
+      showToast("¡Tabla copiada en formato Excel! Podés pegarla directamente", "success");
+    } catch (e) {
+      console.error("Failed to copy table:", e);
+      showToast("Error al copiar la tabla", "error");
+    }
+  };
+
   return (
     <AppLayout title="Cotizaciones" subtitle="Compará proveedores, manejá unidades de medida y monedas integradas">
       {/* Toast Notification */}
@@ -1454,6 +1550,13 @@ export default function CotizacionesPage() {
                 >
                   <Share2 className="w-3.5 h-3.5" />
                   Exportar Imagen
+                </button>
+                <button
+                  onClick={handleCopyExcelFormat}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Copiar Tabla Excel
                 </button>
                 <span className="text-gray-700 hidden sm:inline">|</span>
                 <button
