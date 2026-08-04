@@ -919,10 +919,10 @@ export default function CotizacionesPage() {
       tsv += row1.join("\t") + "\n";
 
       html += `<tr style="background-color: #000000; color: #ffffff; font-weight: bold; border-bottom: 2px solid #334155;">`;
-      html += `<th style="border: 1px solid #334155; padding: 10px; text-align: left;" rowspan="2">Nombre del Ítem</th>`;
-      html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center;" rowspan="2">Cantidad</th>`;
+      html += `<th style="border: 1px solid #334155; padding: 10px; text-align: left; background-color: #000000; color: #ffffff;" rowspan="2">Nombre del Ítem</th>`;
+      html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #000000; color: #ffffff;" rowspan="2">Cantidad</th>`;
       providers.forEach(prov => {
-        html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #000000;" colspan="2">${prov.name}</th>`;
+        html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #000000; color: #ffffff;" colspan="2">${prov.name}</th>`;
       });
       html += `</tr>`;
 
@@ -933,10 +933,10 @@ export default function CotizacionesPage() {
       });
       tsv += row2.join("\t") + "\n";
 
-      html += `<tr style="background-color: #1e293b; color: #94a3b8; font-weight: bold;">`;
+      html += `<tr style="background-color: #1e293b; color: #f1f5f9; font-weight: bold;">`;
       providers.forEach(() => {
-        html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt;">Unitario</th>`;
-        html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt;">Total</th>`;
+        html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt; background-color: #1e293b; color: #f1f5f9;">Unitario</th>`;
+        html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt; background-color: #1e293b; color: #f1f5f9;">Total</th>`;
       });
       html += `</tr>`;
 
