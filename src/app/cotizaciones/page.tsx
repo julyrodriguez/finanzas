@@ -918,11 +918,11 @@ export default function CotizacionesPage() {
       });
       tsv += row1.join("\t") + "\n";
 
-      html += `<tr style="background-color: #0f172a; color: #ffffff; font-weight: bold; border-bottom: 2px solid #334155;">`;
+      html += `<tr style="background-color: #000000; color: #ffffff; font-weight: bold; border-bottom: 2px solid #334155;">`;
       html += `<th style="border: 1px solid #334155; padding: 10px; text-align: left;" rowspan="2">Nombre del Ítem</th>`;
       html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center;" rowspan="2">Cantidad</th>`;
       providers.forEach(prov => {
-        html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #1e293b;" colspan="2">${prov.name}</th>`;
+        html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #000000;" colspan="2">${prov.name}</th>`;
       });
       html += `</tr>`;
 
