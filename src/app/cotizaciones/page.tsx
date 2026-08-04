@@ -33,7 +33,9 @@ import {
   Info,
   Scale,
   Sparkles,
-  Layers
+  Layers,
+  Share2,
+  X
 } from "lucide-react";
 
 // Types definition
@@ -129,6 +131,10 @@ export default function CotizacionesPage() {
   const [savedQuotations, setSavedQuotations] = useState<SavedQuotation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+
+  // Image Export States
+  const [showImgModal, setShowImgModal] = useState<boolean>(false);
+  const [generatedImgUrl, setGeneratedImgUrl] = useState<string | null>(null);
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -606,8 +612,8 @@ export default function CotizacionesPage() {
     };
   });
 
-  // Sort totals to find best overall provider
-  const activeTotals = providerTotals.filter(t => t.totalBaseCurrency > 0);
+  // Sort totals to find best overall provider (only among those who have quoted all items)
+  const activeTotals = providerTotals.filter(t => t.totalBaseCurrency > 0 && t.allQuoted);
   const bestOverallProvider = activeTotals.length > 0 
     ? [...activeTotals].sort((a, b) => a.totalBaseCurrency - b.totalBaseCurrency)[0] 
     : null;
@@ -649,6 +655,270 @@ export default function CotizacionesPage() {
       return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(val);
     } else {
       return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+    }
+  };
+
+  // Export quote comparison as a beautiful image card
+  const handleExportImage = () => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Dimensions
+    const width = 1200;
+    const padding = 50;
+    const itemRowHeight = 60;
+    const headerHeight = 220;
+    const providerSectionHeight = 40 + (providers.length * 95);
+    const optSectionHeight = 130;
+    
+    const contentHeight = Math.max(
+      items.length * itemRowHeight + 80, 
+      providerSectionHeight
+    );
+    
+    const height = headerHeight + contentHeight + optSectionHeight + padding * 2;
+    canvas.width = width;
+    canvas.height = height;
+
+    // Helper for rounded rect
+    const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(x, y, w, h, r);
+      } else {
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+      }
+    };
+
+    // Background Gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, "#0b0f17");
+    bgGrad.addColorStop(1, "#181335");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle Ambient Glows
+    ctx.fillStyle = "rgba(16, 185, 129, 0.02)";
+    ctx.beginPath();
+    ctx.arc(100, 100, 300, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(99, 102, 241, 0.03)";
+    ctx.beginPath();
+    ctx.arc(width - 150, height - 150, 400, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Header Title
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 32px sans-serif";
+    ctx.fillText("CUADRO COMPARATIVO DE PRECIOS", padding, padding + 40);
+
+    // Subtitle
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "16px sans-serif";
+    ctx.fillText(quoteName || "Cotización de Insumos", padding, padding + 72);
+
+    // Decorative separator
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fillRect(padding, padding + 95, width - padding * 2, 2);
+
+    // Metadata Badges
+    const dateStr = new Date().toLocaleDateString("es-AR");
+    
+    // Badge 1: Date
+    ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+    drawRoundRect(padding, padding + 115, 160, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = "#34d399";
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillText(`Fecha: ${dateStr}`, padding + 15, padding + 138);
+
+    // Badge 2: TC
+    ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+    drawRoundRect(padding + 175, padding + 115, 230, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = "#60a5fa";
+    ctx.fillText(`TC Mayorista: 1 USD = $${exchangeRate}`, padding + 190, padding + 138);
+
+    // Badge 3: Base Currency
+    ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+    drawRoundRect(padding + 420, padding + 115, 170, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = "#c084fc";
+    ctx.fillText(`Moneda: ${baseCurrency}`, padding + 435, padding + 138);
+
+    // Content positions
+    const leftWidth = 650;
+    const rightX = padding + leftWidth + 50;
+    const rightWidth = width - rightX - padding;
+    const startY = headerHeight + 40;
+
+    // LEFT SIDE: Items Detail Table
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px sans-serif";
+    ctx.fillText("Detalle de Ítems Requeridos", padding, startY);
+
+    // Table Headers
+    ctx.fillStyle = "#475569";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText("ÍTEM / REQUERIMIENTO", padding, startY + 40);
+    ctx.fillText("MEJOR PRECIO", padding + 380, startY + 40);
+    ctx.fillText("PROVEEDOR GANADOR", padding + 510, startY + 40);
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, startY + 52);
+    ctx.lineTo(padding + leftWidth, startY + 52);
+    ctx.stroke();
+
+    items.forEach((item, idx) => {
+      const rowY = startY + 65 + idx * itemRowHeight;
+
+      // Draw zebra backgrounds
+      if (idx % 2 === 0) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.01)";
+        ctx.fillRect(padding - 10, rowY - 12, leftWidth + 20, itemRowHeight);
+      }
+
+      // Draw Item Name
+      ctx.fillStyle = "#f1f5f9";
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(item.name || "Ítem sin nombre", padding, rowY + 18);
+
+      // Draw unit and qty
+      ctx.fillStyle = "#64748b";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(`Cantidad requerida: ${item.targetQuantity} ${item.baseUnit}`, padding, rowY + 36);
+
+      // Draw best option
+      const analysis = itemAnalyses[item.id];
+      if (analysis && analysis.bestProviderId) {
+        const bestProv = providers.find(p => p.id === analysis.bestProviderId);
+        
+        ctx.fillStyle = "#34d399";
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText(formatCurrencyValue(analysis.lowestCostBaseCurrency, baseCurrency), padding + 380, rowY + 22);
+
+        ctx.fillStyle = "#e2e8f0";
+        ctx.font = "13px sans-serif";
+        ctx.fillText(bestProv ? bestProv.name : "-", padding + 510, rowY + 22);
+      } else {
+        ctx.fillStyle = "#475569";
+        ctx.font = "italic 13px sans-serif";
+        ctx.fillText("Sin cotizaciones", padding + 380, rowY + 22);
+      }
+    });
+
+    // RIGHT SIDE: Providers Summary Card stack
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px sans-serif";
+    ctx.fillText("Cuadro de Proveedores", rightX, startY);
+
+    providerTotals.forEach((total, idx) => {
+      const cardY = startY + 30 + idx * 95;
+      const isWinner = bestOverallProvider?.providerId === total.providerId;
+
+      // Card Box
+      ctx.fillStyle = isWinner ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.02)";
+      drawRoundRect(rightX, cardY, rightWidth, 80, 12);
+      ctx.fill();
+      
+      ctx.strokeStyle = isWinner ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.06)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Provider Name
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText(total.providerName, rightX + 16, cardY + 30);
+
+      // Stats
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(`Cotizados: ${total.itemsQuotedCount}/${items.length} ítems`, rightX + 16, cardY + 54);
+      if (!total.allQuoted) {
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillText(" (Incompleto)", rightX + 120, cardY + 54);
+      }
+
+      // Cost
+      ctx.fillStyle = isWinner ? "#34d399" : "#f1f5f9";
+      ctx.font = "bold 18px sans-serif";
+      const totalText = formatCurrencyValue(total.totalBaseCurrency, baseCurrency);
+      const textWidth = ctx.measureText(totalText).width;
+      ctx.fillText(totalText, rightX + rightWidth - textWidth - 16, cardY + 36);
+
+      // Label status
+      if (isWinner) {
+        ctx.fillStyle = "#34d399";
+        ctx.font = "bold 10px sans-serif";
+        const badge = "RECOMENDADO ★";
+        const badgeW = ctx.measureText(badge).width;
+        ctx.fillText(badge, rightX + rightWidth - badgeW - 16, cardY + 56);
+      } else if (total.totalBaseCurrency > 0) {
+        ctx.fillStyle = "#64748b";
+        ctx.font = "11px sans-serif";
+        const diffText = bestOverallProvider && total.totalBaseCurrency > bestOverallProvider.totalBaseCurrency
+          ? `+${((total.totalBaseCurrency - bestOverallProvider.totalBaseCurrency) / bestOverallProvider.totalBaseCurrency * 100).toFixed(0)}%`
+          : "";
+        const diffW = ctx.measureText(diffText).width;
+        ctx.fillText(diffText, rightX + rightWidth - diffW - 16, cardY + 56);
+      }
+    });
+
+    // FOOTER: Recommendation Card
+    const footerY = height - optSectionHeight - padding;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, footerY);
+    ctx.lineTo(width - padding, footerY);
+    ctx.stroke();
+
+    const optY = footerY + 25;
+    ctx.fillStyle = "rgba(45, 212, 191, 0.04)";
+    drawRoundRect(padding, optY, width - padding * 2, 75, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(45, 212, 191, 0.15)";
+    ctx.stroke();
+
+    ctx.fillStyle = "#2dd4bf";
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillText("💡 ESTRATEGIA DE AHORRO: COMPRA MIXTA OPTIMIZADA", padding + 20, optY + 30);
+
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "13px sans-serif";
+    ctx.fillText("Emitiendo órdenes de compra divididas según la mejor oferta de cada proveedor, el total consolidado se reduce a:", padding + 20, optY + 52);
+
+    ctx.fillStyle = "#2dd4bf";
+    ctx.font = "bold 24px sans-serif";
+    const optText = formatCurrencyValue(optimizedResult.totalBaseCurrency, baseCurrency);
+    const optTextW = ctx.measureText(optText).width;
+    ctx.fillText(optText, width - padding - optTextW - 20, optY + 45);
+
+    // Watermark
+    ctx.fillStyle = "#475569";
+    ctx.font = "11px sans-serif";
+    ctx.fillText("Generado por Finanzas Gestor - Módulo de Cotizaciones", padding, height - 20);
+
+    // Show modal preview
+    try {
+      const dataUrl = canvas.toDataURL("image/png");
+      setGeneratedImgUrl(dataUrl);
+      setShowImgModal(true);
+    } catch (e) {
+      console.error("Error creating dataURL:", e);
+      showToast("Error al exportar la imagen", "error");
     }
   };
 
@@ -1189,6 +1459,16 @@ export default function CotizacionesPage() {
                     Cubre <b className="text-white">{bestOverallProvider.itemsQuotedCount} de {items.length}</b> ítems cotizados.
                   </p>
                 </div>
+              ) : providerTotals.some(t => t.totalBaseCurrency > 0) ? (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-amber-400">Cotización Incompleta</h3>
+                  <p className="text-xs text-gray-400">
+                    Ningún proveedor cotizó todos los ítems ({items.length}). No se puede calcular un ganador absoluto.
+                  </p>
+                  <p className="text-xs text-emerald-400 pt-1 font-semibold">
+                    💡 Se recomienda usar la Compra Mixta Optimizada.
+                  </p>
+                </div>
               ) : (
                 <div className="py-2">
                   <p className="text-sm text-gray-400 italic">No hay cotizaciones cargadas para calcular un ganador.</p>
@@ -1275,7 +1555,7 @@ export default function CotizacionesPage() {
 
           {/* Side-by-Side Detailed Matrix Table */}
           <div className="glass-card rounded-3xl p-6 border border-white/5">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                   <FileSpreadsheet className="w-4 h-4" />
@@ -1286,11 +1566,21 @@ export default function CotizacionesPage() {
                 </div>
               </div>
 
-              {/* Quick Config Toggle */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-400 font-medium">TC: 1 USD = ${exchangeRate} ARS</span>
-                <span className="text-gray-700">|</span>
-                <span className="text-xs text-gray-400 font-medium uppercase">{baseCurrency}</span>
+              {/* Matrix Actions */}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleExportImage}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  Exportar Imagen
+                </button>
+                <span className="text-gray-700 hidden sm:inline">|</span>
+                <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
+                  <span>TC: 1 USD = ${exchangeRate} ARS</span>
+                  <span>•</span>
+                  <span className="uppercase">{baseCurrency}</span>
+                </div>
               </div>
             </div>
 
@@ -1431,6 +1721,11 @@ export default function CotizacionesPage() {
                         >
                           <p className={`text-base font-black font-mono ${isOverallWinner ? "text-emerald-400 text-lg" : "text-white"}`}>
                             {formatCurrencyValue(totalData?.totalBaseCurrency || 0, baseCurrency)}
+                            {totalData && !totalData.allQuoted && (
+                              <span className="text-amber-400 text-[10px] font-bold block mt-0.5">
+                                (Total Parcial)
+                              </span>
+                            )}
                           </p>
                           <p className="text-[10px] text-gray-400 font-normal mt-1">
                             Cotizados: {totalData?.itemsQuotedCount} de {items.length} ítems
@@ -1628,6 +1923,79 @@ export default function CotizacionesPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+      {/* Modal Vista Previa Imagen Exportable */}
+      {showImgModal && generatedImgUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="glass-card rounded-3xl p-6 max-w-4xl w-full border border-white/10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-white text-lg">Reporte Comparativo de Precios</h3>
+                <p className="text-xs text-gray-400">Descargá o copiá la imagen generada para enviarla por WhatsApp o Slack</p>
+              </div>
+              <button
+                onClick={() => setShowImgModal(false)}
+                className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Generated Image Preview Container */}
+            <div className="border border-white/5 rounded-2xl overflow-hidden bg-black/40 flex items-center justify-center p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImgUrl}
+                alt="Reporte Comparativo"
+                className="max-w-full h-auto rounded-lg shadow-2xl max-h-[55vh] object-contain"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  const link = document.createElement("a");
+                  link.download = `Comparativa-${quoteName.replace(/\s+/g, "-")}.png`;
+                  link.href = generatedImgUrl;
+                  link.click();
+                  showToast("Imagen descargada con éxito");
+                }}
+                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
+              >
+                Descargar PNG
+              </button>
+
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(generatedImgUrl);
+                    const blob = await response.blob();
+                    await navigator.clipboard.write([
+                      new ClipboardItem({
+                        [blob.type]: blob
+                      })
+                    ]);
+                    showToast("¡Imagen copiada al portapapeles! Ya podés pegarla.");
+                  } catch (err) {
+                    console.error("Error copying to clipboard:", err);
+                    showToast("No se pudo copiar automáticamente. Descargá el archivo.", "error");
+                  }
+                }}
+                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+              >
+                Copiar al Portapapeles
+              </button>
+
+              <button
+                onClick={() => setShowImgModal(false)}
+                className="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AppLayout>
