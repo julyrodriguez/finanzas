@@ -50,6 +50,7 @@ interface QuoteDetail {
   unitsPerPresentation: number; // multiplier, e.g. 5, 12, or 1 for base unit
   price: number; // raw price entered
   discount: number; // percentage
+  specification?: string; // e.g. Philips, Generic, etc.
 }
 
 interface Provider {
@@ -363,7 +364,8 @@ export default function CotizacionesPage() {
           presentationName: "",
           unitsPerPresentation: 1,
           price: 0,
-          discount: 0
+          discount: 0,
+          specification: ""
         };
 
         const updatedQuote = { ...itemQuote, [field]: value };
@@ -801,13 +803,27 @@ export default function CotizacionesPage() {
 
           // P. Unit
           ctx.fillStyle = "#cbd5e1";
-          ctx.font = "12px sans-serif";
-          ctx.fillText(formatCurrencyValue(displayUnitCost, displayUnitCurrency), pX + 15, rowY + 38);
+          ctx.font = "11px sans-serif";
+          ctx.fillText(formatCurrencyValue(displayUnitCost, displayUnitCurrency), pX + 15, rowY + 30);
 
           // P. Total
           ctx.fillStyle = "#ffffff";
           ctx.font = "bold 12px sans-serif";
-          ctx.fillText(formatCurrencyValue(displayTotalCost, displayTotalCurrency), pX + colWidth + 15, rowY + 38);
+          ctx.fillText(formatCurrencyValue(displayTotalCost, displayTotalCurrency), pX + colWidth + 15, rowY + 30);
+
+          // Specification (Opcional)
+          if (quote.specification) {
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "italic 9px sans-serif";
+            let specText = quote.specification;
+            if (ctx.measureText(specText).width > (colWidth * 2 - 30)) {
+              while (ctx.measureText(specText + "...").width > (colWidth * 2 - 30) && specText.length > 0) {
+                specText = specText.substring(0, specText.length - 1);
+              }
+              specText = specText + "...";
+            }
+            ctx.fillText(specText, pX + 15, rowY + 52);
+          }
         } else {
           ctx.fillStyle = "#475569";
           ctx.font = "italic 11px sans-serif";
@@ -1339,6 +1355,20 @@ export default function CotizacionesPage() {
                               </div>
                             </div>
 
+                            {/* Specification / Model Field */}
+                            <div className="mt-3 space-y-1">
+                              <label className="text-[10px] text-gray-400 font-semibold uppercase block">
+                                Especificación / Modelo / Marca (Opcional)
+                              </label>
+                              <input
+                                type="text"
+                                value={quote.specification || ""}
+                                onChange={(e) => handleUpdateQuote(provider.id, item.id, "specification", e.target.value)}
+                                placeholder="ej. Marca Philips, 12V, Color Calido, etc."
+                                className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                              />
+                            </div>
+
                             {/* Quick Calculated Stats */}
                             <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 pt-1">
                               <span>
@@ -1547,6 +1577,11 @@ export default function CotizacionesPage() {
                                 {quote.discount > 0 && (
                                   <span className="text-red-400 text-[9px] font-bold block">
                                     -{quote.discount}%
+                                  </span>
+                                )}
+                                {quote.specification && (
+                                  <span className="text-[9px] text-gray-400 block font-semibold italic bg-white/5 px-1.5 py-0.5 rounded mt-1 border border-white/5 max-w-[130px] mx-auto truncate" title={quote.specification}>
+                                    {quote.specification}
                                   </span>
                                 )}
                               </div>
