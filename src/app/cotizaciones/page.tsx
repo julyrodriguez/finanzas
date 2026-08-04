@@ -89,7 +89,7 @@ const DEFAULT_UNITS = [
 export default function CotizacionesPage() {
   const { user } = useAuth();
   const [dbActive, setDbActive] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"editor" | "comparador" | "historial">("editor");
+  const [activeTab, setActiveTab] = useState<"editor" | "comparador" | "historial">("historial");
 
   // General State
   const [quoteName, setQuoteName] = useState("Cotización de Insumos " + new Date().toLocaleDateString("es-AR"));
@@ -945,6 +945,22 @@ export default function CotizacionesPage() {
         {/* Navigation Tabs */}
         <div className="flex p-1 bg-[#101725] border border-white/5 rounded-2xl">
           <button
+            onClick={() => setActiveTab("historial")}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === "historial"
+                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+            }`}
+          >
+            <FolderOpen className="w-4 h-4" />
+            Mis Cotizaciones
+            {savedQuotations.length > 0 && (
+              <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
+                {savedQuotations.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab("editor")}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === "editor"
@@ -953,7 +969,7 @@ export default function CotizacionesPage() {
             }`}
           >
             <Calculator className="w-4 h-4" />
-            Editor de Cotización
+            Editor
           </button>
           <button
             onClick={() => setActiveTab("comparador")}
@@ -968,22 +984,6 @@ export default function CotizacionesPage() {
             {providers.length > 0 && (
               <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
                 {providers.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("historial")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === "historial"
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
-            }`}
-          >
-            <FolderOpen className="w-4 h-4" />
-            Historial
-            {savedQuotations.length > 0 && (
-              <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
-                {savedQuotations.length}
               </span>
             )}
           </button>
@@ -1835,15 +1835,27 @@ export default function CotizacionesPage() {
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
             </div>
-          ) : savedQuotations.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
-              <AlertCircle className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-gray-300">No se encontraron cotizaciones guardadas</p>
-              <p className="text-xs text-gray-500 mt-1">Guardá tu trabajo actual usando el botón superior &quot;Guardar Cambios&quot;</p>
-            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {savedQuotations.map((quote) => {
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {/* Card de Crear Nueva Cotización */}
+              <div
+                onClick={handleNewQuotation}
+                className="p-5 rounded-2xl border border-dashed border-white/10 hover:border-emerald-500/40 bg-[#111827]/10 hover:bg-emerald-950/5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
+              >
+                <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors text-sm">
+                    Nueva Cotización
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Crea un presupuesto comparativo en blanco
+                  </p>
+                </div>
+              </div>
+
+              {savedQuotations.length > 0 && savedQuotations.map((quote) => {
                 const date = (quote.createdAt && typeof quote.createdAt === "object" && "seconds" in quote.createdAt)
                   ? new Date((quote.createdAt as { seconds: number }).seconds * 1000).toLocaleString("es-AR")
                   : (quote.createdAt && typeof quote.createdAt === "string"
