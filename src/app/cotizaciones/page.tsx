@@ -1624,8 +1624,8 @@ export default function CotizacionesPage() {
                           }
 
                           // Calculations
-                          const { trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-                          const { totalBaseCurrency, totalRawCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+                          const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+                          const { totalBaseCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
                           const isWinner = analysis?.bestProviderId === prov.id;
 
                           return (
@@ -1645,48 +1645,36 @@ export default function CotizacionesPage() {
                               )}
 
                               {/* Price unit display */}
-                              <div className="space-y-1.5">
-                                {/* Raw quoted price */}
-                                <div className="text-xs text-gray-400">
-                                  Cotizó:{" "}
-                                  <span className="font-semibold text-gray-200">
-                                    {quote.currency === "ARS" ? "$" : "US$"}
-                                    {quote.price.toLocaleString("es-AR")}
+                              <div className="space-y-2">
+                                {/* Precio Unitario */}
+                                <div>
+                                  <span className="text-[10px] text-gray-500 block uppercase font-extrabold tracking-wider text-left">P. Unitario</span>
+                                  <span className="text-xs font-semibold text-gray-200 font-mono block text-left mt-0.5">
+                                    {formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency)}
                                   </span>
-                                  {quote.presentationType === "package" ? (
-                                    <span> x {quote.presentationName || `Lote ${quote.unitsPerPresentation}`}</span>
-                                  ) : (
-                                    <span> por {item.baseUnit}</span>
+                                  {quote.currency !== baseCurrency && (
+                                    <span className="text-[9px] text-gray-400 font-mono block text-left">
+                                      ({quote.currency === "ARS" ? "$" : "US$"}
+                                      {trueUnitRateRaw.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {item.baseUnit})
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Precio Total */}
+                                <div className="pt-1.5 border-t border-white/5">
+                                  <span className="text-[10px] text-gray-500 block uppercase font-extrabold tracking-wider text-left">P. Total</span>
+                                  <span className={`text-sm font-black font-mono block text-left mt-0.5 ${isWinner ? "text-emerald-400" : "text-white"}`}>
+                                    {formatCurrencyValue(totalBaseCurrency, baseCurrency)}
+                                  </span>
+                                  {quote.presentationType === "package" && (
+                                    <span className="text-[9px] text-gray-400 block font-normal text-left mt-0.5">
+                                      {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
+                                    </span>
                                   )}
                                   {quote.discount > 0 && (
-                                    <span className="text-red-400 text-[10px] font-bold ml-1">(-{quote.discount}%)</span>
-                                  )}
-                                </div>
-
-                                {/* True unit rate in base unit */}
-                                <div className="text-[11px] text-gray-400">
-                                  Unitario: <span className="font-mono text-gray-300 font-semibold">{formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency)}</span> /{item.baseUnit}
-                                </div>
-
-                                {/* Purchase requirements details */}
-                                {quote.presentationType === "package" && (
-                                  <div className="text-[10px] text-gray-500">
-                                    Compra: {presentationsCount.toFixed(useRealLots ? 0 : 2)} Lote(s)
-                                    {useRealLots && ` (${Math.ceil(presentationsCount) * quote.unitsPerPresentation} ${item.baseUnit})`}
-                                  </div>
-                                )}
-
-                                {/* Total Price for this item */}
-                                <div className="pt-2 border-t border-white/5">
-                                  <p className="text-xs text-gray-500 uppercase tracking-wider text-[9px] font-bold">Total Item</p>
-                                  <p className={`text-sm font-black font-mono ${isWinner ? "text-emerald-400" : "text-white"}`}>
-                                    {formatCurrencyValue(totalBaseCurrency, baseCurrency)}
-                                  </p>
-                                  {quote.currency !== baseCurrency && (
-                                    <p className="text-[10px] text-gray-500 font-mono">
-                                      ({quote.currency === "ARS" ? "$" : "US$"}
-                                      {totalRawCurrency.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                                    </p>
+                                    <span className="text-red-400 text-[9px] font-bold block text-left">
+                                      Dto: -{quote.discount}%
+                                    </span>
                                   )}
                                 </div>
                               </div>
