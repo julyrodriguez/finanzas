@@ -79,6 +79,7 @@ const DEFAULT_UNITS = [
   { value: "L", label: "Litros (L)" },
   { value: "ml", label: "Mililitros (ml)" },
   { value: "m", label: "Metros (m)" },
+  { value: "m2", label: "Metros Cuadrados (m²)" },
   { value: "Pack", label: "Packs (Pack)" },
   { value: "Caja", label: "Cajas (Caja)" },
   { value: "Hora", label: "Horas (h)" },
@@ -738,8 +739,10 @@ export default function CotizacionesPage() {
       // Provider header name (Spans 2 columns)
       ctx.fillStyle = "#e2e8f0";
       ctx.font = "bold 12px sans-serif";
+      ctx.textAlign = "center";
       const nameText = prov.name;
-      ctx.fillText(nameText, pX + 15, startY + 22);
+      ctx.fillText(nameText, pX + colWidth, startY + 22);
+      ctx.textAlign = "left";
 
       // Unitary & Total subheaders
       ctx.fillStyle = "#64748b";
@@ -890,10 +893,7 @@ export default function CotizacionesPage() {
       }
     });
 
-    // Watermark & Footer info
-    ctx.fillStyle = "#475569";
-    ctx.font = "11px sans-serif";
-    ctx.fillText("Generado por Finanzas Gestor - Módulo de Cotizaciones", padding, height - 20);
+
 
     // Show modal preview
     try {
