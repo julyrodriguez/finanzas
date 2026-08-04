@@ -543,21 +543,26 @@ export default function CotizacionesPage() {
 
   // Totals per Provider (for full quote)
   const providerTotals = providers.map(prov => {
-    let sumBaseCurrency = 0;
+    let sumARS = 0;
+    let sumUSD = 0;
     let itemsQuotedCount = 0;
-    let mixedCurrencies = false;
-    let firstCurrency = "";
     
     items.forEach(item => {
       const quote = prov.quotes[item.id];
       if (quote && quote.price > 0) {
         const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
         if (convertCurrencies) {
-          sumBaseCurrency += totalBaseCurrency;
+          if (baseCurrency === "ARS") {
+            sumARS += totalBaseCurrency;
+          } else {
+            sumUSD += totalBaseCurrency;
+          }
         } else {
-          sumBaseCurrency += totalRawCurrency;
-          if (!firstCurrency) firstCurrency = quote.currency;
-          else if (firstCurrency !== quote.currency) mixedCurrencies = true;
+          if (quote.currency === "ARS") {
+            sumARS += totalRawCurrency;
+          } else {
+            sumUSD += totalRawCurrency;
+          }
         }
         itemsQuotedCount++;
       }
@@ -566,8 +571,8 @@ export default function CotizacionesPage() {
     return {
       providerId: prov.id,
       providerName: prov.name,
-      totalBaseCurrency: sumBaseCurrency,
-      currency: convertCurrencies ? baseCurrency : (mixedCurrencies ? "MIX" : firstCurrency),
+      totalARS: sumARS,
+      totalUSD: sumUSD,
       itemsQuotedCount,
       allQuoted: itemsQuotedCount === items.length
     };
@@ -582,9 +587,9 @@ export default function CotizacionesPage() {
   // Helper formatting values
   const formatCurrencyValue = (val: number, curr: "ARS" | "USD" = baseCurrency) => {
     if (curr === "ARS") {
-      return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(val);
+      return "$" + val.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     } else {
-      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+      return "USD " + val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   };
 
@@ -606,7 +611,7 @@ export default function CotizacionesPage() {
     const tableWidth = itemColWidth + qtyColWidth + providers.length * (colWidth * 2);
     
     const width = Math.max(1000, tableWidth + padding * 2);
-    const contentHeight = 60 + (items.length * itemRowHeight) + 60; // Headers + rows + totals
+    const contentHeight = 60 + (items.length * itemRowHeight) + 75; // Headers + rows + totals (increased height to 75)
     
     const height = headerHeight + contentHeight + padding * 2;
     canvas.width = width;
@@ -822,7 +827,7 @@ export default function CotizacionesPage() {
     ctx.stroke();
 
     ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-    ctx.fillRect(padding, totalRowY, tableWidth, 60);
+    ctx.fillRect(padding, totalRowY, tableWidth, 75);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 12px sans-serif";
@@ -840,18 +845,31 @@ export default function CotizacionesPage() {
       ctx.font = "11px sans-serif";
       ctx.fillText("-", pX + 15, totalRowY + 35);
 
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 13px sans-serif";
-      
-      const displayTotal = totalData?.totalBaseCurrency || 0;
-      const displayCurrency = (totalData?.currency === "MIX" ? baseCurrency : totalData?.currency) as "ARS" | "USD" | undefined;
-      const totalText = formatCurrencyValue(displayTotal, displayCurrency);
-      ctx.fillText(totalText, pX + colWidth + 15, totalRowY + 35);
+      if (totalData) {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 12px sans-serif";
 
-      if (totalData && !totalData.allQuoted) {
-        ctx.fillStyle = "#f59e0b";
-        ctx.font = "bold 9px sans-serif";
-        ctx.fillText("(Parcial)", pX + colWidth + 15, totalRowY + 49);
+        const hasARS = totalData.totalARS > 0;
+        const hasUSD = totalData.totalUSD > 0;
+
+        let curY = totalRowY + 28;
+
+        if (hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) {
+          ctx.fillText(formatCurrencyValue(totalData.totalARS, "ARS"), pX + colWidth + 15, curY);
+          curY += 16;
+        }
+
+        if (hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) {
+          ctx.fillStyle = "#34d399"; // light green for USD in canvas
+          ctx.fillText(formatCurrencyValue(totalData.totalUSD, "USD"), pX + colWidth + 15, curY);
+          curY += 16;
+        }
+
+        if (!totalData.allQuoted) {
+          ctx.fillStyle = "#f59e0b";
+          ctx.font = "bold 9px sans-serif";
+          ctx.fillText("(Parcial)", pX + colWidth + 15, curY);
+        }
       }
     });
 
@@ -1005,7 +1023,7 @@ export default function CotizacionesPage() {
                 className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               >
                 <option value="ARS">Pesos Argentinos ($)</option>
-                <option value="USD">Dólares (US$)</option>
+                <option value="USD">Dólares (USD)</option>
               </select>
             </div>
 
@@ -1280,7 +1298,7 @@ export default function CotizacionesPage() {
                                 </label>
                                 <div className="relative">
                                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">
-                                    {quote.currency === "ARS" ? "$" : "US$"}
+                                    {quote.currency === "ARS" ? "$" : "USD"}
                                   </span>
                                   <input
                                     type="number"
@@ -1325,7 +1343,7 @@ export default function CotizacionesPage() {
                             <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 pt-1">
                               <span>
                                 Unitario neto: <b className="font-mono text-gray-200">
-                                  {quote.currency === "ARS" ? "$" : "US$"}
+                                  {quote.currency === "ARS" ? "$" : "USD"}
                                   {trueUnitRateRaw.toFixed(2)}
                                 </b> /{item.baseUnit}
                               </span>
@@ -1345,15 +1363,32 @@ export default function CotizacionesPage() {
                   <div className="mt-6 pt-4 border-t border-white/5 bg-[#101725]/30 p-3 rounded-2xl">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-400 font-bold">TOTAL ESTIMADO:</span>
-                      <span className="text-base font-black font-mono text-white">
-                        {formatCurrencyValue(
-                          providerTotals.find(t => t.providerId === provider.id)?.totalBaseCurrency || 0,
-                          baseCurrency
-                        )}
-                      </span>
+                      <div className="text-right space-y-0.5">
+                        {(() => {
+                          const totalData = providerTotals.find(t => t.providerId === provider.id);
+                          if (!totalData) return <span className="text-base font-black font-mono text-white">$0</span>;
+
+                          const hasARS = totalData.totalARS > 0;
+                          const hasUSD = totalData.totalUSD > 0;
+
+                          return (
+                            <>
+                              {(hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) && (
+                                <p className="text-base font-black font-mono text-white">
+                                  {formatCurrencyValue(totalData.totalARS, "ARS")}
+                                </p>
+                              )}
+                              {(hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) && (
+                                <p className="text-base font-black font-mono text-emerald-400">
+                                  {formatCurrencyValue(totalData.totalUSD, "USD")}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                     <p className="text-[10px] text-right text-gray-500 mt-1">
-                      En {baseCurrency === "ARS" ? "Pesos Argentinos" : "Dólares Estadounidenses"}{" "}
                       {useRealLots ? "(Cajas enteras)" : "(Fracción exacta)"}
                     </p>
                   </div>
@@ -1494,7 +1529,7 @@ export default function CotizacionesPage() {
                                 <span>{formatCurrencyValue(displayUnitCost, displayUnitCurrency)}</span>
                                 {convertCurrencies && quote.currency !== baseCurrency && (
                                   <span className="text-[9px] text-gray-400 block">
-                                    ({quote.currency === "ARS" ? "$" : "US$"}
+                                    ({quote.currency === "ARS" ? "$" : "USD"}
                                     {trueUnitRateRaw.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                                   </span>
                                 )}
@@ -1533,21 +1568,34 @@ export default function CotizacionesPage() {
 
                     {providers.map(prov => {
                       const totalData = providerTotals.find(t => t.providerId === prov.id);
-                      const displayTotal = totalData?.totalBaseCurrency || 0;
-                      const displayCurrency = (totalData?.currency === "MIX" ? baseCurrency : totalData?.currency) as "ARS" | "USD" | undefined;
+                      if (!totalData) return null;
+
+                      const hasARS = totalData.totalARS > 0;
+                      const hasUSD = totalData.totalUSD > 0;
 
                       return (
                         <Fragment key={prov.id}>
                           {/* Unit price total (empty column) */}
                           <td className="p-4 text-center border-l border-white/10 text-gray-500 font-normal">-</td>
                           {/* Total price sum */}
-                          <td className="p-4 text-center border-l border-white/5 bg-[#101725]/80 text-white font-mono text-sm font-black">
-                            {formatCurrencyValue(displayTotal, displayCurrency)}
-                            {totalData && !totalData.allQuoted && (
-                              <span className="text-amber-400 text-[9px] font-bold block mt-0.5">
-                                (Parcial)
-                              </span>
-                            )}
+                          <td className="p-4 text-center border-l border-white/5 bg-[#101725]/80 text-white font-mono text-xs font-semibold">
+                            <div className="space-y-1">
+                              {(hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) && (
+                                <p className="font-bold text-white whitespace-nowrap">
+                                  {formatCurrencyValue(totalData.totalARS, "ARS")}
+                                </p>
+                              )}
+                              {(hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) && (
+                                <p className="font-bold text-emerald-400 whitespace-nowrap">
+                                  {formatCurrencyValue(totalData.totalUSD, "USD")}
+                                </p>
+                              )}
+                              {totalData && !totalData.allQuoted && (
+                                <span className="text-amber-400 text-[9px] font-bold block mt-0.5">
+                                  (Parcial)
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </Fragment>
                       );
