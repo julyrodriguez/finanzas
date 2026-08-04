@@ -132,6 +132,7 @@ export default function CotizacionesPage() {
   // Image Export States
   const [showImgModal, setShowImgModal] = useState<boolean>(false);
   const [generatedImgUrl, setGeneratedImgUrl] = useState<string | null>(null);
+  const [convertCurrencies, setConvertCurrencies] = useState<boolean>(true);
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -544,12 +545,20 @@ export default function CotizacionesPage() {
   const providerTotals = providers.map(prov => {
     let sumBaseCurrency = 0;
     let itemsQuotedCount = 0;
+    let mixedCurrencies = false;
+    let firstCurrency = "";
     
     items.forEach(item => {
       const quote = prov.quotes[item.id];
       if (quote && quote.price > 0) {
-        const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
-        sumBaseCurrency += totalBaseCurrency;
+        const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+        if (convertCurrencies) {
+          sumBaseCurrency += totalBaseCurrency;
+        } else {
+          sumBaseCurrency += totalRawCurrency;
+          if (!firstCurrency) firstCurrency = quote.currency;
+          else if (firstCurrency !== quote.currency) mixedCurrencies = true;
+        }
         itemsQuotedCount++;
       }
     });
@@ -558,6 +567,7 @@ export default function CotizacionesPage() {
       providerId: prov.id,
       providerName: prov.name,
       totalBaseCurrency: sumBaseCurrency,
+      currency: convertCurrencies ? baseCurrency : (mixedCurrencies ? "MIX" : firstCurrency),
       itemsQuotedCount,
       allQuoted: itemsQuotedCount === items.length
     };
@@ -586,7 +596,7 @@ export default function CotizacionesPage() {
 
     // Dimensions
     const padding = 50;
-    const itemRowHeight = 55;
+    const itemRowHeight = 72; // Increased to allow up to 3 lines of product name
     const headerHeight = 200;
     
     // Dynamically calculate the table width based on providers count
@@ -618,6 +628,39 @@ export default function CotizacionesPage() {
         ctx.lineTo(x, y + r);
         ctx.quadraticCurveTo(x, y, x + r, y);
       }
+    };
+
+    // Helper to wrap text up to maxLines
+    const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number = 3) => {
+      const words = text.split(" ");
+      let line = "";
+      let linesCount = 0;
+      let currentY = y;
+
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + " ";
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line.trim(), x, currentY);
+          line = words[n] + " ";
+          currentY += lineHeight;
+          linesCount++;
+          if (linesCount === maxLines - 1) {
+            // For the last line, append remaining words and truncate if needed
+            let remaining = words.slice(n).join(" ");
+            while (ctx.measureText(remaining + "...").width > maxWidth && remaining.length > 0) {
+              remaining = remaining.substring(0, remaining.length - 1);
+            }
+            ctx.fillText(remaining + "...", x, currentY);
+            return;
+          }
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line.trim(), x, currentY);
     };
 
     // Background Color (Dark Sleek Slate)
@@ -655,11 +698,11 @@ export default function CotizacionesPage() {
     ctx.fill();
     ctx.fillText(`TC Mayorista: 1 USD = $${exchangeRate}`, padding + 180, padding + 125);
 
-    // Currency badge
+    // Currency conversion status badge
     ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-    drawRoundRect(padding + 390, padding + 105, 140, 32, 6);
+    drawRoundRect(padding + 390, padding + 105, 250, 32, 6);
     ctx.fill();
-    ctx.fillText(`Moneda: ${baseCurrency}`, padding + 405, padding + 125);
+    ctx.fillText(`Moneda: ${convertCurrencies ? `Base (${baseCurrency})` : "Original de carga"}`, padding + 405, padding + 125);
 
     const startY = headerHeight + 30;
 
@@ -724,19 +767,16 @@ export default function CotizacionesPage() {
         ctx.fillRect(padding, rowY, tableWidth, itemRowHeight);
       }
 
-      // Product Name (Truncated if too long)
+      // Product Name (Wrapped up to 3 lines)
       ctx.fillStyle = "#f1f5f9";
       ctx.font = "bold 12px sans-serif";
-      let displayName = item.name || "Ítem sin nombre";
-      if (displayName.length > 30) {
-        displayName = displayName.substring(0, 27) + "...";
-      }
-      ctx.fillText(displayName, padding + 15, rowY + 32);
+      const displayName = item.name || "Ítem sin nombre";
+      drawWrappedText(displayName, padding + 15, rowY + 24, itemColWidth - 30, 15, 3);
 
-      // Quantity
+      // Quantity (vertically centered)
       ctx.fillStyle = "#cbd5e1";
       ctx.font = "11px sans-serif";
-      ctx.fillText(`${item.targetQuantity} ${item.baseUnit}`, padding + itemColWidth + 15, rowY + 32);
+      ctx.fillText(`${item.targetQuantity} ${item.baseUnit}`, padding + itemColWidth + 15, rowY + 38);
 
       // Provider quotes
       providers.forEach((prov, pIdx) => {
@@ -745,23 +785,29 @@ export default function CotizacionesPage() {
         const hasQuote = quote && quote.price > 0;
 
         if (hasQuote) {
-          const { trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-          const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+          const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+          const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+
+          const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
+          const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
+
+          const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
+          const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
 
           // P. Unit
           ctx.fillStyle = "#cbd5e1";
           ctx.font = "12px sans-serif";
-          ctx.fillText(formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency), pX + 15, rowY + 32);
+          ctx.fillText(formatCurrencyValue(displayUnitCost, displayUnitCurrency), pX + 15, rowY + 38);
 
           // P. Total
           ctx.fillStyle = "#ffffff";
           ctx.font = "bold 12px sans-serif";
-          ctx.fillText(formatCurrencyValue(totalBaseCurrency, baseCurrency), pX + colWidth + 15, rowY + 32);
+          ctx.fillText(formatCurrencyValue(displayTotalCost, displayTotalCurrency), pX + colWidth + 15, rowY + 38);
         } else {
           ctx.fillStyle = "#475569";
           ctx.font = "italic 11px sans-serif";
-          ctx.fillText("-", pX + 15, rowY + 32);
-          ctx.fillText("-", pX + colWidth + 15, rowY + 32);
+          ctx.fillText("-", pX + 15, rowY + 38);
+          ctx.fillText("-", pX + colWidth + 15, rowY + 38);
         }
       });
     });
@@ -796,7 +842,10 @@ export default function CotizacionesPage() {
 
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 13px sans-serif";
-      const totalText = formatCurrencyValue(totalData?.totalBaseCurrency || 0, baseCurrency);
+      
+      const displayTotal = totalData?.totalBaseCurrency || 0;
+      const displayCurrency = (totalData?.currency === "MIX" ? baseCurrency : totalData?.currency) as "ARS" | "USD" | undefined;
+      const totalText = formatCurrencyValue(displayTotal, displayCurrency);
       ctx.fillText(totalText, pX + colWidth + 15, totalRowY + 35);
 
       if (totalData && !totalData.allQuoted) {
@@ -1357,10 +1406,25 @@ export default function CotizacionesPage() {
                   Exportar Imagen
                 </button>
                 <span className="text-gray-700 hidden sm:inline">|</span>
+                <button
+                  onClick={() => setConvertCurrencies(!convertCurrencies)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    convertCurrencies
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                      : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  Convertir Divisas: {convertCurrencies ? "SÍ" : "NO"}
+                </button>
+                <span className="text-gray-700 hidden sm:inline">|</span>
                 <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
                   <span>TC: 1 USD = ${exchangeRate} ARS</span>
-                  <span>•</span>
-                  <span className="uppercase">{baseCurrency}</span>
+                  {convertCurrencies && (
+                    <>
+                      <span>•</span>
+                      <span className="uppercase">{baseCurrency}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1414,15 +1478,21 @@ export default function CotizacionesPage() {
 
                         // Calculations
                         const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-                        const { totalBaseCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+                        const { totalBaseCurrency, totalRawCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+
+                        const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
+                        const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
+
+                        const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
+                        const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
 
                         return (
                           <Fragment key={prov.id}>
                             {/* Price Unit */}
                             <td className="p-4 border-l border-white/10 text-center align-middle font-mono text-xs text-gray-200">
                               <div className="space-y-0.5">
-                                <span>{formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency)}</span>
-                                {quote.currency !== baseCurrency && (
+                                <span>{formatCurrencyValue(displayUnitCost, displayUnitCurrency)}</span>
+                                {convertCurrencies && quote.currency !== baseCurrency && (
                                   <span className="text-[9px] text-gray-400 block">
                                     ({quote.currency === "ARS" ? "$" : "US$"}
                                     {trueUnitRateRaw.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
@@ -1433,7 +1503,7 @@ export default function CotizacionesPage() {
                             {/* Price Total */}
                             <td className="p-4 border-l border-white/5 text-center align-middle font-mono text-xs text-gray-200 bg-white/[0.01]">
                               <div className="space-y-0.5">
-                                <span className="font-bold text-white">{formatCurrencyValue(totalBaseCurrency, baseCurrency)}</span>
+                                <span className="font-bold text-white">{formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>
                                 {quote.presentationType === "package" && (
                                   <span className="text-[9px] text-gray-400 block font-normal leading-tight">
                                     {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
@@ -1463,13 +1533,16 @@ export default function CotizacionesPage() {
 
                     {providers.map(prov => {
                       const totalData = providerTotals.find(t => t.providerId === prov.id);
+                      const displayTotal = totalData?.totalBaseCurrency || 0;
+                      const displayCurrency = (totalData?.currency === "MIX" ? baseCurrency : totalData?.currency) as "ARS" | "USD" | undefined;
+
                       return (
                         <Fragment key={prov.id}>
                           {/* Unit price total (empty column) */}
                           <td className="p-4 text-center border-l border-white/10 text-gray-500 font-normal">-</td>
                           {/* Total price sum */}
                           <td className="p-4 text-center border-l border-white/5 bg-[#101725]/80 text-white font-mono text-sm font-black">
-                            {formatCurrencyValue(totalData?.totalBaseCurrency || 0, baseCurrency)}
+                            {formatCurrencyValue(displayTotal, displayCurrency)}
                             {totalData && !totalData.allQuoted && (
                               <span className="text-amber-400 text-[9px] font-bold block mt-0.5">
                                 (Parcial)
