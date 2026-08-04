@@ -909,6 +909,7 @@ export default function CotizacionesPage() {
   const handleCopyExcelFormat = () => {
     try {
       let tsv = "";
+      let html = `<table style="border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10pt; border: 1px solid #cbd5e1;">`;
 
       // Row 1: Main Headers
       const row1 = ["Nombre del Ítem", "Cantidad"];
@@ -917,6 +918,14 @@ export default function CotizacionesPage() {
       });
       tsv += row1.join("\t") + "\n";
 
+      html += `<tr style="background-color: #0f172a; color: #ffffff; font-weight: bold; border-bottom: 2px solid #334155;">`;
+      html += `<th style="border: 1px solid #334155; padding: 10px; text-align: left;" rowspan="2">Nombre del Ítem</th>`;
+      html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center;" rowspan="2">Cantidad</th>`;
+      providers.forEach(prov => {
+        html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #1e293b;" colspan="2">${prov.name}</th>`;
+      });
+      html += `</tr>`;
+
       // Row 2: Sub-headers
       const row2 = ["", ""];
       providers.forEach(() => {
@@ -924,12 +933,24 @@ export default function CotizacionesPage() {
       });
       tsv += row2.join("\t") + "\n";
 
+      html += `<tr style="background-color: #1e293b; color: #94a3b8; font-weight: bold;">`;
+      providers.forEach(() => {
+        html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt;">Unitario</th>`;
+        html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt;">Total</th>`;
+      });
+      html += `</tr>`;
+
       // Item Rows
-      items.forEach(item => {
+      items.forEach((item, idx) => {
+        const bgRow = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
         const row = [
           item.name || "Ítem sin nombre",
           `${item.targetQuantity} ${item.baseUnit}`
         ];
+
+        html += `<tr style="background-color: ${bgRow}; border-bottom: 1px solid #e2e8f0;">`;
+        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-weight: bold; color: #0f172a;">${item.name || "Ítem sin nombre"}</td>`;
+        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #475569;">${item.targetQuantity} ${item.baseUnit}</td>`;
 
         providers.forEach(prov => {
           const quote = prov.quotes[item.id];
@@ -937,7 +958,7 @@ export default function CotizacionesPage() {
 
           if (hasQuote) {
             const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-            const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+            const { totalBaseCurrency, totalRawCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
 
             const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
             const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
@@ -945,29 +966,56 @@ export default function CotizacionesPage() {
             const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
             const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
 
-            // Formatted Unit
-            let unitText = formatCurrencyValue(displayUnitCost, displayUnitCurrency);
+            // Formatted Unit for Plain Text (TSV)
+            let unitTextText = formatCurrencyValue(displayUnitCost, displayUnitCurrency);
             if (convertCurrencies && quote.currency !== baseCurrency) {
-              unitText += ` (${quote.currency === "ARS" ? "$" : "USD"} ${trueUnitRateRaw.toFixed(2)})`;
+              unitTextText += ` (${quote.currency === "ARS" ? "$" : "USD"} ${trueUnitRateRaw.toFixed(2)})`;
             }
 
-            // Formatted Total
-            let totalText = formatCurrencyValue(displayTotalCost, displayTotalCurrency);
+            // Formatted Unit for HTML
+            let unitHtmlText = formatCurrencyValue(displayUnitCost, displayUnitCurrency);
+            if (convertCurrencies && quote.currency !== baseCurrency) {
+              unitHtmlText += `<br/><span style="font-size: 8pt; color: #64748b;">(${quote.currency === "ARS" ? "$" : "USD"} ${trueUnitRateRaw.toFixed(2)})</span>`;
+            }
+
+            // Formatted Total for Plain Text (TSV)
+            let totalTextText = formatCurrencyValue(displayTotalCost, displayTotalCurrency);
             if (quote.presentationType === "package") {
-              totalText += ` (${quote.presentationName || `Lote x${quote.unitsPerPresentation}`})`;
+              totalTextText += ` (${quote.presentationName || `Lote x${quote.unitsPerPresentation}`})`;
             }
 
-            row.push(unitText, totalText);
+            // Formatted Total for HTML
+            let totalHtmlText = `<span style="font-weight: bold; color: #0f172a;">${formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>`;
+            if (quote.presentationType === "package") {
+              totalHtmlText += `<br/><span style="font-size: 8pt; color: #64748b;">${quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x${presentationsCount.toFixed(useRealLots ? 0 : 1)})</span>`;
+            }
+            if (quote.discount > 0) {
+              totalHtmlText += `<br/><span style="font-size: 8pt; color: #ef4444; font-weight: bold;">-${quote.discount}%</span>`;
+            }
+            if (quote.specification) {
+              totalHtmlText += `<br/><span style="font-size: 8pt; color: #4b5563; font-style: italic; background-color: #f3f4f6; padding: 2px 4px; border-radius: 4px; display: inline-block; margin-top: 4px;">${quote.specification}</span>`;
+            }
+
+            row.push(unitTextText, totalTextText);
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle;">${unitHtmlText}</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; background-color: #fcfcfc;">${totalHtmlText}</td>`;
           } else {
             row.push("-", "-");
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle;">-</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle; background-color: #fcfcfc;">-</td>`;
           }
         });
 
         tsv += row.join("\t") + "\n";
+        html += `</tr>`;
       });
 
       // Row 4: Summary Totals
       const totalRow = ["TOTAL GENERAL", useRealLots ? "(Lotes comp.)" : "(Fraccional)"];
+      html += `<tr style="background-color: #f1f5f9; font-weight: bold; border-top: 2px solid #cbd5e1; border-bottom: 2px double #cbd5e1;">`;
+      html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: left; font-weight: 800; color: #0f172a;">TOTAL GENERAL</td>`;
+      html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; font-size: 8pt; color: #475569;">${useRealLots ? "Lotes comp." : "Fraccional"}</td>`;
+
       providers.forEach(prov => {
         const totalData = providerTotals.find(t => t.providerId === prov.id);
         if (totalData) {
@@ -975,27 +1023,45 @@ export default function CotizacionesPage() {
           const hasUSD = totalData.totalUSD > 0;
           
           let totalText = "";
+          let cellHtml = "";
           if (hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) {
             totalText += formatCurrencyValue(totalData.totalARS, "ARS");
+            cellHtml += `<div style="font-weight: bold; color: #0f172a; margin-bottom: 2px;">${formatCurrencyValue(totalData.totalARS, "ARS")}</div>`;
           }
           if (hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) {
             if (totalText) totalText += " / ";
             totalText += formatCurrencyValue(totalData.totalUSD, "USD");
+            cellHtml += `<div style="font-weight: bold; color: #15803d;">${formatCurrencyValue(totalData.totalUSD, "USD")}</div>`;
           }
           if (!totalData.allQuoted) {
             totalText += " (Parcial)";
+            cellHtml += `<div style="font-size: 8pt; color: #d97706; font-weight: bold;">(Parcial)</div>`;
           }
 
           totalRow.push("-", totalText);
+          html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; color: #64748b; vertical-align: middle;">-</td>`;
+          html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; vertical-align: middle; background-color: #e2e8f0;">${cellHtml}</td>`;
         } else {
           totalRow.push("-", "-");
+          html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; color: #94a3b8; vertical-align: middle;">-</td>`;
+          html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; color: #94a3b8; vertical-align: middle; background-color: #e2e8f0;">-</td>`;
         }
       });
       tsv += totalRow.join("\t") + "\n";
+      html += `</tr>`;
+      html += `</table>`;
 
-      // Write to Clipboard
-      navigator.clipboard.writeText(tsv);
-      showToast("¡Tabla copiada en formato Excel! Podés pegarla directamente", "success");
+      // Write both Plain Text and Styled HTML to Clipboard
+      const tsvBlob = new Blob([tsv], { type: "text/plain" });
+      const htmlBlob = new Blob([html], { type: "text/html" });
+      const clipboardItem = new ClipboardItem({
+        "text/plain": tsvBlob,
+        "text/html": htmlBlob
+      });
+
+      navigator.clipboard.write([clipboardItem]).then(() => {
+        showToast("¡Tabla copiada con bordes y formatos! Pegala en Excel o Sheets", "success");
+      });
     } catch (e) {
       console.error("Failed to copy table:", e);
       showToast("Error al copiar la tabla", "error");
