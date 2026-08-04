@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -24,15 +24,12 @@ import {
   CheckCircle2, 
   Copy, 
   HelpCircle, 
-  Trophy, 
   RefreshCw, 
   FileSpreadsheet, 
   FolderOpen,
   ArrowRight,
-  TrendingDown,
   Info,
   Scale,
-  Sparkles,
   Layers,
   Share2,
   X
@@ -542,52 +539,6 @@ export default function CotizacionesPage() {
   // -----------------------------------------------------
   // COMPARISON AND SCORING CALCULATIONS
   // -----------------------------------------------------
-  
-  // Calculate analytics for item
-  const getItemAnalysis = (itemId: string) => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return null;
-
-    let bestProviderId = "";
-    let lowestCostBaseCurrency = Infinity;
-    const providerCosts: Record<string, { totalBase: number; totalRaw: number; rawCurrency: string; unitPriceBase: number }> = {};
-
-    providers.forEach(prov => {
-      const quote = prov.quotes[itemId];
-      if (quote && quote.price > 0) {
-        const { trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-        const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
-        
-        providerCosts[prov.id] = {
-          totalBase: totalBaseCurrency,
-          totalRaw: totalRawCurrency,
-          rawCurrency: quote.currency,
-          unitPriceBase: trueUnitRateBaseCurrency
-        };
-
-        if (totalBaseCurrency < lowestCostBaseCurrency) {
-          lowestCostBaseCurrency = totalBaseCurrency;
-          bestProviderId = prov.id;
-        }
-      }
-    });
-
-    return {
-      itemId,
-      bestProviderId: lowestCostBaseCurrency === Infinity ? "" : bestProviderId,
-      lowestCostBaseCurrency: lowestCostBaseCurrency === Infinity ? 0 : lowestCostBaseCurrency,
-      providerCosts
-    };
-  };
-
-  // Analyze all items
-  const itemAnalyses = items.reduce((acc, item) => {
-    const analysis = getItemAnalysis(item.id);
-    if (analysis) {
-      acc[item.id] = analysis;
-    }
-    return acc;
-  }, {} as Record<string, ReturnType<typeof getItemAnalysis>>);
 
   // Totals per Provider (for full quote)
   const providerTotals = providers.map(prov => {
@@ -612,42 +563,11 @@ export default function CotizacionesPage() {
     };
   });
 
-  // Sort totals to find best overall provider (only among those who have quoted all items)
-  const activeTotals = providerTotals.filter(t => t.totalBaseCurrency > 0 && t.allQuoted);
-  const bestOverallProvider = activeTotals.length > 0 
-    ? [...activeTotals].sort((a, b) => a.totalBaseCurrency - b.totalBaseCurrency)[0] 
-    : null;
 
-  // Split-Purchase Optimization (Compra Mixta / Compra Optimizada):
-  // Buy each item from the provider that offers the cheapest rate for it.
-  const optimizedPurchase = () => {
-    let totalBaseCurrency = 0;
-    const splitDetails: Record<string, { providerId: string; providerName: string; costBaseCurrency: number }> = {};
-    let missingQuote = false;
 
-    items.forEach(item => {
-      const analysis = itemAnalyses[item.id];
-      if (analysis && analysis.bestProviderId) {
-        const prov = providers.find(p => p.id === analysis.bestProviderId);
-        splitDetails[item.id] = {
-          providerId: analysis.bestProviderId,
-          providerName: prov ? prov.name : "Desconocido",
-          costBaseCurrency: analysis.lowestCostBaseCurrency
-        };
-        totalBaseCurrency += analysis.lowestCostBaseCurrency;
-      } else {
-        missingQuote = true;
-      }
-    });
 
-    return {
-      totalBaseCurrency,
-      splitDetails,
-      complete: !missingQuote
-    };
-  };
 
-  const optimizedResult = optimizedPurchase();
+
 
   // Helper formatting values
   const formatCurrencyValue = (val: number, curr: "ARS" | "USD" = baseCurrency) => {
@@ -658,26 +578,27 @@ export default function CotizacionesPage() {
     }
   };
 
-  // Export quote comparison as a beautiful image card
+  // Export quote comparison as a beautiful image card (Excel-style spreadsheet screenshot)
   const handleExportImage = () => {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     // Dimensions
-    const width = 1200;
     const padding = 50;
-    const itemRowHeight = 60;
-    const headerHeight = 220;
-    const providerSectionHeight = 40 + (providers.length * 95);
-    const optSectionHeight = 130;
+    const itemRowHeight = 55;
+    const headerHeight = 200;
     
-    const contentHeight = Math.max(
-      items.length * itemRowHeight + 80, 
-      providerSectionHeight
-    );
+    // Dynamically calculate the table width based on providers count
+    const colWidth = 135;
+    const itemColWidth = 280;
+    const qtyColWidth = 110;
+    const tableWidth = itemColWidth + qtyColWidth + providers.length * (colWidth * 2);
     
-    const height = headerHeight + contentHeight + optSectionHeight + padding * 2;
+    const width = Math.max(1000, tableWidth + padding * 2);
+    const contentHeight = 60 + (items.length * itemRowHeight) + 60; // Headers + rows + totals
+    
+    const height = headerHeight + contentHeight + padding * 2;
     canvas.width = width;
     canvas.height = height;
 
@@ -699,214 +620,193 @@ export default function CotizacionesPage() {
       }
     };
 
-    // Background Gradient
-    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, "#0b0f17");
-    bgGrad.addColorStop(1, "#181335");
-    ctx.fillStyle = bgGrad;
+    // Background Color (Dark Sleek Slate)
+    ctx.fillStyle = "#0b0f17";
     ctx.fillRect(0, 0, width, height);
-
-    // Subtle Ambient Glows
-    ctx.fillStyle = "rgba(16, 185, 129, 0.02)";
-    ctx.beginPath();
-    ctx.arc(100, 100, 300, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "rgba(99, 102, 241, 0.03)";
-    ctx.beginPath();
-    ctx.arc(width - 150, height - 150, 400, 0, Math.PI * 2);
-    ctx.fill();
 
     // Header Title
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 32px sans-serif";
-    ctx.fillText("CUADRO COMPARATIVO DE PRECIOS", padding, padding + 40);
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillText("PLANILLA COMPARATIVA DE PRECIOS", padding, padding + 35);
 
     // Subtitle
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "16px sans-serif";
-    ctx.fillText(quoteName || "Cotización de Insumos", padding, padding + 72);
+    ctx.font = "15px sans-serif";
+    ctx.fillText(quoteName || "Cotización de Insumos", padding, padding + 65);
 
     // Decorative separator
     ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.fillRect(padding, padding + 95, width - padding * 2, 2);
+    ctx.fillRect(padding, padding + 85, width - padding * 2, 1.5);
 
     // Metadata Badges
     const dateStr = new Date().toLocaleDateString("es-AR");
     
-    // Badge 1: Date
-    ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-    drawRoundRect(padding, padding + 115, 160, 36, 8);
+    // Date badge
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    drawRoundRect(padding, padding + 105, 150, 32, 6);
     ctx.fill();
-    ctx.fillStyle = "#34d399";
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillText(`Fecha: ${dateStr}`, padding + 15, padding + 138);
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "12px sans-serif";
+    ctx.fillText(`Fecha: ${dateStr}`, padding + 15, padding + 125);
 
-    // Badge 2: TC
-    ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-    drawRoundRect(padding + 175, padding + 115, 230, 36, 8);
+    // TC badge
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    drawRoundRect(padding + 165, padding + 105, 210, 32, 6);
     ctx.fill();
-    ctx.fillStyle = "#60a5fa";
-    ctx.fillText(`TC Mayorista: 1 USD = $${exchangeRate}`, padding + 190, padding + 138);
+    ctx.fillText(`TC Mayorista: 1 USD = $${exchangeRate}`, padding + 180, padding + 125);
 
-    // Badge 3: Base Currency
-    ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
-    drawRoundRect(padding + 420, padding + 115, 170, 36, 8);
+    // Currency badge
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    drawRoundRect(padding + 390, padding + 105, 140, 32, 6);
     ctx.fill();
-    ctx.fillStyle = "#c084fc";
-    ctx.fillText(`Moneda: ${baseCurrency}`, padding + 435, padding + 138);
+    ctx.fillText(`Moneda: ${baseCurrency}`, padding + 405, padding + 125);
 
-    // Content positions
-    const leftWidth = 650;
-    const rightX = padding + leftWidth + 50;
-    const rightWidth = width - rightX - padding;
-    const startY = headerHeight + 40;
+    const startY = headerHeight + 30;
 
-    // LEFT SIDE: Items Detail Table
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 20px sans-serif";
-    ctx.fillText("Detalle de Ítems Requeridos", padding, startY);
+    // Draw spreadsheet table structure
+    ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+    ctx.fillRect(padding, startY, tableWidth, 60);
 
-    // Table Headers
-    ctx.fillStyle = "#475569";
-    ctx.font = "bold 12px sans-serif";
-    ctx.fillText("ÍTEM / REQUERIMIENTO", padding, startY + 40);
-    ctx.fillText("MEJOR PRECIO", padding + 380, startY + 40);
-    ctx.fillText("PROVEEDOR GANADOR", padding + 510, startY + 40);
+    // Main Headers
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillText("NOMBRE DEL ÍTEM", padding + 15, startY + 25);
+    ctx.fillText("CANTIDAD", padding + itemColWidth + 15, startY + 25);
 
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    // Subheaders line separator
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(padding, startY + 52);
-    ctx.lineTo(padding + leftWidth, startY + 52);
+    ctx.moveTo(padding, startY + 35);
+    ctx.lineTo(padding + tableWidth, startY + 35);
     ctx.stroke();
 
-    items.forEach((item, idx) => {
-      const rowY = startY + 65 + idx * itemRowHeight;
+    providers.forEach((prov, pIdx) => {
+      const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
 
-      // Draw zebra backgrounds
-      if (idx % 2 === 0) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.01)";
-        ctx.fillRect(padding - 10, rowY - 12, leftWidth + 20, itemRowHeight);
-      }
+      // Provider header name (Spans 2 columns)
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = "bold 12px sans-serif";
+      const nameText = prov.name;
+      ctx.fillText(nameText, pX + 15, startY + 22);
 
-      // Draw Item Name
-      ctx.fillStyle = "#f1f5f9";
-      ctx.font = "bold 14px sans-serif";
-      ctx.fillText(item.name || "Ítem sin nombre", padding, rowY + 18);
-
-      // Draw unit and qty
+      // Unitary & Total subheaders
       ctx.fillStyle = "#64748b";
-      ctx.font = "12px sans-serif";
-      ctx.fillText(`Cantidad requerida: ${item.targetQuantity} ${item.baseUnit}`, padding, rowY + 36);
+      ctx.font = "bold 10px sans-serif";
+      ctx.fillText("P. Unitario", pX + 15, startY + 48);
+      ctx.fillText("P. Total", pX + colWidth + 15, startY + 48);
 
-      // Draw best option
-      const analysis = itemAnalyses[item.id];
-      if (analysis && analysis.bestProviderId) {
-        const bestProv = providers.find(p => p.id === analysis.bestProviderId);
-        
-        ctx.fillStyle = "#34d399";
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText(formatCurrencyValue(analysis.lowestCostBaseCurrency, baseCurrency), padding + 380, rowY + 22);
-
-        ctx.fillStyle = "#e2e8f0";
-        ctx.font = "13px sans-serif";
-        ctx.fillText(bestProv ? bestProv.name : "-", padding + 510, rowY + 22);
-      } else {
-        ctx.fillStyle = "#475569";
-        ctx.font = "italic 13px sans-serif";
-        ctx.fillText("Sin cotizaciones", padding + 380, rowY + 22);
-      }
+      // Draw grid line separating providers
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.beginPath();
+      ctx.moveTo(pX, startY);
+      ctx.lineTo(pX, startY + contentHeight);
+      ctx.stroke();
     });
 
-    // RIGHT SIDE: Providers Summary Card stack
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 20px sans-serif";
-    ctx.fillText("Cuadro de Proveedores", rightX, startY);
+    // Draw table border outline
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.strokeRect(padding, startY, tableWidth, contentHeight);
 
-    providerTotals.forEach((total, idx) => {
-      const cardY = startY + 30 + idx * 95;
-      const isWinner = bestOverallProvider?.providerId === total.providerId;
+    // Draw zebra background rows & cell content
+    items.forEach((item, idx) => {
+      const rowY = startY + 60 + idx * itemRowHeight;
 
-      // Card Box
-      ctx.fillStyle = isWinner ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.02)";
-      drawRoundRect(rightX, cardY, rightWidth, 80, 12);
-      ctx.fill();
-      
-      ctx.strokeStyle = isWinner ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.06)";
-      ctx.lineWidth = 1.5;
+      // Draw horizontal line separator
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+      ctx.beginPath();
+      ctx.moveTo(padding, rowY);
+      ctx.lineTo(padding + tableWidth, rowY);
       ctx.stroke();
 
-      // Provider Name
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 15px sans-serif";
-      ctx.fillText(total.providerName, rightX + 16, cardY + 30);
-
-      // Stats
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = "12px sans-serif";
-      ctx.fillText(`Cotizados: ${total.itemsQuotedCount}/${items.length} ítems`, rightX + 16, cardY + 54);
-      if (!total.allQuoted) {
-        ctx.fillStyle = "#f59e0b";
-        ctx.fillText(" (Incompleto)", rightX + 120, cardY + 54);
+      if (idx % 2 === 1) {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.01)";
+        ctx.fillRect(padding, rowY, tableWidth, itemRowHeight);
       }
 
-      // Cost
-      ctx.fillStyle = isWinner ? "#34d399" : "#f1f5f9";
-      ctx.font = "bold 18px sans-serif";
-      const totalText = formatCurrencyValue(total.totalBaseCurrency, baseCurrency);
-      const textWidth = ctx.measureText(totalText).width;
-      ctx.fillText(totalText, rightX + rightWidth - textWidth - 16, cardY + 36);
+      // Product Name (Truncated if too long)
+      ctx.fillStyle = "#f1f5f9";
+      ctx.font = "bold 12px sans-serif";
+      let displayName = item.name || "Ítem sin nombre";
+      if (displayName.length > 30) {
+        displayName = displayName.substring(0, 27) + "...";
+      }
+      ctx.fillText(displayName, padding + 15, rowY + 32);
 
-      // Label status
-      if (isWinner) {
-        ctx.fillStyle = "#34d399";
-        ctx.font = "bold 10px sans-serif";
-        const badge = "RECOMENDADO ★";
-        const badgeW = ctx.measureText(badge).width;
-        ctx.fillText(badge, rightX + rightWidth - badgeW - 16, cardY + 56);
-      } else if (total.totalBaseCurrency > 0) {
-        ctx.fillStyle = "#64748b";
-        ctx.font = "11px sans-serif";
-        const diffText = bestOverallProvider && total.totalBaseCurrency > bestOverallProvider.totalBaseCurrency
-          ? `+${((total.totalBaseCurrency - bestOverallProvider.totalBaseCurrency) / bestOverallProvider.totalBaseCurrency * 100).toFixed(0)}%`
-          : "";
-        const diffW = ctx.measureText(diffText).width;
-        ctx.fillText(diffText, rightX + rightWidth - diffW - 16, cardY + 56);
+      // Quantity
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "11px sans-serif";
+      ctx.fillText(`${item.targetQuantity} ${item.baseUnit}`, padding + itemColWidth + 15, rowY + 32);
+
+      // Provider quotes
+      providers.forEach((prov, pIdx) => {
+        const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
+        const quote = prov.quotes[item.id];
+        const hasQuote = quote && quote.price > 0;
+
+        if (hasQuote) {
+          const { trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+          const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+
+          // P. Unit
+          ctx.fillStyle = "#cbd5e1";
+          ctx.font = "12px sans-serif";
+          ctx.fillText(formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency), pX + 15, rowY + 32);
+
+          // P. Total
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "bold 12px sans-serif";
+          ctx.fillText(formatCurrencyValue(totalBaseCurrency, baseCurrency), pX + colWidth + 15, rowY + 32);
+        } else {
+          ctx.fillStyle = "#475569";
+          ctx.font = "italic 11px sans-serif";
+          ctx.fillText("-", pX + 15, rowY + 32);
+          ctx.fillText("-", pX + colWidth + 15, rowY + 32);
+        }
+      });
+    });
+
+    // SUMMARY TOTAL ROW
+    const totalRowY = startY + 60 + items.length * itemRowHeight;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padding, totalRowY);
+    ctx.lineTo(padding + tableWidth, totalRowY);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.fillRect(padding, totalRowY, tableWidth, 60);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText("TOTAL GENERAL", padding + 15, totalRowY + 35);
+
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "10px sans-serif";
+    ctx.fillText(useRealLots ? "(Lotes comp.)" : "(Fraccional)", padding + itemColWidth + 15, totalRowY + 35);
+
+    providers.forEach((prov, pIdx) => {
+      const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
+      const totalData = providerTotals.find(t => t.providerId === prov.id);
+
+      ctx.fillStyle = "#475569";
+      ctx.font = "11px sans-serif";
+      ctx.fillText("-", pX + 15, totalRowY + 35);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 13px sans-serif";
+      const totalText = formatCurrencyValue(totalData?.totalBaseCurrency || 0, baseCurrency);
+      ctx.fillText(totalText, pX + colWidth + 15, totalRowY + 35);
+
+      if (totalData && !totalData.allQuoted) {
+        ctx.fillStyle = "#f59e0b";
+        ctx.font = "bold 9px sans-serif";
+        ctx.fillText("(Parcial)", pX + colWidth + 15, totalRowY + 49);
       }
     });
 
-    // FOOTER: Recommendation Card
-    const footerY = height - optSectionHeight - padding;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padding, footerY);
-    ctx.lineTo(width - padding, footerY);
-    ctx.stroke();
-
-    const optY = footerY + 25;
-    ctx.fillStyle = "rgba(45, 212, 191, 0.04)";
-    drawRoundRect(padding, optY, width - padding * 2, 75, 12);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(45, 212, 191, 0.15)";
-    ctx.stroke();
-
-    ctx.fillStyle = "#2dd4bf";
-    ctx.font = "bold 15px sans-serif";
-    ctx.fillText("💡 ESTRATEGIA DE AHORRO: COMPRA MIXTA OPTIMIZADA", padding + 20, optY + 30);
-
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "13px sans-serif";
-    ctx.fillText("Emitiendo órdenes de compra divididas según la mejor oferta de cada proveedor, el total consolidado se reduce a:", padding + 20, optY + 52);
-
-    ctx.fillStyle = "#2dd4bf";
-    ctx.font = "bold 24px sans-serif";
-    const optText = formatCurrencyValue(optimizedResult.totalBaseCurrency, baseCurrency);
-    const optTextW = ctx.measureText(optText).width;
-    ctx.fillText(optText, width - padding - optTextW - 20, optY + 45);
-
-    // Watermark
+    // Watermark & Footer info
     ctx.fillStyle = "#475569";
     ctx.font = "11px sans-serif";
     ctx.fillText("Generado por Finanzas Gestor - Módulo de Cotizaciones", padding, height - 20);
@@ -1434,125 +1334,6 @@ export default function CotizacionesPage() {
           ==================================================== */}
       {activeTab === "comparador" && (
         <div className="space-y-8 animate-fadeIn">
-          {/* Main Scoring Dashboard Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Overall Winner Card */}
-            <div className="glass-card rounded-3xl p-6 border border-white/5 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                <Trophy className="w-24 h-24 text-amber-400" />
-              </div>
-              <div className="flex items-center gap-2 mb-3">
-                <Trophy className="w-5 h-5 text-amber-400" />
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Proveedor Recomendado</h4>
-              </div>
-              
-              {bestOverallProvider ? (
-                <div className="space-y-2">
-                  <h3 className="text-xl font-black text-white truncate">{bestOverallProvider.providerName}</h3>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold font-mono text-emerald-400">
-                      {formatCurrencyValue(bestOverallProvider.totalBaseCurrency, baseCurrency)}
-                    </span>
-                    <span className="text-xs text-gray-400">Total en {baseCurrency}</span>
-                  </div>
-                  <p className="text-xs text-gray-400 pt-1">
-                    Cubre <b className="text-white">{bestOverallProvider.itemsQuotedCount} de {items.length}</b> ítems cotizados.
-                  </p>
-                </div>
-              ) : providerTotals.some(t => t.totalBaseCurrency > 0) ? (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-bold text-amber-400">Cotización Incompleta</h3>
-                  <p className="text-xs text-gray-400">
-                    Ningún proveedor cotizó todos los ítems ({items.length}). No se puede calcular un ganador absoluto.
-                  </p>
-                  <p className="text-xs text-emerald-400 pt-1 font-semibold">
-                    💡 Se recomienda usar la Compra Mixta Optimizada.
-                  </p>
-                </div>
-              ) : (
-                <div className="py-2">
-                  <p className="text-sm text-gray-400 italic">No hay cotizaciones cargadas para calcular un ganador.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Split Optimized Purchase Card (Awesome Premium Feature!) */}
-            <div className="glass-card rounded-3xl p-6 border border-white/5 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                <Sparkles className="w-24 h-24 text-emerald-400" />
-              </div>
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-5 h-5 text-emerald-400" />
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Compra Mixta Optimizada</h4>
-              </div>
-
-              {optimizedResult && optimizedResult.totalBaseCurrency > 0 ? (
-                <div className="space-y-2">
-                  <h3 className="text-xl font-black text-white">Dividir Pedido</h3>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold font-mono text-teal-400">
-                      {formatCurrencyValue(optimizedResult.totalBaseCurrency, baseCurrency)}
-                    </span>
-                    <span className="text-xs text-gray-400">Presupuesto Min.</span>
-                  </div>
-                  
-                  {bestOverallProvider && bestOverallProvider.totalBaseCurrency > optimizedResult.totalBaseCurrency ? (
-                    <p className="text-xs text-emerald-400 pt-1">
-                      ¡Ahorrás <b className="font-mono">{formatCurrencyValue(bestOverallProvider.totalBaseCurrency - optimizedResult.totalBaseCurrency, baseCurrency)}</b> adicionales dividiendo el pedido!
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-400 pt-1">
-                      Comprar todo al ganador es la opción óptima en este caso.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="py-2">
-                  <p className="text-sm text-gray-400 italic">Carga precios en el editor para optimizar.</p>
-                </div>
-              )}
-            </div>
-
-            {/* Savings & Comparison Report Card */}
-            <div className="glass-card rounded-3xl p-6 border border-white/5 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                <TrendingDown className="w-24 h-24 text-indigo-400" />
-              </div>
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingDown className="w-5 h-5 text-indigo-400" />
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Margen de Ahorro Máximo</h4>
-              </div>
-
-              {providers.length >= 2 && bestOverallProvider && activeTotals.length >= 2 ? (
-                (() => {
-                  const sortedTotals = [...activeTotals].sort((a, b) => b.totalBaseCurrency - a.totalBaseCurrency);
-                  const worstProvider = sortedTotals[0]; // highest cost
-                  const difference = worstProvider.totalBaseCurrency - optimizedResult.totalBaseCurrency;
-                  const pct = worstProvider.totalBaseCurrency > 0 ? (difference / worstProvider.totalBaseCurrency) * 100 : 0;
-
-                  return (
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-black text-white">Ahorro de hasta {pct.toFixed(0)}%</h3>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-2xl font-bold font-mono text-indigo-400">
-                          {formatCurrencyValue(difference, baseCurrency)}
-                        </span>
-                        <span className="text-xs text-gray-400">Evitando sobreprecios</span>
-                      </div>
-                      <p className="text-xs text-gray-400 pt-1">
-                        Comparación entre peor proveedor vs. Compra Mixta.
-                      </p>
-                    </div>
-                  );
-                })()
-              ) : (
-                <div className="py-2">
-                  <p className="text-sm text-gray-400 italic">Agregá más proveedores para ver reportes de ahorro.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Side-by-Side Detailed Matrix Table */}
           <div className="glass-card rounded-3xl p-6 border border-white/5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -1562,7 +1343,7 @@ export default function CotizacionesPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">Cuadro Comparativo de Precios</h3>
-                  <p className="text-xs text-gray-400">Vista detallada por ítem e indicador visual de mejor oferta</p>
+                  <p className="text-xs text-gray-400">Diseño simple tipo planilla Excel para análisis detallado</p>
                 </div>
               </div>
 
@@ -1585,225 +1366,122 @@ export default function CotizacionesPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/5">
+              <table className="w-full text-left text-sm text-gray-300 border-collapse">
+                <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/10">
                   <tr>
-                    <th className="p-4 rounded-l-xl">Ítem y Requerimiento</th>
+                    <th className="p-4 rounded-tl-xl text-left min-w-[200px]" rowSpan={2}>Nombre del Ítem</th>
+                    <th className="p-4 text-center min-w-[100px]" rowSpan={2}>Cantidad</th>
                     {providers.map(prov => (
-                      <th key={prov.id} className="p-4 text-center border-l border-white/5 min-w-[200px]">
+                      <th key={prov.id} className="p-3 text-center border-l border-white/10" colSpan={2}>
                         {prov.name}
                       </th>
                     ))}
                   </tr>
+                  <tr className="bg-[#101725]/60 text-[10px] text-gray-400 font-bold border-b border-white/5">
+                    {providers.map(prov => (
+                      <Fragment key={prov.id}>
+                        <th className="p-2.5 text-center border-l border-white/10 font-bold">Unitario</th>
+                        <th className="p-2.5 text-center border-l border-white/5 font-bold">Total</th>
+                      </Fragment>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {items.map((item) => {
-                    const analysis = itemAnalyses[item.id];
-                    
-                    return (
-                      <tr key={item.id} className="hover:bg-white/[0.01] transition-colors align-top">
-                        {/* Item column */}
-                        <td className="p-4">
-                          <p className="font-bold text-white text-sm">{item.name || "Ítem sin nombre"}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            Cantidad: <b className="text-emerald-400 font-mono">{item.targetQuantity} {item.baseUnit}</b>
-                          </p>
-                        </td>
+                  {items.map((item) => (
+                    <tr key={item.id} className="hover:bg-white/[0.01] transition-colors align-middle border-b border-white/5">
+                      {/* Item column (truncated if very long, hover title) */}
+                      <td className="p-4 max-w-[250px] truncate" title={item.name}>
+                        <span className="font-bold text-white text-sm">{item.name || "Ítem sin nombre"}</span>
+                      </td>
+                      {/* Quantity column */}
+                      <td className="p-4 text-center font-mono text-xs text-gray-300 whitespace-nowrap">
+                        {item.targetQuantity} {item.baseUnit}
+                      </td>
 
-                        {/* Providers values for this item */}
-                        {providers.map(prov => {
-                          const quote = prov.quotes[item.id];
-                          const hasQuote = quote && quote.price > 0;
-                          
-                          if (!hasQuote) {
-                            return (
-                              <td key={prov.id} className="p-4 text-center text-gray-500 italic bg-black/10 border-l border-white/5">
-                                Sin cotización
-                              </td>
-                            );
-                          }
-
-                          // Calculations
-                          const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-                          const { totalBaseCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
-                          const isWinner = analysis?.bestProviderId === prov.id;
-
+                      {/* Providers values for this item */}
+                      {providers.map(prov => {
+                        const quote = prov.quotes[item.id];
+                        const hasQuote = quote && quote.price > 0;
+                        
+                        if (!hasQuote) {
                           return (
-                            <td 
-                              key={prov.id} 
-                              className={`p-4 border-l border-white/5 transition-all text-center relative ${
-                                isWinner 
-                                  ? "bg-emerald-950/20 border-emerald-500/20" 
-                                  : "bg-black/5"
-                              }`}
-                            >
-                              {/* Winner ribbon */}
-                              {isWinner && (
-                                <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-extrabold uppercase border border-emerald-500/20 tracking-wider">
-                                  Mejor precio
-                                </span>
-                              )}
+                            <Fragment key={prov.id}>
+                              <td className="p-4 text-center text-gray-500 font-mono border-l border-white/10">-</td>
+                              <td className="p-4 text-center text-gray-500 font-mono border-l border-white/5 bg-black/5">-</td>
+                            </Fragment>
+                          );
+                        }
 
-                              {/* Price unit display */}
-                              <div className="space-y-2">
-                                {/* Precio Unitario */}
-                                <div>
-                                  <span className="text-[10px] text-gray-500 block uppercase font-extrabold tracking-wider text-left">P. Unitario</span>
-                                  <span className="text-xs font-semibold text-gray-200 font-mono block text-left mt-0.5">
-                                    {formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency)}
-                                  </span>
-                                  {quote.currency !== baseCurrency && (
-                                    <span className="text-[9px] text-gray-400 font-mono block text-left">
-                                      ({quote.currency === "ARS" ? "$" : "US$"}
-                                      {trueUnitRateRaw.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {item.baseUnit})
-                                    </span>
-                                  )}
-                                </div>
+                        // Calculations
+                        const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+                        const { totalBaseCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
 
-                                {/* Precio Total */}
-                                <div className="pt-1.5 border-t border-white/5">
-                                  <span className="text-[10px] text-gray-500 block uppercase font-extrabold tracking-wider text-left">P. Total</span>
-                                  <span className={`text-sm font-black font-mono block text-left mt-0.5 ${isWinner ? "text-emerald-400" : "text-white"}`}>
-                                    {formatCurrencyValue(totalBaseCurrency, baseCurrency)}
+                        return (
+                          <Fragment key={prov.id}>
+                            {/* Price Unit */}
+                            <td className="p-4 border-l border-white/10 text-center align-middle font-mono text-xs text-gray-200">
+                              <div className="space-y-0.5">
+                                <span>{formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency)}</span>
+                                {quote.currency !== baseCurrency && (
+                                  <span className="text-[9px] text-gray-400 block">
+                                    ({quote.currency === "ARS" ? "$" : "US$"}
+                                    {trueUnitRateRaw.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                                   </span>
-                                  {quote.presentationType === "package" && (
-                                    <span className="text-[9px] text-gray-400 block font-normal text-left mt-0.5">
-                                      {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
-                                    </span>
-                                  )}
-                                  {quote.discount > 0 && (
-                                    <span className="text-red-400 text-[9px] font-bold block text-left">
-                                      Dto: -{quote.discount}%
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
                             </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
+                            {/* Price Total */}
+                            <td className="p-4 border-l border-white/5 text-center align-middle font-mono text-xs text-gray-200 bg-white/[0.01]">
+                              <div className="space-y-0.5">
+                                <span className="font-bold text-white">{formatCurrencyValue(totalBaseCurrency, baseCurrency)}</span>
+                                {quote.presentationType === "package" && (
+                                  <span className="text-[9px] text-gray-400 block font-normal leading-tight">
+                                    {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
+                                  </span>
+                                )}
+                                {quote.discount > 0 && (
+                                  <span className="text-red-400 text-[9px] font-bold block">
+                                    -{quote.discount}%
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </Fragment>
+                        );
+                      })}
+                    </tr>
+                  ))}
 
                   {/* SUMMARY TOTAL ROW */}
                   <tr className="bg-[#101725]/60 font-bold border-t-2 border-white/10">
-                    <td className="p-4 rounded-bl-xl">
-                      <p className="text-sm font-black text-white uppercase tracking-wider">TOTAL GENERAL</p>
-                      <p className="text-[10px] text-gray-400 font-normal">
-                        ({useRealLots ? "Lotes completos" : "Fraccional exacto"})
-                      </p>
+                    <td className="p-4 rounded-bl-xl text-left font-black text-white text-xs uppercase tracking-wider">
+                      TOTAL GENERAL
+                    </td>
+                    <td className="p-4 text-center text-[10px] text-gray-400 font-normal">
+                      ({useRealLots ? "Lotes comp." : "Fraccional"})
                     </td>
 
                     {providers.map(prov => {
                       const totalData = providerTotals.find(t => t.providerId === prov.id);
-                      const isOverallWinner = bestOverallProvider?.providerId === prov.id;
-                      
                       return (
-                        <td 
-                          key={prov.id} 
-                          className={`p-4 text-center border-l border-white/5 ${
-                            isOverallWinner 
-                              ? "bg-emerald-950/30 border-emerald-500/30" 
-                              : "bg-black/10"
-                          }`}
-                        >
-                          <p className={`text-base font-black font-mono ${isOverallWinner ? "text-emerald-400 text-lg" : "text-white"}`}>
+                        <Fragment key={prov.id}>
+                          {/* Unit price total (empty column) */}
+                          <td className="p-4 text-center border-l border-white/10 text-gray-500 font-normal">-</td>
+                          {/* Total price sum */}
+                          <td className="p-4 text-center border-l border-white/5 bg-[#101725]/80 text-white font-mono text-sm font-black">
                             {formatCurrencyValue(totalData?.totalBaseCurrency || 0, baseCurrency)}
                             {totalData && !totalData.allQuoted && (
-                              <span className="text-amber-400 text-[10px] font-bold block mt-0.5">
-                                (Total Parcial)
+                              <span className="text-amber-400 text-[9px] font-bold block mt-0.5">
+                                (Parcial)
                               </span>
                             )}
-                          </p>
-                          <p className="text-[10px] text-gray-400 font-normal mt-1">
-                            Cotizados: {totalData?.itemsQuotedCount} de {items.length} ítems
-                          </p>
-                          {isOverallWinner && (
-                            <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20">
-                              <Trophy className="w-3.5 h-3.5" />
-                              Ganador
-                            </span>
-                          )}
-                        </td>
+                          </td>
+                        </Fragment>
                       );
                     })}
                   </tr>
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* Split Optimized Purchase Plan details */}
-          <div className="glass-card rounded-3xl p-6 border border-white/5">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-teal-400" />
-              <div>
-                <h3 className="font-bold text-white text-base">Plan de Compra Mixto Optimizado</h3>
-                <p className="text-xs text-gray-400">Estrategia recomendada comprando a cada proveedor según el mejor precio de cada ítem</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Detailed Breakdown */}
-              <div className="lg:col-span-2 space-y-3">
-                {items.map(item => {
-                  const split = optimizedResult.splitDetails[item.id];
-                  if (!split) return null;
-
-                  return (
-                    <div key={item.id} className="flex items-center justify-between p-3.5 rounded-xl bg-[#111827]/40 border border-white/5">
-                      <div className="space-y-0.5">
-                        <span className="text-sm font-semibold text-white">{item.name}</span>
-                        <div className="text-xs text-gray-400 flex items-center gap-2">
-                          <span>Requerido: <b>{item.targetQuantity} {item.baseUnit}</b></span>
-                          <span className="text-gray-700">•</span>
-                          <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                            Comprar a: <b>{split.providerName}</b>
-                          </span>
-                        </div>
-                      </div>
-                      <span className="font-mono text-sm font-bold text-teal-400">
-                        {formatCurrencyValue(split.costBaseCurrency, baseCurrency)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Overview block */}
-              <div className="p-6 rounded-2xl bg-[#101725]/60 border border-white/5 flex flex-col justify-between">
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Costo Consolidado Mixto</h4>
-                  
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-gray-500">MÍNIMO POSIBLE</p>
-                    <p className="text-3xl font-black font-mono text-teal-400">
-                      {formatCurrencyValue(optimizedResult.totalBaseCurrency, baseCurrency)}
-                    </p>
-                    <p className="text-xs text-gray-400">Moneda de comparación: {baseCurrency}</p>
-                  </div>
-
-                  {bestOverallProvider && bestOverallProvider.totalBaseCurrency > optimizedResult.totalBaseCurrency && (
-                    <div className="p-3 rounded-xl bg-teal-500/5 border border-teal-500/10 text-xs text-teal-300 space-y-1">
-                      <p className="font-bold flex items-center gap-1">
-                        <ArrowRight className="w-3.5 h-3.5" />
-                        Ahorro Adicional Detectado
-                      </p>
-                      <p>
-                        Dividiendo la orden de compra ahorrás un {" "}
-                        <b>
-                          {((bestOverallProvider.totalBaseCurrency - optimizedResult.totalBaseCurrency) / bestOverallProvider.totalBaseCurrency * 100).toFixed(1)}%
-                        </b>{" "}
-                        respecto a comprarle todo a {bestOverallProvider.providerName}.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-4 mt-4 border-t border-white/5 text-[10px] text-gray-500">
-                  <p>✓ Permite emitir solicitudes diferenciadas para maximizar el presupuesto corporativo.</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>
