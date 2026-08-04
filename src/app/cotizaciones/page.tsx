@@ -376,7 +376,8 @@ export default function CotizacionesPage() {
         } else if (field === "discount") {
           updatedQuote.discount = Math.min(100, Math.max(0, parseFloat(value as string) || 0));
         } else if (field === "unitsPerPresentation") {
-          updatedQuote.unitsPerPresentation = Math.max(1, parseInt(value as string) || 1);
+          const parsed = parseFloat(value as string);
+          updatedQuote.unitsPerPresentation = isNaN(parsed) ? 0 : parsed;
         } else if (field === "presentationType") {
           if (value === "base") {
             updatedQuote.unitsPerPresentation = 1;
@@ -1238,9 +1239,6 @@ export default function CotizacionesPage() {
                           discount: 0
                         };
 
-                        // Calculamos precio unitario de referencia para mostrar
-                        const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-
                         return (
                           <div key={item.id} className="p-4 rounded-2xl bg-[#111827]/40 border border-white/5 space-y-3">
                             {/* Item name and presentation type selection */}
@@ -1296,10 +1294,11 @@ export default function CotizacionesPage() {
                                   <label className="text-[10px] text-gray-400 font-semibold uppercase">Cantidad del Lote ({item.baseUnit})</label>
                                   <input
                                     type="number"
+                                    step="any"
                                     value={quote.unitsPerPresentation || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "unitsPerPresentation", e.target.value)}
                                     placeholder="Ej. 12"
-                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none"
+                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
                                   />
                                 </div>
                               </div>
@@ -1369,20 +1368,6 @@ export default function CotizacionesPage() {
                               />
                             </div>
 
-                            {/* Quick Calculated Stats */}
-                            <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 pt-1">
-                              <span>
-                                Unitario neto: <b className="font-mono text-gray-200">
-                                  {quote.currency === "ARS" ? "$" : "USD"}
-                                  {trueUnitRateRaw.toFixed(2)}
-                                </b> /{item.baseUnit}
-                              </span>
-                              <span>
-                                Ref Moneda Base ({baseCurrency}): <b className="font-mono text-emerald-400">
-                                  {formatCurrencyValue(trueUnitRateBaseCurrency, baseCurrency)}
-                                </b>
-                              </span>
-                            </div>
                           </div>
                         );
                       })}
