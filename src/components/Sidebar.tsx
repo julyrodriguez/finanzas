@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   Building2,
   Menu,
-  X
+  X,
+  Calculator
 } from "lucide-react";
 import { useState } from "react";
 
@@ -34,6 +35,12 @@ export function Sidebar() {
       icon: ShoppingBag,
       exact: false,
       badge: "Próximamente",
+    },
+    {
+      name: "Cotizaciones",
+      href: "/cotizaciones",
+      icon: Calculator,
+      exact: false,
     },
   ];
 

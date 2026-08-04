@@ -18,7 +18,8 @@ import {
   User as UserIcon,
   Loader2,
   Percent,
-  Calendar
+  Calendar,
+  Calculator
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -86,6 +87,12 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       name: "Distribución",
       href: "/distribucion",
       icon: Percent,
+      exact: false,
+    },
+    {
+      name: "Cotizaciones",
+      href: "/cotizaciones",
+      icon: Calculator,
       exact: false,
     },
   ];
