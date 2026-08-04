@@ -1482,6 +1482,17 @@ export default function CotizacionesPage() {
                   Convertir Divisas: {convertCurrencies ? "SÍ" : "NO"}
                 </button>
                 <span className="text-gray-700 hidden sm:inline">|</span>
+                <button
+                  onClick={() => setUseRealLots(!useRealLots)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                    useRealLots
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                      : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  Unidades: {useRealLots ? "Lotes Enteros (Compra Real)" : "Fraccional Exacto"}
+                </button>
+                <span className="text-gray-700 hidden sm:inline">|</span>
                 <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
                   <span>TC: 1 USD = ${exchangeRate} ARS</span>
                   {convertCurrencies && (
