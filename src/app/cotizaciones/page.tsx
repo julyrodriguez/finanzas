@@ -885,11 +885,7 @@ export default function CotizacionesPage() {
           curY += 16;
         }
 
-        if (!totalData.allQuoted) {
-          ctx.fillStyle = "#f59e0b";
-          ctx.font = "bold 9px sans-serif";
-          ctx.fillText("(Parcial)", pX + colWidth + 15, curY);
-        }
+
       }
     });
 
@@ -1033,10 +1029,7 @@ export default function CotizacionesPage() {
             totalText += formatCurrencyValue(totalData.totalUSD, "USD");
             cellHtml += `<div style="font-weight: bold; color: #15803d;">${formatCurrencyValue(totalData.totalUSD, "USD")}</div>`;
           }
-          if (!totalData.allQuoted) {
-            totalText += " (Parcial)";
-            cellHtml += `<div style="font-size: 8pt; color: #d97706; font-weight: bold;">(Parcial)</div>`;
-          }
+
 
           totalRow.push("-", totalText);
           html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; color: #64748b; vertical-align: middle;">-</td>`;
@@ -1790,11 +1783,7 @@ export default function CotizacionesPage() {
                                   {formatCurrencyValue(totalData.totalUSD, "USD")}
                                 </p>
                               )}
-                              {totalData && !totalData.allQuoted && (
-                                <span className="text-amber-400 text-[9px] font-bold block mt-0.5">
-                                  (Parcial)
-                                </span>
-                              )}
+
                             </div>
                           </td>
                         </Fragment>
