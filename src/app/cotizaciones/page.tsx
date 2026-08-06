@@ -853,9 +853,7 @@ export default function CotizacionesPage() {
     ctx.font = "bold 12px sans-serif";
     ctx.fillText("TOTAL GENERAL", padding + 15, totalRowY + 35);
 
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "10px sans-serif";
-    ctx.fillText(useRealLots ? "(Lotes comp.)" : "(Fraccional)", padding + itemColWidth + 15, totalRowY + 35);
+
 
     providers.forEach((prov, pIdx) => {
       const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
@@ -1007,10 +1005,10 @@ export default function CotizacionesPage() {
       });
 
       // Row 4: Summary Totals
-      const totalRow = ["TOTAL GENERAL", useRealLots ? "(Lotes comp.)" : "(Fraccional)"];
+      const totalRow = ["TOTAL GENERAL", "-"];
       html += `<tr style="background-color: #f1f5f9; font-weight: bold; border-top: 2px solid #cbd5e1; border-bottom: 2px double #cbd5e1;">`;
       html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: left; font-weight: 800; color: #0f172a;">TOTAL GENERAL</td>`;
-      html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; font-size: 8pt; color: #475569;">${useRealLots ? "Lotes comp." : "Fraccional"}</td>`;
+      html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; font-size: 8pt; color: #475569;">-</td>`;
 
       providers.forEach(prov => {
         const totalData = providerTotals.find(t => t.providerId === prov.id);
@@ -1756,7 +1754,7 @@ export default function CotizacionesPage() {
                       TOTAL GENERAL
                     </td>
                     <td className="p-4 text-center text-[10px] text-gray-400 font-normal">
-                      ({useRealLots ? "Lotes comp." : "Fraccional"})
+                      -
                     </td>
 
                     {providers.map(prov => {
