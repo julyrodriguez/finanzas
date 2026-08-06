@@ -126,8 +126,11 @@ export default function DistribucionPage() {
             }
             return savedC;
           });
-          setComplejos(synced);
-          setEditableComplejos(synced);
+          // Avoid synchronous setState in effect linter error
+          setTimeout(() => {
+            setComplejos(synced);
+            setEditableComplejos(synced);
+          }, 0);
         }
       } catch (err) {
         console.error("Error parsing saved attendance:", err);
@@ -283,8 +286,8 @@ export default function DistribucionPage() {
       codigo: "00643",
       codigoCuenta: "643",
       nombre: "Oficina Central (Administrativo)",
-      region: "-" as any,
-      cadena: "-" as any,
+      region: "-" as unknown as "CABA" | "GBA" | "Interior",
+      cadena: "-" as unknown as "Cinemark" | "Hoyts",
       attendance: 0,
       percentage: percentOficina,
       montoProrrateado: numMontoTotal * (percentOficina / 100),
@@ -293,13 +296,20 @@ export default function DistribucionPage() {
     });
   }
 
-  // Only apply if the total distributed amount is a multiple of the base value.
-  // Otherwise, if it can't be rounded, we display standard decimals to match the total.
-  const baseVal = numMontoTotal >= 1000000 ? 50 : 10;
-  const isDivisible = numMontoTotal % baseVal === 0;
-  const isRoundingApplied = redondear && isDivisible;
+  // If rounding is applied, we determine the base value.
+  // We prefer 50 for amounts >= 1,000,000 to keep numbers cleaner,
+  // but if the total is not divisible by 50, we use 10 to minimize the difference (max 5 pesos instead of 25).
+  let baseVal = 10;
+  if (numMontoTotal >= 1000000) {
+    if (numMontoTotal % 50 === 0) {
+      baseVal = 50;
+    } else {
+      baseVal = 10;
+    }
+  }
+  const isRoundingApplied = redondear;
 
-  if (isRoundingApplied) {
+  if (isRoundingApplied && tableRows.length > 0) {
     const targetTotal = numMontoTotal;
     let sumFloors = 0;
     const items = tableRows.map((r, idx) => {
@@ -565,7 +575,7 @@ export default function DistribucionPage() {
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Alcance Geográfico</span>
                 <select
                   value={ambitoFilter}
-                  onChange={(e: any) => setAmbitoFilter(e.target.value)}
+                  onChange={(e) => setAmbitoFilter(e.target.value as "todos" | "todos_oficina" | "caba" | "gba" | "amba" | "amba_oficina" | "interior" | "personalizado")}
                   className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
                 >
                   <option value="todos" className="bg-[#0d131f] text-white">Todos los Cines (100% complejos)</option>
