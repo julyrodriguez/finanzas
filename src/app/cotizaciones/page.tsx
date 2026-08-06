@@ -134,7 +134,7 @@ export default function CotizacionesPage() {
   // Image Export States
   const [showImgModal, setShowImgModal] = useState<boolean>(false);
   const [generatedImgUrl, setGeneratedImgUrl] = useState<string | null>(null);
-  const [convertCurrencies, setConvertCurrencies] = useState<boolean>(true);
+  const [convertCurrencies, setConvertCurrencies] = useState<boolean>(false);
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
