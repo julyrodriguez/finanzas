@@ -920,7 +920,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                       <th className="px-4 py-3.5">Proveedor</th>
                       <th className="px-4 py-3.5">Monto</th>
                       <th className="px-4 py-3.5">Forma Pago</th>
-                      <th className="px-4 py-3.5">Notas</th>
+                      <th className="px-4 py-3.5">Notas y Motivo</th>
                       <th className="px-4 py-3.5 text-right">Editar</th>
                     </tr>
                   </thead>
@@ -1097,26 +1097,44 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                           {orden.formaPago || "30DFF"}
                         </td>
 
-                        {/* Botón Ver/Agregar Notas */}
+                        {/* Botón Ver/Agregar Notas y Motivo */}
                         <td className="px-4 py-4">
-                          <button
-                            onClick={() => setActiveNotesOrden(orden)}
-                            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] font-medium flex items-center gap-1.5 transition-colors"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Notas ({orden.notas?.length || 0})</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {/* Notes Button with Tooltip */}
+                            <button
+                              onClick={() => setActiveNotesOrden(orden)}
+                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] font-medium flex items-center gap-1 transition-colors"
+                              title={orden.notas && orden.notas.length > 0 
+                                ? `Notas:\n${orden.notas.map((n, i) => `${i+1}. ${n.texto}`).join("\n")}` 
+                                : "Sin notas registradas. Haz clic para agregar."}
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>{orden.notas?.length || 0}</span>
+                            </button>
+
+                            {/* Motif Button with Tooltip */}
+                            {orden.motivo ? (
+                              <button
+                                onClick={() => setActiveNotesOrden(orden)}
+                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] flex items-center transition-colors"
+                                title={`Motivo:\n${orden.motivo}`}
+                              >
+                                <AlertCircle className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                              </button>
+                            ) : (
+                              <span className="w-6.5" /> // spacing placeholder
+                            )}
+                          </div>
                         </td>
 
-                        {/* Action: Open Edit Form */}
+                        {/* Action: Open Edit Form (Icon-only) */}
                         <td className="px-4 py-4 text-right">
                           <button
                             onClick={() => handleOpenEditModal(orden)}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 font-semibold flex items-center justify-end gap-1.5 ml-auto transition-colors"
-                            title="Editar orden (Incluye eliminar)"
+                            className="p-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 ml-auto transition-colors inline-flex items-center justify-center"
+                            title="Editar orden"
                           >
                             <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Editar</span>
                           </button>
                         </td>
                       </tr>
