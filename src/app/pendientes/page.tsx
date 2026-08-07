@@ -396,6 +396,10 @@ export default function PendientesPage() {
     }
   };
 
+  const itemsToRender = selectedId
+    ? (selectedId === "general" ? [] : filteredPendientes.filter((p) => p.id === selectedId))
+    : filteredPendientes;
+
   return (
     <AppLayout
       title="Pendientes"
@@ -432,99 +436,112 @@ export default function PendientesPage() {
         }`}>
           
           {/* Header Stats & Action */}
-          <div className="glass-card p-3.5 border border-white/10 rounded-2xl flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-white font-bold text-base flex items-center gap-2">
-                  <ListTodo className="w-5 h-5 text-emerald-400" />
-                  Notero de Pendientes
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {pendingCount} activos • {completedCount} terminados
-                </p>
+          {selectedId === null ? (
+            <div className="glass-card p-3.5 border border-white/10 rounded-2xl flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-white font-bold text-base flex items-center gap-2">
+                    <ListTodo className="w-5 h-5 text-emerald-400" />
+                    Notero de Pendientes
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {pendingCount} activos • {completedCount} terminados
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setSelectedId("general")}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all bg-white/5 border-white/10 hover:bg-white/10 text-gray-300 hover:text-white"
+                    title="Abrir bloc de notas general"
+                  >
+                    <StickyNote className="w-3.5 h-3.5" />
+                    <span>Bloc General</span>
+                  </button>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-xs font-semibold text-white shadow-md shadow-emerald-500/10 active:scale-95 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nuevo
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
+
+              {/* Quick Filters */}
+              <div className="flex flex-wrap gap-1 bg-[#090d16] p-1 rounded-xl border border-white/5">
                 <button
-                  onClick={() => setSelectedId(selectedId === "general" ? null : "general")}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                    selectedId === "general"
-                      ? "bg-white/15 border-white/20 text-white"
-                      : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300 hover:text-white"
+                  onClick={() => setFilterEstado("pendientes")}
+                  className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
+                    filterEstado === "pendientes"
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-gray-400 hover:text-white"
                   }`}
-                  title="Abrir bloc de notas general"
                 >
-                  <StickyNote className="w-3.5 h-3.5" />
-                  <span>Bloc General</span>
+                  Pendientes
                 </button>
                 <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-xs font-semibold text-white shadow-md shadow-emerald-500/10 active:scale-95 transition-all"
+                  onClick={() => setFilterEstado("completados")}
+                  className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
+                    filterEstado === "completados"
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-gray-400 hover:text-white"
+                  }`}
                 >
-                  <Plus className="w-4 h-4" />
-                  Nuevo
+                  Terminados
+                </button>
+                <button
+                  onClick={() => setFilterEstado("todos")}
+                  className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
+                    filterEstado === "todos"
+                      ? "bg-white/10 text-white shadow-sm"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Todos
+                </button>
+              </div>
+
+              {/* Search and Priority filters */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar proyectos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-[#090d16] border border-white/10 rounded-xl py-1.5 pl-9 pr-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                  />
+                </div>
+
+                <select
+                  value={filterPrioridad}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterPrioridad(e.target.value as "todas" | "alta" | "media" | "baja")}
+                  className="bg-[#090d16] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                >
+                  <option value="todas">Prioridad: Todas</option>
+                  <option value="alta">Alta</option>
+                  <option value="media">Media</option>
+                  <option value="baja">Baja</option>
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="glass-card p-3 border border-white/10 rounded-2xl flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-white font-bold text-xs flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-emerald-400" />
+                  {selectedId === "general" ? "Bloc General" : "Modo Edición"}
+                </h2>
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="px-2.5 py-1 rounded-xl text-[11px] font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+                >
+                  Volver a la Lista
                 </button>
               </div>
             </div>
-
-            {/* Quick Filters */}
-            <div className="flex flex-wrap gap-1 bg-[#090d16] p-1 rounded-xl border border-white/5">
-              <button
-                onClick={() => setFilterEstado("pendientes")}
-                className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
-                  filterEstado === "pendientes"
-                    ? "bg-white/10 text-white shadow-sm"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Pendientes
-              </button>
-              <button
-                onClick={() => setFilterEstado("completados")}
-                className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
-                  filterEstado === "completados"
-                    ? "bg-white/10 text-white shadow-sm"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Terminados
-              </button>
-              <button
-                onClick={() => setFilterEstado("todos")}
-                className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
-                  filterEstado === "todos"
-                    ? "bg-white/10 text-white shadow-sm"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Todos
-              </button>
-            </div>
-
-            {/* Search and Priority filters */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-                <input
-                  type="text"
-                  placeholder="Buscar proyectos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-[#090d16] border border-white/10 rounded-xl py-1.5 pl-9 pr-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                />
-              </div>
-
-              <select
-                value={filterPrioridad}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterPrioridad(e.target.value as "todas" | "alta" | "media" | "baja")}
-                className="bg-[#090d16] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50 transition-colors"
-              >
-                <option value="todas">Prioridad: Todas</option>
-                <option value="alta">Alta</option>
-                <option value="media">Media</option>
-                <option value="baja">Baja</option>
-              </select>
-            </div>
-          </div>
+          )}
 
           {/* Items List */}
           <div className={
@@ -555,14 +572,14 @@ export default function PendientesPage() {
                 </div>
               </div>
             ) : (
-              filteredPendientes.map((item) => {
+              itemsToRender.map((item) => {
                 const isSelected = item.id === selectedId;
                 const style = priorityStyles[item.prioridad] || priorityStyles.media;
 
                 return (
                   <div
                     key={item.id}
-                    onClick={() => setSelectedId(item.id)}
+                    onClick={() => setSelectedId(isSelected ? null : item.id)}
                     className={`group relative flex flex-col p-2.5 rounded-xl border transition-all cursor-pointer bg-gradient-to-br ${
                       isSelected
                         ? "bg-[#0d131f] border-emerald-500/50 shadow-md shadow-emerald-500/5 ring-1 ring-emerald-500/30"
@@ -649,7 +666,7 @@ export default function PendientesPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedId(item.id);
+                            setSelectedId(isSelected ? null : item.id);
                           }}
                           className={`p-1.5 rounded-lg border transition-all ${
                             isSelected
