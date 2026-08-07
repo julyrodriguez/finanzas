@@ -44,6 +44,7 @@ export default function InterbankingPage() {
   const [customCuil, setCustomCuil] = useState("");
   const [customUser, setCustomUser] = useState("");
   const [customPass, setCustomPass] = useState("");
+  const [customCookies, setCustomCookies] = useState("");
 
   // Execution states
   const [runId, setRunId] = useState<string | null>(null);
@@ -122,6 +123,19 @@ export default function InterbankingPage() {
         user: customUser || undefined,
         pass: customPass || undefined,
       };
+    }
+
+    if (customCookies.trim()) {
+      try {
+        const parsed = JSON.parse(customCookies.trim());
+        if (!Array.isArray(parsed)) {
+          throw new Error("El JSON de cookies debe ser un arreglo de objetos [ { ... } ].");
+        }
+        payload.cookies = parsed;
+      } catch (err: any) {
+        setErrorMsg(`JSON de cookies inválido: ${err.message}`);
+        return;
+      }
     }
 
     try {
@@ -299,6 +313,21 @@ export default function InterbankingPage() {
                             {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                           </button>
                         </div>
+                      </div>
+
+                      <div className="space-y-1.5 border-t border-white/5 pt-2">
+                        <label className="text-[11px] text-gray-400 font-medium">JSON de Cookies (Opcional)</label>
+                        <textarea
+                          value={customCookies}
+                          onChange={(e) => setCustomCookies(e.target.value)}
+                          disabled={status === "running"}
+                          placeholder='Pega el arreglo JSON de cookies (de EditThisCookie), ej: [{"name": "sib", "value": "..."}]'
+                          rows={3}
+                          className="w-full bg-[#0d131f] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-emerald-500 font-mono"
+                        />
+                        <p className="text-[9px] text-gray-500 leading-relaxed">
+                          Al inyectar las cookies se omitirá el proceso de inicio de sesión y selección de empresa en el servidor, yendo directo a la interfaz del banco.
+                        </p>
                       </div>
                     </div>
                   )}
