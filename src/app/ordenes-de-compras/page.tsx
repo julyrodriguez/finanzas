@@ -1115,7 +1115,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                             {/* Motif Button with Tooltip */}
                             {orden.motivo ? (
                               <button
-                                onClick={() => setActiveNotesOrden(orden)}
+                                onClick={() => handleOpenEditModal(orden)}
                                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] flex items-center transition-colors"
                                 title={`Motivo:\n${orden.motivo}`}
                               >
