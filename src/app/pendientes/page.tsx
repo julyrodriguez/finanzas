@@ -34,7 +34,8 @@ import {
   X,
   ListTodo,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Edit2
 } from "lucide-react";
 
 // Interfaces
@@ -134,6 +135,19 @@ export default function PendientesPage() {
           };
         });
 
+        // Sort by priority: alta (0) > media (1) > baja (2). If same priority, sort by createdAt desc.
+        const priorityOrder = { alta: 0, media: 1, baja: 2 };
+        list.sort((a, b) => {
+          const ordA = priorityOrder[a.prioridad] ?? 1;
+          const ordB = priorityOrder[b.prioridad] ?? 1;
+          if (ordA !== ordB) {
+            return ordA - ordB;
+          }
+          const timeA = a.createdAt?.seconds || 0;
+          const timeB = b.createdAt?.seconds || 0;
+          return timeB - timeA;
+        });
+
         setTimeout(() => {
           setPendientes(list);
           setLoading(false);
@@ -141,9 +155,9 @@ export default function PendientesPage() {
         }, 0);
       },
       (err) => {
-        console.error("Error fetching pendientes:", err);
+        console.error("Error loading pendientes:", err);
         setTimeout(() => {
-          setError("Error de permisos o conexión al cargar los pendientes.");
+          setError("No se pudieron cargar los pendientes de la base de datos.");
           setLoading(false);
         }, 0);
       }
@@ -410,8 +424,12 @@ export default function PendientesPage() {
       {/* Main Grid: Left sidebar of items, Right workspace notepad */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-12rem)] items-stretch">
         
-        {/* LEFT COLUMN: List of Pendientes (5 cols on lg) */}
-        <section className="lg:col-span-5 xl:col-span-4 flex flex-col gap-4">
+        {/* LEFT COLUMN: List of Pendientes */}
+        <section className={`flex flex-col gap-4 transition-all duration-300 ${
+          selectedId !== null
+            ? "lg:col-span-4 xl:col-span-3"
+            : "col-span-12"
+        }`}>
           
           {/* Header Stats & Action */}
           <div className="glass-card p-3.5 border border-white/10 rounded-2xl flex flex-col gap-2.5">
@@ -425,13 +443,27 @@ export default function PendientesPage() {
                   {pendingCount} activos • {completedCount} terminados
                 </p>
               </div>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-xs font-semibold text-white shadow-md shadow-emerald-500/10 active:scale-95 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Nuevo
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => setSelectedId(selectedId === "general" ? null : "general")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                    selectedId === "general"
+                      ? "bg-white/15 border-white/20 text-white"
+                      : "bg-white/5 border-white/10 hover:bg-white/10 text-gray-300 hover:text-white"
+                  }`}
+                  title="Abrir bloc de notas general"
+                >
+                  <StickyNote className="w-3.5 h-3.5" />
+                  <span>Bloc General</span>
+                </button>
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-xs font-semibold text-white shadow-md shadow-emerald-500/10 active:scale-95 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuevo
+                </button>
+              </div>
             </div>
 
             {/* Quick Filters */}
@@ -495,7 +527,11 @@ export default function PendientesPage() {
           </div>
 
           {/* Items List */}
-          <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin">
+          <div className={
+            selectedId !== null
+              ? "flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin"
+              : "flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin"
+          }>
             {loading ? (
               <div className="glass-card p-8 text-center flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
@@ -586,7 +622,7 @@ export default function PendientesPage() {
                         </div>
                       </div>
 
-                      {/* Right actions inside card (Checkmark toggle & Delete) */}
+                      {/* Right actions inside card (Checkmark toggle, Edit & Delete) */}
                       <div className="flex flex-col items-center justify-between h-full gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                         
                         {/* Circle checkbox */}
@@ -607,6 +643,22 @@ export default function PendientesPage() {
                           ) : (
                             <Circle className="w-4 h-4" />
                           )}
+                        </button>
+
+                        {/* Edit button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedId(item.id);
+                          }}
+                          className={`p-1.5 rounded-lg border transition-all ${
+                            isSelected
+                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                              : "bg-white/5 border-white/10 hover:border-emerald-500/30 text-gray-400 hover:text-emerald-400"
+                          }`}
+                          title="Editar notas y detalles"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
                         </button>
 
                         {/* Delete button */}
@@ -630,209 +682,219 @@ export default function PendientesPage() {
           </div>
         </section>
 
-        {/* RIGHT COLUMN: Notepad Editor Workspace (7 cols on lg) */}
-        <section className="lg:col-span-7 xl:col-span-8 flex flex-col">
-          
-          {selectedItem ? (
-            /* PROJECT NOTEPAD */
-            <div className="glass-card border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden transition-all duration-300">
-              
-              {/* Notepad Header */}
-              <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="min-w-0 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${priorityStyles[selectedItem.prioridad]?.badge}`}>
-                      Prioridad {selectedItem.prioridad}
-                    </span>
-                    {selectedItem.completado ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
-                        Terminado
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1 animate-pulse">
-                        Pendiente
-                      </span>
-                    )}
-                  </div>
-                  <h2 className="text-white font-extrabold text-lg tracking-tight leading-snug">
-                    {selectedItem.titulo}
-                  </h2>
-                  <div className="w-full mt-1.5 max-w-2xl">
-                    <textarea
-                      value={editorDescription}
-                      onChange={(e) => {
-                        setEditorDescription(e.target.value);
-                        setIsEditorDirty(true);
-                      }}
-                      placeholder="Descripción breve del pendiente (puedes editarla aquí)..."
-                      className="w-full bg-[#090d16]/30 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none transition-all resize-none leading-relaxed h-14"
-                    />
+        {/* RIGHT COLUMN: Notepad Editor Workspace */}
+        {selectedId !== null && (
+          <section className="lg:col-span-8 xl:col-span-9 flex flex-col animate-fade-in">
+            
+            {selectedId === "general" ? (
+              /* GENERAL NOTEPAD */
+              <div className="glass-card border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden transition-all duration-300">
+                
+                {/* Notepad Header */}
+                <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h2 className="text-white font-extrabold text-base flex items-center gap-2">
+                      <StickyNote className="w-5 h-5 text-emerald-400" />
+                      Bloc de Notas Rápido / Notero General
+                    </h2>
+                    <p className="text-xs text-gray-400">
+                      Espacio compartido para anotaciones rápidas, links temporales y recordatorios globales.
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2 text-[10px] text-gray-500 shrink-0">
-                  <div className="flex gap-2">
-                    {/* Toggle status directly from header */}
+                {/* Textarea Workspace */}
+                <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30">
+                  <textarea
+                    value={generalNotes}
+                    onChange={(e) => setGeneralNotes(e.target.value)}
+                    placeholder="Utiliza este bloc de notas general para plasmar recordatorios rápidos, ideas o pegar textos que necesites tener a mano mientras trabajas en los proyectos..."
+                    className="w-full flex-1 bg-[#090d16]/50 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none transition-all resize-none leading-relaxed font-mono shadow-inner min-h-[300px]"
+                  />
+                </div>
+
+                {/* Notepad Footer */}
+                <div className="p-4 border-t border-white/10 bg-[#0d131f]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                    {generalLastSaved ? (
+                      <>
+                        <span>Último guardado:</span>
+                        <span className="font-medium text-gray-400">
+                          {generalLastSaved.toLocaleTimeString("es-AR")} - {generalLastSaved.toLocaleDateString("es-AR")}
+                        </span>
+                      </>
+                    ) : (
+                      <span>Bloc de notas en la nube. Escribe y pulsa guardar.</span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 w-full sm:w-auto">
                     <button
-                      onClick={() => handleToggleCompletado(selectedItem.id, selectedItem.completado)}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                        selectedItem.completado
-                          ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
-                          : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                      onClick={() => setSelectedId(null)}
+                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+                    >
+                      Cerrar Bloc
+                    </button>
+                    <button
+                      onClick={handleSaveGeneralNotes}
+                      disabled={savingGeneral}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-500/10 active:scale-95 transition-all"
+                    >
+                      {savingGeneral ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      Guardar Bloc General
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            ) : selectedItem ? (
+              /* PROJECT NOTEPAD */
+              <div className="glass-card border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden transition-all duration-300">
+                
+                {/* Notepad Header */}
+                <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${priorityStyles[selectedItem.prioridad]?.badge}`}>
+                        Prioridad {selectedItem.prioridad}
+                      </span>
+                      {selectedItem.completado ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
+                          Terminado
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1 animate-pulse">
+                          Pendiente
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="text-white font-extrabold text-lg tracking-tight leading-snug">
+                      {selectedItem.titulo}
+                    </h2>
+                    <div className="w-full mt-1.5 max-w-2xl">
+                      <textarea
+                        value={editorDescription}
+                        onChange={(e) => {
+                          setEditorDescription(e.target.value);
+                          setIsEditorDirty(true);
+                        }}
+                        placeholder="Descripción breve del pendiente (puedes editarla aquí)..."
+                        className="w-full bg-[#090d16]/30 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none transition-all resize-none leading-relaxed h-14"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2 text-[10px] text-gray-500 shrink-0">
+                    <div className="flex gap-2">
+                      {/* Toggle status directly from header */}
+                      <button
+                        onClick={() => handleToggleCompletado(selectedItem.id, selectedItem.completado)}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          selectedItem.completado
+                            ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                            : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                        }`}
+                      >
+                        {selectedItem.completado ? (
+                          <>Reabrir</>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" /> Terminar
+                          </>
+                        )}
+                      </button>
+                      
+                      {/* Change Priority dropdown directly in header */}
+                      <select
+                        value={selectedItem.prioridad}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangePriority(selectedItem.id, e.target.value as "alta" | "media" | "baja")}
+                        className="bg-[#090d16] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50"
+                      >
+                        <option value="alta">Alta</option>
+                        <option value="media">Media</option>
+                        <option value="baja">Baja</option>
+                      </select>
+                    </div>
+
+                    <span className="mt-1">Creado por {selectedItem.creadoPor}</span>
+                  </div>
+                </div>
+
+                {/* Textarea Workspace */}
+                <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30 relative">
+                  <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
+                    <label htmlFor="project-notepad" className="font-semibold flex items-center gap-1.5 text-gray-300">
+                      <FileText className="w-4 h-4 text-emerald-400" />
+                      Bitácora de Notas / Notepad de Trabajo
+                    </label>
+                    {isEditorDirty && (
+                      <span className="text-amber-400 text-[10px] font-medium flex items-center gap-1 animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Cambios sin guardar
+                      </span>
+                    )}
+                  </div>
+
+                  <textarea
+                    id="project-notepad"
+                    value={editorNotes}
+                    onChange={(e) => {
+                      setEditorNotes(e.target.value);
+                      setIsEditorDirty(true);
+                    }}
+                    placeholder="Escribe notas de reuniones, llamadas, bitácoras de avance, tareas pendientes del proyecto, etc..."
+                    className="w-full flex-1 bg-[#090d16]/50 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none transition-all resize-none leading-relaxed font-sans shadow-inner min-h-[300px]"
+                  />
+                </div>
+
+                {/* Notepad Footer */}
+                <div className="p-4 border-t border-white/10 bg-[#0d131f]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                    {editorLastSaved ? (
+                      <>
+                        <span>Notas guardadas el:</span>
+                        <span className="font-medium text-gray-400">
+                          {editorLastSaved.toLocaleTimeString("es-AR")}
+                        </span>
+                      </>
+                    ) : (
+                      <span>Escribe arriba y presiona Guardar.</span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => setSelectedId(null)}
+                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+                    >
+                      Cerrar Bloc
+                    </button>
+                    <button
+                      onClick={handleSaveEditorNotes}
+                      disabled={savingEditor}
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg active:scale-95 transition-all ${
+                        isEditorDirty
+                          ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-emerald-500/10"
+                          : "bg-white/10 text-gray-400 cursor-not-allowed border border-white/5"
                       }`}
                     >
-                      {selectedItem.completado ? (
-                        <>Reabrir</>
+                      {savingEditor ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <>
-                          <Check className="w-3.5 h-3.5" /> Terminar
-                        </>
+                        <Save className="w-3.5 h-3.5" />
                       )}
+                      Guardar Notas
                     </button>
-                    
-                    {/* Change Priority dropdown directly in header */}
-                    <select
-                      value={selectedItem.prioridad}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangePriority(selectedItem.id, e.target.value as "alta" | "media" | "baja")}
-                      className="bg-[#090d16] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50"
-                    >
-                      <option value="alta">Alta</option>
-                      <option value="media">Media</option>
-                      <option value="baja">Baja</option>
-                    </select>
                   </div>
-
-                  <span className="mt-1">Creado por {selectedItem.creadoPor}</span>
-                </div>
-              </div>
-
-              {/* Textarea Workspace */}
-              <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30 relative">
-                <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
-                  <label htmlFor="project-notepad" className="font-semibold flex items-center gap-1.5 text-gray-300">
-                    <FileText className="w-4 h-4 text-emerald-400" />
-                    Bitácora de Notas / Notepad de Trabajo
-                  </label>
-                  {isEditorDirty && (
-                    <span className="text-amber-400 text-[10px] font-medium flex items-center gap-1 animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Cambios sin guardar
-                    </span>
-                  )}
                 </div>
 
-                <textarea
-                  id="project-notepad"
-                  value={editorNotes}
-                  onChange={(e) => {
-                    setEditorNotes(e.target.value);
-                    setIsEditorDirty(true);
-                  }}
-                  placeholder="Escribe notas de reuniones, llamadas, bitácoras de avance, tareas pendientes del proyecto, etc..."
-                  className="w-full flex-1 bg-[#090d16]/50 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none transition-all resize-none leading-relaxed font-sans shadow-inner min-h-[300px]"
-                />
               </div>
-
-              {/* Notepad Footer */}
-              <div className="p-4 border-t border-white/10 bg-[#0d131f]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                  {editorLastSaved ? (
-                    <>
-                      <span>Notas guardadas el:</span>
-                      <span className="font-medium text-gray-400">
-                        {editorLastSaved.toLocaleTimeString("es-AR")}
-                      </span>
-                    </>
-                  ) : (
-                    <span>Escribe arriba y presiona Guardar.</span>
-                  )}
-                </div>
-
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
-                  >
-                    Cerrar Bloc
-                  </button>
-                  <button
-                    onClick={handleSaveEditorNotes}
-                    disabled={savingEditor}
-                    className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg active:scale-95 transition-all ${
-                      isEditorDirty
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-emerald-500/10"
-                        : "bg-white/10 text-gray-400 cursor-not-allowed border border-white/5"
-                    }`}
-                  >
-                    {savingEditor ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Save className="w-3.5 h-3.5" />
-                    )}
-                    Guardar Notas
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          ) : (
-            /* GENERAL NOTEPAD (when no project is selected) */
-            <div className="glass-card border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden transition-all duration-300">
-              
-              {/* Notepad Header */}
-              <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <h2 className="text-white font-extrabold text-base flex items-center gap-2">
-                    <StickyNote className="w-5 h-5 text-emerald-400" />
-                    Bloc de Notas Rápido / Notero General
-                  </h2>
-                  <p className="text-xs text-gray-400">
-                    Espacio compartido para anotaciones rápidas, links temporales y recordatorios globales.
-                  </p>
-                </div>
-              </div>
-
-              {/* Textarea Workspace */}
-              <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30">
-                <textarea
-                  value={generalNotes}
-                  onChange={(e) => setGeneralNotes(e.target.value)}
-                  placeholder="Utiliza este bloc de notas general para plasmar recordatorios rápidos, ideas o pegar textos que necesites tener a mano mientras trabajas en los proyectos..."
-                  className="w-full flex-1 bg-[#090d16]/50 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none transition-all resize-none leading-relaxed font-mono shadow-inner min-h-[300px]"
-                />
-              </div>
-
-              {/* Notepad Footer */}
-              <div className="p-4 border-t border-white/10 bg-[#0d131f]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                  {generalLastSaved ? (
-                    <>
-                      <span>Último guardado:</span>
-                      <span className="font-medium text-gray-400">
-                        {generalLastSaved.toLocaleTimeString("es-AR")} - {generalLastSaved.toLocaleDateString("es-AR")}
-                      </span>
-                    </>
-                  ) : (
-                    <span>Bloc de notas en la nube. Escribe y pulsa guardar.</span>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleSaveGeneralNotes}
-                  disabled={savingGeneral}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-500/10 active:scale-95 transition-all"
-                >
-                  {savingGeneral ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Save className="w-3.5 h-3.5" />
-                  )}
-                  Guardar Bloc General
-                </button>
-              </div>
-
-            </div>
-          )}
-        </section>
+            ) : null}
+          </section>
+        )}
 
       </div>
 
