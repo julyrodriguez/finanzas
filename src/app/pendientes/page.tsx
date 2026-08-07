@@ -67,6 +67,7 @@ export default function PendientesPage() {
   // Selection & Editor state
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorNotes, setEditorNotes] = useState<string>("");
+  const [editorDescription, setEditorDescription] = useState<string>("");
   const [isEditorDirty, setIsEditorDirty] = useState<boolean>(false);
   const [savingEditor, setSavingEditor] = useState<boolean>(false);
   const [editorLastSaved, setEditorLastSaved] = useState<Date | null>(null);
@@ -182,7 +183,8 @@ export default function PendientesPage() {
   useEffect(() => {
     setTimeout(() => {
       if (selectedItem) {
-        setEditorNotes(selectedItem.notasAdicionales);
+        setEditorNotes(selectedItem.notasAdicionales || "");
+        setEditorDescription(selectedItem.descripcion || "");
         setIsEditorDirty(false);
         setEditorLastSaved(
           selectedItem.completedAt && typeof selectedItem.completedAt.toDate === "function"
@@ -191,6 +193,7 @@ export default function PendientesPage() {
         );
       } else {
         setEditorNotes("");
+        setEditorDescription("");
         setIsEditorDirty(false);
       }
     }, 0);
@@ -226,6 +229,7 @@ export default function PendientesPage() {
       const docRef = doc(db, "pendientes", selectedId);
       await updateDoc(docRef, {
         notasAdicionales: editorNotes,
+        descripcion: editorDescription,
         updatedAt: serverTimestamp()
       });
       setIsEditorDirty(false);
@@ -410,7 +414,7 @@ export default function PendientesPage() {
         <section className="lg:col-span-5 xl:col-span-4 flex flex-col gap-4">
           
           {/* Header Stats & Action */}
-          <div className="glass-card p-4.5 border border-white/10 rounded-2xl flex flex-col gap-3.5">
+          <div className="glass-card p-3.5 border border-white/10 rounded-2xl flex flex-col gap-2.5">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-white font-bold text-base flex items-center gap-2">
@@ -434,7 +438,7 @@ export default function PendientesPage() {
             <div className="flex flex-wrap gap-1 bg-[#090d16] p-1 rounded-xl border border-white/5">
               <button
                 onClick={() => setFilterEstado("pendientes")}
-                className={`flex-1 text-center py-1.5 text-xs font-medium rounded-lg transition-all ${
+                className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
                   filterEstado === "pendientes"
                     ? "bg-white/10 text-white shadow-sm"
                     : "text-gray-400 hover:text-white"
@@ -444,7 +448,7 @@ export default function PendientesPage() {
               </button>
               <button
                 onClick={() => setFilterEstado("completados")}
-                className={`flex-1 text-center py-1.5 text-xs font-medium rounded-lg transition-all ${
+                className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
                   filterEstado === "completados"
                     ? "bg-white/10 text-white shadow-sm"
                     : "text-gray-400 hover:text-white"
@@ -454,7 +458,7 @@ export default function PendientesPage() {
               </button>
               <button
                 onClick={() => setFilterEstado("todos")}
-                className={`flex-1 text-center py-1.5 text-xs font-medium rounded-lg transition-all ${
+                className={`flex-1 text-center py-1 text-xs font-medium rounded-lg transition-all ${
                   filterEstado === "todos"
                     ? "bg-white/10 text-white shadow-sm"
                     : "text-gray-400 hover:text-white"
@@ -491,7 +495,7 @@ export default function PendientesPage() {
           </div>
 
           {/* Items List */}
-          <div className="flex-1 flex flex-col gap-2.5 overflow-y-auto max-h-[calc(100vh-23rem)] pr-1 scrollbar-thin">
+          <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin">
             {loading ? (
               <div className="glass-card p-8 text-center flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
@@ -523,23 +527,23 @@ export default function PendientesPage() {
                   <div
                     key={item.id}
                     onClick={() => setSelectedId(item.id)}
-                    className={`group relative flex flex-col p-4 rounded-xl border transition-all cursor-pointer bg-gradient-to-br ${
+                    className={`group relative flex flex-col p-2.5 rounded-xl border transition-all cursor-pointer bg-gradient-to-br ${
                       isSelected
                         ? "bg-[#0d131f] border-emerald-500/50 shadow-md shadow-emerald-500/5 ring-1 ring-emerald-500/30"
                         : "bg-[#0d131f]/40 hover:bg-[#0d131f]/75 border-white/5 " + style.border
                     }`}
                   >
                     {/* Glowing side accent */}
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${style.dot}`} />
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${style.dot}`} />
 
                     {/* Card Content */}
-                    <div className="pl-2.5 flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="pl-1.5 flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0 space-y-1">
                         
                         {/* Title & Priority Badge */}
                         <div className="flex flex-wrap items-center gap-2">
                           <span
-                            className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full border ${style.badge}`}
+                            className={`text-[8.5px] uppercase tracking-wider font-bold px-1.5 py-0 rounded-full border ${style.badge}`}
                           >
                             {item.prioridad}
                           </span>
@@ -565,15 +569,15 @@ export default function PendientesPage() {
 
                         {/* Description Snippet */}
                         {item.descripcion && (
-                          <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
+                          <p className="text-[10px] text-gray-400 line-clamp-1 leading-relaxed">
                             {item.descripcion}
                           </p>
                         )}
 
                         {/* Meta Info */}
-                        <div className="flex items-center gap-3 pt-1.5 text-[10px] text-gray-500">
+                        <div className="flex items-center gap-2.5 pt-0.5 text-[9px] text-gray-500">
                           <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-gray-600" />
+                            <Clock className="w-2.5 h-2.5 text-gray-600" />
                             {item.createdAt 
                               ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("es-AR")
                               : "Reciente"}
@@ -653,11 +657,17 @@ export default function PendientesPage() {
                   <h2 className="text-white font-extrabold text-lg tracking-tight leading-snug">
                     {selectedItem.titulo}
                   </h2>
-                  {selectedItem.descripcion && (
-                    <p className="text-xs text-gray-400 leading-relaxed max-w-2xl">
-                      {selectedItem.descripcion}
-                    </p>
-                  )}
+                  <div className="w-full mt-1.5 max-w-2xl">
+                    <textarea
+                      value={editorDescription}
+                      onChange={(e) => {
+                        setEditorDescription(e.target.value);
+                        setIsEditorDirty(true);
+                      }}
+                      placeholder="Descripción breve del pendiente (puedes editarla aquí)..."
+                      className="w-full bg-[#090d16]/30 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none transition-all resize-none leading-relaxed h-14"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2 text-[10px] text-gray-500 shrink-0">
