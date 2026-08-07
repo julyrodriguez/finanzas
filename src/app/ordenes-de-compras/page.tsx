@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -89,6 +89,9 @@ export default function OrdenesDeComprasPage() {
   // Pagination State: Limit initial query reads to 15
   const [queryLimit, setQueryLimit] = useState(15);
 
+  // Filter creator state
+  const [filterCreadoPor, setFilterCreadoPor] = useState<string>("todos");
+
   // Modal state for Add/Edit Order
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenCompra | null>(null);
@@ -126,6 +129,24 @@ export default function OrdenesDeComprasPage() {
   };
 
   const isSearching = searchQuery.trim() !== "";
+
+  // Unique list of creators
+  const uniqueCreators = useMemo(() => {
+    const set = new Set<string>();
+    // Pre-populate with standard requested users
+    set.add("julian");
+    set.add("oalvarez");
+    set.add("talbrecht");
+    
+    // Scan loaded orders to add any others
+    ordenes.forEach(o => {
+      if (o.creadoPor) {
+        set.add(o.creadoPor.trim().toLowerCase());
+      }
+    });
+    
+    return Array.from(set);
+  }, [ordenes]);
 
   // Load Firestore real-time data with query limits and status filters
   useEffect(() => {
@@ -661,7 +682,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
       return true;
     })();
 
-    return matchesSearch && matchesEmpresa && matchesEstado;
+    const matchesCreadoPor = (() => {
+      if (filterCreadoPor === "todos") return true;
+      return (orden.creadoPor || "").toLowerCase().trim() === filterCreadoPor.toLowerCase().trim();
+    })();
+
+    return matchesSearch && matchesEmpresa && matchesEstado && matchesCreadoPor;
   });
 
   // Limit visible items to queryLimit (slicing off the extra placeholder item we fetched to check hasMore)
@@ -795,6 +821,26 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                 </button>
               ))}
             </div>
+
+            {/* Filter Dropdown for Creador */}
+            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
+              <span className="text-gray-400 text-[11px] px-2 font-medium">Creador:</span>
+              <select
+                value={filterCreadoPor}
+                onChange={(e) => {
+                  setFilterCreadoPor(e.target.value);
+                  setQueryLimit(15);
+                }}
+                className="bg-transparent text-gray-300 font-semibold px-2 py-1.5 focus:outline-none cursor-pointer text-xs select-none pr-3 lowercase"
+              >
+                <option value="todos" className="bg-[#090d16] text-gray-300 uppercase">Todos</option>
+                {uniqueCreators.map((creator) => (
+                  <option key={creator} value={creator} className="bg-[#090d16] text-gray-300">
+                    {creator}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Leyenda de Estados */}
@@ -851,7 +897,32 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                       <th className="px-4 py-3.5">Empresa</th>
                       <th className="px-4 py-3.5">N° Solicitud</th>
                       <th className="px-4 py-3.5">N° OC & Copiar</th>
-                      <th className="px-4 py-3.5">Creado Por</th>
+                      <th className="px-4 py-3.5">
+                        <div className="flex items-center gap-1">
+                          <span>Creado Por</span>
+                          <select
+                            value={filterCreadoPor}
+                            onChange={(e) => {
+                              setFilterCreadoPor(e.target.value);
+                              setQueryLimit(15);
+                            }}
+                            className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-semibold text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none pr-4.5 lowercase"
+                            style={{ 
+                              backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(156, 163, 175, 0.8)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
+                              backgroundPosition: 'right 4px center', 
+                              backgroundSize: '8px', 
+                              backgroundRepeat: 'no-repeat' 
+                            }}
+                          >
+                            <option value="todos" className="bg-[#090d16] text-gray-300 uppercase">Todos</option>
+                            {uniqueCreators.map((creator) => (
+                              <option key={creator} value={creator} className="bg-[#090d16] text-gray-300">
+                                {creator}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </th>
                       <th className="px-4 py-3.5">Proveedor</th>
                       <th className="px-4 py-3.5">Monto</th>
                       <th className="px-4 py-3.5">Forma Pago</th>
