@@ -580,7 +580,7 @@ export default function PendientesPage() {
         {/* LEFT COLUMN: List of Pendientes */}
         <section className={`flex flex-col gap-4 transition-all duration-300 ${
           selectedId !== null
-            ? "lg:col-span-4 xl:col-span-3"
+            ? "lg:col-span-5 xl:col-span-5"
             : "col-span-12"
         }`}>
           
@@ -695,7 +695,7 @@ export default function PendientesPage() {
           {/* Items List */}
           <div className={
             selectedId !== null
-              ? "flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin"
+              ? "flex-initial flex flex-col gap-1.5"
               : "flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin"
           }>
             {loading ? (
@@ -874,7 +874,7 @@ export default function PendientesPage() {
 
           {/* Stepper map: only in edit mode (selectedItem is defined) */}
           {selectedId !== null && selectedId !== "general" && selectedItem && (
-            <div className="glass-card p-3 border border-white/10 rounded-2xl flex flex-col gap-2 bg-[#090d16]/10 animate-fade-in mt-1">
+            <div className="glass-card p-4 border border-white/10 rounded-2xl flex flex-col gap-2.5 bg-[#090d16]/10 animate-fade-in mt-1 flex-1 min-h-[300px] max-h-[500px]">
               <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
                 <h3 className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
                   <ListTodo className="w-4 h-4 text-emerald-400" />
@@ -887,7 +887,7 @@ export default function PendientesPage() {
                 )}
               </div>
 
-              <div className="space-y-0.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+              <div className="space-y-0.5 overflow-y-auto pr-1 scrollbar-thin flex-1">
                 {/* Render insertion line at index 0 */}
                 {renderInsertionLine(0)}
 
@@ -1017,7 +1017,7 @@ export default function PendientesPage() {
 
         {/* RIGHT COLUMN: Notepad Editor Workspace */}
         {selectedId !== null && (
-          <section className="lg:col-span-8 xl:col-span-9 flex flex-col animate-fade-in">
+          <section className="lg:col-span-7 xl:col-span-7 flex flex-col animate-fade-in">
             
             {selectedId === "general" ? (
               /* GENERAL NOTEPAD */
