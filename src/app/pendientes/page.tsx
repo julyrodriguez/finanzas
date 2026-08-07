@@ -16,9 +16,7 @@ import {
   serverTimestamp,
   setDoc,
   getDoc,
-  Timestamp,
-  where,
-  limit
+  Timestamp
 } from "firebase/firestore";
 import {
   Plus,
@@ -71,10 +69,8 @@ export default function PendientesPage() {
   const { user } = useAuth();
 
   // State lists
-  const [pendingItems, setPendingItems] = useState<Pendiente[]>([]);
-  const [completedItems, setCompletedItems] = useState<Pendiente[]>([]);
+  const [allItems, setAllItems] = useState<Pendiente[]>([]);
   const [completedLimit, setCompletedLimit] = useState<number>(10);
-  const [hasMoreCompleted, setHasMoreCompleted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,15 +121,40 @@ export default function PendientesPage() {
 
   const isSearching = searchTerm.trim() !== "";
 
+  // Split and sort in memory to avoid Firestore composite index errors
+  const pendingItems = useMemo(() => {
+    return allItems.filter(item => !item.completado);
+  }, [allItems]);
+
+  const completedItemsAll = useMemo(() => {
+    const list = allItems.filter(item => item.completado);
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      const timeA = (a.completedAt && "seconds" in a.completedAt) ? a.completedAt.seconds : (a.createdAt?.seconds || 0);
+      const timeB = (b.completedAt && "seconds" in b.completedAt) ? b.completedAt.seconds : (b.createdAt?.seconds || 0);
+      return timeB - timeA;
+    });
+    return sorted;
+  }, [allItems]);
+
+  const completedItems = useMemo(() => {
+    return completedItemsAll.slice(0, completedLimit);
+  }, [completedItemsAll, completedLimit]);
+
+  const hasMoreCompleted = useMemo(() => {
+    return completedItemsAll.length > completedLimit;
+  }, [completedItemsAll, completedLimit]);
+
   // Combine pending and completed items depending on filterEstado
   const pendientes = useMemo(() => {
     let list: Pendiente[] = [];
     if (filterEstado === "todos") {
-      list = [...pendingItems, ...completedItems];
+      const activeCompleted = isSearching ? completedItemsAll : completedItems;
+      list = [...pendingItems, ...activeCompleted];
     } else if (filterEstado === "pendientes") {
       list = pendingItems;
     } else {
-      list = completedItems;
+      list = isSearching ? completedItemsAll : completedItems;
     }
     
     // Sort by priority: alta (0) > media (1) > baja (2). If same priority, sort by createdAt desc.
@@ -151,9 +172,9 @@ export default function PendientesPage() {
     });
     
     return sorted;
-  }, [pendingItems, completedItems, filterEstado]);
+  }, [pendingItems, completedItems, completedItemsAll, filterEstado, isSearching]);
 
-  // 1. Fetch pending items (always all)
+  // 1. Fetch all items in real time
   useEffect(() => {
     if (!db) {
       setTimeout(() => {
@@ -164,7 +185,7 @@ export default function PendientesPage() {
     }
 
     const colRef = collection(db, "pendientes");
-    const q = query(colRef, where("completado", "==", false), orderBy("createdAt", "desc"));
+    const q = query(colRef, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(
       q,
@@ -186,7 +207,7 @@ export default function PendientesPage() {
         });
 
         setTimeout(() => {
-          setPendingItems(list);
+          setAllItems(list);
           setLoading(false);
           setError(null);
         }, 0);
@@ -202,63 +223,6 @@ export default function PendientesPage() {
 
     return () => unsubscribe();
   }, [db]);
-
-  // 1.1 Fetch completed items (with limit, or large limit if searching)
-  useEffect(() => {
-    if (!db) return;
-
-    const colRef = collection(db, "pendientes");
-    // If searching, fetch up to 300 to do wide client search, otherwise use completedLimit
-    const activeLimit = searchTerm.trim() !== "" ? 300 : completedLimit;
-
-    const q = query(
-      colRef,
-      where("completado", "==", true),
-      orderBy("completedAt", "desc"),
-      limit(activeLimit + 1)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docs = snapshot.docs;
-        const hasMore = docs.length > activeLimit;
-        const listDocs = hasMore ? docs.slice(0, activeLimit) : docs;
-
-        const list: Pendiente[] = listDocs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            titulo: data.titulo || "",
-            descripcion: data.descripcion || "",
-            prioridad: data.prioridad || "media",
-            completado: Boolean(data.completado),
-            creadoPor: data.creadoPor || "Usuario",
-            createdAt: data.createdAt || null,
-            completedAt: data.completedAt || null,
-            notasAdicionales: data.notasAdicionales || "",
-            etapas: data.etapas || []
-          };
-        });
-
-        setTimeout(() => {
-          setCompletedItems(list);
-          setHasMoreCompleted(hasMore);
-          setLoading(false);
-          setError(null);
-        }, 0);
-      },
-      (err) => {
-        console.error("Error loading completed items:", err);
-        setTimeout(() => {
-          setError("No se pudieron cargar los terminados.");
-          setLoading(false);
-        }, 0);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [db, completedLimit, searchTerm]);
 
   // 2. Fetch General Notepad contents once
   useEffect(() => {
