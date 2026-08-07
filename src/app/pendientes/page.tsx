@@ -38,7 +38,17 @@ import {
   Edit2
 } from "lucide-react";
 
+const generateUniqueId = () => {
+  return Date.now().toString() + Math.random().toString(36).substring(2, 9);
+};
+
 // Interfaces
+interface Etapa {
+  id: string;
+  titulo: string;
+  completado: boolean;
+}
+
 interface Pendiente {
   id: string;
   titulo: string;
@@ -49,6 +59,7 @@ interface Pendiente {
   createdAt: Timestamp | null;
   completedAt: Timestamp | null;
   notasAdicionales: string;
+  etapas?: Etapa[];
 }
 
 export default function PendientesPage() {
@@ -72,6 +83,10 @@ export default function PendientesPage() {
   const [isEditorDirty, setIsEditorDirty] = useState<boolean>(false);
   const [savingEditor, setSavingEditor] = useState<boolean>(false);
   const [editorLastSaved, setEditorLastSaved] = useState<Date | null>(null);
+
+  // Stepper / Etapas state
+  const [insertingAtIndex, setInsertingAtIndex] = useState<number | null>(null);
+  const [newStepTitle, setNewStepTitle] = useState<string>("");
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -131,7 +146,8 @@ export default function PendientesPage() {
             creadoPor: data.creadoPor || "Usuario",
             createdAt: data.createdAt || null,
             completedAt: data.completedAt || null,
-            notasAdicionales: data.notasAdicionales || ""
+            notasAdicionales: data.notasAdicionales || "",
+            etapas: data.etapas || []
           };
         });
 
@@ -255,6 +271,119 @@ export default function PendientesPage() {
     } finally {
       setSavingEditor(false);
     }
+  };
+
+  // Etapas / Pasos handlers
+  const handleInsertEtapa = async (index: number) => {
+    if (!db || !selectedId || !newStepTitle.trim()) return;
+    try {
+      const docRef = doc(db, "pendientes", selectedId);
+      const newStep: Etapa = {
+        id: "etapa-" + generateUniqueId(),
+        titulo: newStepTitle.trim(),
+        completado: false
+      };
+      
+      const currentEtapas = selectedItem?.etapas || [];
+      const updated = [...currentEtapas];
+      updated.splice(index, 0, newStep);
+
+      await updateDoc(docRef, { etapas: updated });
+      setInsertingAtIndex(null);
+      setNewStepTitle("");
+      showToast("Etapa agregada", "success");
+    } catch (err) {
+      console.error("Error inserting stage:", err);
+      showToast("Error al agregar etapa", "error");
+    }
+  };
+
+  const handleToggleEtapa = async (stepId: string, currentCompletado: boolean) => {
+    if (!db || !selectedId) return;
+    try {
+      const docRef = doc(db, "pendientes", selectedId);
+      const currentEtapas = selectedItem?.etapas || [];
+      const updated = currentEtapas.map(step =>
+        step.id === stepId ? { ...step, completado: !currentCompletado } : step
+      );
+
+      await updateDoc(docRef, { etapas: updated });
+    } catch (err) {
+      console.error("Error toggling stage:", err);
+      showToast("Error al actualizar etapa", "error");
+    }
+  };
+
+  const handleDeleteEtapa = async (stepId: string) => {
+    if (!db || !selectedId) return;
+    try {
+      const docRef = doc(db, "pendientes", selectedId);
+      const currentEtapas = selectedItem?.etapas || [];
+      const updated = currentEtapas.filter(step => step.id !== stepId);
+
+      await updateDoc(docRef, { etapas: updated });
+      showToast("Etapa eliminada", "info");
+    } catch (err) {
+      console.error("Error deleting stage:", err);
+      showToast("Error al eliminar etapa", "error");
+    }
+  };
+
+  const renderInsertionLine = (index: number) => {
+    const isInsertingHere = insertingAtIndex === index;
+
+    if (isInsertingHere) {
+      return (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleInsertEtapa(index);
+          }}
+          className="flex items-center gap-1.5 py-1 px-2.5 bg-white/5 rounded-xl border border-white/10 my-1 animate-fade-in"
+        >
+          <input
+            type="text"
+            placeholder="Nombre de la etapa..."
+            value={newStepTitle}
+            onChange={(e) => setNewStepTitle(e.target.value)}
+            className="flex-1 bg-transparent text-xs text-white placeholder-gray-500 focus:outline-none py-0.5"
+            autoFocus
+          />
+          <button
+            type="submit"
+            className="px-2 py-0.5 rounded bg-emerald-500 text-[10px] font-bold text-white hover:bg-emerald-400"
+          >
+            Insertar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInsertingAtIndex(null);
+              setNewStepTitle("");
+            }}
+            className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-semibold text-gray-400 hover:text-white"
+          >
+            Cancelar
+          </button>
+        </form>
+      );
+    }
+
+    return (
+      <div className="group/line flex items-center justify-center h-3 relative my-0.5">
+        <div className="absolute inset-x-0 h-px bg-white/5 group-hover/line:bg-emerald-500/20 transition-colors" />
+        <button
+          onClick={() => {
+            setInsertingAtIndex(index);
+            setNewStepTitle("");
+          }}
+          className="z-10 w-4.5 h-4.5 rounded-full bg-[#0d131f] border border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-gray-500 hover:text-emerald-400 flex items-center justify-center opacity-0 group-hover/line:opacity-100 transition-all scale-75 hover:scale-100 cursor-pointer"
+          title="Insertar etapa aquí"
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      </div>
+    );
   };
 
   // 5. Add a new Pendiente
@@ -628,15 +757,33 @@ export default function PendientesPage() {
                         )}
 
                         {/* Meta Info */}
-                        <div className="flex items-center gap-2.5 pt-0.5 text-[9px] text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5 text-gray-600" />
-                            {item.createdAt 
-                              ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("es-AR")
-                              : "Reciente"}
-                          </span>
-                          <span className="truncate">Por: {item.creadoPor}</span>
+                        <div className="flex items-center justify-between gap-2.5 pt-0.5 text-[9px] text-gray-500">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="flex items-center gap-1 shrink-0">
+                              <Clock className="w-2.5 h-2.5 text-gray-600" />
+                              {item.createdAt 
+                                ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("es-AR")
+                                : "Reciente"}
+                            </span>
+                            <span className="truncate">Por: {item.creadoPor}</span>
+                          </div>
+
+                          {item.etapas && item.etapas.length > 0 && (
+                            <span className="flex items-center gap-0.5 shrink-0 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded text-[8px] font-bold">
+                              {item.etapas.filter(e => e.completado).length}/{item.etapas.length} pasos
+                            </span>
+                          )}
                         </div>
+
+                        {/* Tiny progress bar */}
+                        {item.etapas && item.etapas.length > 0 && (
+                          <div className="w-full bg-white/5 rounded-full h-1 mt-1.5 overflow-hidden">
+                            <div 
+                              className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-500"
+                              style={{ width: `${(item.etapas.filter(e => e.completado).length / item.etapas.length) * 100}%` }}
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {/* Right actions inside card (Checkmark toggle, Edit & Delete) */}
@@ -838,10 +985,118 @@ export default function PendientesPage() {
                     </div>
 
                     <span className="mt-1">Creado por {selectedItem.creadoPor}</span>
-                  </div>
+                </div>
+              </div>
+
+              {/* Mapa de Etapas / Pasos */}
+              <div className="p-4.5 border-b border-white/5 bg-[#090d16]/10">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                    <ListTodo className="w-4 h-4 text-emerald-400" />
+                    Mapa de Pasos y Etapas
+                  </h3>
+                  {selectedItem.etapas && selectedItem.etapas.length > 0 && (
+                    <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/5 px-2 py-0.5 rounded-lg border border-emerald-500/10">
+                      {selectedItem.etapas.filter(e => e.completado).length}/{selectedItem.etapas.length} Completados
+                    </span>
+                  )}
                 </div>
 
-                {/* Textarea Workspace */}
+                <div className="space-y-0.5 max-h-[180px] overflow-y-auto pr-1 scrollbar-thin">
+                  {/* Render insertion line at index 0 */}
+                  {renderInsertionLine(0)}
+
+                  {(!selectedItem.etapas || selectedItem.etapas.length === 0) ? (
+                    <div className="text-center py-3 bg-[#090d16]/20 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-2">
+                      <span className="text-[10px] text-gray-500">Sin etapas definidas. Define la primera para comenzar el seguimiento.</span>
+                      {insertingAtIndex === 0 ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleInsertEtapa(0);
+                          }}
+                          className="flex items-center gap-1.5 max-w-sm w-full py-0.5 px-2 bg-[#090d16] rounded-lg border border-white/10 animate-fade-in"
+                        >
+                          <input
+                            type="text"
+                            placeholder="Nombre de etapa inicial..."
+                            value={newStepTitle}
+                            onChange={(e) => setNewStepTitle(e.target.value)}
+                            className="flex-1 bg-transparent text-[11px] text-white placeholder-gray-600 focus:outline-none py-0.5"
+                            autoFocus
+                          />
+                          <button
+                            type="submit"
+                            className="px-2 py-0.5 rounded bg-emerald-500 text-[10px] font-bold text-white hover:bg-emerald-400"
+                          >
+                            Agregar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInsertingAtIndex(null);
+                              setNewStepTitle("");
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-semibold text-gray-400 hover:text-white"
+                          >
+                            Cancelar
+                          </button>
+                        </form>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setInsertingAtIndex(0);
+                            setNewStepTitle("");
+                          }}
+                          className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-semibold flex items-center gap-1 transition-all"
+                        >
+                          <Plus className="w-3 h-3" /> Crear Etapa Inicial
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    selectedItem.etapas.map((step, idx) => (
+                      <div key={step.id}>
+                        {/* Step card */}
+                        <div className={`flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg border transition-all ${
+                          step.completado
+                            ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-200/80"
+                            : "bg-[#090d16]/30 border-white/5 text-gray-200"
+                        }`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button
+                              onClick={() => handleToggleEtapa(step.id, step.completado)}
+                              className={`p-1 rounded-md border transition-all ${
+                                step.completado
+                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                                  : "bg-white/5 border-white/10 hover:border-emerald-500/40 text-gray-500 hover:text-emerald-400"
+                              }`}
+                            >
+                              {step.completado ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
+                            </button>
+                            <span className={`text-xs font-medium truncate ${step.completado ? "line-through text-gray-500" : ""}`}>
+                              {idx + 1}. {step.titulo}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => handleDeleteEtapa(step.id)}
+                            className="p-1 rounded bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
+                            title="Eliminar etapa"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Render insertion line at index idx + 1 */}
+                        {renderInsertionLine(idx + 1)}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Textarea Workspace */}
                 <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30 relative">
                   <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
                     <label htmlFor="project-notepad" className="font-semibold flex items-center gap-1.5 text-gray-300">
