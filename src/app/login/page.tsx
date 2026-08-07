@@ -46,20 +46,21 @@ export default function LoginPage() {
         await loginWithEmail(fullEmail, password);
       }
       router.push("/");
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      if (err.code === "auth/email-already-in-use") {
+      const error = err as { code?: string };
+      if (error.code === "auth/email-already-in-use") {
         setError("El usuario ya existe en el sistema.");
-      } else if (err.code === "auth/weak-password") {
+      } else if (error.code === "auth/weak-password") {
         setError("La contraseña debe tener al menos 6 caracteres.");
       } else if (
-        err.code === "auth/invalid-credential" || 
-        err.code === "auth/user-not-found" || 
-        err.code === "auth/wrong-password"
+        error.code === "auth/invalid-credential" || 
+        error.code === "auth/user-not-found" || 
+        error.code === "auth/wrong-password"
       ) {
         setError("Usuario o contraseña incorrectos.");
       } else {
-        setError("Error al procesar la solicitud. Inténtalo de nuevo.");
+        setError("Ocurrió un error inesperado. Intente nuevamente.");
       }
     } finally {
       setLoading(false);

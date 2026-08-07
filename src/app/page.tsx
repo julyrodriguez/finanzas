@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { 
   Plus, 
@@ -8,7 +8,6 @@ import {
   ChevronRight, 
   Calendar as CalendarIcon, 
   Clock, 
-  Tag, 
   Trash2, 
   X, 
   AlertCircle, 
@@ -23,7 +22,8 @@ import {
   onSnapshot, 
   doc, 
   setDoc, 
-  deleteDoc 
+  deleteDoc,
+  Firestore
 } from "firebase/firestore";
 
 interface CalendarEvent {
@@ -169,11 +169,13 @@ export default function CalendarioPage() {
 
   const loadLocalMockEvents = () => {
     const mock = getMockEvents();
-    setEvents(mock);
+    setTimeout(() => {
+      setEvents(mock);
+    }, 0);
     localStorage.setItem("finanzas-calendar-events", JSON.stringify(mock));
   };
 
-  const preloadMockEventsToFirestore = async (db: any) => {
+  const preloadMockEventsToFirestore = async (db: Firestore) => {
     localStorage.setItem("preloaded-firestore-calendar", "true");
     const mocks = getMockEvents();
     for (const evt of mocks) {
@@ -194,12 +196,17 @@ export default function CalendarioPage() {
       const saved = localStorage.getItem("finanzas-calendar-events");
       if (saved) {
         try {
-          setEvents(JSON.parse(saved));
-        } catch (e) {
-          console.error("Error parsing saved events:", e);
+          const parsedEvents = JSON.parse(saved);
+          setTimeout(() => {
+            setEvents(parsedEvents);
+          }, 0);
+        } catch (error) {
+          console.error("Error parsing saved events:", error);
         }
       } else {
-        loadLocalMockEvents();
+        setTimeout(() => {
+          loadLocalMockEvents();
+        }, 0);
       }
       return;
     }
@@ -231,20 +238,28 @@ export default function CalendarioPage() {
           }
         }
 
-        setEvents(docs);
+        setTimeout(() => {
+          setEvents(docs);
+        }, 0);
       },
       (error) => {
         console.error("Firestore loading error, using local fallback:", error);
         const saved = localStorage.getItem("finanzas-calendar-events");
         if (saved) {
           try {
-            setEvents(JSON.parse(saved));
-          } catch (e) {}
+            const parsedEvents = JSON.parse(saved);
+            setTimeout(() => {
+              setEvents(parsedEvents);
+            }, 0);
+          } catch (err) {
+            console.error("Error parsing saved events on fallback:", err);
+          }
         }
       }
     );
 
     return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. Navigation Helpers
@@ -446,7 +461,6 @@ export default function CalendarioPage() {
 
   // 5. Date Math for Week View
   const getDaysInWeek = () => {
-    const year = currentDate.getFullYear();
     // Shift so Monday is 0, Sunday is 6
     const dayOfWeek = (currentDate.getDay() + 6) % 7;
     
@@ -1154,7 +1168,7 @@ export default function CalendarioPage() {
                 <label className="block text-xs font-semibold text-gray-300 mb-1">Categoría</label>
                 <select
                   value={formCategory}
-                  onChange={(e: any) => setFormCategory(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormCategory(e.target.value as "finanzas" | "reunion" | "operaciones" | "personal")}
                   className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
                 >
                   <option value="finanzas" className="bg-[#0d131f] text-white">Finanzas (Verde)</option>

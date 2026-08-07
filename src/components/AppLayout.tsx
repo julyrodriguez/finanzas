@@ -5,21 +5,21 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { 
-  Home, 
   ShoppingBag, 
   TrendingUp, 
   Sparkles, 
   Clock, 
-  ShieldCheck,
-  Building2,
-  Menu,
-  X,
-  LogOut,
-  User as UserIcon,
-  Loader2,
-  Percent,
-  Calendar,
-  Calculator
+  ShieldCheck, 
+  Building2, 
+  Menu, 
+  X, 
+  LogOut, 
+  User as UserIcon, 
+  Loader2, 
+  Percent, 
+  Calendar, 
+  Calculator, 
+  ClipboardList 
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -34,14 +34,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const [theme, setTheme] = useState<"dark" | "pink">("dark");
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("app-theme");
-    if (savedTheme === "pink") {
-      setTheme("pink");
+  const [theme, setTheme] = useState<"dark" | "pink">(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("app-theme");
+      return savedTheme === "pink" ? "pink" : "dark";
     }
-  }, []);
+    return "dark";
+  });
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "pink" : "dark";
@@ -61,7 +60,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const menuItems: {
     name: string;
     href: string;
-    icon: any;
+    icon: React.ComponentType<{ className?: string }>;
     exact: boolean;
     badge?: string;
   }[] = [
@@ -70,6 +69,12 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       href: "/",
       icon: Calendar,
       exact: true,
+    },
+    {
+      name: "Pendientes",
+      href: "/pendientes",
+      icon: ClipboardList,
+      exact: false,
     },
     {
       name: "Órdenes de Compra",

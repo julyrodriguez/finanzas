@@ -3,18 +3,14 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { 
-  Percent, 
   Calculator, 
   Lock, 
   Unlock, 
   ShieldAlert, 
   Save, 
-  X, 
-  Building2, 
   Sparkles, 
   CheckCircle,
   HelpCircle,
-  TrendingUp,
   Copy
 } from "lucide-react";
 

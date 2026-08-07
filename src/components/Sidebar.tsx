@@ -13,7 +13,8 @@ import {
   Building2,
   Menu,
   X,
-  Calculator
+  Calculator,
+  ClipboardList
 } from "lucide-react";
 import { useState } from "react";
 
@@ -28,6 +29,12 @@ export function Sidebar() {
       icon: Home,
       exact: true,
       badge: "Próximamente",
+    },
+    {
+      name: "Pendientes",
+      href: "/pendientes",
+      icon: ClipboardList,
+      exact: false,
     },
     {
       name: "Órdenes de Compra",

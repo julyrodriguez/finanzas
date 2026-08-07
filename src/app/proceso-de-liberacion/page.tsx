@@ -105,8 +105,8 @@ export default function ProcesoDeLiberacionPage() {
 
         // Sort manually by creation time
         activeDocs.sort((a, b) => {
-          const timeA = a.createdAt?.seconds || 0;
-          const timeB = b.createdAt?.seconds || 0;
+          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
           return timeB - timeA;
         });
 

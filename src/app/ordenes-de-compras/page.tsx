@@ -17,7 +17,9 @@ import {
   limit,
   where,
   QueryConstraint,
-  getDocs
+  getDocs,
+  Timestamp,
+  FieldValue
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -39,6 +41,10 @@ import {
   ChevronDown,
   Link2
 } from "lucide-react";
+
+const generateUniqueId = () => {
+  return Date.now().toString() + Math.random().toString(36).substring(2, 9);
+};
 
 export interface Nota {
   id: string;
@@ -62,7 +68,7 @@ export interface OrdenCompra {
   cancelada?: boolean;
   creadoPor?: string;
   notas?: Nota[];
-  createdAt?: any;
+  createdAt?: Timestamp | FieldValue | null;
   relatedOC?: string;
   enviado?: boolean;
   firmado1?: boolean;
@@ -125,7 +131,9 @@ export default function OrdenesDeComprasPage() {
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(false);
+      }, 0);
       return;
     }
 
@@ -190,15 +198,17 @@ export default function OrdenesDeComprasPage() {
 
             // Sort manually on client to handle missing createdAt fields cleanly
             docs.sort((a, b) => {
-              const timeA = a.createdAt?.seconds || 0;
-              const timeB = b.createdAt?.seconds || 0;
+              const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+              const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
               return timeB - timeA;
             });
 
-            setOrdenes(docs);
-            setLoading(false);
+            setTimeout(() => {
+              setOrdenes(docs);
+              setLoading(false);
+            }, 0);
           },
-          (error: any) => {
+          (error: Error) => {
             // Check if error is due to missing index
             if (useFilters && error.message && error.message.includes("index")) {
               console.warn("Firestore index missing. Falling back to client-side filtering query...", error);
@@ -206,13 +216,17 @@ export default function OrdenesDeComprasPage() {
               startListener(false);
             } else {
               console.warn("Firestore snapshot listener error:", error);
-              setLoading(false);
+              setTimeout(() => {
+                setLoading(false);
+              }, 0);
             }
           }
         );
       } catch (err) {
         console.warn("Firestore collection error:", err);
-        setLoading(false);
+        setTimeout(() => {
+          setLoading(false);
+        }, 0);
       }
     };
 
@@ -403,6 +417,7 @@ export default function OrdenesDeComprasPage() {
         createdAt: serverTimestamp(),
       };
 
+      const tempId = generateUniqueId();
       if (db) {
         try {
           await addDoc(collection(db, "ordenes_compra"), newOrden);
@@ -411,10 +426,10 @@ export default function OrdenesDeComprasPage() {
           showToast("¡Orden de compra agregada!");
         } catch (err) {
           console.error("Error al agregar orden:", err);
-          setOrdenes((prev) => [{ id: Date.now().toString(), ...newOrden }, ...prev]);
+          setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
         }
       } else {
-        setOrdenes((prev) => [{ id: Date.now().toString(), ...newOrden }, ...prev]);
+        setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
       }
     }
 
@@ -448,7 +463,7 @@ export default function OrdenesDeComprasPage() {
     const formattedDate = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`;
 
     const nuevaNota: Nota = {
-      id: Date.now().toString(),
+      id: generateUniqueId(),
       texto: newNotaText.trim(),
       autor: getCleanUsername(),
       fecha: formattedDate,
@@ -699,7 +714,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                 <select
                   value={searchField}
                   onChange={(e) => {
-                    setSearchField(e.target.value as any);
+                    setSearchField(e.target.value as "todos" | "numSolicitud" | "numOC" | "razonSocial");
                     setQueryLimit(15);
                   }}
                   className="w-full sm:w-auto pl-3 pr-8 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none"
