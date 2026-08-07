@@ -141,7 +141,7 @@ export default function OrdenesDeComprasPage() {
     // Scan loaded orders to add any others
     ordenes.forEach(o => {
       if (o.creadoPor) {
-        set.add(o.creadoPor.trim().toLowerCase());
+        set.add(o.creadoPor.trim());
       }
     });
     
@@ -167,6 +167,27 @@ export default function OrdenesDeComprasPage() {
 
         if (isSearching) {
           q = query(colRef, orderBy("createdAt", "desc"), limit(300));
+        } else if (filterCreadoPor !== "todos") {
+          // If a specific creator is filtered, query exactly the latest 10 for them
+          const constraints: QueryConstraint[] = [
+            where("creadoPor", "==", filterCreadoPor),
+            orderBy("createdAt", "desc")
+          ];
+          
+          if (useFilters) {
+            if (filterEstado === "Liberadas") {
+              constraints.unshift(where("liberada", "==", true));
+            } else if (filterEstado === "Mandadas") {
+              constraints.unshift(where("mandada", "==", true));
+            } else if (filterEstado === "Entregadas") {
+              constraints.unshift(where("entregada", "==", true));
+            } else if (filterEstado === "Pendientes") {
+              constraints.unshift(where("liberada", "==", false));
+            }
+          }
+          
+          constraints.push(limit(10));
+          q = query(colRef, ...constraints);
         } else if (useFilters) {
           // Dynamic status filtering in Firestore to only read matching documents
           const constraints: QueryConstraint[] = [orderBy("createdAt", "desc")];
@@ -185,7 +206,7 @@ export default function OrdenesDeComprasPage() {
           constraints.push(limit(queryLimit + 1));
           q = query(colRef, ...constraints);
         } else {
-          // Fallback query (or when state is 'Todas')
+          // Fallback query (or when state is 'Todas' and Creador is 'Todos')
           q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 100));
         }
 
@@ -253,7 +274,7 @@ export default function OrdenesDeComprasPage() {
 
     startListener(true);
     return () => unsubscribe();
-  }, [queryLimit, isSearching, filterEstado]);
+  }, [queryLimit, isSearching, filterEstado, filterCreadoPor]);
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
@@ -820,26 +841,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                   {est}
                 </button>
               ))}
-            </div>
-
-            {/* Filter Dropdown for Creador */}
-            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
-              <span className="text-gray-400 text-[11px] px-2 font-medium">Creador:</span>
-              <select
-                value={filterCreadoPor}
-                onChange={(e) => {
-                  setFilterCreadoPor(e.target.value);
-                  setQueryLimit(15);
-                }}
-                className="bg-transparent text-gray-300 font-semibold px-2 py-1.5 focus:outline-none cursor-pointer text-xs select-none pr-3 lowercase"
-              >
-                <option value="todos" className="bg-[#090d16] text-gray-300 uppercase">Todos</option>
-                {uniqueCreators.map((creator) => (
-                  <option key={creator} value={creator} className="bg-[#090d16] text-gray-300">
-                    {creator}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 
