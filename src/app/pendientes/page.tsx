@@ -35,7 +35,8 @@ import {
   ListTodo,
   AlertTriangle,
   RefreshCw,
-  Edit2
+  Edit2,
+  Flag
 } from "lucide-react";
 
 const generateUniqueId = () => {
@@ -47,6 +48,7 @@ interface Etapa {
   id: string;
   titulo: string;
   completado: boolean;
+  esFinal?: boolean;
 }
 
 interface Pendiente {
@@ -314,6 +316,24 @@ export default function PendientesPage() {
     }
   };
 
+  const handleSetEtapaFinal = async (stepId: string) => {
+    if (!db || !selectedId) return;
+    try {
+      const docRef = doc(db, "pendientes", selectedId);
+      const currentEtapas = selectedItem?.etapas || [];
+      const updated = currentEtapas.map(step => ({
+        ...step,
+        esFinal: step.id === stepId ? !step.esFinal : false
+      }));
+
+      await updateDoc(docRef, { etapas: updated });
+      showToast("Etapa final establecida", "success");
+    } catch (err) {
+      console.error("Error setting final stage:", err);
+      showToast("Error al definir etapa final", "error");
+    }
+  };
+
   const handleDeleteEtapa = async (stepId: string) => {
     if (!db || !selectedId) return;
     try {
@@ -370,17 +390,17 @@ export default function PendientesPage() {
     }
 
     return (
-      <div className="group/line flex items-center justify-center h-3 relative my-0.5">
+      <div className="group/line flex items-center justify-center h-4.5 relative my-0.5">
         <div className="absolute inset-x-0 h-px bg-white/5 group-hover/line:bg-emerald-500/20 transition-colors" />
         <button
           onClick={() => {
             setInsertingAtIndex(index);
             setNewStepTitle("");
           }}
-          className="z-10 w-4.5 h-4.5 rounded-full bg-[#0d131f] border border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-gray-500 hover:text-emerald-400 flex items-center justify-center opacity-0 group-hover/line:opacity-100 transition-all scale-75 hover:scale-100 cursor-pointer"
+          className="z-10 w-5 h-5 rounded-full bg-[#0d131f] border border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-gray-400 hover:text-emerald-400 flex items-center justify-center opacity-40 group-hover/line:opacity-100 transition-all scale-90 hover:scale-100 cursor-pointer"
           title="Insertar etapa aquí"
         >
-          <Plus className="w-3 h-3" />
+          <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
     );
@@ -768,11 +788,18 @@ export default function PendientesPage() {
                             <span className="truncate">Por: {item.creadoPor}</span>
                           </div>
 
-                          {item.etapas && item.etapas.length > 0 && (
-                            <span className="flex items-center gap-0.5 shrink-0 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded text-[8px] font-bold">
-                              {item.etapas.filter(e => e.completado).length}/{item.etapas.length} pasos
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {item.etapas && item.etapas.some(e => e.esFinal && e.completado) && (
+                              <span className="flex items-center gap-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 px-1 py-0.2 rounded text-[7.5px] font-extrabold uppercase">
+                                <Flag className="w-2.5 h-2.5" /> Meta
+                              </span>
+                            )}
+                            {item.etapas && item.etapas.length > 0 && (
+                              <span className="flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded text-[8px] font-bold">
+                                {item.etapas.filter(e => e.completado).length}/{item.etapas.length} pasos
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Tiny progress bar */}
@@ -1062,30 +1089,50 @@ export default function PendientesPage() {
                           step.completado
                             ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-200/80"
                             : "bg-[#090d16]/30 border-white/5 text-gray-200"
-                        }`}>
+                        } ${step.esFinal ? "border-amber-500/30 ring-1 ring-amber-500/15" : ""}`}>
                           <div className="flex items-center gap-2 min-w-0">
                             <button
                               onClick={() => handleToggleEtapa(step.id, step.completado)}
                               className={`p-1 rounded-md border transition-all ${
                                 step.completado
-                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
                                   : "bg-white/5 border-white/10 hover:border-emerald-500/40 text-gray-500 hover:text-emerald-400"
                               }`}
                             >
                               {step.completado ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
                             </button>
-                            <span className={`text-xs font-medium truncate ${step.completado ? "line-through text-gray-500" : ""}`}>
+                            <span className={`text-xs font-medium truncate flex items-center gap-1.5 ${step.completado ? "line-through text-gray-500" : ""}`}>
                               {idx + 1}. {step.titulo}
+                              {step.esFinal && (
+                                <span className="flex items-center gap-0.5 text-[8px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20 uppercase tracking-wide">
+                                  <Flag className="w-2 h-2" /> Final
+                                </span>
+                              )}
                             </span>
                           </div>
 
-                          <button
-                            onClick={() => handleDeleteEtapa(step.id)}
-                            className="p-1 rounded bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
-                            title="Eliminar etapa"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Toggle final stage button */}
+                            <button
+                              onClick={() => handleSetEtapaFinal(step.id)}
+                              className={`p-1 rounded bg-white/5 border transition-all ${
+                                step.esFinal
+                                  ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
+                                  : "border-white/5 text-gray-500 hover:text-amber-400 hover:bg-amber-500/5 hover:border-amber-500/25"
+                              }`}
+                              title={step.esFinal ? "Desmarcar como etapa final" : "Marcar como etapa final"}
+                            >
+                              <Flag className="w-3 h-3" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteEtapa(step.id)}
+                              className="p-1 rounded bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
+                              title="Eliminar etapa"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Render insertion line at index idx + 1 */}
