@@ -49,6 +49,12 @@ export function Sidebar() {
       icon: Calculator,
       exact: false,
     },
+    {
+      name: "Interbanking",
+      href: "/interbanking",
+      icon: Building2,
+      exact: false,
+    },
   ];
 
   const isActive = (href: string, exact: boolean) => {
