@@ -871,6 +871,148 @@ export default function PendientesPage() {
               })
             )}
           </div>
+
+          {/* Stepper map: only in edit mode (selectedItem is defined) */}
+          {selectedId !== null && selectedId !== "general" && selectedItem && (
+            <div className="glass-card p-3 border border-white/10 rounded-2xl flex flex-col gap-2 bg-[#090d16]/10 animate-fade-in mt-1">
+              <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
+                <h3 className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-emerald-400" />
+                  <span>Mapa de Etapas</span>
+                </h3>
+                {selectedItem.etapas && selectedItem.etapas.length > 0 && (
+                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10">
+                    {selectedItem.etapas.filter(e => e.completado).length}/{selectedItem.etapas.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-0.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+                {/* Render insertion line at index 0 */}
+                {renderInsertionLine(0)}
+
+                {(!selectedItem.etapas || selectedItem.etapas.length === 0) ? (
+                  <div className="text-center py-4 bg-[#090d16]/20 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-2">
+                    <span className="text-[10px] text-gray-500 leading-normal px-2">Sin etapas definidas.</span>
+                    {insertingAtIndex === 0 ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleInsertEtapa(0);
+                        }}
+                        className="flex items-center gap-1 w-full py-0.5 px-2 bg-[#090d16] rounded-lg border border-white/10 animate-fade-in"
+                      >
+                        <input
+                          type="text"
+                          placeholder="Etapa inicial..."
+                          value={newStepTitle}
+                          onChange={(e) => setNewStepTitle(e.target.value)}
+                          className="flex-1 bg-transparent text-[10px] text-white placeholder-gray-600 focus:outline-none py-0.5"
+                          autoFocus
+                        />
+                        <button
+                          type="submit"
+                          className="px-1.5 py-0.5 rounded bg-emerald-500 text-[9px] font-bold text-white hover:bg-emerald-400"
+                        >
+                          Ok
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setInsertingAtIndex(0);
+                          setNewStepTitle("");
+                        }}
+                        className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 text-[9px] font-semibold flex items-center gap-1 transition-all"
+                      >
+                        <Plus className="w-2.5 h-2.5" /> Crear Etapa Inicial
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  (() => {
+                    const etapasList = selectedItem.etapas || [];
+                    const activeStepIndex = etapasList.findIndex(e => !e.completado);
+                    return etapasList.map((step, idx) => {
+                      const isActive = idx === activeStepIndex;
+                      return (
+                        <div key={step.id} className="relative">
+                          {/* Vertical timeline line segment */}
+                          {idx < etapasList.length - 1 && (
+                            <div className="absolute left-[13px] top-[26px] bottom-0 w-[1px] bg-white/10 z-0" />
+                          )}
+                          
+                          {/* Step card */}
+                          <div className={`flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-xl border transition-all duration-500 z-10 relative ${
+                            step.completado
+                              ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-300/70"
+                              : isActive
+                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.08)] ring-1 ring-emerald-500/20"
+                              : "bg-[#090d16]/30 border-white/5 text-gray-300"
+                          } ${step.esFinal ? "border-amber-500/25 shadow-[0_0_8px_rgba(245,158,11,0.03)]" : ""}`}>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              
+                              {/* Status Icon / Pulsing indicator */}
+                              <div className="relative shrink-0 flex items-center justify-center">
+                                <button
+                                  onClick={() => handleToggleEtapa(step.id, step.completado)}
+                                  className={`p-0.5 rounded-md border transition-all ${
+                                    step.completado
+                                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                                      : "bg-white/5 border-white/10 hover:border-emerald-500/40 text-gray-500 hover:text-emerald-400"
+                                  }`}
+                                >
+                                  {step.completado ? <Check className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full bg-white/5" />}
+                                </button>
+                                {isActive && !step.completado && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping absolute -top-0.5 -right-0.5" />
+                                )}
+                              </div>
+
+                              <span className={`text-[11px] font-medium truncate flex items-center gap-1.5 ${step.completado ? "line-through text-gray-500 text-opacity-40" : ""}`}>
+                                {step.titulo}
+                                {step.esFinal && (
+                                  <span className="flex items-center gap-0.5 text-[7px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0 rounded border border-amber-500/20 uppercase tracking-wide shrink-0">
+                                    <Flag className="w-2 h-2" /> Final
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0 opacity-40 hover:opacity-100 transition-opacity">
+                              {/* Toggle final stage button */}
+                              <button
+                                  onClick={() => handleSetEtapaFinal(step.id)}
+                                  className={`p-0.5 rounded bg-white/5 border transition-all ${
+                                    step.esFinal
+                                      ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
+                                      : "border-white/5 text-gray-500 hover:text-amber-400"
+                                  }`}
+                                  title={step.esFinal ? "Desmarcar como etapa final" : "Marcar como etapa final"}
+                              >
+                                <Flag className="w-2.5 h-2.5" />
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteEtapa(step.id)}
+                                className="p-0.5 rounded bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                title="Eliminar etapa"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Render insertion line at index idx + 1 */}
+                          {renderInsertionLine(idx + 1)}
+                        </div>
+                      );
+                    });
+                  })()
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* RIGHT COLUMN: Notepad Editor Workspace */}
@@ -1012,134 +1154,6 @@ export default function PendientesPage() {
                     </div>
 
                     <span className="mt-1">Creado por {selectedItem.creadoPor}</span>
-                </div>
-              </div>
-
-              {/* Mapa de Etapas / Pasos */}
-              <div className="p-4.5 border-b border-white/5 bg-[#090d16]/10">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                    <ListTodo className="w-4 h-4 text-emerald-400" />
-                    Mapa de Pasos y Etapas
-                  </h3>
-                  {selectedItem.etapas && selectedItem.etapas.length > 0 && (
-                    <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/5 px-2 py-0.5 rounded-lg border border-emerald-500/10">
-                      {selectedItem.etapas.filter(e => e.completado).length}/{selectedItem.etapas.length} Completados
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-0.5 max-h-[180px] overflow-y-auto pr-1 scrollbar-thin">
-                  {/* Render insertion line at index 0 */}
-                  {renderInsertionLine(0)}
-
-                  {(!selectedItem.etapas || selectedItem.etapas.length === 0) ? (
-                    <div className="text-center py-3 bg-[#090d16]/20 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-2">
-                      <span className="text-[10px] text-gray-500">Sin etapas definidas. Define la primera para comenzar el seguimiento.</span>
-                      {insertingAtIndex === 0 ? (
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            handleInsertEtapa(0);
-                          }}
-                          className="flex items-center gap-1.5 max-w-sm w-full py-0.5 px-2 bg-[#090d16] rounded-lg border border-white/10 animate-fade-in"
-                        >
-                          <input
-                            type="text"
-                            placeholder="Nombre de etapa inicial..."
-                            value={newStepTitle}
-                            onChange={(e) => setNewStepTitle(e.target.value)}
-                            className="flex-1 bg-transparent text-[11px] text-white placeholder-gray-600 focus:outline-none py-0.5"
-                            autoFocus
-                          />
-                          <button
-                            type="submit"
-                            className="px-2 py-0.5 rounded bg-emerald-500 text-[10px] font-bold text-white hover:bg-emerald-400"
-                          >
-                            Agregar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setInsertingAtIndex(null);
-                              setNewStepTitle("");
-                            }}
-                            className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-semibold text-gray-400 hover:text-white"
-                          >
-                            Cancelar
-                          </button>
-                        </form>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setInsertingAtIndex(0);
-                            setNewStepTitle("");
-                          }}
-                          className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-semibold flex items-center gap-1 transition-all"
-                        >
-                          <Plus className="w-3 h-3" /> Crear Etapa Inicial
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    selectedItem.etapas.map((step, idx) => (
-                      <div key={step.id}>
-                        {/* Step card */}
-                        <div className={`flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg border transition-all ${
-                          step.completado
-                            ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-200/80"
-                            : "bg-[#090d16]/30 border-white/5 text-gray-200"
-                        } ${step.esFinal ? "border-amber-500/30 ring-1 ring-amber-500/15" : ""}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <button
-                              onClick={() => handleToggleEtapa(step.id, step.completado)}
-                              className={`p-1 rounded-md border transition-all ${
-                                step.completado
-                                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
-                                  : "bg-white/5 border-white/10 hover:border-emerald-500/40 text-gray-500 hover:text-emerald-400"
-                              }`}
-                            >
-                              {step.completado ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
-                            </button>
-                            <span className={`text-xs font-medium truncate flex items-center gap-1.5 ${step.completado ? "line-through text-gray-500" : ""}`}>
-                              {idx + 1}. {step.titulo}
-                              {step.esFinal && (
-                                <span className="flex items-center gap-0.5 text-[8px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20 uppercase tracking-wide">
-                                  <Flag className="w-2 h-2" /> Final
-                                </span>
-                              )}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {/* Toggle final stage button */}
-                            <button
-                              onClick={() => handleSetEtapaFinal(step.id)}
-                              className={`p-1 rounded bg-white/5 border transition-all ${
-                                step.esFinal
-                                  ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
-                                  : "border-white/5 text-gray-500 hover:text-amber-400 hover:bg-amber-500/5 hover:border-amber-500/25"
-                              }`}
-                              title={step.esFinal ? "Desmarcar como etapa final" : "Marcar como etapa final"}
-                            >
-                              <Flag className="w-3 h-3" />
-                            </button>
-
-                            <button
-                              onClick={() => handleDeleteEtapa(step.id)}
-                              className="p-1 rounded bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
-                              title="Eliminar etapa"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Render insertion line at index idx + 1 */}
-                        {renderInsertionLine(idx + 1)}
-                      </div>
-                    ))
-                  )}
                 </div>
               </div>
 
