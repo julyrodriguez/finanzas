@@ -168,10 +168,10 @@ export default function OrdenesDeComprasPage() {
         if (isSearching) {
           q = query(colRef, orderBy("createdAt", "desc"), limit(300));
         } else if (filterCreadoPor !== "todos") {
-          // If a specific creator is filtered, query exactly the latest 10 for them
+          // If a specific creator is filtered, query exactly the latest 100 for them
+          // We DO NOT use orderBy to avoid composite index requirements!
           const constraints: QueryConstraint[] = [
-            where("creadoPor", "==", filterCreadoPor),
-            orderBy("createdAt", "desc")
+            where("creadoPor", "==", filterCreadoPor)
           ];
           
           if (useFilters) {
@@ -186,7 +186,7 @@ export default function OrdenesDeComprasPage() {
             }
           }
           
-          constraints.push(limit(10));
+          constraints.push(limit(100));
           q = query(colRef, ...constraints);
         } else if (useFilters) {
           // Dynamic status filtering in Firestore to only read matching documents
@@ -245,8 +245,11 @@ export default function OrdenesDeComprasPage() {
               return timeB - timeA;
             });
 
+            // Slice to first 10 if specific creator is filtered
+            const finalDocs = filterCreadoPor !== "todos" ? docs.slice(0, 10) : docs;
+
             setTimeout(() => {
-              setOrdenes(docs);
+              setOrdenes(finalDocs);
               setLoading(false);
             }, 0);
           },
@@ -876,16 +879,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
             <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
             <p className="text-xs">Cargando órdenes de compra de Firestore...</p>
           </div>
-        ) : visibleOrdenes.length === 0 ? (
-          <div className="py-16 text-center rounded-3xl glass-card border border-white/10 p-8 space-y-3">
-            <AlertCircle className="w-10 h-10 text-gray-500 mx-auto" />
-            <h3 className="text-base font-bold text-white">No se encontraron órdenes</h3>
-            <p className="text-xs text-gray-400 max-w-sm mx-auto">
-              {searchQuery || filterEmpresa !== "Todas" || filterEstado !== "Todas"
-                ? "Intenta modificar los filtros o la búsqueda."
-                : "Aún no hay órdenes de compra registradas. ¡Agrega la primera!"}
-            </p>
-          </div>
         ) : (
           <div className="space-y-4">
             <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
@@ -932,7 +925,22 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-gray-300">
-                    {visibleOrdenes.map((orden) => {
+                    {visibleOrdenes.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="px-4 py-12 text-center text-gray-500">
+                          <div className="space-y-2 flex flex-col items-center justify-center">
+                            <AlertCircle className="w-8 h-8 text-gray-600 mx-auto" />
+                            <p className="font-semibold text-xs text-gray-300">No se encontraron órdenes de compra</p>
+                            <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                              {searchQuery || filterEmpresa !== "Todas" || filterEstado !== "Todas" || filterCreadoPor !== "todos"
+                                ? "Intenta modificar los filtros o la búsqueda."
+                                : "Aún no hay órdenes de compra registradas. ¡Agrega la primera!"}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleOrdenes.map((orden) => {
                       const isPendingSend = orden.liberada && !orden.mandada;
                       let rowClass = "hover:bg-white/[0.02] transition-all duration-200";
                       
@@ -1113,14 +1121,26 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                         </td>
                       </tr>
                       );
-                    })}
+                    })
+                    )}
                   </tbody>
                 </table>
               </div>
 
               {/* Mobile / Tablet Cards View */}
               <div className="lg:hidden space-y-4">
-                {visibleOrdenes.map((orden) => {
+                {visibleOrdenes.length === 0 ? (
+                  <div className="py-12 text-center text-gray-500 px-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="space-y-1.5 flex flex-col items-center justify-center">
+                      <AlertCircle className="w-7 h-7 text-gray-600 mx-auto" />
+                      <p className="font-semibold text-xs text-gray-300">No se encontraron órdenes</p>
+                      <p className="text-[10px] text-gray-500 max-w-xs mx-auto">
+                        Prueba ajustando la búsqueda o seleccionando otro creador.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  visibleOrdenes.map((orden) => {
                   const isPendingSend = orden.liberada && !orden.mandada;
                   let cardClass = "p-4 space-y-3 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
                   if (orden.cancelada) {
@@ -1295,12 +1315,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                       </div>
                     </div>
                   );
-                })}
+                })
+                )}
               </div>
             </div>
 
             {/* Botón Cargar Más */}
-            {hasMore && (
+            {hasMore && filterCreadoPor === "todos" && (
               <div className="py-4 text-center">
                 <button
                   onClick={() => setQueryLimit((prev) => prev + 15)}
