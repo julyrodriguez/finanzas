@@ -665,7 +665,7 @@ export default function OrdenesDeComprasPage() {
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
-Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
+Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
     const htmlNotesPart = orden.notas && orden.notas.length > 0
       ? "<br/>Notas:<br/>" + orden.notas.map(n => `- ${n.texto}`).join("<br/>")
@@ -676,7 +676,7 @@ Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
 Proveedor: ${orden.razonSocial}<br/>
 Monto: ${formattedMonto}<br/>
 Detalle: ${orden.motivo}<br/>
-Forma de Pago: ${orden.formaPago}${htmlLinkPart}${htmlNotesPart}`;
+Forma de Pago: ${orden.formaPago}${htmlNotesPart}${htmlLinkPart}`;
 
     return { text, html };
   };
