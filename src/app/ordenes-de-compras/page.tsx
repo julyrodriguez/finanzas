@@ -647,7 +647,8 @@ export default function OrdenesDeComprasPage() {
   // Helper to generate the text format for a single order
   const getOrderCopyText = (orden: OrdenCompra, estado: string) => {
     if (estado === "Liberadas") {
-      return `OC 0${orden.numOC} - ${orden.razonSocial}`;
+      const textVal = `OC 0${orden.numOC} - ${orden.razonSocial}`;
+      return { text: textVal, html: textVal };
     }
 
     const formattedMonto = typeof orden.monto === "number"
@@ -660,27 +661,56 @@ export default function OrdenesDeComprasPage() {
 
     const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
 
-    return `OC ${orden.numOC} ${orden.empresa}
+    const text = `OC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
 Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
+
+    const htmlNotesPart = orden.notas && orden.notas.length > 0
+      ? "<br/>Notas:<br/>" + orden.notas.map(n => `- ${n.texto}`).join("<br/>")
+      : "";
+    const htmlLinkPart = orden.linkSharepoint ? `<br/>Link: <a href="${orden.linkSharepoint}">${orden.linkSharepoint}</a>` : "";
+
+    const html = `OC ${orden.numOC} ${orden.empresa}<br/>
+Proveedor: ${orden.razonSocial}<br/>
+Monto: ${formattedMonto}<br/>
+Detalle: ${orden.motivo}<br/>
+Forma de Pago: ${orden.formaPago}${htmlLinkPart}${htmlNotesPart}`;
+
+    return { text, html };
+  };
+
+  // Helper to write rich text (HTML) and plain text to Clipboard
+  const writeToClipboardWithHtml = async (text: string, html: string) => {
+    try {
+      const textBlob = new Blob([text], { type: "text/plain" });
+      const htmlBlob = new Blob([html], { type: "text/html" });
+      const clipboardItem = new ClipboardItem({
+        "text/plain": textBlob,
+        "text/html": htmlBlob
+      });
+      await navigator.clipboard.write([clipboardItem]);
+    } catch (err) {
+      console.warn("Failed to write HTML to clipboard, falling back to text:", err);
+      await navigator.clipboard.writeText(text);
+    }
   };
 
   // Copy Order Format to Clipboard
-  const handleCopy = (orden: OrdenCompra) => {
-    const copyText = getOrderCopyText(orden, filterEstado);
-    navigator.clipboard.writeText(copyText);
+  const handleCopy = async (orden: OrdenCompra) => {
+    const { text, html } = getOrderCopyText(orden, filterEstado);
+    await writeToClipboardWithHtml(text, html);
     showToast(`¡Copiado OC ${orden.numOC}!`);
   };
 
   // Copy All Filtered Orders to Clipboard
-  const handleCopyAll = () => {
+  const handleCopyAll = async () => {
     if (filteredOrdenes.length === 0) return;
-    const joinedText = filteredOrdenes
-      .map((orden) => getOrderCopyText(orden, filterEstado))
-      .join("\n\n\n");
-    navigator.clipboard.writeText(joinedText);
+    const results = filteredOrdenes.map((orden) => getOrderCopyText(orden, filterEstado));
+    const joinedText = results.map(r => r.text).join("\n\n\n");
+    const joinedHtml = results.map(r => r.html).join("<br/><br/><br/>");
+    await writeToClipboardWithHtml(joinedText, joinedHtml);
     showToast(`¡Copiadas ${filteredOrdenes.length} órdenes al portapapeles!`);
   };
 
