@@ -22,8 +22,7 @@ import {
   onSnapshot, 
   doc, 
   setDoc, 
-  deleteDoc,
-  Firestore
+  deleteDoc
 } from "firebase/firestore";
 
 interface CalendarEvent {
@@ -92,102 +91,6 @@ export default function CalendarioPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Helper to construct mock events
-  const getMockEvents = () => {
-    const today = new Date();
-    const formatOffsetDate = (daysOffset: number) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() + daysOffset);
-      return d.toISOString().split("T")[0];
-    };
-    return [
-      {
-        id: "mock-1",
-        title: "Revisión de Flujo de Caja",
-        description: "Análisis mensual de ingresos y egresos de los complejos de cine.",
-        date: formatOffsetDate(0),
-        startTime: "09:00",
-        endTime: "10:30",
-        category: "finanzas",
-      },
-      {
-        id: "mock-2",
-        title: "Reunión de Equipo Semanal",
-        description: "Seguimiento de tareas pendientes y novedades de Finanzas.",
-        date: formatOffsetDate(0),
-        startTime: "14:00",
-        endTime: "15:30",
-        category: "reunion",
-      },
-      {
-        id: "mock-3",
-        title: "Aprobación de Órdenes de Compra",
-        description: "Autorización de facturas urgentes de Hoyts Unicenter y Abasto.",
-        date: formatOffsetDate(1),
-        startTime: "11:00",
-        endTime: "12:00",
-        category: "finanzas",
-      },
-      {
-        id: "mock-4",
-        title: "Mantenimiento Servidor / DB",
-        description: "Actualización de índices de base de datos de auditoría.",
-        date: formatOffsetDate(1),
-        startTime: "16:30",
-        endTime: "18:00",
-        category: "operaciones",
-      },
-      {
-        id: "mock-5",
-        title: "Conciliación Bancaria",
-        description: "Cierre de cuentas del mes anterior.",
-        date: formatOffsetDate(-1),
-        startTime: "10:00",
-        endTime: "12:00",
-        category: "finanzas",
-      },
-      {
-        id: "mock-6",
-        title: "Planificación Mensual",
-        description: "Proyecciones y metas financieras del próximo mes.",
-        date: formatOffsetDate(3),
-        startTime: "15:00",
-        endTime: "16:30",
-        category: "reunion",
-      },
-      {
-        id: "mock-7",
-        title: "Almuerzo de Equipo",
-        description: "Festejo de cumpleaños del sector.",
-        date: formatOffsetDate(4),
-        startTime: "13:00",
-        endTime: "14:30",
-        category: "personal",
-      }
-    ] as CalendarEvent[];
-  };
-
-  const loadLocalMockEvents = () => {
-    const mock = getMockEvents();
-    setTimeout(() => {
-      setEvents(mock);
-    }, 0);
-    localStorage.setItem("finanzas-calendar-events", JSON.stringify(mock));
-  };
-
-  const preloadMockEventsToFirestore = async (db: Firestore) => {
-    localStorage.setItem("preloaded-firestore-calendar", "true");
-    const mocks = getMockEvents();
-    for (const evt of mocks) {
-      try {
-        const { id, ...data } = evt;
-        await setDoc(doc(db, "calendar_events", id), data);
-      } catch (err) {
-        console.error("Failed to upload mock event to Firestore:", err);
-      }
-    }
-  };
-
   // 1. Initial Load of Events (Firestore real-time listener + LocalStorage fallback)
   useEffect(() => {
     const db = getFirebaseDb();
@@ -205,7 +108,7 @@ export default function CalendarioPage() {
         }
       } else {
         setTimeout(() => {
-          loadLocalMockEvents();
+          setEvents([]);
         }, 0);
       }
       return;
@@ -231,13 +134,6 @@ export default function CalendarioPage() {
           };
         });
 
-        if (docs.length === 0) {
-          const preloadedFlag = localStorage.getItem("preloaded-firestore-calendar");
-          if (!preloadedFlag) {
-            preloadMockEventsToFirestore(db);
-          }
-        }
-
         setTimeout(() => {
           setEvents(docs);
         }, 0);
@@ -259,7 +155,6 @@ export default function CalendarioPage() {
     );
 
     return () => unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. Navigation Helpers
