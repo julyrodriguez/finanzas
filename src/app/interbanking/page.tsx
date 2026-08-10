@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { useAuth } from "@/context/AuthContext";
 import { 
   Download, 
   Play, 
@@ -28,6 +29,21 @@ interface DownloadedFile {
 }
 
 export default function InterbankingPage() {
+  const { user, loading } = useAuth();
+
+  const getCleanUsername = () => {
+    if (!user) return "";
+    if (user.displayName) return user.displayName;
+    if (user.email) {
+      const parts = user.email.split("@");
+      return parts[0];
+    }
+    return "";
+  };
+
+  const username = getCleanUsername().toLowerCase();
+  const isJulian = username === "julian";
+
   // Form states
   const [company, setCompany] = useState("CINEMARK ARGENTINA S.A.");
   const [lote, setLote] = useState("");
@@ -88,7 +104,7 @@ export default function InterbankingPage() {
             clearInterval(interval);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error en polling de estado:", err);
       }
     }, 1500);
@@ -111,7 +127,17 @@ export default function InterbankingPage() {
     setErrorMsg(null);
     setRunId(null);
 
-    const payload: any = {
+    const payload: {
+      company: string;
+      lote: string;
+      monthYear: string;
+      customCredentials?: {
+        cuil?: string;
+        user?: string;
+        pass?: string;
+      };
+      cookies?: unknown[];
+    } = {
       company,
       lote,
       monthYear,
@@ -132,8 +158,8 @@ export default function InterbankingPage() {
           throw new Error("El JSON de cookies debe ser un arreglo de objetos [ { ... } ].");
         }
         payload.cookies = parsed;
-      } catch (err: any) {
-        setErrorMsg(`JSON de cookies inválido: ${err.message}`);
+      } catch (err: unknown) {
+        setErrorMsg(`JSON de cookies inválido: ${(err as Error).message}`);
         return;
       }
     }
@@ -159,10 +185,11 @@ export default function InterbankingPage() {
       } else {
         throw new Error(data.error || "Respuesta inválida del servidor.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus("failed");
-      setErrorMsg(err.message);
-      setLogs((prev) => [...prev, `❌ [Cliente] Error al conectar con el servidor: ${err.message}`]);
+      const errMessage = err instanceof Error ? err.message : String(err);
+      setErrorMsg(errMessage);
+      setLogs((prev) => [...prev, `❌ [Cliente] Error al conectar con el servidor: ${errMessage}`]);
     }
   };
 
@@ -175,6 +202,35 @@ export default function InterbankingPage() {
     setErrorMsg(null);
     setRunId(null);
   };
+
+  if (loading) {
+    return (
+      <AppLayout title="Automatización Interbanking" subtitle="Descarga automatizada de comprobantes CBU">
+        <div className="py-20 text-center flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+          <p className="text-xs text-gray-400">Verificando permisos...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!isJulian) {
+    return (
+      <AppLayout title="Acceso Restringido" subtitle="Módulo protegido">
+        <div className="max-w-md mx-auto my-12 p-8 rounded-3xl glass-card border border-white/10 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-white font-extrabold text-base">Acceso Denegado</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Este módulo de automatización de Interbanking está restringido únicamente al usuario administrador <strong>julian</strong>.
+            </p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout title="Automatización Interbanking" subtitle="Descarga automatizada de comprobantes CBU">

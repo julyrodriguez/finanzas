@@ -50,6 +50,18 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
   const { user, loading, logout } = useAuth();
 
+  const getCleanUsername = () => {
+    if (!user) return "Usuario";
+    if (user.displayName) return user.displayName;
+    if (user.email) {
+      const parts = user.email.split("@");
+      return parts[0];
+    }
+    return "Usuario";
+  };
+
+  const isJulian = user ? getCleanUsername().toLowerCase() === "julian" : false;
+
   // Strict Protected Route Guard: If not logged in and not public, redirect immediately to /login
   useEffect(() => {
     if (!loading && !user && !publicRoute) {
@@ -106,7 +118,12 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       icon: Building2,
       exact: false,
     },
-  ];
+  ].filter(item => {
+    if (item.href === "/interbanking") {
+      return isJulian;
+    }
+    return true;
+  });
 
   const isActive = (href: string, exact: boolean) => {
     if (exact) {
@@ -119,16 +136,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     await logout();
     router.push("/login");
   };
-
-  const getCleanUsername = () => {
-    if (!user) return "Usuario";
-    if (user.displayName) return user.displayName;
-    if (user.email) {
-      const parts = user.email.split("@");
-      return parts[0];
-    }
-    return "Usuario";
-  };
+  // getCleanUsername moved to top of component
 
   // If checking authentication or unauthenticated, block rendering and show loader
   if (loading || (!user && !publicRoute)) {
