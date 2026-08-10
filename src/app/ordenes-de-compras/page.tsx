@@ -667,24 +667,10 @@ Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
 Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
-    let folderName = "Carpeta SharePoint";
-    if (orden.linkSharepoint) {
-      try {
-        const cleanUrl = orden.linkSharepoint.split("?")[0].split("#")[0];
-        const parts = cleanUrl.split("/").filter(Boolean);
-        const lastPart = parts[parts.length - 1];
-        if (lastPart) {
-          folderName = decodeURIComponent(lastPart);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
     const htmlNotesPart = orden.notas && orden.notas.length > 0
       ? "<br/>Notas:<br/>" + orden.notas.map(n => `- ${n.texto}`).join("<br/>")
       : "";
-    const htmlLinkPart = orden.linkSharepoint ? `<br/>Link: <a href="${orden.linkSharepoint}">${folderName}</a>` : "";
+    const htmlLinkPart = orden.linkSharepoint ? `<br/>Link: <a href="${orden.linkSharepoint}">${orden.linkSharepoint}</a>` : "";
 
     const html = `OC ${orden.numOC} ${orden.empresa}<br/>
 Proveedor: ${orden.razonSocial}<br/>
