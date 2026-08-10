@@ -18,7 +18,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Search,
-  X
+  X,
+  Copy
 } from "lucide-react";
 import type { OrdenCompra } from "@/app/ordenes-de-compras/page";
 
@@ -27,7 +28,7 @@ export default function ProcesoDeLiberacionPage() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterEnvio, setFilterEnvio] = useState<"Todas" | "Enviadas" | "No Enviadas">("Todas");
+  const [filterEnvio, setFilterEnvio] = useState<"Todas" | "Enviadas" | "No Enviadas" | "1 firma">("Todas");
 
   const filteredOrdenes = ordenes.filter((o) => {
     // 1. Filter by search query
@@ -47,6 +48,9 @@ export default function ProcesoDeLiberacionPage() {
       return o.enviado === true;
     } else if (filterEnvio === "No Enviadas") {
       return !o.enviado;
+    } else if (filterEnvio === "1 firma") {
+      const signatureCount = (o.firmado1 ? 1 : 0) + (o.firmado2 ? 1 : 0);
+      return signatureCount === 1;
     }
 
     return true;
@@ -97,6 +101,7 @@ export default function ProcesoDeLiberacionPage() {
             enviado: Boolean(data.enviado),
             firmado1: Boolean(data.firmado1),
             firmado2: Boolean(data.firmado2),
+            linkSharepoint: data.linkSharepoint || "",
           } as OrdenCompra;
         });
 
@@ -186,6 +191,28 @@ export default function ProcesoDeLiberacionPage() {
     }
   };
 
+  // Copy Order Format to Clipboard (plain text format)
+  const handleCopy = (orden: OrdenCompra) => {
+    const formattedMonto = typeof orden.monto === "number"
+      ? `$ ${orden.monto.toLocaleString("es-AR")}`
+      : orden.monto;
+
+    const notasPart = orden.notas && orden.notas.length > 0
+      ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
+      : "";
+
+    const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
+
+    const copyText = `OC ${orden.numOC} ${orden.empresa}
+Proveedor: ${orden.razonSocial}
+Monto: ${formattedMonto}
+Detalle: ${orden.motivo}
+Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
+
+    navigator.clipboard.writeText(copyText);
+    showToast(`¡Copiado OC ${orden.numOC}!`);
+  };
+
   return (
     <AppLayout 
       title="Proceso de Liberación" 
@@ -240,7 +267,7 @@ export default function ProcesoDeLiberacionPage() {
               {/* Filtros de Envío */}
               <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-[11px] flex-wrap">
                 <span className="text-gray-400 px-2 font-medium">Envío:</span>
-                {(["Todas", "Enviadas", "No Enviadas"] as const).map((filterOpt) => (
+                {(["Todas", "Enviadas", "No Enviadas", "1 firma"] as const).map((filterOpt) => (
                   <button
                     key={filterOpt}
                     onClick={() => setFilterEnvio(filterOpt)}
@@ -305,9 +332,19 @@ export default function ProcesoDeLiberacionPage() {
                           N° Solicitud: {orden.numSolicitud}
                         </span>
                       </div>
-                      <h4 className="text-xs font-extrabold text-white">
-                        OC: {orden.numOC}
-                      </h4>
+                      <div className="flex items-center justify-between gap-2 pb-1">
+                        <h4 className="text-xs font-extrabold text-white">
+                          OC: {orden.numOC}
+                        </h4>
+                        <button
+                          onClick={() => handleCopy(orden)}
+                          className="px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500 hover:text-[#0d131f] text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          title="Copiar resumen"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copiar</span>
+                        </button>
+                      </div>
                       <p className="text-[11px] text-gray-300 line-clamp-1">
                         <strong>Prov:</strong> {orden.razonSocial}
                       </p>
