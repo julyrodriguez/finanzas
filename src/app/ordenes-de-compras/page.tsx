@@ -756,76 +756,83 @@ Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
 
     try {
       const text = pasteText.trim();
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-      
-      let numOC = "";
-      let empresa: "Hoyts" | "CMK" = "Hoyts";
-      let razonSocial = "";
-      let monto: string | number = "";
-      let motivo = "";
-      let formaPago = "";
-      let linkSharepoint = "";
+      const blocks = text.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
 
-      // Find URL
-      const urlMatch = text.match(/https?:\/\/[^\s]+/);
-      if (urlMatch) {
-        linkSharepoint = urlMatch[0];
-      }
-
-      for (const line of lines) {
-        const lowerLine = line.toLowerCase();
-        
-        if (lowerLine.startsWith("oc ")) {
-          const match = line.match(/(?:OC|oc)\s+(\S+)(?:\s+(Hoyts|CMK|hoyts|cmk))?/i);
-          if (match) {
-            numOC = match[1];
-            if (match[2]) {
-              const emp = match[2].toLowerCase();
-              empresa = emp === "cmk" ? "CMK" : "Hoyts";
-            }
-          }
-        } else if (lowerLine.startsWith("proveedor:")) {
-          razonSocial = line.substring("proveedor:".length).trim();
-        } else if (lowerLine.startsWith("monto:")) {
-          const montoStr = line.substring("monto:".length).trim();
-          monto = parseMonto(montoStr);
-        } else if (lowerLine.startsWith("detalle:")) {
-          motivo = line.substring("detalle:".length).trim();
-        } else if (lowerLine.startsWith("forma de pago:")) {
-          formaPago = line.substring("forma de pago:".length).trim();
-        }
-      }
-
-      if (!numOC) {
-        alert("No se pudo detectar el número de OC en el texto. Asegúrate de incluir la línea inicial como 'OC XXXXX'");
-        setProcessingPaste(false);
-        return;
-      }
-
-      if (!linkSharepoint) {
-        alert("No se pudo detectar ningún enlace de SharePoint o OneDrive en el texto.");
+      if (blocks.length === 0) {
+        alert("No se detectó ningún bloque de texto válido.");
         setProcessingPaste(false);
         return;
       }
 
       const db = getFirebaseDb();
-      if (db) {
-        const colRef = collection(db, "ordenes_compra");
+      if (!db) {
+        showToast("Error de conexión con la base de datos");
+        setProcessingPaste(false);
+        return;
+      }
+
+      const colRef = collection(db, "ordenes_compra");
+      let updatedCount = 0;
+      let createdCount = 0;
+
+      const newItemsLocal: OrdenCompra[] = [];
+      const updatedItemsLocalMap: { [id: string]: Partial<OrdenCompra> } = {};
+
+      for (const block of blocks) {
+        const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
+        
+        let numOC = "";
+        let empresa: "Hoyts" | "CMK" = "Hoyts";
+        let razonSocial = "";
+        let monto: string | number = "";
+        let motivo = "";
+        let formaPago = "";
+        let linkSharepoint = "";
+
+        const urlMatch = block.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) {
+          linkSharepoint = urlMatch[0];
+        }
+
+        for (const line of lines) {
+          const lowerLine = line.toLowerCase();
+          
+          if (lowerLine.startsWith("oc ")) {
+            const match = line.match(/(?:OC|oc)\s+(\S+)(?:\s+(Hoyts|CMK|hoyts|cmk))?/i);
+            if (match) {
+              numOC = match[1];
+              if (match[2]) {
+                const emp = match[2].toLowerCase();
+                empresa = emp === "cmk" ? "CMK" : "Hoyts";
+              }
+            }
+          } else if (lowerLine.startsWith("proveedor:")) {
+            razonSocial = line.substring("proveedor:".length).trim();
+          } else if (lowerLine.startsWith("monto:")) {
+            const montoStr = line.substring("monto:".length).trim();
+            monto = parseMonto(montoStr);
+          } else if (lowerLine.startsWith("detalle:")) {
+            motivo = line.substring("detalle:".length).trim();
+          } else if (lowerLine.startsWith("forma de pago:")) {
+            formaPago = line.substring("forma de pago:".length).trim();
+          }
+        }
+
+        if (!numOC || !linkSharepoint) {
+          continue;
+        }
+
         const q = query(colRef, where("numOC", "==", numOC.trim()));
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-          // OC exists, update link
           const docSnap = querySnapshot.docs[0];
           const docRef = doc(db, "ordenes_compra", docSnap.id);
           await updateDoc(docRef, { linkSharepoint });
 
-          setOrdenes((prev) =>
-            prev.map((item) => (item.id === docSnap.id ? { ...item, linkSharepoint } : item))
-          );
-          showToast(`¡Enlace vinculado a la OC ${numOC} existente!`);
+          updatedItemsLocalMap[docSnap.id] = { linkSharepoint };
+          updatedCount++;
         } else {
-          // OC does not exist, create new
           const authorName = getCleanUsername();
           const newOrden: Omit<OrdenCompra, "id"> = {
             empresa,
@@ -846,15 +853,35 @@ Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
           };
 
           const docAdded = await addDoc(colRef, newOrden);
-          
-          setOrdenes((prev) => [
-            { id: docAdded.id, ...newOrden, createdAt: Timestamp.now() },
-            ...prev
-          ]);
-          showToast(`¡OC ${numOC} creada y vinculada con éxito!`);
+          newItemsLocal.push({
+            id: docAdded.id,
+            ...newOrden,
+            createdAt: Timestamp.now()
+          });
+          createdCount++;
         }
+      }
+
+      if (updatedCount > 0 || createdCount > 0) {
+        setOrdenes((prev) => {
+          let nextState = prev;
+          if (updatedCount > 0) {
+            nextState = nextState.map((item) => {
+              if (item.id && updatedItemsLocalMap[item.id]) {
+                return { ...item, ...updatedItemsLocalMap[item.id] };
+              }
+              return item;
+            });
+          }
+          if (createdCount > 0) {
+            nextState = [...newItemsLocal, ...nextState];
+          }
+          return nextState;
+        });
+
+        showToast(`Vunculación completada: ${updatedCount} actualizadas, ${createdCount} creadas.`);
       } else {
-        showToast("Error de conexión con la base de datos");
+        alert("No se pudo vincular ni crear ninguna orden de compra. Revisa el formato pegado.");
       }
 
       setIsPasteModalOpen(false);
