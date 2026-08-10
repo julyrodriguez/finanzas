@@ -631,29 +631,42 @@ export default function OrdenesDeComprasPage() {
     }
   };
 
-  // Copy Order Format to Clipboard
-  const handleCopy = (orden: OrdenCompra) => {
-    let copyText = "";
-    if (filterEstado === "Liberadas") {
-      copyText = `OC 0${orden.numOC} - ${orden.razonSocial}`;
-    } else {
-      const formattedMonto = typeof orden.monto === "number"
-        ? `$ ${orden.monto.toLocaleString("es-AR")}`
-        : orden.monto;
+  // Helper to generate the text format for a single order
+  const getOrderCopyText = (orden: OrdenCompra, estado: string) => {
+    if (estado === "Liberadas") {
+      return `OC 0${orden.numOC} - ${orden.razonSocial}`;
+    }
 
-      const notasPart = orden.notas && orden.notas.length > 0
-        ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
-        : "";
+    const formattedMonto = typeof orden.monto === "number"
+      ? `$ ${orden.monto.toLocaleString("es-AR")}`
+      : orden.monto;
 
-      copyText = `OC ${orden.numOC} ${orden.empresa}
+    const notasPart = orden.notas && orden.notas.length > 0
+      ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
+      : "";
+
+    return `OC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
 Forma de Pago: ${orden.formaPago}${notasPart}`;
-    }
+  };
 
+  // Copy Order Format to Clipboard
+  const handleCopy = (orden: OrdenCompra) => {
+    const copyText = getOrderCopyText(orden, filterEstado);
     navigator.clipboard.writeText(copyText);
     showToast(`¡Copiado OC ${orden.numOC}!`);
+  };
+
+  // Copy All Filtered Orders to Clipboard
+  const handleCopyAll = () => {
+    if (filteredOrdenes.length === 0) return;
+    const joinedText = filteredOrdenes
+      .map((orden) => getOrderCopyText(orden, filterEstado))
+      .join("\n\n\n");
+    navigator.clipboard.writeText(joinedText);
+    showToast(`¡Copiadas ${filteredOrdenes.length} órdenes al portapapeles!`);
   };
 
   const showToast = (msg: string) => {
@@ -845,6 +858,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}`;
                 </button>
               ))}
             </div>
+
+            {/* Copiar Todas button if filter is Pendientes */}
+            {filterEstado === "Pendientes" && filteredOrdenes.length > 0 && (
+              <button
+                onClick={handleCopyAll}
+                className="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20"
+                title="Copiar todas las OCs pendientes"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copiar Todas ({filteredOrdenes.length})</span>
+              </button>
+            )}
           </div>
 
           {/* Leyenda de Estados */}
