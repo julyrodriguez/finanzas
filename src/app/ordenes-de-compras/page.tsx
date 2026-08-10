@@ -705,6 +705,34 @@ Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
     }
   };
 
+  // Prompt user to paste SharePoint / OneDrive link
+  const handlePromptLink = async (orden: OrdenCompra) => {
+    const url = prompt(`Pega el enlace de SharePoint/OneDrive para la OC ${orden.numOC}:`);
+    if (url === null) return; // User cancelled
+    
+    const cleanUrl = url.trim();
+    if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+      const db = getFirebaseDb();
+      if (db && orden.id) {
+        try {
+          const docRef = doc(db, "ordenes_compra", orden.id);
+          await updateDoc(docRef, { linkSharepoint: cleanUrl });
+          
+          setOrdenes((prev) =>
+            prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: cleanUrl } : item))
+          );
+          
+          showToast(`¡Enlace guardado para OC ${orden.numOC}!`);
+        } catch (err) {
+          console.error("Error al guardar enlace:", err);
+          showToast("Error al guardar el enlace");
+        }
+      }
+    } else if (cleanUrl) {
+      alert("Por favor, ingresa un enlace válido (debe empezar con http:// o https://)");
+    }
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -1119,12 +1147,13 @@ Forma de Pago: ${orden.formaPago}${linkPart}${notasPart}`;
                                   <FolderOpen className="w-3.5 h-3.5" />
                                 </a>
                               ) : (
-                                <div 
-                                  className="p-1 rounded border border-dashed border-white/20 text-gray-500 hover:text-gray-300 hover:border-gray-400 cursor-pointer transition-all"
-                                  title="Arrastra un enlace aquí para vincular carpeta"
+                                <button 
+                                  onClick={() => handlePromptLink(orden)}
+                                  className="p-1 rounded border border-dashed border-white/20 text-gray-500 hover:text-gray-300 hover:border-gray-400 cursor-pointer transition-all flex items-center justify-center bg-transparent"
+                                  title="Haz clic para pegar enlace o arrastra un enlace web aquí"
                                 >
                                   <Folder className="w-3.5 h-3.5" />
-                                </div>
+                                </button>
                               )}
                             </div>
                             {orden.relatedOC && (
