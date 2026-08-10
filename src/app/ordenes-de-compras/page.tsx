@@ -41,7 +41,9 @@ import {
   ChevronDown,
   Link2,
   Folder,
-  FolderOpen
+  FolderOpen,
+  FolderPlus,
+  Terminal
 } from "lucide-react";
 
 const generateUniqueId = () => {
@@ -126,6 +128,9 @@ export default function OrdenesDeComprasPage() {
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [processingPaste, setProcessingPaste] = useState(false);
+  
+  // Selection state for copying CMD folder creation commands (Julian only)
+  const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
 
   // Get current clean username without @equipo.local
   const getCleanUsername = () => {
@@ -138,6 +143,8 @@ export default function OrdenesDeComprasPage() {
   };
 
   const isSearching = searchQuery.trim() !== "";
+  const isJulian = user ? getCleanUsername().toLowerCase() === "julian" : false;
+  const showCMDSection = filterEstado === "Pendientes" && isJulian;
 
   // Unique list of creators
   const uniqueCreators = useMemo(() => {
@@ -957,6 +964,33 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   const visibleOrdenes = isSearching ? filteredOrdenes : filteredOrdenes.slice(0, queryLimit);
   const hasMore = isSearching ? false : ordenes.length > queryLimit;
 
+  // Helper to sanitize Windows folder names
+  const sanitizeFolderName = (name: string) => {
+    return name.replace(/[\\/:*?"<>|]/g, "").trim();
+  };
+
+  const getCMDCommand = () => {
+    const selectedOrders = filteredOrdenes.filter(o => o.id && selectedOCIds.includes(o.id));
+    if (selectedOrders.length === 0) return "";
+    
+    const folderNames = selectedOrders.map(orden => {
+      const name = `OC ${orden.numOC} ${orden.empresa} ${orden.razonSocial}`;
+      return `"${sanitizeFolderName(name)}"`;
+    });
+
+    return `mkdir ${folderNames.join(" ")}`;
+  };
+
+  const handleCopyCMD = () => {
+    const cmd = getCMDCommand();
+    if (!cmd) {
+      alert("Por favor selecciona al menos una orden de compra.");
+      return;
+    }
+    navigator.clipboard.writeText(cmd);
+    showToast("¡Comando CMD de carpetas copiado al portapapeles!");
+  };
+
   return (
     <AppLayout 
       title="Órdenes de Compra" 
@@ -1082,6 +1116,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   onClick={() => {
                     setFilterEstado(est);
                     setQueryLimit(15);
+                    setSelectedOCIds([]);
                   }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEstado === est
@@ -1106,6 +1141,41 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               </button>
             )}
           </div>
+
+          {/* Seccion CMD de Creacion de Carpetas (solo Julian, en Pendientes, si hay seleccionadas) */}
+          {showCMDSection && selectedOCIds.length > 0 && (
+            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 space-y-3 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <h4 className="text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
+                    <FolderPlus className="w-4 h-4" />
+                    Generador de Carpetas para Windows (CMD)
+                  </h4>
+                  <p className="text-[10px] text-gray-400">
+                    Has seleccionado <strong>{selectedOCIds.length}</strong> órdenes de compra. Ejecuta este comando en la terminal CMD de Windows para crear sus carpetas automáticamente.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedOCIds([])}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-[11px] font-semibold transition-all cursor-pointer"
+                  >
+                    Limpiar selección
+                  </button>
+                  <button
+                    onClick={handleCopyCMD}
+                    className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>Copiar Comando CMD</span>
+                  </button>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-indigo-200 overflow-x-auto whitespace-nowrap">
+                {getCMDCommand()}
+              </div>
+            </div>
+          )}
 
           {/* Leyenda de Estados */}
           <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
@@ -1147,6 +1217,24 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 <table className="w-full text-left text-xs">
                   <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-semibold">
                     <tr>
+                      {showCMDSection && (
+                        <th className="px-4 py-3.5 w-10">
+                          <input
+                            type="checkbox"
+                            checked={visibleOrdenes.length > 0 && visibleOrdenes.every(o => o.id && selectedOCIds.includes(o.id))}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                const newIds = [...new Set([...selectedOCIds, ...visibleOrdenes.map(o => o.id || "").filter(Boolean)])];
+                                setSelectedOCIds(newIds);
+                              } else {
+                                const visibleIds = visibleOrdenes.map(o => o.id || "");
+                                setSelectedOCIds(prev => prev.filter(id => !visibleIds.includes(id)));
+                              }
+                            }}
+                            className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                          />
+                        </th>
+                      )}
                       <th className="px-4 py-3.5">Estados</th>
                       <th className="px-4 py-3.5">Empresa</th>
                       <th className="px-4 py-3.5">N° Solicitud</th>
@@ -1187,7 +1275,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   <tbody className="divide-y divide-white/5 text-gray-300">
                     {visibleOrdenes.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="px-4 py-12 text-center text-gray-500">
+                        <td colSpan={showCMDSection ? 11 : 10} className="px-4 py-12 text-center text-gray-500">
                           <div className="space-y-2 flex flex-col items-center justify-center">
                             <AlertCircle className="w-8 h-8 text-gray-600 mx-auto" />
                             <p className="font-semibold text-xs text-gray-300">No se encontraron órdenes de compra</p>
@@ -1211,6 +1299,23 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       }
                       return (
                         <tr key={orden.id} className={rowClass}>
+                          {showCMDSection && (
+                            <td className="px-4 py-4 w-10">
+                              <input
+                                type="checkbox"
+                                checked={orden.id ? selectedOCIds.includes(orden.id) : false}
+                                onChange={() => {
+                                  if (!orden.id) return;
+                                  setSelectedOCIds(prev =>
+                                    prev.includes(orden.id!)
+                                      ? prev.filter(id => id !== orden.id)
+                                      : [...prev, orden.id!]
+                                  );
+                                }}
+                                className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                              />
+                            </td>
+                          )}
                           {/* Tildes: Liberada & Mandada */}
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-1.5">
@@ -1454,6 +1559,21 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       {/* Top Row: Empresa, OC number and Actions (Copiar/Editar) */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
+                          {showCMDSection && (
+                            <input
+                              type="checkbox"
+                              checked={orden.id ? selectedOCIds.includes(orden.id) : false}
+                              onChange={() => {
+                                if (!orden.id) return;
+                                setSelectedOCIds(prev =>
+                                  prev.includes(orden.id!)
+                                    ? prev.filter(id => id !== orden.id)
+                                    : [...prev, orden.id!]
+                                );
+                              }}
+                              className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer mr-1.5"
+                            />
+                          )}
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                               orden.empresa === "Hoyts"
