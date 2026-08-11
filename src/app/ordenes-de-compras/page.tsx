@@ -131,6 +131,24 @@ export default function OrdenesDeComprasPage() {
   
   // Selection state for copying CMD folder creation commands (Julian only)
   const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
+  const [cmdFolderPath, setCmdFolderPath] = useState("");
+
+  // Load cmdFolderPath from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedPath = localStorage.getItem("cmd_folder_path");
+      if (savedPath) {
+        setCmdFolderPath(savedPath);
+      }
+    }
+  }, []);
+
+  const handleSavePath = (path: string) => {
+    setCmdFolderPath(path);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cmd_folder_path", path);
+    }
+  };
 
   // Get current clean username without @equipo.local
   const getCleanUsername = () => {
@@ -978,7 +996,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       return `"${sanitizeFolderName(name)}"`;
     });
 
-    return `mkdir ${folderNames.join(" ")}`;
+    const mkdirCmd = `mkdir ${folderNames.join(" ")}`;
+    
+    if (cmdFolderPath.trim()) {
+      return `cd /d "${cmdFolderPath.trim()}"\r\n${mkdirCmd}`;
+    }
+    
+    return mkdirCmd;
   };
 
   const handleCopyCMD = () => {
@@ -1171,7 +1195,34 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   </button>
                 </div>
               </div>
-              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-indigo-200 overflow-x-auto whitespace-nowrap">
+
+              {/* Ruta de carpeta para el CD */}
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-black/20 p-2 rounded-xl border border-white/5">
+                <label className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 shrink-0 pl-1">
+                  <Folder className="w-3.5 h-3.5 text-indigo-400" />
+                  Ubicación de Carpeta:
+                </label>
+                <div className="relative w-full">
+                  <input
+                    type="text"
+                    value={cmdFolderPath}
+                    onChange={(e) => handleSavePath(e.target.value)}
+                    placeholder="Ej. C:\Proyectos\Facturas (se guardará automáticamente)"
+                    className="w-full pl-3 pr-8 py-1.5 text-[11px] rounded-lg bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 text-white outline-none transition-all placeholder-gray-600 font-sans"
+                  />
+                  {cmdFolderPath && (
+                    <button
+                      onClick={() => handleSavePath("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                      title="Limpiar ubicación"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-indigo-200 overflow-x-auto whitespace-pre">
                 {getCMDCommand()}
               </div>
             </div>
