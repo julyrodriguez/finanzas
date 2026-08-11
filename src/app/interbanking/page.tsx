@@ -305,7 +305,7 @@ export default function InterbankingPage() {
                     className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-emerald-500"
                   />
                   <p className="text-[10px] text-gray-500">
-                    Se buscará desde el día 1 hasta el último día del mes seleccionado de forma automática.
+                    Se buscará automáticamente un rango de hasta 30 días (hasta el día 30 o el día de hoy si es el mes actual) para respetar el límite de rango de Interbanking.
                   </p>
                 </div>
 
