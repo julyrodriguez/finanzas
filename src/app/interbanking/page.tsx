@@ -112,6 +112,21 @@ export default function InterbankingPage() {
     return () => clearInterval(interval);
   }, [runId, status]);
 
+  // Descarga automática en el navegador cuando el backend completa la tarea
+  useEffect(() => {
+    if (status === "completed" && downloadedFiles.length > 0) {
+      downloadedFiles.forEach((file) => {
+        const link = document.createElement("a");
+        link.href = file.url;
+        link.setAttribute("download", file.name);
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    }
+  }, [status, downloadedFiles]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lote) {
