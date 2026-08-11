@@ -64,22 +64,36 @@ export default function InterbankingPage() {
 
   // Execution states
   const [runId, setRunId] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "running" | "completed" | "failed">("idle");
+  const [status, setStatus] = useState<"idle" | "starting" | "running" | "completed" | "failed">("idle");
   const [logs, setLogs] = useState<string[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<string[]>([]);
   const [downloadedFiles, setDownloadedFiles] = useState<DownloadedFile[]>([]);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Queue states
+  const [queue, setQueue] = useState<string[]>([]);
+  const [currentLote, setCurrentLote] = useState<string | null>(null);
+  const [totalLotesCount, setTotalLotesCount] = useState<number>(0);
+  const [completedLotes, setCompletedLotes] = useState<string[]>([]);
+  const [failedLotes, setFailedLotes] = useState<{lote: string, error: string}[]>([]);
+
   const consoleEndRef = useRef<HTMLDivElement>(null);
+
+  // Derived state to disable fields
+  const isBusy = status !== "idle" || queue.length > 0;
+
+  // Combine logs of previous batches and current batch
+  const allLogs = [...historyLogs, ...logs];
 
   // Auto-scroll logs to bottom
   useEffect(() => {
     if (consoleEndRef.current) {
       consoleEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [logs]);
+  }, [allLogs]);
 
-  // Polling hook to check task status
+  // Polling hook to check task status of current lote
   useEffect(() => {
     if (!runId || status !== "running") return;
 
@@ -112,7 +126,7 @@ export default function InterbankingPage() {
     return () => clearInterval(interval);
   }, [runId, status]);
 
-  // Descarga automática en el navegador cuando el backend completa la tarea
+  // Descarga automática en el navegador cuando el backend completa la tarea del lote actual
   useEffect(() => {
     if (status === "completed" && downloadedFiles.length > 0) {
       downloadedFiles.forEach((file) => {
@@ -127,43 +141,165 @@ export default function InterbankingPage() {
     }
   }, [status, downloadedFiles]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!lote) {
-      setErrorMsg("Debes ingresar un número de lote.");
-      return;
-    }
+  // Queue runner: starts the next lote in the queue sequentially
+  useEffect(() => {
+    const processQueue = async () => {
+      if (queue.length > 0 && status === "idle") {
+        const nextLote = queue[0];
+        setCurrentLote(nextLote);
+        setStatus("starting");
+        setLogs([]);
 
-    // Reset states
-    setStatus("running");
-    setLogs(["[Cliente] Iniciando solicitud de automatización..."]);
-    setDownloadedFiles([]);
-    setScreenshotUrl(null);
-    setErrorMsg(null);
-    setRunId(null);
+        setHistoryLogs((prev) => [
+          ...prev,
+          `==================================================`,
+          `🚀 [Cola] Procesando lote ${nextLote} (${totalLotesCount - queue.length + 1} de ${totalLotesCount})...`,
+          `==================================================`,
+          `[Cliente] Solicitando ejecución para lote ${nextLote}...`,
+        ]);
 
-    const payload: {
-      company: string;
-      lote: string;
-      monthYear: string;
-      customCredentials?: {
-        cuil?: string;
-        user?: string;
-        pass?: string;
-      };
-      cookies?: unknown[];
-    } = {
-      company,
-      lote,
-      monthYear,
+        const payload: {
+          company: string;
+          lote: string;
+          monthYear: string;
+          customCredentials?: {
+            cuil?: string;
+            user?: string;
+            pass?: string;
+          };
+          cookies?: unknown[];
+        } = {
+          company,
+          lote: nextLote,
+          monthYear,
+        };
+
+        if (customCuil || customUser || customPass) {
+          payload.customCredentials = {
+            cuil: customCuil || undefined,
+            user: customUser || undefined,
+            pass: customPass || undefined,
+          };
+        }
+
+        if (customCookies.trim()) {
+          try {
+            const parsed = JSON.parse(customCookies.trim());
+            payload.cookies = parsed;
+          } catch (err: unknown) {
+            // Ignoramos, ya validado en submit
+          }
+        }
+
+        try {
+          const response = await fetch("https://apivacas.jariel.com.ar/api/interbanking/run", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || "Error al iniciar el servidor de automatización.");
+          }
+
+          const data = await response.json();
+          if (data.success) {
+            setRunId(data.runId);
+            setHistoryLogs((prev) => [
+              ...prev,
+              `[Cliente] Lote ${nextLote} encolado exitosamente. ID: ${data.runId}`,
+              `[Cliente] Conectando con los logs del servidor...`,
+            ]);
+            setStatus("running");
+          } else {
+            throw new Error(data.error || "Respuesta inválida del servidor.");
+          }
+        } catch (err: unknown) {
+          const errMessage = err instanceof Error ? err.message : String(err);
+          setHistoryLogs((prev) => [
+            ...prev,
+            `❌ [Cliente] Error al iniciar lote ${nextLote}: ${errMessage}`,
+          ]);
+          setFailedLotes((prev) => [...prev, { lote: nextLote, error: errMessage }]);
+          
+          // Avanzar al siguiente lote tras una pequeña pausa de 4 segundos
+          setTimeout(() => {
+            setQueue((prev) => prev.slice(1));
+            setStatus("idle");
+          }, 4000);
+        }
+      }
     };
 
-    if (customCuil || customUser || customPass) {
-      payload.customCredentials = {
-        cuil: customCuil || undefined,
-        user: customUser || undefined,
-        pass: customPass || undefined,
-      };
+    processQueue();
+  }, [queue, status]);
+
+  // Queue transition: waits after a batch completes/fails, saves its logs to history, and advances
+  useEffect(() => {
+    if ((status === "completed" || status === "failed") && currentLote) {
+      if (status === "completed") {
+        setCompletedLotes((prev) => [...prev, currentLote]);
+      } else {
+        setFailedLotes((prev) => [...prev, { lote: currentLote, error: errorMsg || "Error desconocido" }]);
+      }
+
+      // Esperar 5 segundos para que la descarga termine y no saturar el servidor
+      const timer = setTimeout(() => {
+        setHistoryLogs((prev) => [
+          ...prev,
+          ...logs,
+          status === "completed" 
+            ? `✅ Lote ${currentLote} completado exitosamente.`
+            : `❌ Lote ${currentLote} falló: ${errorMsg}`,
+          `\n`
+        ]);
+        setLogs([]);
+        
+        // Limpiar variables del lote actual
+        setRunId(null);
+        setCurrentLote(null);
+        setDownloadedFiles([]);
+        setScreenshotUrl(null);
+        setErrorMsg(null);
+        
+        // Descolar y avanzar
+        setQueue((prev) => {
+          const nextQueue = prev.slice(1);
+          if (nextQueue.length === 0) {
+            setHistoryLogs((h) => [
+              ...h,
+              `==================================================`,
+              `🎉 [Cola] ¡Proceso de cola terminado!`,
+              `Total de lotes procesados: ${totalLotesCount}`,
+              `Exitosos: ${completedLotes.length + (status === "completed" ? 1 : 0)}`,
+              `Fallidos: ${failedLotes.length + (status === "failed" ? 1 : 0)}`,
+              `==================================================`,
+            ]);
+          }
+          return nextQueue;
+        });
+        
+        setStatus("idle");
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [status, currentLote, logs, errorMsg]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const parsedLotes = lote
+      .split(/[\s,]+/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+      
+    if (parsedLotes.length === 0) {
+      setErrorMsg("Debes ingresar al menos un número de lote.");
+      return;
     }
 
     if (customCookies.trim()) {
@@ -172,50 +308,41 @@ export default function InterbankingPage() {
         if (!Array.isArray(parsed)) {
           throw new Error("El JSON de cookies debe ser un arreglo de objetos [ { ... } ].");
         }
-        payload.cookies = parsed;
       } catch (err: unknown) {
         setErrorMsg(`JSON de cookies inválido: ${(err as Error).message}`);
         return;
       }
     }
 
-    try {
-      const response = await fetch("https://apivacas.jariel.com.ar/api/interbanking/run", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Error al iniciar el servidor de automatización.");
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setRunId(data.runId);
-        setLogs((prev) => [...prev, `[Cliente] Tarea encolada en el servidor. ID de ejecución: ${data.runId}`, `[Cliente] Conectando con el stream de logs...`]);
-      } else {
-        throw new Error(data.error || "Respuesta inválida del servidor.");
-      }
-    } catch (err: unknown) {
-      setStatus("failed");
-      const errMessage = err instanceof Error ? err.message : String(err);
-      setErrorMsg(errMessage);
-      setLogs((prev) => [...prev, `❌ [Cliente] Error al conectar con el servidor: ${errMessage}`]);
-    }
+    // Inicializar cola
+    setQueue(parsedLotes);
+    setTotalLotesCount(parsedLotes.length);
+    setCompletedLotes([]);
+    setFailedLotes([]);
+    setHistoryLogs([]);
+    setLogs([]);
+    setDownloadedFiles([]);
+    setScreenshotUrl(null);
+    setErrorMsg(null);
+    setRunId(null);
+    setCurrentLote(null);
+    setStatus("idle");
   };
 
   const handleReset = () => {
     setStatus("idle");
     setLote("");
     setLogs([]);
+    setHistoryLogs([]);
     setDownloadedFiles([]);
     setScreenshotUrl(null);
     setErrorMsg(null);
     setRunId(null);
+    setQueue([]);
+    setCurrentLote(null);
+    setTotalLotesCount(0);
+    setCompletedLotes([]);
+    setFailedLotes([]);
   };
 
   if (loading) {
@@ -277,7 +404,7 @@ export default function InterbankingPage() {
                     <select
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
-                      disabled={status === "running"}
+                      disabled={isBusy}
                       className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
                     >
                       <option value="BULNES">BULNES</option>
@@ -301,8 +428,8 @@ export default function InterbankingPage() {
                     type="month"
                     value={monthYear}
                     onChange={(e) => setMonthYear(e.target.value)}
-                    disabled={status === "running"}
-                    className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-emerald-500"
+                    disabled={isBusy}
+                    className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-emerald-500"
                   />
                   <p className="text-[10px] text-gray-500">
                     Se buscará automáticamente un rango de hasta 30 días (hasta el día 30 o el día de hoy si es el mes actual) para respetar el límite de rango de Interbanking.
@@ -312,16 +439,19 @@ export default function InterbankingPage() {
                 {/* Número de Lote */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
-                    <Hash className="w-3.5 h-3.5 text-gray-400" /> Número de Lote
+                    <Hash className="w-3.5 h-3.5 text-gray-400" /> Número de Lotes
                   </label>
                   <input
                     type="text"
                     value={lote}
                     onChange={(e) => setLote(e.target.value)}
-                    disabled={status === "running"}
-                    placeholder="Ej. 1823901"
-                    className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2 text-sm text-gray-100 focus:outline-none focus:border-emerald-500"
+                    disabled={isBusy}
+                    placeholder="Ej. 152, 153, 164"
+                    className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-emerald-500"
                   />
+                  <p className="text-[10px] text-gray-500">
+                    Puedes ingresar múltiples números de lote separados por comas o espacios para descargarlos secuencialmente.
+                  </p>
                 </div>
 
                 {/* Acordeón de Credenciales Personalizadas */}
@@ -347,7 +477,7 @@ export default function InterbankingPage() {
                           type="text"
                           value={customCuil}
                           onChange={(e) => setCustomCuil(e.target.value)}
-                          disabled={status === "running"}
+                          disabled={isBusy}
                           placeholder="Sin guiones, ej: 20469191436"
                           className="w-full bg-[#0d131f] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-emerald-500"
                         />
@@ -359,7 +489,7 @@ export default function InterbankingPage() {
                           type="text"
                           value={customUser}
                           onChange={(e) => setCustomUser(e.target.value)}
-                          disabled={status === "running"}
+                          disabled={isBusy}
                           placeholder="Ej: gpainemal"
                           className="w-full bg-[#0d131f] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-emerald-500"
                         />
@@ -372,7 +502,7 @@ export default function InterbankingPage() {
                             type={showPass ? "text" : "password"}
                             value={customPass}
                             onChange={(e) => setCustomPass(e.target.value)}
-                            disabled={status === "running"}
+                            disabled={isBusy}
                             placeholder="Contraseña de acceso"
                             className="w-full bg-[#0d131f] border border-white/5 rounded-lg pl-2.5 pr-8 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-emerald-500"
                           />
@@ -391,7 +521,7 @@ export default function InterbankingPage() {
                         <textarea
                           value={customCookies}
                           onChange={(e) => setCustomCookies(e.target.value)}
-                          disabled={status === "running"}
+                          disabled={isBusy}
                           placeholder='Pega el arreglo JSON de cookies (de EditThisCookie), ej: [{"name": "sib", "value": "..."}]'
                           rows={3}
                           className="w-full bg-[#0d131f] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-emerald-500 font-mono"
@@ -406,27 +536,27 @@ export default function InterbankingPage() {
 
                 {/* Botones de acción */}
                 <div className="flex gap-3 pt-2">
-                  {status === "idle" ? (
+                  {!isBusy ? (
                     <button
                       type="submit"
                       className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all cursor-pointer shadow-lg shadow-emerald-500/10"
                     >
-                      <Play className="w-4 h-4 fill-slate-950 text-slate-950" /> Iniciar Descarga
+                      <Play className="w-4 h-4 fill-slate-950 text-slate-950" /> Iniciar Descargas
                     </button>
                   ) : (
                     <>
-                      {status !== "running" && (
+                      {status !== "running" && status !== "starting" && (
                         <button
                           type="button"
                           onClick={handleReset}
-                          className="flex-1 bg-white/10 hover:bg-white/15 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-all"
+                          className="flex-1 bg-white/10 hover:bg-white/15 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition-all animate-pulse"
                         >
-                          Nueva Búsqueda
+                          Cancelar y Restablecer
                         </button>
                       )}
-                      {status === "running" && (
+                      {(status === "running" || status === "starting") && (
                         <div className="flex-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" /> Procesando en Servidor...
+                          <Loader2 className="w-4 h-4 animate-spin" /> Procesando Lote ({currentLote})...
                         </div>
                       )}
                     </>
@@ -439,17 +569,67 @@ export default function InterbankingPage() {
           {/* Consola e Historial de Descarga */}
           <div className="lg:col-span-7 space-y-6">
             {/* Pantalla de Estado y Archivos Descargados */}
-            {(status === "completed" || status === "failed" || status === "running") && (
+            {/* Cola de Descargas Activa (Barra de progreso visual) */}
+            {totalLotesCount > 1 && (
+              <div className="p-6 rounded-2xl glass-card border border-white/10 space-y-4 animate-fadeIn">
+                <h3 className="text-white font-bold text-base flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-emerald-400 animate-spin" />
+                  Cola de Descarga de Lotes
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>Progreso: {completedLotes.length + failedLotes.length} de {totalLotesCount} lotes</span>
+                    <span className="font-semibold text-emerald-400">
+                      {Math.round(((completedLotes.length + failedLotes.length) / totalLotesCount) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/60 rounded-full h-2 overflow-hidden border border-white/5">
+                    <div 
+                      className="bg-emerald-500 h-2 rounded-full transition-all duration-500" 
+                      style={{ width: `${((completedLotes.length + failedLotes.length) / totalLotesCount) * 100}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 text-xs">
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-2 text-center">
+                      <span className="text-[10px] text-gray-500 block uppercase font-medium">Exitosos</span>
+                      <span className="text-xs font-bold text-emerald-400">{completedLotes.length}</span>
+                    </div>
+                    <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-2 text-center">
+                      <span className="text-[10px] text-gray-500 block uppercase font-medium">Fallidos</span>
+                      <span className="text-xs font-bold text-rose-400">{failedLotes.length}</span>
+                    </div>
+                    <div className="bg-white/5 border border-white/5 rounded-xl p-2 text-center">
+                      <span className="text-[10px] text-gray-500 block uppercase font-medium">Restantes</span>
+                      <span className="text-xs font-bold text-gray-300">{queue.length}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pantalla de Estado y Archivos Descargados */}
+            {(status === "completed" || status === "failed" || status === "running" || status === "starting" || currentLote !== null) && (
               <div className="p-6 rounded-2xl glass-card border border-white/10 space-y-4">
                 <h3 className="text-white font-bold text-base flex items-center gap-2">
                   <CheckCircle2 className={`w-5 h-5 ${status === 'completed' ? 'text-emerald-400' : status === 'failed' ? 'text-rose-400' : 'text-amber-400 animate-pulse'}`} /> 
-                  Resultado del Proceso
+                  Estado: Lote {currentLote}
                 </h3>
+
+                {status === "starting" && (
+                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-300 text-xs leading-relaxed space-y-2">
+                    <p className="font-semibold flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Inicializando lote {currentLote}...
+                    </p>
+                    <p className="text-gray-400">
+                      Iniciando la sesión segura y encolando la solicitud en el servidor. Por favor, espera.
+                    </p>
+                  </div>
+                )}
 
                 {status === "running" && (
                   <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-300 text-xs leading-relaxed space-y-2">
                     <p className="font-semibold flex items-center gap-2">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Ejecutando script de navegación inteligente...
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Procesando lote {currentLote}...
                     </p>
                     <p className="text-gray-400">
                       Esto tomará entre 30 segundos y 1.5 minutos dependiendo de la velocidad de respuesta de Interbanking. Por favor, no cierres esta ventana.
@@ -460,7 +640,7 @@ export default function InterbankingPage() {
                 {status === "failed" && (
                   <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs space-y-2">
                     <p className="font-semibold flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-rose-400" /> Error de Automatización:
+                      <AlertTriangle className="w-4 h-4 text-rose-400" /> Error en Lote {currentLote}:
                     </p>
                     <p className="bg-slate-950/40 p-2.5 rounded-lg font-mono text-[11px] text-red-200 border border-rose-500/5">
                       {errorMsg}
@@ -491,7 +671,7 @@ export default function InterbankingPage() {
                 {status === "completed" && (
                   <div className="space-y-3">
                     <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs">
-                      ✨ El comprobante se ha descargado y procesado correctamente en el servidor.
+                      ✨ El comprobante para el lote {currentLote} se ha descargado correctamente.
                     </div>
 
                     <div className="space-y-2">
@@ -535,6 +715,14 @@ export default function InterbankingPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Aviso de transición de cola */}
+                {queue.length > 1 && (status === "completed" || status === "failed") && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-xs flex items-center gap-2 animate-pulse mt-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Lote finalizado. Iniciando el siguiente lote ({queue[1]}) en unos segundos...</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -545,10 +733,10 @@ export default function InterbankingPage() {
               </h3>
               
               <div className="flex-1 bg-slate-950/80 border border-white/5 rounded-xl p-4 font-mono text-[11px] text-emerald-300/90 overflow-y-auto space-y-1 shadow-inner h-full">
-                {logs.length === 0 ? (
+                {allLogs.length === 0 ? (
                   <p className="text-gray-500 italic">La consola está lista. Inicia el proceso para ver los eventos en tiempo real...</p>
                 ) : (
-                  logs.map((logStr, i) => (
+                  allLogs.map((logStr, i) => (
                     <div key={i} className="leading-5 whitespace-pre-wrap">
                       {logStr}
                     </div>
