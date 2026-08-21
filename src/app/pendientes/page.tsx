@@ -50,6 +50,7 @@ interface Etapa {
   completado: boolean;
   esFinal?: boolean;
   completedAt?: string | null;
+  createdAt?: string | null;
 }
 
 interface Pendiente {
@@ -322,7 +323,6 @@ export default function PendientesPage() {
     }
   };
 
-  // Etapas / Pasos handlers
   const handleInsertEtapa = async (index: number) => {
     if (!db || !selectedId || !newStepTitle.trim()) return;
     try {
@@ -330,7 +330,9 @@ export default function PendientesPage() {
       const newStep: Etapa = {
         id: "etapa-" + generateUniqueId(),
         titulo: newStepTitle.trim(),
-        completado: false
+        completado: false,
+        createdAt: new Date().toISOString(),
+        completedAt: null
       };
       
       const currentEtapas = selectedItem?.etapas || [];
@@ -1078,25 +1080,35 @@ export default function PendientesPage() {
                                     </span>
                                   )}
                                 </span>
-                                {step.completado && (
-                                  <span className="text-[10px] text-emerald-300 font-medium mt-0.5">
-                                    {step.completedAt ? (
-                                      (() => {
-                                        try {
-                                          const dateObj = typeof step.completedAt === "string"
-                                            ? new Date(step.completedAt)
-                                            : (step.completedAt as any).toDate
-                                            ? (step.completedAt as any).toDate()
-                                            : new Date(step.completedAt);
-                                          return `Hecho el ${dateObj.toLocaleDateString("es-AR")}`;
-                                        } catch (e) {
-                                          return "Hecho (fecha inválida)";
-                                        }
-                                      })()
-                                    ) : (
-                                      "Hecho (sin fecha registrada)"
+                                {(step.createdAt || step.completado) && (
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[9px] font-medium text-gray-500">
+                                    {step.createdAt && (
+                                      <span>
+                                        Creado: {new Date(step.createdAt).toLocaleDateString("es-AR")}
+                                      </span>
                                     )}
-                                  </span>
+                                    {step.createdAt && step.completado && <span>•</span>}
+                                    {step.completado && (
+                                      <span className="text-emerald-300 font-semibold">
+                                        {step.completedAt ? (
+                                          (() => {
+                                            try {
+                                              const dateObj = typeof step.completedAt === "string"
+                                                ? new Date(step.completedAt)
+                                                : (step.completedAt as any).toDate
+                                                ? (step.completedAt as any).toDate()
+                                                : new Date(step.completedAt);
+                                              return `Hecho: ${dateObj.toLocaleDateString("es-AR")}`;
+                                            } catch (e) {
+                                              return "Hecho (fecha inválida)";
+                                            }
+                                          })()
+                                        ) : (
+                                          "Hecho (sin fecha registrada)"
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
