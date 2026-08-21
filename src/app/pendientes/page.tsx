@@ -49,6 +49,7 @@ interface Etapa {
   titulo: string;
   completado: boolean;
   esFinal?: boolean;
+  completedAt?: string | null;
 }
 
 interface Pendiente {
@@ -62,6 +63,7 @@ interface Pendiente {
   completedAt: Timestamp | null;
   notasAdicionales: string;
   etapas?: Etapa[];
+  fechaLimite?: string | null;
 }
 
 export default function PendientesPage() {
@@ -83,6 +85,7 @@ export default function PendientesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editorNotes, setEditorNotes] = useState<string>("");
   const [editorDescription, setEditorDescription] = useState<string>("");
+  const [editorFechaLimite, setEditorFechaLimite] = useState<string>("");
   const [isEditorDirty, setIsEditorDirty] = useState<boolean>(false);
   const [savingEditor, setSavingEditor] = useState<boolean>(false);
   const [editorLastSaved, setEditorLastSaved] = useState<Date | null>(null);
@@ -101,6 +104,7 @@ export default function PendientesPage() {
   const [newTitle, setNewTitle] = useState<string>("");
   const [newDescription, setNewDescription] = useState<string>("");
   const [newPriority, setNewPriority] = useState<"alta" | "media" | "baja">("media");
+  const [newFechaLimite, setNewFechaLimite] = useState<string>("");
   const [isAdding, setIsAdding] = useState<boolean>(false);
 
   // Success Toast
@@ -202,7 +206,8 @@ export default function PendientesPage() {
             createdAt: data.createdAt || null,
             completedAt: data.completedAt || null,
             notasAdicionales: data.notasAdicionales || "",
-            etapas: data.etapas || []
+            etapas: data.etapas || [],
+            fechaLimite: data.fechaLimite || null
           };
         });
 
@@ -257,6 +262,7 @@ export default function PendientesPage() {
       if (selectedItem) {
         setEditorNotes(selectedItem.notasAdicionales || "");
         setEditorDescription(selectedItem.descripcion || "");
+        setEditorFechaLimite(selectedItem.fechaLimite || "");
         setIsEditorDirty(false);
         setEditorLastSaved(
           selectedItem.completedAt && typeof selectedItem.completedAt.toDate === "function"
@@ -266,6 +272,7 @@ export default function PendientesPage() {
       } else {
         setEditorNotes("");
         setEditorDescription("");
+        setEditorFechaLimite("");
         setIsEditorDirty(false);
       }
     }, 0);
@@ -293,7 +300,6 @@ export default function PendientesPage() {
     }
   };
 
-  // 4. Save editor notes for selected pending item
   const handleSaveEditorNotes = async () => {
     if (!db || !selectedId) return;
     setSavingEditor(true);
@@ -302,6 +308,7 @@ export default function PendientesPage() {
       await updateDoc(docRef, {
         notasAdicionales: editorNotes,
         descripcion: editorDescription,
+        fechaLimite: editorFechaLimite || null,
         updatedAt: serverTimestamp()
       });
       setIsEditorDirty(false);
@@ -345,9 +352,17 @@ export default function PendientesPage() {
     try {
       const docRef = doc(db, "pendientes", selectedId);
       const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.map(step =>
-        step.id === stepId ? { ...step, completado: !currentCompletado } : step
-      );
+      const updated = currentEtapas.map(step => {
+        if (step.id === stepId) {
+          const nextCompletado = !currentCompletado;
+          return {
+            ...step,
+            completado: nextCompletado,
+            completedAt: nextCompletado ? new Date().toISOString() : null
+          };
+        }
+        return step;
+      });
 
       await updateDoc(docRef, { etapas: updated });
     } catch (err) {
@@ -446,7 +461,6 @@ export default function PendientesPage() {
     );
   };
 
-  // 5. Add a new Pendiente
   const handleAddPendiente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) {
@@ -465,7 +479,8 @@ export default function PendientesPage() {
         creadoPor: getCleanUsername(),
         createdAt: serverTimestamp(),
         completedAt: null,
-        notasAdicionales: ""
+        notasAdicionales: "",
+        fechaLimite: newFechaLimite || null
       });
 
       // Auto-select the newly created item
@@ -475,6 +490,7 @@ export default function PendientesPage() {
       setNewTitle("");
       setNewDescription("");
       setNewPriority("media");
+      setNewFechaLimite("");
       setIsModalOpen(false);
 
       showToast("Proyecto pendiente creado", "success");
@@ -816,6 +832,38 @@ export default function PendientesPage() {
                           </p>
                         )}
 
+                        {/* Date Limit / Invoice Deadline Info */}
+                        {item.fechaLimite && (
+                          (() => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const limitDate = new Date(item.fechaLimite + "T00:00:00");
+                            const isOverdue = limitDate < today;
+                            const formattedDate = limitDate.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+
+                            return (
+                              <div className={`mt-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-semibold border ${
+                                item.completado
+                                  ? "bg-white/5 border-white/5 text-gray-500"
+                                  : isOverdue
+                                  ? "bg-rose-500/10 border-rose-500/20 text-rose-400 animate-pulse"
+                                  : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              }`}>
+                                {isOverdue ? (
+                                  <AlertCircle className="w-3 h-3 shrink-0" />
+                                ) : (
+                                  <Clock className="w-3 h-3 shrink-0" />
+                                )}
+                                <span className="truncate">
+                                  {isOverdue 
+                                    ? `Plazo vencido (${formattedDate})` 
+                                    : `Recibiendo hasta: ${formattedDate}`}
+                                </span>
+                              </div>
+                            );
+                          })()
+                        )}
+
                         {/* Meta Info */}
                         <div className="flex items-center justify-between gap-2.5 pt-0.5 text-[9px] text-gray-500">
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -1021,14 +1069,21 @@ export default function PendientesPage() {
                                 )}
                               </div>
 
-                              <span className={`text-[11px] font-medium truncate flex items-center gap-1.5 ${step.completado ? "line-through text-gray-500 text-opacity-40" : ""}`}>
-                                {step.titulo}
-                                {step.esFinal && (
-                                  <span className="flex items-center gap-0.5 text-[7px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0 rounded border border-amber-500/20 uppercase tracking-wide shrink-0">
-                                    <Flag className="w-2 h-2" /> Final
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <span className={`text-[11px] font-medium truncate flex items-center gap-1.5 ${step.completado ? "line-through text-gray-500 text-opacity-40" : ""}`}>
+                                  {step.titulo}
+                                  {step.esFinal && (
+                                    <span className="flex items-center gap-0.5 text-[7px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0 rounded border border-amber-500/20 uppercase tracking-wide shrink-0">
+                                      <Flag className="w-2 h-2" /> Final
+                                    </span>
+                                  )}
+                                </span>
+                                {step.completado && step.completedAt && (
+                                  <span className="text-[9px] text-emerald-400/60 font-semibold mt-0.5">
+                                    Hecho el {new Date(step.completedAt).toLocaleDateString("es-AR")}
                                   </span>
                                 )}
-                              </span>
+                              </div>
                             </div>
 
                             <div className="flex items-center gap-1 shrink-0 opacity-40 hover:opacity-100 transition-opacity">
@@ -1160,16 +1215,33 @@ export default function PendientesPage() {
                     <h2 className="text-white font-extrabold text-lg tracking-tight leading-snug">
                       {selectedItem.titulo}
                     </h2>
-                    <div className="w-full mt-1.5 max-w-2xl">
-                      <textarea
-                        value={editorDescription}
-                        onChange={(e) => {
-                          setEditorDescription(e.target.value);
-                          setIsEditorDirty(true);
-                        }}
-                        placeholder="Descripción breve del pendiente (puedes editarla aquí)..."
-                        className="w-full bg-[#090d16]/30 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none transition-all resize-none leading-relaxed h-14"
-                      />
+                    <div className="w-full mt-1.5 max-w-2xl flex flex-col sm:flex-row gap-3 items-stretch">
+                      <div className="flex-1">
+                        <textarea
+                          value={editorDescription}
+                          onChange={(e) => {
+                            setEditorDescription(e.target.value);
+                            setIsEditorDirty(true);
+                          }}
+                          placeholder="Descripción breve del pendiente (puedes editarla aquí)..."
+                          className="w-full bg-[#090d16]/30 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none transition-all resize-none leading-relaxed h-14"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+                        <label className="text-[10px] font-bold text-gray-400 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Plazo de Recepción</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={editorFechaLimite}
+                          onChange={(e) => {
+                            setEditorFechaLimite(e.target.value);
+                            setIsEditorDirty(true);
+                          }}
+                          className="bg-[#090d16] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1337,6 +1409,20 @@ export default function PendientesPage() {
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
                     className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors resize-none"
+                  />
+                </div>
+
+                {/* Fecha Límite */}
+                <div className="space-y-1.5">
+                  <label htmlFor="new-fecha-limite" className="text-xs font-semibold text-gray-300">
+                    Fecha Límite / Plazo de Recepción (Opcional)
+                  </label>
+                  <input
+                    id="new-fecha-limite"
+                    type="date"
+                    value={newFechaLimite}
+                    onChange={(e) => setNewFechaLimite(e.target.value)}
+                    className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
                   />
                 </div>
 
