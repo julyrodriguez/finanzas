@@ -1078,9 +1078,24 @@ export default function PendientesPage() {
                                     </span>
                                   )}
                                 </span>
-                                {step.completado && step.completedAt && (
-                                  <span className="text-[9px] text-emerald-400/60 font-semibold mt-0.5">
-                                    Hecho el {new Date(step.completedAt).toLocaleDateString("es-AR")}
+                                {step.completado && (
+                                  <span className="text-[10px] text-emerald-300 font-medium mt-0.5">
+                                    {step.completedAt ? (
+                                      (() => {
+                                        try {
+                                          const dateObj = typeof step.completedAt === "string"
+                                            ? new Date(step.completedAt)
+                                            : (step.completedAt as any).toDate
+                                            ? (step.completedAt as any).toDate()
+                                            : new Date(step.completedAt);
+                                          return `Hecho el ${dateObj.toLocaleDateString("es-AR")}`;
+                                        } catch (e) {
+                                          return "Hecho (fecha inválida)";
+                                        }
+                                      })()
+                                    ) : (
+                                      "Hecho (sin fecha registrada)"
+                                    )}
                                   </span>
                                 )}
                               </div>
