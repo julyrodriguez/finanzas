@@ -685,7 +685,7 @@ export default function OrdenesDeComprasPage() {
 
     const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
 
-    return `\n\nOC ${orden.numOC} ${orden.empresa}
+    return `\n\n\nOC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
