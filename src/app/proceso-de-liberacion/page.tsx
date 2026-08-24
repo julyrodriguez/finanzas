@@ -203,7 +203,7 @@ export default function ProcesoDeLiberacionPage() {
 
     const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
 
-    const copyText = `OC ${orden.numOC} ${orden.empresa}
+    const copyText = `\n\nOC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}

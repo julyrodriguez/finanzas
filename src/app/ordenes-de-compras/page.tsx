@@ -685,7 +685,7 @@ export default function OrdenesDeComprasPage() {
 
     const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
 
-    return `OC ${orden.numOC} ${orden.empresa}
+    return `\n\nOC ${orden.numOC} ${orden.empresa}
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
@@ -702,9 +702,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   // Copy All Filtered Orders to Clipboard
   const handleCopyAll = () => {
     if (filteredOrdenes.length === 0) return;
+    const joinSeparator = filterEstado === "Liberadas" ? "\n\n\n" : "\n";
     const joinedText = filteredOrdenes
       .map((orden) => getOrderCopyText(orden, filterEstado))
-      .join("\n\n\n");
+      .join(joinSeparator);
     navigator.clipboard.writeText(joinedText);
     showToast(`¡Copiadas ${filteredOrdenes.length} órdenes al portapapeles!`);
   };
