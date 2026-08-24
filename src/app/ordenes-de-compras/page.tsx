@@ -689,7 +689,7 @@ export default function OrdenesDeComprasPage() {
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
-Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}\n\n`;
+Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   };
 
   // Copy Order Format to Clipboard
@@ -702,10 +702,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}\n\n`;
   // Copy All Filtered Orders to Clipboard
   const handleCopyAll = () => {
     if (filteredOrdenes.length === 0) return;
-    const joinSeparator = filterEstado === "Liberadas" ? "\n\n\n" : "\n";
     const joinedText = filteredOrdenes
       .map((orden) => getOrderCopyText(orden, filterEstado))
-      .join(joinSeparator);
+      .join("\n\n\n");
     navigator.clipboard.writeText(joinedText);
     showToast(`¡Copiadas ${filteredOrdenes.length} órdenes al portapapeles!`);
   };

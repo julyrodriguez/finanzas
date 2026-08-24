@@ -207,7 +207,7 @@ export default function ProcesoDeLiberacionPage() {
 Proveedor: ${orden.razonSocial}
 Monto: ${formattedMonto}
 Detalle: ${orden.motivo}
-Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}\n\n`;
+Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
     navigator.clipboard.writeText(copyText);
     showToast(`¡Copiado OC ${orden.numOC}!`);
