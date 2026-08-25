@@ -70,6 +70,8 @@ interface SavedQuotation {
   providers: Provider[];
   createdAt?: { seconds: number; nanoseconds: number } | string | null;
   createdBy?: string;
+  isFinalized?: boolean;
+  winningProviderId?: string;
 }
 
 const DEFAULT_UNITS = [
@@ -96,6 +98,8 @@ export default function CotizacionesPage() {
   const [exchangeRate, setExchangeRate] = useState<number>(1400); // 1 USD = 1400 ARS
   const [baseCurrency, setBaseCurrency] = useState<"ARS" | "USD">("ARS");
   const [useRealLots, setUseRealLots] = useState<boolean>(false);
+  const [isFinalized, setIsFinalized] = useState<boolean>(false);
+  const [winningProviderId, setWinningProviderId] = useState<string>("");
 
   // Items State
   const [items, setItems] = useState<Item[]>([
@@ -353,6 +357,9 @@ export default function CotizacionesPage() {
       return;
     }
     setProviders(providers.filter(p => p.id !== id));
+    if (winningProviderId === id) {
+      setWinningProviderId("");
+    }
   };
 
   // Edit Provider Quote detail
@@ -413,7 +420,9 @@ export default function CotizacionesPage() {
       useRealLots,
       items,
       providers,
-      createdBy: user?.email || "Usuario Local"
+      createdBy: user?.email || "Usuario Local",
+      isFinalized,
+      winningProviderId
     };
 
     const db = getFirebaseDb();
@@ -465,6 +474,8 @@ export default function CotizacionesPage() {
     setQuoteName("Nueva Cotización " + new Date().toLocaleDateString("es-AR"));
     setNotes("");
     setCurrentQuoteId(null);
+    setIsFinalized(false);
+    setWinningProviderId("");
     setItems([
       { id: "item-1", name: "Insumo nuevo", baseUnit: "U", targetQuantity: 1 }
     ]);
@@ -493,6 +504,8 @@ export default function CotizacionesPage() {
     setUseRealLots(quote.useRealLots || false);
     setItems(quote.items || []);
     setProviders(quote.providers || []);
+    setIsFinalized(quote.isFinalized || false);
+    setWinningProviderId(quote.winningProviderId || "");
     setActiveTab("editor");
     showToast(`Cotización "${quote.name}" cargada`);
   };
@@ -537,6 +550,8 @@ export default function CotizacionesPage() {
     setUseRealLots(quote.useRealLots || false);
     setItems(quote.items || []);
     setProviders(quote.providers || []);
+    setIsFinalized(false);
+    setWinningProviderId("");
     setActiveTab("editor");
     showToast(`Copia creada de "${quote.name}"`);
   };
@@ -1237,6 +1252,48 @@ export default function CotizacionesPage() {
             className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px]"
           />
         </div>
+
+        {/* Finalización y Proveedor Ganador */}
+        <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <label className="relative flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isFinalized}
+                onChange={(e) => {
+                  setIsFinalized(e.target.checked);
+                  if (!e.target.checked) {
+                    setWinningProviderId("");
+                  } else if (providers.length > 0 && !winningProviderId) {
+                    setWinningProviderId(providers[0].id);
+                  }
+                }}
+                className="w-5 h-5 rounded-lg border-white/10 bg-[#111827]/60 text-emerald-500 focus:ring-emerald-500/30 focus:ring-offset-0 focus:ring-2 cursor-pointer transition-all"
+              />
+              <span className="text-sm font-semibold text-gray-300">Marcar como Finalizada</span>
+            </label>
+          </div>
+
+          {isFinalized && (
+            <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                Proveedor Ganador:
+              </label>
+              <select
+                value={winningProviderId}
+                onChange={(e) => setWinningProviderId(e.target.value)}
+                className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              >
+                <option value="">Seleccionar Ganador...</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ====================================================
@@ -1838,6 +1895,8 @@ export default function CotizacionesPage() {
 
                 const isCurrent = currentQuoteId === quote.id;
 
+                const winningProvider = quote.providers?.find(p => p.id === quote.winningProviderId);
+
                 return (
                   <div
                     key={quote.id}
@@ -1845,7 +1904,9 @@ export default function CotizacionesPage() {
                     className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-4 group ${
                       isCurrent 
                         ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60" 
-                        : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
+                        : quote.isFinalized
+                          ? "bg-blue-950/20 border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-950/30"
+                          : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
                     }`}
                   >
                     <div className="space-y-2">
@@ -1853,11 +1914,18 @@ export default function CotizacionesPage() {
                         <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors truncate pr-4">
                           {quote.name}
                         </h4>
-                        {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20 whitespace-nowrap">
-                            Cargada
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1 items-end shrink-0 select-none">
+                          {isCurrent && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20 whitespace-nowrap">
+                              Cargada
+                            </span>
+                          )}
+                          {quote.isFinalized && (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-extrabold uppercase border border-blue-500/20 whitespace-nowrap">
+                              Finalizada
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       {quote.notes && (
@@ -1880,6 +1948,15 @@ export default function CotizacionesPage() {
                           Provs: <span className="text-gray-300 font-semibold">{quote.providers?.length || 0}</span>
                         </div>
                       </div>
+
+                      {quote.isFinalized && (
+                        <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-blue-400">
+                          <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                          <span className="truncate">
+                            Ganador: <strong className="text-white">{winningProvider ? winningProvider.name : "No seleccionado"}</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between pt-2 text-[10px] text-gray-500 border-t border-white/5">
