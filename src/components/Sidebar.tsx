@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -17,10 +15,14 @@ import {
   ClipboardList
 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const { user } = useAuth();
+
+  const isOrdenesUser = user?.email?.startsWith("ordenes");
 
   const menuItems = [
     {
@@ -29,33 +31,41 @@ export function Sidebar() {
       icon: Home,
       exact: true,
       badge: "Próximamente",
+      hideForOrders: true,
     },
     {
       name: "Pendientes",
       href: "/pendientes",
       icon: ClipboardList,
       exact: false,
+      hideForOrders: true,
     },
     {
-      name: "Órdenes de Compra",
+      name: isOrdenesUser ? "Consulta de Órdenes" : "Órdenes de Compra",
       href: "/ordenes-de-compras",
       icon: ShoppingBag,
       exact: false,
-      badge: "Próximamente",
+      badge: isOrdenesUser ? undefined : "Próximamente",
     },
     {
       name: "Cotizaciones",
       href: "/cotizaciones",
       icon: Calculator,
       exact: false,
+      hideForOrders: true,
     },
     {
       name: "Interbanking",
       href: "/interbanking",
       icon: Building2,
       exact: false,
+      hideForOrders: true,
     },
   ];
+
+  const visibleMenuItems = isOrdenesUser 
+    ? menuItems.filter(item => !item.hideForOrders)
+    : menuItems;
 
   const isActive = (href: string, exact: boolean) => {
     if (exact) {
@@ -113,7 +123,7 @@ export function Sidebar() {
 
           {/* Navigation Items */}
           <nav className="space-y-1.5">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const active = isActive(item.href, item.exact);
               const Icon = item.icon;
               return (
@@ -193,14 +203,14 @@ export function Sidebar() {
           {/* User Profile */}
           <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer">
             <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center font-bold text-white text-xs shadow-md">
-              JD
+              {isOrdenesUser ? "OR" : (user?.displayName || user?.email || "JD").slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-200 truncate">
-                Julián Demo
+                {isOrdenesUser ? "Usuario Órdenes" : (user?.displayName || user?.email?.split("@")[0] || "Julián Demo")}
               </p>
               <p className="text-xs text-gray-400 truncate flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" /> Admin
+                <ShieldCheck className="w-3 h-3 text-emerald-400" /> {isOrdenesUser ? "Consulta" : "Admin"}
               </p>
             </div>
           </div>

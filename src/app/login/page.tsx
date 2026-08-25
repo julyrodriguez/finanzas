@@ -18,11 +18,11 @@ import {
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [isRegister, setIsRegister] = useState(false);
+  const isRegister = false;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { loginWithEmail, registerWithEmail } = useAuth();
+  const { loginWithEmail } = useAuth();
   const router = useRouter();
 
   // Helper function to build email transparently
@@ -40,11 +40,7 @@ export default function LoginPage() {
     const fullEmail = formatEmail(username);
 
     try {
-      if (isRegister) {
-        await registerWithEmail(fullEmail, password);
-      } else {
-        await loginWithEmail(fullEmail, password);
-      }
+      await loginWithEmail(fullEmail, password);
       router.push("/");
     } catch (err) {
       console.error(err);
@@ -94,37 +90,7 @@ export default function LoginPage() {
 
         {/* Card Form */}
         <div className="glass-card border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl backdrop-blur-xl">
-          {/* Form Tabs */}
-          <div className="flex border-b border-white/10 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(false);
-                setError(null);
-              }}
-              className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition-all ${
-                !isRegister
-                  ? "border-emerald-500 text-white"
-                  : "border-transparent text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              Iniciar Sesión
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(true);
-                setError(null);
-              }}
-              className={`flex-1 pb-3 text-sm font-semibold border-b-2 transition-all ${
-                isRegister
-                  ? "border-emerald-500 text-white"
-                  : "border-transparent text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              Registrarse
-            </button>
-          </div>
+          <h2 className="text-lg font-bold text-white mb-6 text-center">Iniciar Sesión</h2>
 
           {/* Error Alert */}
           {error && (
@@ -162,7 +128,6 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
-                  minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -178,11 +143,6 @@ export default function LoginPage() {
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-              ) : isRegister ? (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Crear Cuenta y Entrar</span>
-                </>
               ) : (
                 <>
                   <span>Entrar a la Plataforma</span>
@@ -192,22 +152,9 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Toggle Link below */}
-          <div className="mt-4 text-center space-y-4">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(!isRegister);
-                setError(null);
-              }}
-              className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-            >
-              {isRegister
-                ? "¿Ya tienes una cuenta? Inicia sesión"
-                : "¿No tienes una cuenta? Regístrate aquí"}
-            </button>
-
-            <div className="relative flex py-2 items-center justify-center">
+          {/* Bottom links */}
+          <div className="mt-6 text-center">
+            <div className="relative flex py-2 items-center justify-center mb-4">
               <div className="flex-grow border-t border-white/5"></div>
               <span className="flex-shrink mx-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">o continuar como</span>
               <div className="flex-grow border-t border-white/5"></div>

@@ -49,6 +49,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   };
 
   const { user, loading, logout } = useAuth();
+  const isOrdenesUser = user?.email?.startsWith("ordenes");
 
   const getCleanUsername = () => {
     if (!user) return "Usuario";
@@ -63,11 +64,16 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const isJulian = user ? getCleanUsername().toLowerCase() === "julian" : false;
 
   // Strict Protected Route Guard: If not logged in and not public, redirect immediately to /login
+  // Redirect forbidden pages for 'ordenes' user to /ordenes-de-compras
   useEffect(() => {
     if (!loading && !user && !publicRoute) {
       router.push("/login");
+      return;
     }
-  }, [user, loading, router, publicRoute]);
+    if (!loading && user && isOrdenesUser && pathname !== "/ordenes-de-compras") {
+      router.push("/ordenes-de-compras");
+    }
+  }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
   const menuItems: {
     name: string;
@@ -75,21 +81,24 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     icon: React.ComponentType<{ className?: string }>;
     exact: boolean;
     badge?: string;
+    hideForOrders?: boolean;
   }[] = [
     {
       name: "Calendario",
       href: "/",
       icon: Calendar,
       exact: true,
+      hideForOrders: true,
     },
     {
       name: "Pendientes",
       href: "/pendientes",
       icon: ClipboardList,
       exact: false,
+      hideForOrders: true,
     },
     {
-      name: "Órdenes de Compra",
+      name: isOrdenesUser ? "Consulta de Órdenes" : "Órdenes de Compra",
       href: "/ordenes-de-compras",
       icon: ShoppingBag,
       exact: false,
@@ -99,26 +108,33 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       href: "/proceso-de-liberacion",
       icon: Clock,
       exact: false,
+      hideForOrders: true,
     },
     {
       name: "Distribución",
       href: "/distribucion",
       icon: Percent,
       exact: false,
+      hideForOrders: true,
     },
     {
       name: "Cotizaciones",
       href: "/cotizaciones",
       icon: Calculator,
       exact: false,
+      hideForOrders: true,
     },
     {
       name: "Interbanking",
       href: "/interbanking",
       icon: Building2,
       exact: false,
+      hideForOrders: true,
     },
   ].filter(item => {
+    if (isOrdenesUser && item.hideForOrders) {
+      return false;
+    }
     if (item.href === "/interbanking") {
       return isJulian;
     }
@@ -290,7 +306,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                 </span>
               </div>
               <p className="text-xs text-gray-300 font-medium truncate">
-                {user ? getCleanUsername() : "Acceso Público"}
+                {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Acceso Público")}
               </p>
               <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
                 <div className="bg-emerald-500 h-full w-full rounded-full" />
@@ -302,15 +318,19 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           <div className={`flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
             <div className="flex items-center gap-3 min-w-0">
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
-                {user ? getCleanUsername()[0]?.toUpperCase() : "P"}
+                {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
               </div>
               {isExpanded && (
                 <div className="min-w-0 transition-opacity duration-200">
                   <p className="text-xs font-semibold text-gray-200 truncate">
-                    {user ? getCleanUsername() : "Público"}
+                    {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
                   </p>
                   <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
-                    {user ? (
+                    {isOrdenesUser ? (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-400" /> Consulta
+                      </>
+                    ) : user ? (
                       <>
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Activo
                       </>
