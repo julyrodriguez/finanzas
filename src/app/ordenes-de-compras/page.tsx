@@ -1391,7 +1391,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
                                       autorizada
                                     </span>
-                                  ) : orden.enviado ? (
+                                  ) : orden.mandada ? (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
                                       enviada a autorizar
                                     </span>
@@ -1790,7 +1790,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
                                     autorizada
                                   </span>
-                                ) : orden.enviado ? (
+                                ) : orden.mandada ? (
                                   <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
                                     enviada a autorizar
                                   </span>
