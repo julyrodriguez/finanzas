@@ -71,6 +71,7 @@ interface SavedQuotation {
   createdAt?: { seconds: number; nanoseconds: number } | string | null;
   createdBy?: string;
   isFinalized?: boolean;
+  status?: string;
   winningProviderId?: string;
 }
 
@@ -98,9 +99,10 @@ export default function CotizacionesPage() {
   const [exchangeRate, setExchangeRate] = useState<number>(1400); // 1 USD = 1400 ARS
   const [baseCurrency, setBaseCurrency] = useState<"ARS" | "USD">("ARS");
   const [useRealLots, setUseRealLots] = useState<boolean>(false);
-  const [isFinalized, setIsFinalized] = useState<boolean>(false);
+  const [status, setStatus] = useState<"borrador" | "enviada" | "finalizada">("borrador");
   const [winningProviderId, setWinningProviderId] = useState<string>("");
   const [hasActiveQuote, setHasActiveQuote] = useState<boolean>(false);
+  const isLocked = status !== "borrador";
 
   // Items State
   const [items, setItems] = useState<Item[]>([
@@ -422,8 +424,9 @@ export default function CotizacionesPage() {
       items,
       providers,
       createdBy: user?.email || "Usuario Local",
-      isFinalized,
-      winningProviderId
+      status,
+      isFinalized: status === "finalizada",
+      winningProviderId: status === "finalizada" ? winningProviderId : ""
     };
 
     const db = getFirebaseDb();
@@ -475,7 +478,7 @@ export default function CotizacionesPage() {
     setQuoteName("Nueva Cotización " + new Date().toLocaleDateString("es-AR"));
     setNotes("");
     setCurrentQuoteId(null);
-    setIsFinalized(false);
+    setStatus("borrador");
     setWinningProviderId("");
     setHasActiveQuote(true);
     setItems([
@@ -506,7 +509,13 @@ export default function CotizacionesPage() {
     setUseRealLots(quote.useRealLots || false);
     setItems(quote.items || []);
     setProviders(quote.providers || []);
-    setIsFinalized(quote.isFinalized || false);
+    let loadedStatus: "borrador" | "enviada" | "finalizada" = "borrador";
+    if (quote.status) {
+      loadedStatus = quote.status as "borrador" | "enviada" | "finalizada";
+    } else if (quote.isFinalized) {
+      loadedStatus = "finalizada";
+    }
+    setStatus(loadedStatus);
     setWinningProviderId(quote.winningProviderId || "");
     setHasActiveQuote(true);
     setActiveTab("editor");
@@ -555,7 +564,7 @@ export default function CotizacionesPage() {
     setUseRealLots(quote.useRealLots || false);
     setItems(quote.items || []);
     setProviders(quote.providers || []);
-    setIsFinalized(false);
+    setStatus("borrador");
     setWinningProviderId("");
     setHasActiveQuote(true);
     setActiveTab("editor");
@@ -1197,7 +1206,8 @@ export default function CotizacionesPage() {
                 value={quoteName}
                 onChange={(e) => setQuoteName(e.target.value)}
                 placeholder="Ej. Insumos Planta Munro Q3"
-                className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                disabled={isLocked}
+                className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -1215,7 +1225,8 @@ export default function CotizacionesPage() {
                     value={exchangeRate || ""}
                     onChange={(e) => setExchangeRate(Math.max(1, parseFloat(e.target.value) || 0))}
                     placeholder="1400"
-                    className="w-full bg-[#111827]/60 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                    disabled={isLocked}
+                    className="w-full bg-[#111827]/60 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -1226,7 +1237,8 @@ export default function CotizacionesPage() {
                 <select
                   value={baseCurrency}
                   onChange={(e) => setBaseCurrency(e.target.value as "ARS" | "USD")}
-                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  disabled={isLocked}
+                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="ARS">Pesos Argentinos ($)</option>
                   <option value="USD">Dólares (USD)</option>
@@ -1244,7 +1256,8 @@ export default function CotizacionesPage() {
                 <select
                   value={useRealLots ? "real" : "fraction"}
                   onChange={(e) => setUseRealLots(e.target.value === "real")}
-                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  disabled={isLocked}
+                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="fraction">Fraccional (Exacto)</option>
                   <option value="real">Lotes Completos (Compra Real)</option>
@@ -1270,32 +1283,37 @@ export default function CotizacionesPage() {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Comentarios sobre requerimientos de entrega, plazos de pago, etc."
               rows={1}
-              className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px]"
+              disabled={isLocked}
+              className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px] disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
-          {/* Finalización y Proveedor Ganador */}
+          {/* Estado de la Cotización y Proveedor Ganador */}
           <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <label className="relative flex items-center gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isFinalized}
-                  onChange={(e) => {
-                    setIsFinalized(e.target.checked);
-                    if (!e.target.checked) {
-                      setWinningProviderId("");
-                    } else if (providers.length > 0 && !winningProviderId) {
-                      setWinningProviderId(providers[0].id);
-                    }
-                  }}
-                  className="w-5 h-5 rounded-lg border-white/10 bg-[#111827]/60 text-emerald-500 focus:ring-emerald-500/30 focus:ring-offset-0 focus:ring-2 cursor-pointer transition-all"
-                />
-                <span className="text-sm font-semibold text-gray-300">Marcar como Finalizada</span>
+            <div className="flex items-center gap-3">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                Estado de la Cotización:
               </label>
+              <select
+                value={status}
+                onChange={(e) => {
+                  const newStatus = e.target.value as "borrador" | "enviada" | "finalizada";
+                  setStatus(newStatus);
+                  if (newStatus !== "finalizada") {
+                    setWinningProviderId("");
+                  } else if (providers.length > 0 && !winningProviderId) {
+                    setWinningProviderId(providers[0].id);
+                  }
+                }}
+                className="bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              >
+                <option value="borrador">Borrador (Abierta)</option>
+                <option value="enviada">Enviada (Cerrada para edición)</option>
+                <option value="finalizada">Finalizada (Cerrada y adjudicada)</option>
+              </select>
             </div>
 
-            {isFinalized && (
+            {status === "finalizada" && (
               <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   Proveedor Ganador:
@@ -1338,7 +1356,8 @@ export default function CotizacionesPage() {
               
               <button
                 onClick={handleAddItem}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm"
+                disabled={isLocked}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Añadir Ítem
@@ -1364,14 +1383,16 @@ export default function CotizacionesPage() {
                           value={item.name}
                           onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
                           placeholder="Ej. Resma A4, Café en Grano, Azúcar..."
-                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                          disabled={isLocked}
+                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="p-4 w-60">
                         <select
                           value={item.baseUnit}
                           onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
-                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                          disabled={isLocked}
+                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {DEFAULT_UNITS.map(opt => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1385,7 +1406,8 @@ export default function CotizacionesPage() {
                             value={item.targetQuantity || ""}
                             onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
                             placeholder="Cantidad"
-                            className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                            disabled={isLocked}
+                            className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                           <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500">
                             {item.baseUnit}
@@ -1395,7 +1417,7 @@ export default function CotizacionesPage() {
                       <td className="p-4 text-center">
                         <button
                           onClick={() => handleDeleteItem(item.id)}
-                          disabled={items.length === 1}
+                          disabled={isLocked || items.length === 1}
                           className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                           title="Eliminar ítem"
                         >
@@ -1424,7 +1446,8 @@ export default function CotizacionesPage() {
               
               <button
                 onClick={handleAddProvider}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm"
+                disabled={isLocked}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Añadir Proveedor
@@ -1445,13 +1468,15 @@ export default function CotizacionesPage() {
                           const name = e.target.value;
                           setProviders(providers.map(p => p.id === provider.id ? { ...p, name } : p));
                         }}
-                        className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none font-bold text-white text-base py-1 px-2 rounded -ml-2 transition-all w-2/3"
+                        disabled={isLocked}
+                        className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none font-bold text-white text-base py-1 px-2 rounded -ml-2 transition-all w-2/3 disabled:opacity-50"
                         placeholder="Nombre del Proveedor"
                       />
                       
                       <button
                         onClick={() => handleDeleteProvider(provider.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/10"
+                        disabled={isLocked}
+                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Eliminar este proveedor"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -1487,9 +1512,10 @@ export default function CotizacionesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateQuote(provider.id, item.id, "presentationType", "base")}
-                                  className={`px-2.5 py-1 rounded font-semibold ${
+                                  disabled={isLocked}
+                                  className={`px-2.5 py-1 rounded font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                     quote.presentationType === "base"
-                                      ? "bg-emerald-500 text-white"
+                                      ? "bg-emerald-500 text-white font-bold"
                                       : "text-gray-400 hover:text-gray-200"
                                   }`}
                                 >
@@ -1498,9 +1524,10 @@ export default function CotizacionesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleUpdateQuote(provider.id, item.id, "presentationType", "package")}
-                                  className={`px-2.5 py-1 rounded font-semibold ${
+                                  disabled={isLocked}
+                                  className={`px-2.5 py-1 rounded font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                                     quote.presentationType === "package"
-                                      ? "bg-emerald-500 text-white"
+                                      ? "bg-emerald-500 text-white font-bold"
                                       : "text-gray-400 hover:text-gray-200"
                                   }`}
                                 >
@@ -1519,7 +1546,8 @@ export default function CotizacionesPage() {
                                     value={quote.presentationName}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "presentationName", e.target.value)}
                                     placeholder="Ej. Caja x12"
-                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none"
+                                    disabled={isLocked}
+                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none disabled:opacity-50"
                                   />
                                 </div>
                                 <div className="space-y-1">
@@ -1530,7 +1558,8 @@ export default function CotizacionesPage() {
                                     value={quote.unitsPerPresentation || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "unitsPerPresentation", e.target.value)}
                                     placeholder="Ej. 12"
-                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                                    disabled={isLocked}
+                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                                   />
                                 </div>
                               </div>
@@ -1552,7 +1581,8 @@ export default function CotizacionesPage() {
                                     value={quote.price || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "price", e.target.value)}
                                     placeholder="0.00"
-                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                                    disabled={isLocked}
+                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                 </div>
                               </div>
@@ -1563,7 +1593,8 @@ export default function CotizacionesPage() {
                                 <select
                                   value={quote.currency}
                                   onChange={(e) => handleUpdateQuote(provider.id, item.id, "currency", e.target.value)}
-                                  className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 h-[30px]"
+                                  disabled={isLocked}
+                                  className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 h-[30px] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   <option value="ARS">Pesos ($)</option>
                                   <option value="USD">Dólares (USD)</option>
@@ -1579,7 +1610,8 @@ export default function CotizacionesPage() {
                                     value={quote.discount || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "discount", e.target.value)}
                                     placeholder="0"
-                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-2.5 pr-6 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+                                    disabled={isLocked}
+                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-2.5 pr-6 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-[10px] font-semibold">%</span>
                                 </div>
@@ -1596,7 +1628,8 @@ export default function CotizacionesPage() {
                                 value={quote.specification || ""}
                                 onChange={(e) => handleUpdateQuote(provider.id, item.id, "specification", e.target.value)}
                                 placeholder="ej. Marca Philips, 12V, Color Calido, etc."
-                                className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                                disabled={isLocked}
+                                className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                               />
                             </div>
 
@@ -1926,9 +1959,11 @@ export default function CotizacionesPage() {
                     className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-4 group ${
                       isCurrent 
                         ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60" 
-                        : quote.isFinalized
+                        : quote.status === "finalizada" || quote.isFinalized
                           ? "bg-blue-950/20 border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-950/30"
-                          : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
+                          : quote.status === "enviada"
+                            ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-950/30"
+                            : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
                     }`}
                   >
                     <div className="space-y-2">
@@ -1942,7 +1977,12 @@ export default function CotizacionesPage() {
                               Cargada
                             </span>
                           )}
-                          {quote.isFinalized && (
+                          {quote.status === "enviada" && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-extrabold uppercase border border-amber-500/20 whitespace-nowrap">
+                              Enviada
+                            </span>
+                          )}
+                          {(quote.status === "finalizada" || quote.isFinalized) && (
                             <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-extrabold uppercase border border-blue-500/20 whitespace-nowrap">
                               Finalizada
                             </span>
@@ -1971,7 +2011,7 @@ export default function CotizacionesPage() {
                         </div>
                       </div>
 
-                      {quote.isFinalized && (
+                      {(quote.status === "finalizada" || quote.isFinalized) && (
                         <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-blue-400">
                           <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
                           <span className="truncate">
