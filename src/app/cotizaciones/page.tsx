@@ -100,6 +100,7 @@ export default function CotizacionesPage() {
   const [useRealLots, setUseRealLots] = useState<boolean>(false);
   const [isFinalized, setIsFinalized] = useState<boolean>(false);
   const [winningProviderId, setWinningProviderId] = useState<string>("");
+  const [hasActiveQuote, setHasActiveQuote] = useState<boolean>(false);
 
   // Items State
   const [items, setItems] = useState<Item[]>([
@@ -476,6 +477,7 @@ export default function CotizacionesPage() {
     setCurrentQuoteId(null);
     setIsFinalized(false);
     setWinningProviderId("");
+    setHasActiveQuote(true);
     setItems([
       { id: "item-1", name: "Insumo nuevo", baseUnit: "U", targetQuantity: 1 }
     ]);
@@ -506,6 +508,7 @@ export default function CotizacionesPage() {
     setProviders(quote.providers || []);
     setIsFinalized(quote.isFinalized || false);
     setWinningProviderId(quote.winningProviderId || "");
+    setHasActiveQuote(true);
     setActiveTab("editor");
     showToast(`Cotización "${quote.name}" cargada`);
   };
@@ -532,6 +535,8 @@ export default function CotizacionesPage() {
       }
       if (currentQuoteId === id) {
         setCurrentQuoteId(null);
+        setHasActiveQuote(false);
+        setActiveTab("historial");
       }
     } catch (error) {
       console.error("Error deleting quote:", error);
@@ -552,6 +557,7 @@ export default function CotizacionesPage() {
     setProviders(quote.providers || []);
     setIsFinalized(false);
     setWinningProviderId("");
+    setHasActiveQuote(true);
     setActiveTab("editor");
     showToast(`Copia creada de "${quote.name}"`);
   };
@@ -1097,7 +1103,11 @@ export default function CotizacionesPage() {
         {/* Navigation Tabs */}
         <div className="flex p-1 bg-[#101725] border border-white/5 rounded-2xl">
           <button
-            onClick={() => setActiveTab("historial")}
+            onClick={() => {
+              setActiveTab("historial");
+              setCurrentQuoteId(null);
+              setHasActiveQuote(false);
+            }}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === "historial"
                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
@@ -1113,27 +1123,35 @@ export default function CotizacionesPage() {
             )}
           </button>
           <button
-            onClick={() => setActiveTab("editor")}
+            disabled={!hasActiveQuote}
+            onClick={() => hasActiveQuote && setActiveTab("editor")}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === "editor"
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+              !hasActiveQuote 
+                ? "text-gray-600 cursor-not-allowed opacity-50"
+                : activeTab === "editor"
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
             }`}
+            title={!hasActiveQuote ? "Abrí o creá una cotización para editar" : ""}
           >
             <Calculator className="w-4 h-4" />
             Editor
           </button>
           <button
-            onClick={() => setActiveTab("comparador")}
+            disabled={!hasActiveQuote}
+            onClick={() => hasActiveQuote && setActiveTab("comparador")}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === "comparador"
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+              !hasActiveQuote 
+                ? "text-gray-600 cursor-not-allowed opacity-50"
+                : activeTab === "comparador"
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
             }`}
+            title={!hasActiveQuote ? "Abrí o creá una cotización para ver la matriz" : ""}
           >
             <Scale className="w-4 h-4" />
             Matriz Comparativa
-            {providers.length > 0 && (
+            {hasActiveQuote && providers.length > 0 && (
               <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
                 {providers.length}
               </span>
@@ -1150,13 +1168,15 @@ export default function CotizacionesPage() {
             Nueva Cotización
           </button>
           
-          <button
-            onClick={handleSaveQuotation}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-bold transition-all"
-          >
-            <Save className="w-4 h-4" />
-            Guardar Cambios
-          </button>
+          {hasActiveQuote && (
+            <button
+              onClick={handleSaveQuotation}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-bold transition-all animate-fadeIn"
+            >
+              <Save className="w-4 h-4" />
+              Guardar Cambios
+            </button>
+          )}
 
           {/* Database indicator */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 text-[11px] text-gray-400">
@@ -1167,134 +1187,136 @@ export default function CotizacionesPage() {
       </div>
 
       {/* Quote Meta Information */}
-      <div className="glass-card rounded-3xl p-6 mb-8 border border-white/5">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nombre del Presupuesto / Proyecto</label>
-            <input
-              type="text"
-              value={quoteName}
-              onChange={(e) => setQuoteName(e.target.value)}
-              placeholder="Ej. Insumos Planta Munro Q3"
-              className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+      {hasActiveQuote && (
+        <div className="glass-card rounded-3xl p-6 mb-8 border border-white/5 animate-fadeIn">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nombre del Presupuesto / Proyecto</label>
+              <input
+                type="text"
+                value={quoteName}
+                onChange={(e) => setQuoteName(e.target.value)}
+                placeholder="Ej. Insumos Planta Munro Q3"
+                className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
+
+            <div className="space-y-2 col-span-1 lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {/* Exchange Rate Input */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  TC Mayorista
+                  <span className="text-[10px] text-gray-500">(1 USD a ARS)</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-semibold">$</span>
+                  <input
+                    type="number"
+                    value={exchangeRate || ""}
+                    onChange={(e) => setExchangeRate(Math.max(1, parseFloat(e.target.value) || 0))}
+                    placeholder="1400"
+                    className="w-full bg-[#111827]/60 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Base Comparison Currency Selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Moneda Base</label>
+                <select
+                  value={baseCurrency}
+                  onChange={(e) => setBaseCurrency(e.target.value as "ARS" | "USD")}
+                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="ARS">Pesos Argentinos ($)</option>
+                  <option value="USD">Dólares (USD)</option>
+                </select>
+              </div>
+
+              {/* Pricing Mode Option */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                  Lotes Enteros
+                  <span title="Activar para calcular precios finales en base a cajas/packs enteros en vez de fracciones." className="cursor-help flex items-center">
+                    <HelpCircle className="w-3 h-3 text-gray-500 hover:text-gray-300" />
+                  </span>
+                </label>
+                <select
+                  value={useRealLots ? "real" : "fraction"}
+                  onChange={(e) => setUseRealLots(e.target.value === "real")}
+                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="fraction">Fraccional (Exacto)</option>
+                  <option value="real">Lotes Completos (Compra Real)</option>
+                </select>
+              </div>
+
+              {/* Total Items Info */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Resumen Ítems</label>
+                <div className="bg-[#111827]/40 border border-white/5 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs text-gray-300 h-[42px]">
+                  <span>Ítems: <b>{items.length}</b></span>
+                  <span>Prov: <b>{providers.length}</b></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes Field */}
+          <div className="mt-4 space-y-1">
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Notas o Descripción</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Comentarios sobre requerimientos de entrega, plazos de pago, etc."
+              rows={1}
+              className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px]"
             />
           </div>
 
-          <div className="space-y-2 col-span-1 lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {/* Exchange Rate Input */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                TC Mayorista
-                <span className="text-[10px] text-gray-500">(1 USD a ARS)</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-semibold">$</span>
+          {/* Finalización y Proveedor Ganador */}
+          <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <label className="relative flex items-center gap-3 cursor-pointer select-none">
                 <input
-                  type="number"
-                  value={exchangeRate || ""}
-                  onChange={(e) => setExchangeRate(Math.max(1, parseFloat(e.target.value) || 0))}
-                  placeholder="1400"
-                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                  type="checkbox"
+                  checked={isFinalized}
+                  onChange={(e) => {
+                    setIsFinalized(e.target.checked);
+                    if (!e.target.checked) {
+                      setWinningProviderId("");
+                    } else if (providers.length > 0 && !winningProviderId) {
+                      setWinningProviderId(providers[0].id);
+                    }
+                  }}
+                  className="w-5 h-5 rounded-lg border-white/10 bg-[#111827]/60 text-emerald-500 focus:ring-emerald-500/30 focus:ring-offset-0 focus:ring-2 cursor-pointer transition-all"
                 />
-              </div>
-            </div>
-
-            {/* Base Comparison Currency Selection */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Moneda Base</label>
-              <select
-                value={baseCurrency}
-                onChange={(e) => setBaseCurrency(e.target.value as "ARS" | "USD")}
-                className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-              >
-                <option value="ARS">Pesos Argentinos ($)</option>
-                <option value="USD">Dólares (USD)</option>
-              </select>
-            </div>
-
-            {/* Pricing Mode Option */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                Lotes Enteros
-                <span title="Activar para calcular precios finales en base a cajas/packs enteros en vez de fracciones." className="cursor-help flex items-center">
-                  <HelpCircle className="w-3 h-3 text-gray-500 hover:text-gray-300" />
-                </span>
+                <span className="text-sm font-semibold text-gray-300">Marcar como Finalizada</span>
               </label>
-              <select
-                value={useRealLots ? "real" : "fraction"}
-                onChange={(e) => setUseRealLots(e.target.value === "real")}
-                className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-              >
-                <option value="fraction">Fraccional (Exacto)</option>
-                <option value="real">Lotes Completos (Compra Real)</option>
-              </select>
             </div>
 
-            {/* Total Items Info */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Resumen Ítems</label>
-              <div className="bg-[#111827]/40 border border-white/5 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs text-gray-300 h-[42px]">
-                <span>Ítems: <b>{items.length}</b></span>
-                <span>Prov: <b>{providers.length}</b></span>
+            {isFinalized && (
+              <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  Proveedor Ganador:
+                </label>
+                <select
+                  value={winningProviderId}
+                  onChange={(e) => setWinningProviderId(e.target.value)}
+                  className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">Seleccionar Ganador...</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
+            )}
           </div>
         </div>
-
-        {/* Notes Field */}
-        <div className="mt-4 space-y-1">
-          <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Notas o Descripción</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Comentarios sobre requerimientos de entrega, plazos de pago, etc."
-            rows={1}
-            className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px]"
-          />
-        </div>
-
-        {/* Finalización y Proveedor Ganador */}
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <label className="relative flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isFinalized}
-                onChange={(e) => {
-                  setIsFinalized(e.target.checked);
-                  if (!e.target.checked) {
-                    setWinningProviderId("");
-                  } else if (providers.length > 0 && !winningProviderId) {
-                    setWinningProviderId(providers[0].id);
-                  }
-                }}
-                className="w-5 h-5 rounded-lg border-white/10 bg-[#111827]/60 text-emerald-500 focus:ring-emerald-500/30 focus:ring-offset-0 focus:ring-2 cursor-pointer transition-all"
-              />
-              <span className="text-sm font-semibold text-gray-300">Marcar como Finalizada</span>
-            </label>
-          </div>
-
-          {isFinalized && (
-            <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-                Proveedor Ganador:
-              </label>
-              <select
-                value={winningProviderId}
-                onChange={(e) => setWinningProviderId(e.target.value)}
-                className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-              >
-                <option value="">Seleccionar Ganador...</option>
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ====================================================
           TAB CONTENT: EDITOR DE COTIZACIÓN
