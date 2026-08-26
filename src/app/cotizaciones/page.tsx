@@ -22,6 +22,7 @@ import {
   Calculator, 
   AlertCircle, 
   CheckCircle2, 
+  Calendar,
   Copy, 
   HelpCircle, 
   RefreshCw, 
@@ -73,6 +74,7 @@ interface SavedQuotation {
   isFinalized?: boolean;
   status?: string;
   winningProviderId?: string;
+  sentAt?: string;
 }
 
 const DEFAULT_UNITS = [
@@ -101,6 +103,7 @@ export default function CotizacionesPage() {
   const [useRealLots, setUseRealLots] = useState<boolean>(false);
   const [status, setStatus] = useState<"borrador" | "enviada" | "finalizada" | "cancelada">("borrador");
   const [winningProviderId, setWinningProviderId] = useState<string>("");
+  const [sentAt, setSentAt] = useState<string>("");
   const [hasActiveQuote, setHasActiveQuote] = useState<boolean>(false);
   const isLocked = status !== "borrador";
 
@@ -426,7 +429,8 @@ export default function CotizacionesPage() {
       createdBy: user?.email || "Usuario Local",
       status,
       isFinalized: status === "finalizada",
-      winningProviderId: status === "finalizada" ? winningProviderId : ""
+      winningProviderId: status === "finalizada" ? winningProviderId : "",
+      sentAt: status === "enviada" ? sentAt : ""
     };
 
     const db = getFirebaseDb();
@@ -480,6 +484,7 @@ export default function CotizacionesPage() {
     setCurrentQuoteId(null);
     setStatus("borrador");
     setWinningProviderId("");
+    setSentAt("");
     setHasActiveQuote(true);
     setItems([
       { id: "item-1", name: "Insumo nuevo", baseUnit: "U", targetQuantity: 1 }
@@ -517,6 +522,7 @@ export default function CotizacionesPage() {
     }
     setStatus(loadedStatus);
     setWinningProviderId(quote.winningProviderId || "");
+    setSentAt(quote.sentAt || "");
     setHasActiveQuote(true);
     setActiveTab("editor");
     showToast(`Cotización "${quote.name}" cargada`);
@@ -1304,6 +1310,13 @@ export default function CotizacionesPage() {
                   } else if (providers.length > 0 && !winningProviderId) {
                     setWinningProviderId(providers[0].id);
                   }
+                  if (newStatus === "enviada" && !sentAt) {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    setSentAt(`${yyyy}-${mm}-${dd}`);
+                  }
                 }}
                 className="bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               >
@@ -1331,6 +1344,20 @@ export default function CotizacionesPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {status === "enviada" && (
+              <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  Fecha de Envío:
+                </label>
+                <input
+                  type="date"
+                  value={sentAt}
+                  onChange={(e) => setSentAt(e.target.value)}
+                  className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                />
               </div>
             )}
           </div>
@@ -2024,6 +2051,15 @@ export default function CotizacionesPage() {
                           <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
                           <span className="truncate">
                             Ganador: <strong className="text-white">{winningProvider ? winningProvider.name : "No seleccionado"}</strong>
+                          </span>
+                        </div>
+                      )}
+
+                      {quote.status === "enviada" && quote.sentAt && (
+                        <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-amber-400">
+                          <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span className="truncate">
+                            Enviada el: <strong className="text-white">{quote.sentAt.includes("-") ? quote.sentAt.split("-").reverse().join("/") : quote.sentAt}</strong>
                           </span>
                         </div>
                       )}
