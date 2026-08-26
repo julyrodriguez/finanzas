@@ -99,7 +99,7 @@ export default function CotizacionesPage() {
   const [exchangeRate, setExchangeRate] = useState<number>(1400); // 1 USD = 1400 ARS
   const [baseCurrency, setBaseCurrency] = useState<"ARS" | "USD">("ARS");
   const [useRealLots, setUseRealLots] = useState<boolean>(false);
-  const [status, setStatus] = useState<"borrador" | "enviada" | "finalizada">("borrador");
+  const [status, setStatus] = useState<"borrador" | "enviada" | "finalizada" | "cancelada">("borrador");
   const [winningProviderId, setWinningProviderId] = useState<string>("");
   const [hasActiveQuote, setHasActiveQuote] = useState<boolean>(false);
   const isLocked = status !== "borrador";
@@ -509,9 +509,9 @@ export default function CotizacionesPage() {
     setUseRealLots(quote.useRealLots || false);
     setItems(quote.items || []);
     setProviders(quote.providers || []);
-    let loadedStatus: "borrador" | "enviada" | "finalizada" = "borrador";
+    let loadedStatus: "borrador" | "enviada" | "finalizada" | "cancelada" = "borrador";
     if (quote.status) {
-      loadedStatus = quote.status as "borrador" | "enviada" | "finalizada";
+      loadedStatus = quote.status as "borrador" | "enviada" | "finalizada" | "cancelada";
     } else if (quote.isFinalized) {
       loadedStatus = "finalizada";
     }
@@ -1297,7 +1297,7 @@ export default function CotizacionesPage() {
               <select
                 value={status}
                 onChange={(e) => {
-                  const newStatus = e.target.value as "borrador" | "enviada" | "finalizada";
+                  const newStatus = e.target.value as "borrador" | "enviada" | "finalizada" | "cancelada";
                   setStatus(newStatus);
                   if (newStatus !== "finalizada") {
                     setWinningProviderId("");
@@ -1310,6 +1310,7 @@ export default function CotizacionesPage() {
                 <option value="borrador">Borrador (Abierta)</option>
                 <option value="enviada">Enviada (Cerrada para edición)</option>
                 <option value="finalizada">Finalizada (Cerrada y adjudicada)</option>
+                <option value="cancelada">Cancelada (Cerrada)</option>
               </select>
             </div>
 
@@ -1963,7 +1964,9 @@ export default function CotizacionesPage() {
                           ? "bg-blue-950/20 border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-950/30"
                           : quote.status === "enviada"
                             ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-950/30"
-                            : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
+                            : quote.status === "cancelada"
+                              ? "bg-red-950/20 border-red-500/30 hover:border-red-500/50 hover:bg-red-950/30"
+                              : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
                     }`}
                   >
                     <div className="space-y-2">
@@ -1985,6 +1988,11 @@ export default function CotizacionesPage() {
                           {(quote.status === "finalizada" || quote.isFinalized) && (
                             <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-extrabold uppercase border border-blue-500/20 whitespace-nowrap">
                               Finalizada
+                            </span>
+                          )}
+                          {quote.status === "cancelada" && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-[10px] font-extrabold uppercase border border-red-500/20 whitespace-nowrap">
+                              Cancelada
                             </span>
                           )}
                         </div>
