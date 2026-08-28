@@ -59,35 +59,47 @@ export function BatchLiberateModal({
     return withoutLeadingZeros || cleaned;
   };
 
-  // Extract candidate OC tokens from pasted text
+  // Extract candidate OC tokens from pasted text intelligently
   const extractedTokens = useMemo(() => {
     if (!inputText.trim()) return [];
 
     const lines = inputText.split("\n");
-    const tokenSet = new Set<string>();
+    const normalizedMap = new Map<string, string>(); // normToken -> rawToken
 
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
-      // Match patterns like "OC 45892", "OC 045892", "OC-45892", "OC#45892"
+      // 1. Explicit OC/SOL patterns: "OC 45892", "OC 045892", "OC-45892", "SOL 1234"
       const ocMatches = trimmed.match(/(?:OC|SOL)[-_\s:#]*([0-9A-Za-z]+)/gi);
       if (ocMatches) {
         for (const m of ocMatches) {
-          tokenSet.add(m.trim());
+          const norm = normalizeOC(m);
+          if (norm && !normalizedMap.has(norm)) {
+            normalizedMap.set(norm, m.trim());
+          }
         }
       }
 
-      // Also match standalone numbers at start of line or tab-separated
-      const numberMatches = trimmed.match(/\b\d{4,10}\b/g);
-      if (numberMatches) {
-        for (const num of numberMatches) {
-          tokenSet.add(num.trim());
+      // 2. Standalone number lines (e.g. column pasted from Excel like "45892" or "045892")
+      // Ignore lines that are clearly descriptions, amounts, or other metadata fields
+      const isMetadataLine = /^(?:Monto|Proveedor|Detalle|Forma de Pago|Link|Notas|Total|Prov|Fecha):/i.test(trimmed) || trimmed.includes("$");
+      
+      if (!isMetadataLine) {
+        // Match numbers if the line starts with a number or is a column cell
+        const standaloneMatches = trimmed.match(/\b\d{4,10}\b/g);
+        if (standaloneMatches) {
+          for (const num of standaloneMatches) {
+            const norm = normalizeOC(num);
+            if (norm && !normalizedMap.has(norm)) {
+              normalizedMap.set(norm, num.trim());
+            }
+          }
         }
       }
     }
 
-    return Array.from(tokenSet);
+    return Array.from(normalizedMap.values());
   }, [inputText]);
 
   // Combine memory orders with any extra orders fetched from DB
@@ -396,11 +408,58 @@ o simplemente pega una lista de números de OC..."
                 </div>
               )}
 
+              {/* Not Found Tokens Preview */}
+              {notFoundList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-bold text-amber-400 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>Tokens / OCs no encontradas ({notFoundList.length}):</span>
+                    </div>
+                    <button
+                      onClick={handleDeepSearch}
+                      disabled={searchingDb}
+                      className="text-[11px] text-amber-300 hover:text-amber-200 underline font-normal cursor-pointer"
+                    >
+                      {searchingDb ? "Buscando en base de datos..." : "Buscar en base de datos"}
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-2">
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {notFoundList.map((m, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-xs font-bold"
+                        >
+                          <span>{m.rawToken}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-[10.5px] text-amber-300/80 leading-relaxed">
+                      Estos valores no coincidieron con ninguna orden registrada en el sistema (pueden ser montos o números que no pertenecen a una OC).
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Already liberated preview */}
-              {alreadyLiberatedList.length > 0 && toLiberateList.length === 0 && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                  <span>Todas las {alreadyLiberatedList.length} órdenes detectadas ya se encuentran marcadas como liberadas.</span>
+              {alreadyLiberatedList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Órdenes ya liberadas anteriormente ({alreadyLiberatedList.length}):</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                    {alreadyLiberatedList.map((m, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 font-mono text-[11px]"
+                      >
+                        {m.order?.numOC || m.rawToken}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
