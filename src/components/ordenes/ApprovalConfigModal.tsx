@@ -5,14 +5,9 @@ import {
   Settings, 
   X, 
   Plus, 
-  Trash2, 
   Save, 
   RotateCcw, 
-  ShieldCheck, 
-  DollarSign, 
-  Users,
-  Sparkles,
-  UserCheck
+  Users
 } from "lucide-react";
 import { 
   ApprovalConfig, 
@@ -28,6 +23,94 @@ interface ApprovalConfigModalProps {
   showToast?: (message: string) => void;
 }
 
+interface SignerSectionBoxProps {
+  label: string;
+  hint: string;
+  signers: string[];
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  badgeClass: string;
+}
+
+function SignerSectionBox({
+  label,
+  hint,
+  signers,
+  onAdd,
+  onRemove,
+  badgeClass,
+}: SignerSectionBoxProps) {
+  const [inputVal, setInputVal] = useState("");
+
+  const handleAdd = () => {
+    const trimmed = inputVal.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setInputVal("");
+  };
+
+  return (
+    <div className="p-3 rounded-xl bg-[#111726]/70 border border-slate-800 space-y-2 flex flex-col justify-between">
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-white text-xs">{label}</span>
+          <span className="text-[10px] text-slate-400">({signers.length} {signers.length === 1 ? "firmante" : "firmantes"})</span>
+        </div>
+        <p className="text-[10.5px] text-slate-400 leading-snug">{hint}</p>
+
+        {/* Tag pills */}
+        <div className="flex flex-wrap gap-1.5 pt-1 min-h-[30px]">
+          {signers.map((name) => (
+            <span
+              key={name}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${badgeClass}`}
+            >
+              <span>{name}</span>
+              <button
+                type="button"
+                onClick={() => onRemove(name)}
+                className="hover:text-red-400 transition-colors p-0.5 opacity-70 hover:opacity-100 cursor-pointer"
+                title={`Quitar a ${name}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          {signers.length === 0 && (
+            <span className="text-[11px] text-amber-400 italic py-1">Sin firmantes asignados</span>
+          )}
+        </div>
+      </div>
+
+      {/* Inline Add Input */}
+      <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/80">
+        <input
+          type="text"
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAdd();
+            }
+          }}
+          placeholder="Nombre del firmante..."
+          className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#080c16] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs font-medium"
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={!inputVal.trim()}
+          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Agregar</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ApprovalConfigModal({
   isOpen,
   onClose,
@@ -35,64 +118,34 @@ export function ApprovalConfigModal({
   showToast,
 }: ApprovalConfigModalProps) {
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_APPROVAL_CONFIG);
-  const [newSignerName, setNewSignerName] = useState("");
-  const [newSignerLimit, setNewSignerLimit] = useState<string>("5000000");
 
   useEffect(() => {
     if (isOpen) {
       setConfig(getStoredApprovalConfig());
-      setNewSignerName("");
-      setNewSignerLimit("5000000");
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleUpdateSignerLimit = (name: string, newLimit: number) => {
+  const addSignerTo = (key: keyof ApprovalConfig, name: string) => {
+    const list = Array.isArray(config[key]) ? (config[key] as string[]) : [];
+    if (list.includes(name)) return;
     setConfig((prev) => ({
       ...prev,
-      limitesIndividuales: {
-        ...prev.limitesIndividuales,
-        [name]: Math.max(0, newLimit),
-      },
+      [key]: [...list, name],
     }));
   };
 
-  const handleAddAreaSigner = () => {
-    const trimmed = newSignerName.trim();
-    if (!trimmed) return;
-    const limitNum = Math.max(0, Number(newSignerLimit) || config.limiteNivel1);
-
-    setConfig((prev) => {
-      const exists = prev.firmantesAreaNivel1.includes(trimmed);
-      return {
-        ...prev,
-        firmantesAreaNivel1: exists ? prev.firmantesAreaNivel1 : [...prev.firmantesAreaNivel1, trimmed],
-        limitesIndividuales: {
-          ...prev.limitesIndividuales,
-          [trimmed]: limitNum,
-        },
-      };
-    });
-
-    setNewSignerName("");
-    setNewSignerLimit("5000000");
-  };
-
-  const handleRemoveAreaSigner = (name: string) => {
-    setConfig((prev) => {
-      const newLimits = { ...prev.limitesIndividuales };
-      delete newLimits[name];
-      return {
-        ...prev,
-        firmantesAreaNivel1: prev.firmantesAreaNivel1.filter((s) => s !== name),
-        limitesIndividuales: newLimits,
-      };
-    });
+  const removeSignerFrom = (key: keyof ApprovalConfig, name: string) => {
+    const list = Array.isArray(config[key]) ? (config[key] as string[]) : [];
+    setConfig((prev) => ({
+      ...prev,
+      [key]: list.filter((s) => s !== name),
+    }));
   };
 
   const handleResetDefaults = () => {
-    if (confirm("¿Restablecer todos los firmadores y montos a los valores por defecto?")) {
+    if (confirm("¿Restablecer todas las escalas y firmadores a los valores por defecto?")) {
       setConfig(DEFAULT_APPROVAL_CONFIG);
     }
   };
@@ -100,13 +153,13 @@ export function ApprovalConfigModal({
   const handleSave = () => {
     saveStoredApprovalConfig(config);
     if (onConfigSaved) onConfigSaved(config);
-    if (showToast) showToast("⚙️ Montos y firmadores guardados con éxito");
+    if (showToast) showToast("⚙️ Firmadores y escalas guardados con éxito");
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-4xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
           <div className="flex items-center gap-3">
@@ -115,10 +168,10 @@ export function ApprovalConfigModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-white tracking-tight">
-                Montos y Límites por Firmante
+                Configurar Firmantes y Escalas de Aprobación
               </h3>
               <p className="text-xs text-slate-400">
-                Ajusta el monto máximo individual que cada persona tiene autorización para firmar
+                Agrega o quita firmantes habilitados para cada firma en los 4 niveles
               </p>
             </div>
           </div>
@@ -132,200 +185,162 @@ export function ApprovalConfigModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
           
-          {/* 1. Firmantes de Nivel 1 (Firma Base y Área) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-                <Users className="w-4 h-4 text-emerald-400" />
-                <span>Firmadores de Área y Base</span>
+          {/* NIVEL 1: Hasta 5 Millones */}
+          <div className="p-4 rounded-xl bg-[#080c16] border border-slate-800 space-y-3 shadow-inner">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-bold font-mono text-[10px] border border-emerald-500/30">NIVEL 1</span>
+                <h4 className="font-bold text-white text-sm">Hasta ${config.limiteNivel1.toLocaleString("es-AR")}</h4>
               </div>
-              <span className="text-[11px] text-slate-500">Monto Máximo de Firma</span>
-            </div>
-
-            {/* Tomás (Firma 1 Automática) */}
-            <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-white text-xs">{config.firmanteBaseNivel1}</span>
-                  <span className="text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/25">
-                    Firma 1 Automática al Mandar
-                  </span>
-                </div>
-                <p className="text-[10.5px] text-slate-400">
-                  Si la orden es menor o igual a este monto, asume su firma automáticamente al pasar a &quot;Mandada&quot;.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs font-bold text-slate-400">$</span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-semibold">Tope Nivel 1:</span>
+                <span className="text-slate-500 font-bold">$</span>
                 <input
                   type="number"
-                  value={config.limiteTomas}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) || 0;
-                    setConfig({ 
-                      ...config, 
-                      limiteTomas: val,
-                      limiteNivel1: val,
-                      limitesIndividuales: { ...config.limitesIndividuales, [config.firmanteBaseNivel1]: val }
-                    });
-                  }}
-                  className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
+                  value={config.limiteNivel1}
+                  onChange={(e) => setConfig({ ...config, limiteNivel1: Math.max(0, Number(e.target.value)) })}
+                  className="w-32 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
-            {/* Lista de Firmantes de Área */}
-            <div className="space-y-2">
-              {config.firmantesAreaNivel1.map((name) => {
-                const currentLimit = config.limitesIndividuales[name] ?? config.limiteNivel1;
-                return (
-                  <div
-                    key={name}
-                    className="p-3 rounded-xl bg-[#080c16] border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">
-                        {name[0]?.toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <span className="font-semibold text-white text-xs block truncate">{name}</span>
-                        <span className="text-[10px] text-slate-400">Firma 2 de Área</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-bold text-slate-400">$</span>
-                      <input
-                        type="number"
-                        value={currentLimit}
-                        onChange={(e) => handleUpdateSignerLimit(name, Number(e.target.value))}
-                        className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAreaSigner(name)}
-                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors cursor-pointer"
-                        title={`Eliminar firmante ${name}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Agregar nuevo firmante con su monto */}
-            <div className="p-3.5 rounded-xl bg-[#111726]/60 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              <input
-                type="text"
-                value={newSignerName}
-                onChange={(e) => setNewSignerName(e.target.value)}
-                placeholder="Nombre del nuevo firmante..."
-                className="flex-1 px-3 py-2 rounded-lg bg-[#080c16] border border-slate-700/80 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <SignerSectionBox
+                label="Firma 1 (Automática al pasar a Mandada)"
+                hint="Se asume aprobada automáticamente si la orden está mandada y dentro del tope."
+                signers={config.firmantes1Nivel1}
+                onAdd={(name) => addSignerTo("firmantes1Nivel1", name)}
+                onRemove={(name) => removeSignerFrom("firmantes1Nivel1", name)}
+                badgeClass="bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
               />
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-400">$</span>
-                <input
-                  type="number"
-                  value={newSignerLimit}
-                  onChange={(e) => setNewSignerLimit(e.target.value)}
-                  placeholder="Monto límite..."
-                  className="w-36 px-3 py-2 rounded-lg bg-[#080c16] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddAreaSigner}
-                  disabled={!newSignerName.trim()}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Agregar</span>
-                </button>
-              </div>
+              <SignerSectionBox
+                label="Firma 2 (Responsables de Área)"
+                hint="Al pegar la autorización de cualquiera de estas personas, la orden queda 100% liberada."
+                signers={config.firmantes2Nivel1}
+                onAdd={(name) => addSignerTo("firmantes2Nivel1", name)}
+                onRemove={(name) => removeSignerFrom("firmantes2Nivel1", name)}
+                badgeClass="bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+              />
             </div>
           </div>
 
-          {/* 2. Firmantes de Montos Mayores (Nivel 2) */}
-          <div className="space-y-3 pt-3 border-t border-slate-800">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-                <ShieldCheck className="w-4 h-4 text-purple-400" />
-                <span>Firmadores de Montos Mayores (Nivel Superior)</span>
+          {/* NIVEL 2: De 5M a 18M */}
+          <div className="p-4 rounded-xl bg-[#080c16] border border-slate-800 space-y-3 shadow-inner">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 font-bold font-mono text-[10px] border border-purple-500/30">NIVEL 2</span>
+                <h4 className="font-bold text-white text-sm">
+                  De ${config.limiteNivel1.toLocaleString("es-AR")} a ${config.limiteNivel2.toLocaleString("es-AR")}
+                </h4>
               </div>
-              <span className="text-[11px] text-slate-500">Monto Máximo de Firma</span>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-semibold">Tope Nivel 2:</span>
+                <span className="text-slate-500 font-bold">$</span>
+                <input
+                  type="number"
+                  value={config.limiteNivel2}
+                  onChange={(e) => setConfig({ ...config, limiteNivel2: Math.max(0, Number(e.target.value)) })}
+                  className="w-32 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              {/* Pablo Mondelo */}
-              <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white text-xs">{config.firmante1Nivel2}</span>
-                    <span className="text-[10px] font-semibold bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-md border border-purple-500/25">
-                      Firma 1 Requerida (&gt; ${config.limiteTomas.toLocaleString("es-AR")})
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-400">
-                    Debe autorizar explícitamente órdenes que superen el límite de Tomás.
-                  </p>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <SignerSectionBox
+                label="Firma 1 Requerida"
+                hint="Debe mandar confirmación expresa de autorización."
+                signers={config.firmantes1Nivel2}
+                onAdd={(name) => addSignerTo("firmantes1Nivel2", name)}
+                onRemove={(name) => removeSignerFrom("firmantes1Nivel2", name)}
+                badgeClass="bg-purple-500/15 border-purple-500/30 text-purple-300"
+              />
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-bold text-slate-400">$</span>
-                  <input
-                    type="number"
-                    value={config.limiteMondelo}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
-                      setConfig({ 
-                        ...config, 
-                        limiteMondelo: val,
-                        limiteNivel2: Math.max(val, config.limiteDario),
-                        limitesIndividuales: { ...config.limitesIndividuales, [config.firmante1Nivel2]: val }
-                      });
-                    }}
-                    className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
-                  />
-                </div>
+              <SignerSectionBox
+                label="Firma 2 Requerida"
+                hint="Segunda firma obligatoria para completar la liberación."
+                signers={config.firmantes2Nivel2}
+                onAdd={(name) => addSignerTo("firmantes2Nivel2", name)}
+                onRemove={(name) => removeSignerFrom("firmantes2Nivel2", name)}
+                badgeClass="bg-purple-500/15 border-purple-500/30 text-purple-300"
+              />
+            </div>
+          </div>
+
+          {/* NIVEL 3: De 18M a 150M */}
+          <div className="p-4 rounded-xl bg-[#080c16] border border-slate-800 space-y-3 shadow-inner">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 font-bold font-mono text-[10px] border border-blue-500/30">NIVEL 3</span>
+                <h4 className="font-bold text-white text-sm">
+                  De ${config.limiteNivel2.toLocaleString("es-AR")} a ${config.limiteNivel3.toLocaleString("es-AR")}
+                </h4>
               </div>
-
-              {/* Darío */}
-              <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white text-xs">{config.firmante2Nivel2}</span>
-                    <span className="text-[10px] font-semibold bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-md border border-purple-500/25">
-                      Firma 2 Requerida (&gt; ${config.limiteTomas.toLocaleString("es-AR")})
-                    </span>
-                  </div>
-                  <p className="text-[10.5px] text-slate-400">
-                    Segunda firma necesaria para liberar montos mayores junto a Pablo Mondelo.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-bold text-slate-400">$</span>
-                  <input
-                    type="number"
-                    value={config.limiteDario}
-                    onChange={(e) => {
-                      const val = Number(e.target.value) || 0;
-                      setConfig({ 
-                        ...config, 
-                        limiteDario: val,
-                        limiteNivel2: Math.max(config.limiteMondelo, val),
-                        limitesIndividuales: { ...config.limitesIndividuales, [config.firmante2Nivel2]: val }
-                      });
-                    }}
-                    className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
-                  />
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-semibold">Tope Nivel 3:</span>
+                <span className="text-slate-500 font-bold">$</span>
+                <input
+                  type="number"
+                  value={config.limiteNivel3}
+                  onChange={(e) => setConfig({ ...config, limiteNivel3: Math.max(0, Number(e.target.value)) })}
+                  className="w-36 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
+                />
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <SignerSectionBox
+                label="Firma 1 Habilitados"
+                hint="Cualquiera de ellos puede autorizar en 1ra instancia."
+                signers={config.firmantes1Nivel3}
+                onAdd={(name) => addSignerTo("firmantes1Nivel3", name)}
+                onRemove={(name) => removeSignerFrom("firmantes1Nivel3", name)}
+                badgeClass="bg-blue-500/15 border-blue-500/30 text-blue-300"
+              />
+
+              <SignerSectionBox
+                label="Firma 2 Habilitados"
+                hint="Segunda firma requerida para completar la liberación."
+                signers={config.firmantes2Nivel3}
+                onAdd={(name) => addSignerTo("firmantes2Nivel3", name)}
+                onRemove={(name) => removeSignerFrom("firmantes2Nivel3", name)}
+                badgeClass="bg-blue-500/15 border-blue-500/30 text-blue-300"
+              />
+            </div>
+          </div>
+
+          {/* NIVEL 4: Más de 150 Millones */}
+          <div className="p-4 rounded-xl bg-[#080c16] border border-slate-800 space-y-3 shadow-inner">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold font-mono text-[10px] border border-amber-500/30">NIVEL 4</span>
+                <h4 className="font-bold text-white text-sm">
+                  Más de ${config.limiteNivel3.toLocaleString("es-AR")}
+                </h4>
+              </div>
+              <span className="text-[11px] text-amber-400 font-semibold">Directorio / Presidencia</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <SignerSectionBox
+                label="Firma 1 Habilitados"
+                hint="Cualquiera de ellos puede autorizar en 1ra instancia."
+                signers={config.firmantes1Nivel4}
+                onAdd={(name) => addSignerTo("firmantes1Nivel4", name)}
+                onRemove={(name) => removeSignerFrom("firmantes1Nivel4", name)}
+                badgeClass="bg-amber-500/15 border-amber-500/30 text-amber-300"
+              />
+
+              <SignerSectionBox
+                label="Firma 2 Habilitados"
+                hint="Segunda firma requerida para montos máximos."
+                signers={config.firmantes2Nivel4}
+                onAdd={(name) => addSignerTo("firmantes2Nivel4", name)}
+                onRemove={(name) => removeSignerFrom("firmantes2Nivel4", name)}
+                badgeClass="bg-amber-500/15 border-amber-500/30 text-amber-300"
+              />
             </div>
           </div>
         </div>
@@ -336,7 +351,7 @@ export function ApprovalConfigModal({
             type="button"
             onClick={handleResetDefaults}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="Restablecer valores por defecto"
+            title="Restablecer escalas por defecto"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Por Defecto</span>
@@ -357,7 +372,7 @@ export function ApprovalConfigModal({
               className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>Guardar Montos</span>
+              <span>Guardar Firmantes</span>
             </button>
           </div>
         </div>
