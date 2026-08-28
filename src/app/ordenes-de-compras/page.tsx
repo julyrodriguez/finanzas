@@ -1700,13 +1700,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         isOpen={isBatchLiberateOpen}
         onClose={() => setIsBatchLiberateOpen(false)}
         ordenes={ordenes}
-        onBatchSuccess={(updatedIds) => {
+        onBatchSuccess={(updatedEntries) => {
+          const updateMap = new Map<string, Partial<OrdenCompra>>();
+          for (const entry of updatedEntries) {
+            updateMap.set(entry.id, entry.updates);
+          }
           setOrdenes((prev) =>
-            prev.map((o) =>
-              o.id && updatedIds.includes(o.id)
-                ? { ...o, liberada: true, mandada: true, cancelada: false }
-                : o
-            )
+            prev.map((o) => {
+              if (o.id && updateMap.has(o.id)) {
+                return { ...o, ...updateMap.get(o.id) };
+              }
+              return o;
+            })
           );
         }}
         showToast={showToast}

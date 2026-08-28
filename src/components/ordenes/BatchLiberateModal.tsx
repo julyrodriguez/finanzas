@@ -36,7 +36,7 @@ interface BatchLiberateModalProps {
   isOpen: boolean;
   onClose: () => void;
   ordenes: OrdenCompra[];
-  onBatchSuccess: (updatedIds: string[]) => void;
+  onBatchSuccess: (updatedEntries: { id: string; updates: Partial<OrdenCompra> }[]) => void;
   showToast: (msg: string) => void;
 }
 
@@ -601,7 +601,7 @@ export function BatchLiberateModal({
     setIsProcessing(true);
     const db = getFirebaseDb();
     const itemsToUpdate = [...toLiberateList, ...toPartialSignList];
-    const updatedIds: string[] = [];
+    const updatedEntries: { id: string; updates: Partial<OrdenCompra> }[] = [];
 
     if (db) {
       try {
@@ -610,7 +610,7 @@ export function BatchLiberateModal({
           if (item.order?.id && item.updatesToApply) {
             const docRef = doc(db, "ordenes_compra", item.order.id);
             batch.update(docRef, item.updatesToApply);
-            updatedIds.push(item.order.id);
+            updatedEntries.push({ id: item.order.id, updates: item.updatesToApply });
           }
         }
         await batch.commit();
@@ -623,14 +623,17 @@ export function BatchLiberateModal({
           showToast(`✍️ ¡${toPartialSignList.length} órdenes firmadas (pendientes de 2da firma)!`);
         }
 
-        onBatchSuccess(updatedIds);
+        onBatchSuccess(updatedEntries);
         handleClose();
       } catch (err) {
         console.error("Error al ejecutar batch update en Firestore:", err);
         showToast("Error al actualizar las órdenes en el servidor");
       }
     } else {
-      onBatchSuccess(itemsToUpdate.map(i => i.order!.id!));
+      const localUpdates = itemsToUpdate
+        .filter(i => i.order?.id && i.updatesToApply)
+        .map(i => ({ id: i.order!.id!, updates: i.updatesToApply! }));
+      onBatchSuccess(localUpdates);
       showToast(`🎉 ¡${itemsToUpdate.length} órdenes actualizadas localmente!`);
       handleClose();
     }
