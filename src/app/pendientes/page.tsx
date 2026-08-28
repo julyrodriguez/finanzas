@@ -1072,7 +1072,7 @@ export default function PendientesPage() {
                               </div>
 
                               <div className="flex flex-col min-w-0 flex-1">
-                                <span className={`text-[11px] font-medium truncate flex items-center gap-1.5 ${step.completado ? "line-through text-gray-500 text-opacity-40" : ""}`}>
+                                <span className={`text-[11px] font-medium truncate flex items-center gap-1.5 ${step.completado ? "italic text-emerald-400/90" : ""}`}>
                                   {step.titulo}
                                   {step.esFinal && (
                                     <span className="flex items-center gap-0.5 text-[7px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0 rounded border border-amber-500/20 uppercase tracking-wide shrink-0">
@@ -1095,11 +1095,11 @@ export default function PendientesPage() {
                                             try {
                                               const dateObj = typeof step.completedAt === "string"
                                                 ? new Date(step.completedAt)
-                                                : (step.completedAt as any).toDate
-                                                ? (step.completedAt as any).toDate()
+                                                : (step.completedAt && typeof step.completedAt === "object" && "toDate" in step.completedAt && typeof (step.completedAt as { toDate?: unknown }).toDate === "function")
+                                                ? (step.completedAt as { toDate: () => Date }).toDate()
                                                 : new Date(step.completedAt);
                                               return `Hecho: ${dateObj.toLocaleDateString("es-AR")}`;
-                                            } catch (e) {
+                                            } catch {
                                               return "Hecho (fecha inválida)";
                                             }
                                           })()
