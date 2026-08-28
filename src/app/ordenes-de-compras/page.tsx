@@ -39,12 +39,13 @@ import {
   FolderOpen, 
   FileSpreadsheet,
   ClipboardPaste,
-  Settings
+  Settings,
+  Eye
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
 import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
-import { OrderNotesModal } from "@/components/ordenes/OrderNotesModal";
+import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { BatchLiberateModal } from "@/components/ordenes/BatchLiberateModal";
@@ -1238,7 +1239,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       <th className="px-4 py-3.5">Proveedor</th>
                       <th className="px-4 py-3.5">Monto</th>
                       <th className="px-4 py-3.5">Forma Pago</th>
-                      <th className="px-4 py-3.5">Notas y Motivo</th>
+                      <th className="px-4 py-3.5">Descripción y Notas</th>
                       {!isOrdenesUser && <th className="px-4 py-3.5 text-right">Editar</th>}
                     </tr>
                   </thead>
@@ -1409,35 +1410,21 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           {orden.formaPago || "30DFF"}
                         </td>
 
-                        {/* Botón Ver/Agregar Notas y Motivo */}
+                        {/* Botón Ver Descripción / Card Detalle */}
                         <td className="px-4 py-4">
-                          <div className="flex items-center gap-1.5">
-                            {/* Notes Button with Tooltip */}
-                            <button
-                              onClick={() => setActiveNotesOrden(orden)}
-                              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[11px] font-medium flex items-center gap-1 transition-colors"
-                              title={orden.notas && orden.notas.length > 0 
-                                ? `Notas:\n${orden.notas.map((n, i) => `${i+1}. ${n.texto}`).join("\n")}` 
-                                : "Sin notas registradas. Haz clic para agregar."}
-                            >
-                              <MessageSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span>{orden.notas?.length || 0}</span>
-                            </button>
-
-                            {/* Motif Button with Tooltip */}
-                            {orden.motivo ? (
-                              <button
-                                onClick={() => !isOrdenesUser && handleOpenEditModal(orden)}
-                                disabled={isOrdenesUser}
-                                className={`p-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px] flex items-center transition-colors ${isOrdenesUser ? "cursor-default" : "hover:bg-white/10"}`}
-                                title={`Motivo:\n${orden.motivo}`}
-                              >
-                                <AlertCircle className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                              </button>
-                            ) : (
-                              <span className="w-6.5" /> // spacing placeholder
+                          <button
+                            onClick={() => setActiveNotesOrden(orden)}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/25 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                            title="Ver descripción completa, firmas y notas de la orden"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Ver Descripción</span>
+                            {orden.notas && orden.notas.length > 0 && (
+                              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                                {orden.notas.length}
+                              </span>
                             )}
-                          </div>
+                          </button>
                         </td>
 
                         {/* Action: Open Edit Form (Icon-only) */}
@@ -1625,13 +1612,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           />
                         </div>
 
-                        {/* Internal Notes Button */}
+                        {/* Botón Ver Descripción */}
                         <button
                           onClick={() => setActiveNotesOrden(orden)}
-                          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                          className="px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                         >
-                          <MessageSquare className="w-3 h-3 text-emerald-400" />
-                          <span>Notas ({orden.notas?.length || 0})</span>
+                          <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Ver Descripción</span>
+                          {orden.notas && orden.notas.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">
+                              {orden.notas.length}
+                            </span>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -1657,15 +1649,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         )}
       </div>
 
-      {/* Modal para Ver y Agregar Notas de la Orden */}
-      <OrderNotesModal
+      {/* Modal de Detalle, Descripción, Firmas y Notas de la Orden */}
+      <OrderDetailModal
         orden={activeNotesOrden}
         onClose={() => setActiveNotesOrden(null)}
         isOrdenesUser={isOrdenesUser}
+        onEdit={handleOpenEditModal}
         newNotaText={newNotaText}
         setNewNotaText={setNewNotaText}
         savingNota={savingNota}
         onAddNota={handleAddNota}
+        showToast={showToast}
+        getFormattedCreatedAt={getFormattedCreatedAt}
       />
 
       {/* Modal para Agregar o Editar Solicitud de OC */}
