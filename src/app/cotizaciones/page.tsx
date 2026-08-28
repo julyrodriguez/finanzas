@@ -1295,9 +1295,9 @@ export default function CotizacionesPage() {
           </div>
 
           {/* Estado de la Cotización y Proveedor Ganador */}
-          <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+          <div className="mt-4 pt-4 border-t border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
                 Estado de la Cotización:
               </label>
               <select
@@ -1318,7 +1318,7 @@ export default function CotizacionesPage() {
                     setSentAt(`${yyyy}-${mm}-${dd}`);
                   }
                 }}
-                className="bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               >
                 <option value="borrador">Borrador (Abierta)</option>
                 <option value="enviada">Enviada (Cerrada para edición)</option>
@@ -1328,8 +1328,8 @@ export default function CotizacionesPage() {
             </div>
 
             {status === "finalizada" && (
-              <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 animate-fadeIn w-full md:w-auto">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
                   Proveedor Ganador:
                 </label>
                 <select
@@ -1348,8 +1348,8 @@ export default function CotizacionesPage() {
             )}
 
             {status === "enviada" && (
-              <div className="flex items-center gap-3 animate-fadeIn w-full sm:w-auto">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 animate-fadeIn w-full md:w-auto">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
                   Fecha de Envío:
                 </label>
                 <input
@@ -1851,7 +1851,8 @@ export default function CotizacionesPage() {
               </div>
             </div>
 
-             <div className="overflow-x-auto">
+             {/* Desktop View: Spreadsheet Table */}
+             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-sm text-gray-300 border-collapse">
                 <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/10">
                   <tr>
@@ -1991,6 +1992,204 @@ export default function CotizacionesPage() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile View: Totals Summary per Provider */}
+            <div className="block md:hidden bg-[#101725]/40 border border-white/5 p-4 rounded-2xl space-y-3 mb-6">
+              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resumen de Totales Generales</h4>
+              <div className="space-y-2">
+                {providerTotals.map(totalData => {
+                  const hasARS = totalData.totalARS > 0;
+                  const hasUSD = totalData.totalUSD > 0;
+                  
+                  const getProviderTotalInBaseCurrency = (provId: string) => {
+                    const pt = providerTotals.find(t => t.providerId === provId);
+                    if (!pt) return 0;
+                    let sum = 0;
+                    items.forEach(item => {
+                      const p = providers.find(pr => pr.id === provId);
+                      const quote = p?.quotes[item.id];
+                      if (quote && quote.price > 0) {
+                        const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+                        sum += totalBaseCurrency;
+                      }
+                    });
+                    return sum;
+                  };
+
+                  const currentTotalBC = getProviderTotalInBaseCurrency(totalData.providerId);
+                  const allTotalsBC = providers.map(p => getProviderTotalInBaseCurrency(p.id)).filter(t => t > 0);
+                  const minTotalBC = Math.min(...allTotalsBC);
+                  const isCheapest = currentTotalBC > 0 && currentTotalBC === minTotalBC && providers.length > 1;
+
+                  return (
+                    <div 
+                      key={totalData.providerId} 
+                      className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
+                        isCheapest 
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-white font-semibold" 
+                          : "bg-[#111827]/40 border-white/5 text-gray-300"
+                      }`}
+                    >
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="font-bold text-xs flex items-center gap-1.5">
+                          {totalData.providerName}
+                          {isCheapest && (
+                            <span className="text-[8px] bg-emerald-500 text-white font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              Mejor Opción
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          Cotizado: {totalData.itemsQuotedCount} de {items.length} ítems
+                        </span>
+                      </div>
+                      <div className="text-right font-mono font-bold text-xs shrink-0">
+                        {hasARS && (
+                          <p className="text-white">
+                            {formatCurrencyValue(totalData.totalARS, "ARS")}
+                          </p>
+                        )}
+                        {hasUSD && (
+                          <p className="text-emerald-400">
+                            {formatCurrencyValue(totalData.totalUSD, "USD")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Mobile View: Detailed Matrix Cards */}
+            <div className="block md:hidden space-y-4">
+              {items.map((item) => {
+                const itemComparisons = providers.map(prov => {
+                  const quote = prov.quotes[item.id];
+                  const hasQuote = quote && quote.price > 0;
+                  
+                  if (!hasQuote) return { 
+                    prov, 
+                    hasQuote: false, 
+                    trueUnitRateBaseCurrency: Infinity, 
+                    totalBaseCurrency: Infinity,
+                    quote: null as QuoteDetail | null,
+                    displayUnitCost: 0,
+                    displayUnitCurrency: baseCurrency,
+                    displayTotalCost: 0,
+                    displayTotalCurrency: baseCurrency,
+                    presentationsCount: 0
+                  };
+
+                  const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+                  const { totalBaseCurrency, totalRawCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+
+                  const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
+                  const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
+
+                  const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
+                  const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
+
+                  return {
+                    prov,
+                    hasQuote: true,
+                    quote,
+                    trueUnitRateBaseCurrency,
+                    totalBaseCurrency,
+                    displayUnitCost,
+                    displayUnitCurrency,
+                    displayTotalCost,
+                    displayTotalCurrency,
+                    presentationsCount
+                  };
+                });
+
+                const quotedComparisons = itemComparisons.filter(c => c.hasQuote);
+                const minUnitCost = Math.min(...quotedComparisons.map(c => c.trueUnitRateBaseCurrency));
+                
+                return (
+                  <div key={item.id} className="p-4 bg-[#111827]/40 border border-white/5 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                      <span className="font-bold text-white text-xs truncate max-w-[200px]" title={item.name}>
+                        {item.name || "Ítem sin nombre"}
+                      </span>
+                      <span className="text-[10px] text-emerald-300 font-mono font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 whitespace-nowrap">
+                        {item.targetQuantity} {item.baseUnit}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {itemComparisons.map(({ prov, hasQuote, quote, trueUnitRateBaseCurrency, displayUnitCost, displayUnitCurrency, displayTotalCost, displayTotalCurrency, presentationsCount }) => {
+                        const isCheapest = hasQuote && trueUnitRateBaseCurrency === minUnitCost && quotedComparisons.length > 1;
+                        
+                        return (
+                          <div 
+                            key={prov.id}
+                            className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                              isCheapest 
+                                ? "bg-emerald-500/5 border-emerald-500/25" 
+                                : "bg-black/25 border-white/5"
+                            }`}
+                          >
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-semibold text-white flex items-center gap-1.5">
+                                {prov.name}
+                                {isCheapest && (
+                                  <span className="text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 rounded uppercase tracking-wider font-bold">
+                                    Mejor Precio
+                                  </span>
+                                )}
+                              </span>
+                              {hasQuote && quote ? (
+                                <div className="text-[10px] text-gray-500 mt-0.5 space-y-0.5">
+                                  <p>
+                                    U: {formatCurrencyValue(displayUnitCost, displayUnitCurrency)}
+                                    {convertCurrencies && quote.currency !== baseCurrency && (
+                                      <span className="text-[9px] text-gray-600 ml-1">
+                                        ({quote.currency === "ARS" ? "$" : "USD"} {quote.price / (quote.unitsPerPresentation || 1)})
+                                      </span>
+                                    )}
+                                  </p>
+                                  {quote.presentationType === "package" && (
+                                    <p className="leading-tight">
+                                      {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
+                                    </p>
+                                  )}
+                                  {quote.specification && (
+                                    <p className="italic text-[9px] text-gray-400 max-w-[150px] truncate" title={quote.specification}>
+                                      Obs: {quote.specification}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-gray-600 mt-0.5">No cotizado</span>
+                              )}
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              {hasQuote ? (
+                                <div className="space-y-0.5 font-mono">
+                                  <p className="font-bold text-white text-xs">
+                                    {formatCurrencyValue(displayTotalCost, displayTotalCurrency)}
+                                  </p>
+                                  {quote && quote.discount > 0 && (
+                                    <span className="text-[9px] text-red-400 font-bold block">
+                                      -{quote.discount}%
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-600 font-mono">-</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
