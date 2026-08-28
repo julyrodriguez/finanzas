@@ -11,7 +11,8 @@ import {
   ShieldCheck, 
   DollarSign, 
   Users,
-  Sparkles
+  Sparkles,
+  UserCheck
 } from "lucide-react";
 import { 
   ApprovalConfig, 
@@ -34,37 +35,64 @@ export function ApprovalConfigModal({
   showToast,
 }: ApprovalConfigModalProps) {
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_APPROVAL_CONFIG);
-  const [newAreaSigner, setNewAreaSigner] = useState("");
+  const [newSignerName, setNewSignerName] = useState("");
+  const [newSignerLimit, setNewSignerLimit] = useState<string>("5000000");
 
   useEffect(() => {
     if (isOpen) {
       setConfig(getStoredApprovalConfig());
-      setNewAreaSigner("");
+      setNewSignerName("");
+      setNewSignerLimit("5000000");
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleAddAreaSigner = () => {
-    const trimmed = newAreaSigner.trim();
-    if (!trimmed) return;
-    if (config.firmantesAreaNivel1.includes(trimmed)) return;
+  const handleUpdateSignerLimit = (name: string, newLimit: number) => {
     setConfig((prev) => ({
       ...prev,
-      firmantesAreaNivel1: [...prev.firmantesAreaNivel1, trimmed],
+      limitesIndividuales: {
+        ...prev.limitesIndividuales,
+        [name]: Math.max(0, newLimit),
+      },
     }));
-    setNewAreaSigner("");
+  };
+
+  const handleAddAreaSigner = () => {
+    const trimmed = newSignerName.trim();
+    if (!trimmed) return;
+    const limitNum = Math.max(0, Number(newSignerLimit) || config.limiteNivel1);
+
+    setConfig((prev) => {
+      const exists = prev.firmantesAreaNivel1.includes(trimmed);
+      return {
+        ...prev,
+        firmantesAreaNivel1: exists ? prev.firmantesAreaNivel1 : [...prev.firmantesAreaNivel1, trimmed],
+        limitesIndividuales: {
+          ...prev.limitesIndividuales,
+          [trimmed]: limitNum,
+        },
+      };
+    });
+
+    setNewSignerName("");
+    setNewSignerLimit("5000000");
   };
 
   const handleRemoveAreaSigner = (name: string) => {
-    setConfig((prev) => ({
-      ...prev,
-      firmantesAreaNivel1: prev.firmantesAreaNivel1.filter((s) => s !== name),
-    }));
+    setConfig((prev) => {
+      const newLimits = { ...prev.limitesIndividuales };
+      delete newLimits[name];
+      return {
+        ...prev,
+        firmantesAreaNivel1: prev.firmantesAreaNivel1.filter((s) => s !== name),
+        limitesIndividuales: newLimits,
+      };
+    });
   };
 
   const handleResetDefaults = () => {
-    if (confirm("¿Restablecer los límites y firmadores a los valores por defecto?")) {
+    if (confirm("¿Restablecer todos los firmadores y montos a los valores por defecto?")) {
       setConfig(DEFAULT_APPROVAL_CONFIG);
     }
   };
@@ -72,13 +100,13 @@ export function ApprovalConfigModal({
   const handleSave = () => {
     saveStoredApprovalConfig(config);
     if (onConfigSaved) onConfigSaved(config);
-    if (showToast) showToast("⚙️ Configuración de aprobaciones guardada con éxito");
+    if (showToast) showToast("⚙️ Montos y firmadores guardados con éxito");
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-3xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
           <div className="flex items-center gap-3">
@@ -87,10 +115,10 @@ export function ApprovalConfigModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-white tracking-tight">
-                Configuración de Firmas y Límites de Aprobación
+                Montos y Límites por Firmante
               </h3>
               <p className="text-xs text-slate-400">
-                Ajusta los topes de monto y los firmadores autorizados para la liberación inteligente
+                Ajusta el monto máximo individual que cada persona tiene autorización para firmar
               </p>
             </div>
           </div>
@@ -105,165 +133,198 @@ export function ApprovalConfigModal({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
-          {/* 1. Límites de Montos */}
+          
+          {/* 1. Firmantes de Nivel 1 (Firma Base y Área) */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-              <DollarSign className="w-4 h-4 text-emerald-400" />
-              <span>Topes y Límites de Monto</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+                <Users className="w-4 h-4 text-emerald-400" />
+                <span>Firmadores de Área y Base</span>
+              </div>
+              <span className="text-[11px] text-slate-500">Monto Máximo de Firma</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Límite Nivel 1 */}
-              <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Límite Nivel 1 (Tomás + Área)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-xs">$</span>
-                  <input
-                    type="number"
-                    value={config.limiteNivel1}
-                    onChange={(e) => setConfig({ ...config, limiteNivel1: Math.max(0, Number(e.target.value)) })}
-                    className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-sm font-bold focus:outline-none focus:border-indigo-500"
-                  />
+            {/* Tomás (Firma 1 Automática) */}
+            <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-white text-xs">{config.firmanteBaseNivel1}</span>
+                  <span className="text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/25">
+                    Firma 1 Automática al Mandar
+                  </span>
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  Hasta este importe, se aprueba con Tomás (auto al mandar) y 1 firma de área.
+                <p className="text-[10.5px] text-slate-400">
+                  Si la orden es menor o igual a este monto, asume su firma automáticamente al pasar a &quot;Mandada&quot;.
                 </p>
               </div>
 
-              {/* Límite Nivel 2 */}
-              <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Límite Nivel 2 (Mondelo + Darío)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-xs">$</span>
-                  <input
-                    type="number"
-                    value={config.limiteNivel2}
-                    onChange={(e) => setConfig({ ...config, limiteNivel2: Math.max(0, Number(e.target.value)) })}
-                    className="w-full pl-7 pr-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-sm font-bold focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500">
-                  Entre Nivel 1 y este tope, se requiere firma de Pablo Mondelo y Darío.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Firmadores Nivel 1 */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-              <Users className="w-4 h-4 text-indigo-400" />
-              <span>Firmadores Nivel 1 (Hasta ${config.limiteNivel1.toLocaleString("es-AR")})</span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-[#080c16] border border-slate-800 space-y-3">
-              {/* Firmante Base Automático */}
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Firma 1 Automática al Mandar:
-                </label>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-bold text-slate-400">$</span>
                 <input
-                  type="text"
-                  value={config.firmanteBaseNivel1}
-                  onChange={(e) => setConfig({ ...config, firmanteBaseNivel1: e.target.value })}
-                  placeholder="ej: Tomas"
-                  className="w-full px-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                  type="number"
+                  value={config.limiteTomas}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 0;
+                    setConfig({ 
+                      ...config, 
+                      limiteTomas: val,
+                      limiteNivel1: val,
+                      limitesIndividuales: { ...config.limitesIndividuales, [config.firmanteBaseNivel1]: val }
+                    });
+                  }}
+                  className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
                 />
-                <p className="text-[10px] text-slate-500">
-                  Al cambiar una orden a estado &quot;Mandada&quot; con monto ≤ ${config.limiteNivel1.toLocaleString("es-AR")}, asumirá automáticamente la firma de este responsable.
-                </p>
               </div>
+            </div>
 
-              {/* Firmantes de Área (Segunda Firma) */}
-              <div className="space-y-2 pt-2 border-t border-slate-800">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Firmantes de Área Habilitados (Firma 2):
-                </label>
+            {/* Lista de Firmantes de Área */}
+            <div className="space-y-2">
+              {config.firmantesAreaNivel1.map((name) => {
+                const currentLimit = config.limitesIndividuales[name] ?? config.limiteNivel1;
+                return (
+                  <div
+                    key={name}
+                    className="p-3 rounded-xl bg-[#080c16] border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0">
+                        {name[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-semibold text-white text-xs block truncate">{name}</span>
+                        <span className="text-[10px] text-slate-400">Firma 2 de Área</span>
+                      </div>
+                    </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {config.firmantesAreaNivel1.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold"
-                    >
-                      <span>{name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-slate-400">$</span>
+                      <input
+                        type="number"
+                        value={currentLimit}
+                        onChange={(e) => handleUpdateSignerLimit(name, Number(e.target.value))}
+                        className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
+                      />
                       <button
                         type="button"
                         onClick={() => handleRemoveAreaSigner(name)}
-                        className="text-indigo-400 hover:text-red-400 transition-colors p-0.5"
-                        title={`Quitar a ${name}`}
+                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors cursor-pointer"
+                        title={`Eliminar firmante ${name}`}
                       >
-                        <X className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    </span>
-                  ))}
-                </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
-                {/* Agregar nuevo firmante de área */}
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="text"
-                    value={newAreaSigner}
-                    onChange={(e) => setNewAreaSigner(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddAreaSigner();
-                      }
-                    }}
-                    placeholder="Nuevo firmante de área (ej: Juan Pérez)..."
-                    className="flex-1 px-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddAreaSigner}
-                    disabled={!newAreaSigner.trim()}
-                    className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Agregar</span>
-                  </button>
-                </div>
+            {/* Agregar nuevo firmante con su monto */}
+            <div className="p-3.5 rounded-xl bg-[#111726]/60 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <input
+                type="text"
+                value={newSignerName}
+                onChange={(e) => setNewSignerName(e.target.value)}
+                placeholder="Nombre del nuevo firmante..."
+                className="flex-1 px-3 py-2 rounded-lg bg-[#080c16] border border-slate-700/80 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-medium"
+              />
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400">$</span>
+                <input
+                  type="number"
+                  value={newSignerLimit}
+                  onChange={(e) => setNewSignerLimit(e.target.value)}
+                  placeholder="Monto límite..."
+                  className="w-36 px-3 py-2 rounded-lg bg-[#080c16] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAreaSigner}
+                  disabled={!newSignerName.trim()}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Agregar</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* 3. Firmadores Nivel 2 (Mayor monto) */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-              <ShieldCheck className="w-4 h-4 text-purple-400" />
-              <span>Firmadores Nivel 2 (De ${config.limiteNivel1.toLocaleString("es-AR")} a ${config.limiteNivel2.toLocaleString("es-AR")})</span>
+          {/* 2. Firmantes de Montos Mayores (Nivel 2) */}
+          <div className="space-y-3 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+                <ShieldCheck className="w-4 h-4 text-purple-400" />
+                <span>Firmadores de Montos Mayores (Nivel Superior)</span>
+              </div>
+              <span className="text-[11px] text-slate-500">Monto Máximo de Firma</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[#080c16] border border-slate-800">
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Firma 1 Requerida:
-                </label>
-                <input
-                  type="text"
-                  value={config.firmante1Nivel2}
-                  onChange={(e) => setConfig({ ...config, firmante1Nivel2: e.target.value })}
-                  placeholder="ej: Pablo Mondelo"
-                  className="w-full px-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
-                />
+            <div className="space-y-2">
+              {/* Pablo Mondelo */}
+              <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-xs">{config.firmante1Nivel2}</span>
+                    <span className="text-[10px] font-semibold bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-md border border-purple-500/25">
+                      Firma 1 Requerida (&gt; ${config.limiteTomas.toLocaleString("es-AR")})
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400">
+                    Debe autorizar explícitamente órdenes que superen el límite de Tomás.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-slate-400">$</span>
+                  <input
+                    type="number"
+                    value={config.limiteMondelo}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      setConfig({ 
+                        ...config, 
+                        limiteMondelo: val,
+                        limiteNivel2: Math.max(val, config.limiteDario),
+                        limitesIndividuales: { ...config.limitesIndividuales, [config.firmante1Nivel2]: val }
+                      });
+                    }}
+                    className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Firma 2 Requerida:
-                </label>
-                <input
-                  type="text"
-                  value={config.firmante2Nivel2}
-                  onChange={(e) => setConfig({ ...config, firmante2Nivel2: e.target.value })}
-                  placeholder="ej: Dario"
-                  className="w-full px-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
-                />
+              {/* Darío */}
+              <div className="p-3.5 rounded-xl bg-[#080c16] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-xs">{config.firmante2Nivel2}</span>
+                    <span className="text-[10px] font-semibold bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-md border border-purple-500/25">
+                      Firma 2 Requerida (&gt; ${config.limiteTomas.toLocaleString("es-AR")})
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400">
+                    Segunda firma necesaria para liberar montos mayores junto a Pablo Mondelo.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-slate-400">$</span>
+                  <input
+                    type="number"
+                    value={config.limiteDario}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      setConfig({ 
+                        ...config, 
+                        limiteDario: val,
+                        limiteNivel2: Math.max(config.limiteMondelo, val),
+                        limitesIndividuales: { ...config.limitesIndividuales, [config.firmante2Nivel2]: val }
+                      });
+                    }}
+                    className="w-36 px-3 py-1.5 rounded-lg bg-[#111726] border border-slate-700/80 text-white font-mono text-xs font-bold focus:outline-none focus:border-indigo-500 text-right"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -296,7 +357,7 @@ export function ApprovalConfigModal({
               className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>Guardar Configuración</span>
+              <span>Guardar Montos</span>
             </button>
           </div>
         </div>
