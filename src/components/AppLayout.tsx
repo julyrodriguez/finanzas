@@ -93,6 +93,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       exact: false,
     },
     {
+      name: "Proceso de Liberación",
+      href: "/proceso-de-liberacion",
+      icon: Clock,
+      exact: false,
+      hideForOrders: true,
+    },
+    {
       name: "Distribución",
       href: "/distribucion",
       icon: Percent,
