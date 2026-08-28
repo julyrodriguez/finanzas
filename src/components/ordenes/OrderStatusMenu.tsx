@@ -14,6 +14,7 @@ import {
 import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
+import { getStoredApprovalConfig } from "@/lib/approvalConfig";
 
 export type OrderStatusKey = "pendiente" | "mandada" | "liberada" | "entregada" | "cancelada";
 
@@ -125,6 +126,8 @@ export function OrderStatusMenu({
     setIsOpen(false);
     setIsUpdating(true);
 
+    const configApproval = getStoredApprovalConfig();
+    const numMonto = typeof orden.monto === "number" ? orden.monto : Number(String(orden.monto).replace(/[^0-9.-]+/g, "")) || 0;
     let updateData: Partial<OrdenCompra> = {};
 
     switch (targetStatus) {
@@ -137,22 +140,35 @@ export function OrderStatusMenu({
           enviado: false,
           firmado1: false,
           firmado2: false,
+          firmante1: "",
+          firmante2: "",
+          fechaFirma1: "",
+          fechaFirma2: "",
         };
         break;
-      case "mandada":
+      case "mandada": {
+        const canAutoSign = numMonto <= configApproval.limiteNivel1;
         updateData = {
           liberada: false,
           mandada: true,
           entregada: false,
           cancelada: false,
+          ...(canAutoSign ? {
+            firmado1: true,
+            firmante1: orden.firmante1 || configApproval.firmanteBaseNivel1 || "Tomas",
+            fechaFirma1: orden.fechaFirma1 || new Date().toISOString(),
+          } : {}),
         };
         break;
+      }
       case "liberada":
         updateData = {
           liberada: true,
           mandada: true,
           entregada: false,
           cancelada: false,
+          firmado1: true,
+          firmado2: true,
         };
         break;
       case "entregada":

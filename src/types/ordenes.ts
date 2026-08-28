@@ -27,5 +27,9 @@ export interface OrdenCompra {
   enviado?: boolean;
   firmado1?: boolean;
   firmado2?: boolean;
+  firmante1?: string;
+  firmante2?: string;
+  fechaFirma1?: string;
+  fechaFirma2?: string;
   linkSharepoint?: string;
 }

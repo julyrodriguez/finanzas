@@ -384,6 +384,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       <button
                         onClick={() => handleTogglePasoLiberacion(orden, 'firmado1')}
                         className="flex flex-col items-center gap-1 group cursor-pointer"
+                        title={orden.firmante1 ? `Firmado por ${orden.firmante1}` : "Firma 1"}
                       >
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all ${
                           isFirmado1
@@ -392,7 +393,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         }`}>
                           <Check className={`w-4 h-4 ${isFirmado1 ? "stroke-[3]" : "opacity-30"}`} />
                         </div>
-                        <span className="text-[9px] font-semibold text-gray-400 group-hover:text-white">Firmado 1</span>
+                        <span className="text-[9px] font-semibold text-gray-400 group-hover:text-white truncate max-w-[70px]">
+                          {isFirmado1 && orden.firmante1 ? orden.firmante1 : "Firmado 1"}
+                        </span>
                       </button>
 
                       {/* Connect line */}
@@ -404,6 +407,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       <button
                         onClick={() => handleTogglePasoLiberacion(orden, 'firmado2')}
                         className="flex flex-col items-center gap-1 group cursor-pointer"
+                        title={orden.firmante2 ? `Firmado por ${orden.firmante2}` : "Firma 2"}
                       >
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all ${
                           isFirmado2
@@ -412,7 +416,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         }`}>
                           <Check className={`w-4 h-4 ${isFirmado2 ? "stroke-[3]" : "opacity-30"}`} />
                         </div>
-                        <span className="text-[9px] font-semibold text-gray-400 group-hover:text-white">Firmado 2</span>
+                        <span className="text-[9px] font-semibold text-gray-400 group-hover:text-white truncate max-w-[70px]">
+                          {isFirmado2 && orden.firmante2 ? orden.firmante2 : "Firmado 2"}
+                        </span>
                       </button>
                     </div>
 

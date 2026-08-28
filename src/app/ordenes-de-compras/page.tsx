@@ -38,7 +38,8 @@ import {
   Folder,
   FolderOpen, 
   FileSpreadsheet,
-  ClipboardPaste
+  ClipboardPaste,
+  Settings
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -47,6 +48,7 @@ import { OrderNotesModal } from "@/components/ordenes/OrderNotesModal";
 import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { BatchLiberateModal } from "@/components/ordenes/BatchLiberateModal";
+import { ApprovalConfigModal } from "@/components/ordenes/ApprovalConfigModal";
 import { exportToExcel } from "@/lib/exportToExcel";
 
 const generateUniqueId = () => {
@@ -78,6 +80,9 @@ export default function OrdenesDeComprasPage() {
 
   // Modal state for Batch Liberate Paste
   const [isBatchLiberateOpen, setIsBatchLiberateOpen] = useState(false);
+
+  // Modal state for Approval Configuration (gear button)
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
   // Modal state for Notes
   const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
@@ -1102,14 +1107,25 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
               {/* Pegar y Marcar Liberadas button if filter is Liberadas */}
               {filterEstado === "Liberadas" && (
-                <button
-                  onClick={() => setIsBatchLiberateOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/15 hover:shadow-indigo-600/30"
-                  title="Pegar órdenes de compra en texto y marcarlas como liberadas en lote"
-                >
-                  <ClipboardPaste className="w-3.5 h-3.5" />
-                  <span>Pegar y Marcar Liberadas</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setIsBatchLiberateOpen(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/15 hover:shadow-indigo-600/30"
+                    title="Pegar órdenes de compra en texto y marcarlas como liberadas en lote"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>Pegar y Marcar Liberadas</span>
+                  </button>
+
+                  {/* Tuerquita de Configuración de Aprobaciones y Límites */}
+                  <button
+                    onClick={() => setIsConfigModalOpen(true)}
+                    className="p-1.5 rounded-xl bg-[#080c16] hover:bg-white/10 text-slate-400 hover:text-indigo-300 border border-slate-700/80 transition-all cursor-pointer shadow-sm"
+                    title="Configurar límites de monto y firmadores de liberación"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1698,6 +1714,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             )
           );
         }}
+        showToast={showToast}
+      />
+
+      {/* Modal de Configuración de Aprobaciones y Límites (Tuerquita) */}
+      <ApprovalConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
         showToast={showToast}
       />
     </AppLayout>
