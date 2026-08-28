@@ -2,30 +2,45 @@
 
 @layer base {
   :root {
-    --bg-primary: #0b0f17;
-    --bg-secondary: #111827;
-    --card-bg: rgba(17, 24, 39, 0.75);
+    --bg-primary: #090d16;
+    --bg-secondary: #0b0f19;
+    --card-bg: #111726;
     --border-color: rgba(255, 255, 255, 0.08);
   }
 
   body {
     background-color: #090d16;
-    color: #f3f4f6;
+    color: #f1f5f9;
     font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+    background-image: 
+      radial-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
+      linear-gradient(180deg, #070a10 0%, #0c111c 100%);
+    background-size: 32px 32px, 100% 100%;
+    background-attachment: fixed;
   }
 }
 
+/* ============================================================
+   VERCEL / STRIPE SAAS ENTERPRISE DESIGN SYSTEM
+   ============================================================ */
+
 .glass-panel {
-  background: rgba(17, 24, 39, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #111726;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
 }
 
 .glass-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #111726;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.35);
 }
 
 .glow-emerald {
@@ -43,7 +58,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: #090d16;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -52,14 +67,66 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* Inputs & Form Controls Default */
+input, select, textarea {
+  background-color: #0b0f19;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+input::placeholder, textarea::placeholder {
+  color: #64748b;
+}
+
+/* Table Default Typography & Contrast */
+table th {
+  background-color: #0c121e;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+table tr {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+table tr:hover {
+  background-color: rgba(99, 102, 241, 0.04);
+}
+
+/* Primary Action Buttons */
+button[class*="from-emerald-500"],
+button[class*="bg-gradient-to-r"] {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35);
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+button[class*="from-emerald-500"]:hover,
+button[class*="bg-gradient-to-r"]:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.5);
 }
 
 /* ==========================================
    PINK THEME (MODO ROSA OSCURO / WINE-PLUM)
    ========================================== */
 
-/* Page Background & Base Color override */
 .pink-theme {
   background-color: #1a0510 !important;
   color: #f3f4f6 !important;
@@ -68,9 +135,8 @@
                     radial-gradient(at 100% 0%, hsla(330, 80%, 12%, 1) 0px, transparent 50%) !important;
 }
 
-/* Sidebar & Header overrides */
 .pink-theme aside {
-  background-color: #12020a !important; /* deep black-wine */
+  background-color: #12020a !important;
   border-color: rgba(236, 72, 153, 0.15) !important;
   box-shadow: 10px 0 30px -15px rgba(236, 72, 153, 0.15) !important;
 }
@@ -81,14 +147,13 @@
   backdrop-filter: blur(12px) !important;
 }
 
-/* Override text color classes for headings and subheadings */
 .pink-theme h1,
 .pink-theme h2,
 .pink-theme h3,
 .pink-theme h4,
 .pink-theme th,
 .pink-theme .text-white {
-  color: #fbcfe8 !important; /* rose-200 */
+  color: #fbcfe8 !important;
 }
 
 .pink-theme .text-gray-100 {
@@ -98,17 +163,15 @@
 .pink-theme .text-gray-200,
 .pink-theme .text-gray-300,
 .pink-theme .text-gray-400 {
-  color: #fda4af !important; /* rose-300 */
+  color: #fda4af !important;
 }
 
-/* Glass cards override */
 .pink-theme .glass-card {
   background: linear-gradient(135deg, rgba(236, 72, 153, 0.05) 0%, rgba(236, 72, 153, 0.02) 100%) !important;
   border-color: rgba(236, 72, 153, 0.2) !important;
   box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Override inputs and selects */
 .pink-theme input,
 .pink-theme select,
 .pink-theme textarea {
@@ -120,7 +183,7 @@
 .pink-theme input:focus,
 .pink-theme select:focus,
 .pink-theme textarea:focus {
-  border-color: #ec4899 !important; /* pink-500 */
+  border-color: #ec4899 !important;
   box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2) !important;
 }
 
@@ -129,22 +192,19 @@
   color: rgba(244, 63, 94, 0.4) !important;
 }
 
-/* Active links in sidebar */
-.pink-theme aside a[class*="from-emerald-500"] {
+.pink-theme aside a[class*="from-emerald-500"],
+.pink-theme aside a.active,
+.pink-theme aside nav a[class*="text-emerald-300"] {
   background: linear-gradient(to right, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.05)) !important;
   border-color: rgba(236, 72, 153, 0.4) !important;
-  color: #f472b6 !important; /* pink-400 */
+  color: #f472b6 !important;
 }
 
-/* Sidebar navigation icons colors */
 .pink-theme aside nav a svg {
   color: #f472b6 !important;
 }
 
-.pink-theme aside nav a:hover svg {
-  color: #fbcfe8 !important;
-}
-
+.pink-theme aside nav a:hover svg,
 .pink-theme aside nav a[class*="from-emerald-500"] svg {
   color: #f472b6 !important;
 }
@@ -170,7 +230,6 @@
   border-color: rgba(236, 72, 153, 0.3) !important;
 }
 
-/* Table header and row coloring */
 .pink-theme th {
   background-color: #270617 !important;
   color: #fbcfe8 !important;
@@ -185,7 +244,6 @@
   background-color: rgba(236, 72, 153, 0.04) !important;
 }
 
-/* Buttons primary (Nueva Orden, Entrar, etc.) */
 .pink-theme button[class*="from-emerald-500"],
 .pink-theme button[class*="bg-gradient-to-r"] {
   background: linear-gradient(to right, #ec4899, #f43f5e) !important;
@@ -198,7 +256,6 @@
   background: linear-gradient(to right, #db2777, #e11d48) !important;
 }
 
-/* State filter pills */
 .pink-theme button[class*="bg-emerald-500"] {
   background-color: #ec4899 !important;
   color: #ffffff !important;
@@ -209,7 +266,6 @@
   border-color: rgba(236, 72, 153, 0.2) !important;
 }
 
-/* Ambient glow blobs removal or adjustments */
 .pink-theme div[class*="bg-emerald-500/15"],
 .pink-theme div[class*="bg-teal-500/15"],
 .pink-theme div[class*="bg-emerald-500/10"],
@@ -217,7 +273,6 @@
   background-color: rgba(236, 72, 153, 0.12) !important;
 }
 
-/* Scrollbar overrides */
 .pink-theme ::-webkit-scrollbar-track {
   background: rgba(236, 72, 153, 0.05);
 }
@@ -230,7 +285,6 @@
   background: rgba(236, 72, 153, 0.4);
 }
 
-/* Modal and dialogs */
 .pink-theme div[class*="bg-black/70"] {
   background-color: rgba(26, 5, 16, 0.8) !important;
 }
@@ -245,7 +299,6 @@
   background-color: rgba(239, 68, 68, 0.25) !important;
 }
 
-/* Custom indicator states: */
 .pink-theme span[class*="bg-emerald-500/15"] {
   background-color: rgba(236, 72, 153, 0.2) !important;
   color: #f472b6 !important;
@@ -264,32 +317,28 @@
   border-color: rgba(236, 72, 153, 0.4) !important;
 }
 
-/* Pending sends (red highlights) - keep high contrast */
 .pink-theme tr[class*="bg-red-500/5"] {
   background-color: rgba(239, 68, 68, 0.1) !important;
   border-left: 3px solid #f87171 !important;
 }
 
-/* User profile initials box */
 .pink-theme div[class*="bg-gradient-to-tr from-emerald-500 to-teal-500"] {
   background: linear-gradient(to right, #ec4899, #f43f5e) !important;
 }
 
-/* Hoyts & CMK label and Selected States overrides in Pink theme */
 .pink-theme span[class*="bg-purple-500/15"] {
   background-color: rgba(216, 180, 254, 0.15) !important;
-  color: #c084fc !important; /* light purple */
+  color: #c084fc !important;
   border-color: rgba(216, 180, 254, 0.3) !important;
 }
 
 .pink-theme span[class*="bg-teal-500/15"],
 .pink-theme span[class*="text-teal-300"] {
   background-color: rgba(45, 212, 191, 0.15) !important;
-  color: #2dd4bf !important; /* light teal */
+  color: #2dd4bf !important;
   border-color: rgba(45, 212, 191, 0.3) !important;
 }
 
-/* Modal Form Empresa Selected/Unselected overrides */
 .pink-theme form button[class*="border-white/10"] {
   background-color: rgba(236, 72, 153, 0.05) !important;
   color: #fda4af !important;
@@ -314,14 +363,13 @@
   box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
 }
 
-/* Emerald text color contrast overrides in dark background */
 .pink-theme .text-emerald-400,
 .pink-theme .text-emerald-300,
 .pink-theme .text-emerald-500,
 .pink-theme font-bold[class*="text-emerald-400"],
 .pink-theme span[class*="text-emerald-400"],
 .pink-theme span[class*="text-emerald-300"] {
-  color: #34d399 !important; /* restore beautiful bright green for dark bg readability */
+  color: #34d399 !important;
 }
 
 .pink-theme span[class*="bg-emerald-500/10"],
@@ -337,257 +385,13 @@
   border-color: rgba(52, 211, 153, 0.3) !important;
 }
 
-/* Indigo button styling for Liberadas Copy buttons in Pink theme */
 .pink-theme button[class*="bg-indigo-500/20"] {
   background-color: rgba(99, 102, 241, 0.15) !important;
-  color: #818cf8 !important; /* indigo-300 */
+  color: #818cf8 !important;
   border-color: rgba(99, 102, 241, 0.3) !important;
 }
 
 .pink-theme button[class*="bg-indigo-500/20"]:hover {
-  background-color: #6366f1 !important; /* indigo-500 */
+  background-color: #6366f1 !important;
   color: #ffffff !important;
 }
-
-/* ============================================================
-   DISEÑO 1: THEME ENTERPRISE (STRIPE / VERCEL SAAS PRESTIGE)
-   ============================================================ */
-
-.theme-enterprise {
-  background-color: #090d16 !important;
-  color: #f1f5f9 !important;
-  background-image: 
-    radial-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
-    linear-gradient(180deg, #070a10 0%, #0c111c 100%) !important;
-  background-size: 32px 32px, 100% 100% !important;
-}
-
-.theme-enterprise aside {
-  background-color: #0b0f19 !important;
-  border-color: rgba(255, 255, 255, 0.07) !important;
-  box-shadow: 4px 0 24px -2px rgba(0, 0, 0, 0.6) !important;
-}
-
-.theme-enterprise header {
-  background-color: rgba(9, 13, 22, 0.92) !important;
-  border-color: rgba(255, 255, 255, 0.07) !important;
-  backdrop-filter: blur(12px) !important;
-}
-
-.theme-enterprise h1,
-.theme-enterprise h2,
-.theme-enterprise h3,
-.theme-enterprise h4,
-.theme-enterprise .text-white {
-  color: #ffffff !important;
-  letter-spacing: -0.025em;
-}
-
-.theme-enterprise .text-gray-400 {
-  color: #94a3b8 !important; /* slate-400 */
-}
-
-.theme-enterprise .text-gray-300 {
-  color: #cbd5e1 !important; /* slate-300 */
-}
-
-.theme-enterprise .glass-card,
-.theme-enterprise .glass-panel {
-  background: #111726 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5) !important;
-  border-radius: 14px !important;
-}
-
-.theme-enterprise .glass-card:hover {
-  border-color: rgba(99, 102, 241, 0.3) !important;
-}
-
-.theme-enterprise input,
-.theme-enterprise select,
-.theme-enterprise textarea {
-  background-color: #0b0f19 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #f8fafc !important;
-  border-radius: 8px !important;
-}
-
-.theme-enterprise input:focus,
-.theme-enterprise select:focus,
-.theme-enterprise textarea:focus {
-  border-color: #6366f1 !important; /* Indigo 500 */
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
-}
-
-.theme-enterprise aside a[class*="from-emerald-500"],
-.theme-enterprise aside a.active,
-.theme-enterprise aside nav a[class*="text-emerald-300"] {
-  background: rgba(99, 102, 241, 0.12) !important;
-  border-color: rgba(99, 102, 241, 0.35) !important;
-  color: #a5b4fc !important; /* Indigo 300 */
-}
-
-.theme-enterprise aside nav a svg {
-  color: #94a3b8;
-}
-
-.theme-enterprise aside nav a:hover svg,
-.theme-enterprise aside nav a[class*="text-emerald-300"] svg {
-  color: #818cf8 !important;
-}
-
-.theme-enterprise th {
-  background-color: #0c121e !important;
-  color: #94a3b8 !important;
-  font-weight: 600 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-  font-size: 0.7rem !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-.theme-enterprise tr {
-  border-color: rgba(255, 255, 255, 0.05) !important;
-}
-
-.theme-enterprise tr:hover {
-  background-color: rgba(99, 102, 241, 0.04) !important;
-}
-
-.theme-enterprise button[class*="from-emerald-500"],
-.theme-enterprise button[class*="bg-gradient-to-r"] {
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35) !important;
-  border-radius: 8px !important;
-  font-weight: 600 !important;
-}
-
-.theme-enterprise button[class*="from-emerald-500"]:hover,
-.theme-enterprise button[class*="bg-gradient-to-r"]:hover {
-  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%) !important;
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.5) !important;
-}
-
-.theme-enterprise button[class*="bg-emerald-500"] {
-  background-color: #4f46e5 !important;
-  color: #ffffff !important;
-}
-
-/* ============================================================
-   DISEÑO 2: THEME GLASSMORPHISM (APPLE VISIONOS / DARK CRYSTAL)
-   ============================================================ */
-
-.theme-glass {
-  background-color: #05070e !important;
-  color: #f8fafc !important;
-  background-image: 
-    radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.12) 0%, transparent 40%),
-    radial-gradient(circle at 85% 15%, rgba(6, 182, 212, 0.12) 0%, transparent 45%),
-    radial-gradient(circle at 50% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%) !important;
-  background-attachment: fixed !important;
-}
-
-.theme-glass aside {
-  background: rgba(10, 14, 26, 0.65) !important;
-  backdrop-filter: blur(28px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5) !important;
-}
-
-.theme-glass header {
-  background: rgba(8, 12, 22, 0.6) !important;
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.theme-glass .glass-card,
-.theme-glass .glass-panel {
-  background: rgba(255, 255, 255, 0.035) !important;
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2) !important;
-  border-radius: 20px !important;
-}
-
-.theme-glass .glass-card:hover {
-  background: rgba(255, 255, 255, 0.055) !important;
-  border-color: rgba(255, 255, 255, 0.22) !important;
-  box-shadow: 0 25px 50px -12px rgba(168, 85, 247, 0.2), inset 0 1px 1px 0 rgba(255, 255, 255, 0.3) !important;
-}
-
-.theme-glass h1,
-.theme-glass h2,
-.theme-glass h3 {
-  color: #ffffff !important;
-  font-weight: 700;
-}
-
-.theme-glass input,
-.theme-glass select,
-.theme-glass textarea {
-  background: rgba(255, 255, 255, 0.04) !important;
-  backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 14px !important;
-  color: #ffffff !important;
-}
-
-.theme-glass input:focus,
-.theme-glass select:focus,
-.theme-glass textarea:focus {
-  border-color: rgba(168, 85, 247, 0.8) !important;
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25), 0 0 20px rgba(168, 85, 247, 0.3) !important;
-}
-
-.theme-glass aside a[class*="from-emerald-500"],
-.theme-glass aside nav a[class*="text-emerald-300"] {
-  background: rgba(255, 255, 255, 0.08) !important;
-  backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 4px 12px rgba(168, 85, 247, 0.15) !important;
-  color: #f3e8ff !important; /* Purple 100 */
-}
-
-.theme-glass aside nav a svg {
-  color: #cbd5e1;
-}
-
-.theme-glass aside nav a[class*="text-emerald-300"] svg {
-  color: #c084fc !important; /* Purple 400 */
-}
-
-.theme-glass button[class*="from-emerald-500"],
-.theme-glass button[class*="bg-gradient-to-r"] {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.9) 0%, rgba(99, 102, 241, 0.9) 50%, rgba(6, 182, 212, 0.9) 100%) !important;
-  backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 8px 24px -4px rgba(168, 85, 247, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.35) !important;
-  border-radius: 14px !important;
-  color: #ffffff !important;
-}
-
-.theme-glass button[class*="from-emerald-500"]:hover,
-.theme-glass button[class*="bg-gradient-to-r"]:hover {
-  filter: brightness(1.1) !important;
-  box-shadow: 0 12px 28px -4px rgba(168, 85, 247, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
-}
-
-.theme-glass th {
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(12px) !important;
-  color: #e2e8f0 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-.theme-glass tr {
-  border-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-.theme-glass tr:hover {
-  background-color: rgba(255, 255, 255, 0.03) !important;
-}
-

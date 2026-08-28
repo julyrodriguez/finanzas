@@ -35,7 +35,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   const { user, loading, logout } = useAuth();
   const isOrdenesUser = user?.email?.startsWith("ordenes");
@@ -120,20 +120,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       exact: false,
       hideForOrders: true,
     },
-    {
-      name: "⚡ Diseño 1 (SaaS)",
-      href: "/diseno1",
-      icon: Sparkles,
-      exact: false,
-      badge: "Vercel",
-    },
-    {
-      name: "✨ Diseño 2 (Glass)",
-      href: "/diseno2",
-      icon: Sparkles,
-      exact: false,
-      badge: "VisionOS",
-    },
   ].filter(item => {
     if (isOrdenesUser && item.hideForOrders) {
       return false;
@@ -177,15 +163,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const isExpanded = sidebarOpen || isHovered;
 
   return (
-    <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 ${
-      theme === "pink"
-        ? "pink-theme"
-        : theme === "enterprise"
-        ? "theme-enterprise"
-        : theme === "glassmorphism"
-        ? "theme-glass"
-        : ""
-    }`}>
+    <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 ${theme === "pink" ? "pink-theme" : ""}`}>
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div
@@ -201,7 +179,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           setIsHovered(false);
           setSidebarOpen(false);
         }}
-        className={`fixed lg:sticky lg:top-0 lg:h-screen inset-y-0 left-0 z-50 bg-[#0d131f] border-r border-white/10 flex flex-col justify-between transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-hidden ${
+        className={`fixed lg:sticky lg:top-0 lg:h-screen inset-y-0 left-0 z-50 bg-[#0b0f19] border-r border-white/10 flex flex-col justify-between transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-hidden ${
           sidebarOpen
             ? "translate-x-0 w-72"
             : "-translate-x-full lg:translate-x-0"
@@ -213,9 +191,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         <div className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-3 min-w-0">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex-shrink-0">
-                <div className="h-full w-full bg-[#0d131f] rounded-[10px] flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-emerald-400" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5 shadow-lg shadow-indigo-500/20 flex-shrink-0">
+                <div className="h-full w-full bg-[#0b0f19] rounded-[10px] flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-indigo-400" />
                 </div>
               </div>
               {isExpanded && (
@@ -242,7 +220,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           {isExpanded && (
             <div className="px-2 mb-2 flex items-center justify-between text-xs font-semibold text-gray-400 tracking-wider uppercase transition-opacity duration-200">
               <span>Navegación</span>
-              <Sparkles className="w-3.5 h-3.5 text-amber-400/80" />
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400/80" />
             </div>
           )}
 
@@ -263,7 +241,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                     isExpanded ? "px-3.5 py-3" : "px-0 py-3 justify-center"
                   } ${
                     active
-                      ? "bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 text-emerald-300 border border-emerald-500/30 shadow-sm"
+                      ? "bg-gradient-to-r from-indigo-500/15 to-indigo-500/5 text-indigo-300 border border-indigo-500/30 shadow-sm"
                       : "text-gray-400 hover:text-gray-100 hover:bg-white/5 border border-transparent"
                   }`}
                   title={!isExpanded ? item.name : undefined}
@@ -271,8 +249,8 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                   <div
                     className={`rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
                       isExpanded
-                        ? "p-2 " + (active ? "bg-emerald-500/20 text-emerald-400" : "bg-[#0d131f] text-gray-400 group-hover:text-white group-hover:bg-white/10")
-                        : (active ? "text-emerald-400" : "text-gray-400 group-hover:text-white")
+                        ? "p-2 " + (active ? "bg-indigo-500/20 text-indigo-400" : "bg-[#0b0f19] text-gray-400 group-hover:text-white group-hover:bg-white/10")
+                        : (active ? "text-indigo-400" : "text-gray-400 group-hover:text-white")
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -285,7 +263,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                         <span
                           className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
                             active
-                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                              ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
                               : "bg-amber-500/10 text-amber-300 border-amber-500/20"
                           }`}
                         >
@@ -407,59 +385,24 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* Theme Selector Pill Group */}
-            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
-              <button
-                onClick={() => setTheme("enterprise")}
-                title="Diseño 1: Stripe / Vercel Enterprise"
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  theme === "enterprise"
-                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <span>⚡</span>
-                <span className="hidden md:inline">Diseño 1</span>
-              </button>
-
-              <button
-                onClick={() => setTheme("glassmorphism")}
-                title="Diseño 2: Apple Glassmorphism / VisionOS"
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  theme === "glassmorphism"
-                    ? "bg-gradient-to-r from-purple-500 to-cyan-500 text-white shadow-sm font-semibold"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <span>✨</span>
-                <span className="hidden md:inline">Diseño 2</span>
-              </button>
-
-              <button
-                onClick={() => setTheme("dark")}
-                title="Diseño Clásico (Dark)"
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  theme === "dark"
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <span>🌙</span>
-                <span className="hidden md:inline">Clásico</span>
-              </button>
-
-              <button
-                onClick={() => setTheme("pink")}
-                title="Modo Rosa"
-                className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                  theme === "pink"
-                    ? "bg-pink-500/20 text-pink-300 border border-pink-500/30"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <span>🌸</span>
-              </button>
-            </div>
+            {/* Theme Switcher Button */}
+            <button
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Cambiar a Modo Rosa" : "Cambiar a Modo Oscuro"}
+              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+            >
+              {theme === "dark" ? (
+                <>
+                  <span className="text-xs">🌸</span>
+                  <span className="hidden sm:inline">Modo Rosa</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs">🌙</span>
+                  <span className="hidden sm:inline">Modo Oscuro</span>
+                </>
+              )}
+            </button>
 
             {user ? (
               <button

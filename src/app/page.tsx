@@ -431,12 +431,12 @@ export default function CalendarioPage() {
       {/* Main Container */}
       <div className="space-y-6">
         {/* 1. Header Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-[#0d131f] p-4 rounded-3xl border border-white/10 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 glass-card p-4 rounded-2xl border border-white/10 shadow-lg">
           {/* Month/Week Navigation */}
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrev}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
+              className="p-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
               title="Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -444,14 +444,14 @@ export default function CalendarioPage() {
             
             <button
               onClick={handleToday}
-              className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-200 transition-colors"
+              className="px-3.5 py-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-200 transition-colors"
             >
               Hoy
             </button>
 
             <button
               onClick={handleNext}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
+              className="p-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
               title="Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
@@ -465,12 +465,12 @@ export default function CalendarioPage() {
           {/* View Toggles & Add Event */}
           <div className="flex items-center justify-between sm:justify-end gap-3">
             {/* Monthly / Weekly toggle */}
-            <div className="flex bg-white/5 border border-white/10 p-1 rounded-xl gap-1">
+            <div className="flex bg-[#0b0f19] border border-white/10 p-1 rounded-xl gap-1">
               <button
                 onClick={() => setViewMode("month")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   viewMode === "month"
-                    ? "bg-emerald-500 text-white shadow"
+                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -480,7 +480,7 @@ export default function CalendarioPage() {
                 onClick={() => setViewMode("week")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   viewMode === "week"
-                    ? "bg-emerald-500 text-white shadow"
+                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -491,7 +491,7 @@ export default function CalendarioPage() {
             {/* "+ Nuevo" Button */}
             <button
               onClick={() => openAddModal()}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Nuevo Evento</span>
@@ -507,9 +507,9 @@ export default function CalendarioPage() {
             
             {/* MONTH VIEW */}
             {viewMode === "month" && (
-              <div className="rounded-3xl glass-card border border-white/10 overflow-hidden shadow-2xl">
+              <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-2xl">
                 {/* Weekday headers */}
-                <div className="grid grid-cols-7 bg-white/5 border-b border-white/10 text-center font-bold text-gray-400 py-3 text-xs uppercase tracking-wider">
+                <div className="grid grid-cols-7 bg-[#0c121e] border-b border-white/10 text-center font-bold text-gray-400 py-3 text-xs uppercase tracking-wider">
                   <div>Lun</div>
                   <div>Mar</div>
                   <div>Mié</div>

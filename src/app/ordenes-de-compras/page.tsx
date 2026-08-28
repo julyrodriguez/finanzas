@@ -935,7 +935,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {!isOrdenesUser && (
               <button
                 onClick={handleOpenAddModal}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 <span>Agregar Solicitud de OC</span>
@@ -957,12 +957,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setSearchField(e.target.value as "todos" | "numSolicitud" | "numOC" | "razonSocial");
                     setQueryLimit(15);
                   }}
-                  className="w-full sm:w-auto pl-3 pr-8 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none"
+                  className="w-full sm:w-auto pl-3 pr-8 py-2.5 text-xs rounded-xl bg-[#0b0f19] border border-white/10 text-white focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none"
                 >
-                  <option value="todos" className="bg-[#0d131f] text-white">Todos los campos</option>
-                  <option value="numOC" className="bg-[#0d131f] text-white">N° OC</option>
-                  <option value="numSolicitud" className="bg-[#0d131f] text-white">N° Solicitud</option>
-                  <option value="razonSocial" className="bg-[#0d131f] text-white">Proveedor</option>
+                  <option value="todos" className="bg-[#0b0f19] text-white">Todos los campos</option>
+                  <option value="numOC" className="bg-[#0b0f19] text-white">N° OC</option>
+                  <option value="numSolicitud" className="bg-[#0b0f19] text-white">N° Solicitud</option>
+                  <option value="razonSocial" className="bg-[#0b0f19] text-white">Proveedor</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
@@ -978,7 +978,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setQueryLimit(15);
                   }}
                   placeholder="Buscar..."
-                  className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
+                  className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-[#0b0f19] border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
                 />
                 {searchQuery && (
                   <button
@@ -1006,7 +1006,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEmpresa === emp
-                      ? "bg-emerald-500 text-white shadow-sm"
+                      ? "bg-indigo-600 text-white shadow-sm font-semibold"
                       : "text-gray-400 hover:text-white"
                   }`}
                 >
@@ -1028,7 +1028,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   }}
                   className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                     filterEstado === est
-                      ? "bg-emerald-500 text-white shadow-sm"
+                      ? "bg-indigo-600 text-white shadow-sm font-semibold"
                       : "text-gray-400 hover:text-white"
                   }`}
                 >
