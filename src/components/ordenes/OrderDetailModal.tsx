@@ -23,7 +23,7 @@ import {
   Check 
 } from "lucide-react";
 import type { OrdenCompra } from "@/types/ordenes";
-import { getStoredApprovalConfig } from "@/lib/approvalConfig";
+import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG } from "@/lib/approvalConfig";
 
 interface OrderDetailModalProps {
   orden: OrdenCompra | null;
@@ -50,40 +50,66 @@ export function OrderDetailModal({
   showToast,
   getFormattedCreatedAt,
 }: OrderDetailModalProps) {
-  const config = useMemo(() => getStoredApprovalConfig(), []);
+  const config = useMemo(() => {
+    try {
+      return getStoredApprovalConfig() || DEFAULT_APPROVAL_CONFIG;
+    } catch {
+      return DEFAULT_APPROVAL_CONFIG;
+    }
+  }, []);
 
   if (!orden) return null;
 
   const numMonto = typeof orden.monto === "number" 
     ? orden.monto 
-    : Number(String(orden.monto).replace(/[^0-9.-]+/g, "")) || 0;
+    : Number(String(orden.monto || "0").replace(/[^0-9.-]+/g, "")) || 0;
+
+  const formatSigners = (arr?: string[], fallback: string = "") => {
+    if (Array.isArray(arr) && arr.length > 0) return arr.join(", ");
+    return fallback;
+  };
+
+  const formatSignDate = (dateVal?: string) => {
+    if (!dateVal) return "";
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return String(dateVal);
+      return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  const limite1 = config?.limiteNivel1 || 5000000;
+  const limite2 = config?.limiteNivel2 || 18000000;
+  const limite3 = config?.limiteNivel3 || 150000000;
 
   const tierInfo = useMemo(() => {
-    if (numMonto <= config.limiteNivel1) {
+    if (numMonto <= limite1) {
       return {
-        tierName: "Nivel 1 (Hasta $5.000.000)",
+        tierName: `Nivel 1 (Hasta $${limite1.toLocaleString("es-AR")})`,
         f1Label: "Firma 1 (Base): Tomás",
-        f2Label: `Firma 2 (Área): ${config.firmantes2Nivel1.join(", ")}`,
-        isF1Signed: Boolean(orden.firmado1 || (orden.mandada && numMonto <= config.limiteNivel1)),
+        f2Label: `Firma 2 (Área): ${formatSigners(config?.firmantes2Nivel1, "Victoria, Tristán, Pablo G., Jorgelina")}`,
+        isF1Signed: Boolean(orden.firmado1 || (orden.mandada && numMonto <= limite1)),
         f1Signer: orden.firmante1 || (orden.mandada ? "Tomas" : "Pendiente"),
         isF2Signed: Boolean(orden.firmado2),
         f2Signer: orden.firmante2 || "Pendiente de Área",
       };
-    } else if (numMonto > config.limiteNivel1 && numMonto <= config.limiteNivel2) {
+    } else if (numMonto > limite1 && numMonto <= limite2) {
       return {
-        tierName: "Nivel 2 (De $5M a $18.000.000)",
-        f1Label: `Firma 1: ${config.firmantes1Nivel2.join(", ")}`,
-        f2Label: `Firma 2: ${config.firmantes2Nivel2.join(", ")}`,
+        tierName: `Nivel 2 (De $${limite1.toLocaleString("es-AR")} a $${limite2.toLocaleString("es-AR")})`,
+        f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel2, "Pablo Mondelo")}`,
+        f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel2, "Darío")}`,
         isF1Signed: Boolean(orden.firmado1),
         f1Signer: orden.firmante1 || "Pendiente de P. Mondelo",
         isF2Signed: Boolean(orden.firmado2),
         f2Signer: orden.firmante2 || "Pendiente de Darío",
       };
-    } else if (numMonto > config.limiteNivel2 && numMonto <= config.limiteNivel3) {
+    } else if (numMonto > limite2 && numMonto <= limite3) {
       return {
-        tierName: "Nivel 3 (De $18M a $150.000.000)",
-        f1Label: `Firma 1: ${config.firmantes1Nivel3.join(" / ")}`,
-        f2Label: `Firma 2: ${config.firmantes2Nivel3.join(", ")}`,
+        tierName: `Nivel 3 (De $${limite2.toLocaleString("es-AR")} a $${limite3.toLocaleString("es-AR")})`,
+        f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel3, "Matías, Hernán")}`,
+        f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel3, "Darío")}`,
         isF1Signed: Boolean(orden.firmado1),
         f1Signer: orden.firmante1 || "Pendiente de Matías/Hernán",
         isF2Signed: Boolean(orden.firmado2),
@@ -91,21 +117,21 @@ export function OrderDetailModal({
       };
     } else {
       return {
-        tierName: "Nivel 4 (Más de $150.000.000)",
-        f1Label: `Firma 1: ${config.firmantes1Nivel4.join(" / ")}`,
-        f2Label: `Firma 2: ${config.firmantes2Nivel4.join(", ")}`,
+        tierName: `Nivel 4 (Más de $${limite3.toLocaleString("es-AR")})`,
+        f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel4, "Darío, Hernán")}`,
+        f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel4, "Martín")}`,
         isF1Signed: Boolean(orden.firmado1),
         f1Signer: orden.firmante1 || "Pendiente de Darío/Hernán",
         isF2Signed: Boolean(orden.firmado2),
         f2Signer: orden.firmante2 || "Pendiente de Martín",
       };
     }
-  }, [numMonto, config, orden]);
+  }, [numMonto, config, orden, limite1, limite2, limite3]);
 
   const handleCopySummary = () => {
-    const summary = `OC ${orden.numOC} ${orden.empresa}
-Proveedor: ${orden.razonSocial}
-Monto: $ ${Number(orden.monto).toLocaleString("es-AR")}
+    const summary = `OC ${orden.numOC || ""} ${orden.empresa || ""}
+Proveedor: ${orden.razonSocial || ""}
+Monto: $ ${Number(orden.monto || 0).toLocaleString("es-AR")}
 Forma de Pago: ${orden.formaPago || "30DFF"}
 Motivo: ${orden.motivo || "Sin motivo"}
 Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}`;
@@ -208,7 +234,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                 Proveedor / Razón Social
               </span>
               <div className="text-base font-bold text-white tracking-tight truncate">
-                {orden.razonSocial}
+                {orden.razonSocial || "Sin razón social"}
               </div>
               <div className="text-[11px] text-slate-400 flex items-center gap-3 pt-1">
                 <span className="flex items-center gap-1">
@@ -232,7 +258,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
               <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-1">
                 {typeof orden.monto === "number"
                   ? `$ ${orden.monto.toLocaleString("es-AR")}`
-                  : orden.monto}
+                  : `$ ${orden.monto}`}
               </div>
             </div>
           </div>
@@ -298,7 +324,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                 {orden.fechaFirma1 && (
                   <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5">
                     <Calendar className="w-3 h-3" />
-                    {new Date(orden.fechaFirma1).toLocaleString("es-AR")}
+                    {formatSignDate(orden.fechaFirma1)}
                   </div>
                 )}
               </div>
@@ -326,7 +352,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                 {orden.fechaFirma2 && (
                   <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5">
                     <Calendar className="w-3 h-3" />
-                    {new Date(orden.fechaFirma2).toLocaleString("es-AR")}
+                    {formatSignDate(orden.fechaFirma2)}
                   </div>
                 )}
               </div>
