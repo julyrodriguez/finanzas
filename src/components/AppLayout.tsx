@@ -35,7 +35,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const { user, loading, logout } = useAuth();
   const isOrdenesUser = user?.email?.startsWith("ordenes");
@@ -120,6 +120,20 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       exact: false,
       hideForOrders: true,
     },
+    {
+      name: "⚡ Diseño 1 (SaaS)",
+      href: "/diseno1",
+      icon: Sparkles,
+      exact: false,
+      badge: "Vercel",
+    },
+    {
+      name: "✨ Diseño 2 (Glass)",
+      href: "/diseno2",
+      icon: Sparkles,
+      exact: false,
+      badge: "VisionOS",
+    },
   ].filter(item => {
     if (isOrdenesUser && item.hideForOrders) {
       return false;
@@ -163,7 +177,15 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const isExpanded = sidebarOpen || isHovered;
 
   return (
-    <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 ${theme === "pink" ? "pink-theme" : ""}`}>
+    <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200 ${
+      theme === "pink"
+        ? "pink-theme"
+        : theme === "enterprise"
+        ? "theme-enterprise"
+        : theme === "glassmorphism"
+        ? "theme-glass"
+        : ""
+    }`}>
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div
@@ -385,24 +407,59 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* Theme Switcher Button */}
-            <button
-              onClick={toggleTheme}
-              title={theme === "dark" ? "Cambiar a Modo Rosa" : "Cambiar a Modo Oscuro"}
-              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-1.5"
-            >
-              {theme === "dark" ? (
-                <>
-                  <span className="text-xs">🌸</span>
-                  <span className="hidden sm:inline">Modo Rosa</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs">🌙</span>
-                  <span className="hidden sm:inline">Modo Oscuro</span>
-                </>
-              )}
-            </button>
+            {/* Theme Selector Pill Group */}
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setTheme("enterprise")}
+                title="Diseño 1: Stripe / Vercel Enterprise"
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  theme === "enterprise"
+                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <span>⚡</span>
+                <span className="hidden md:inline">Diseño 1</span>
+              </button>
+
+              <button
+                onClick={() => setTheme("glassmorphism")}
+                title="Diseño 2: Apple Glassmorphism / VisionOS"
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  theme === "glassmorphism"
+                    ? "bg-gradient-to-r from-purple-500 to-cyan-500 text-white shadow-sm font-semibold"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <span>✨</span>
+                <span className="hidden md:inline">Diseño 2</span>
+              </button>
+
+              <button
+                onClick={() => setTheme("dark")}
+                title="Diseño Clásico (Dark)"
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  theme === "dark"
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <span>🌙</span>
+                <span className="hidden md:inline">Clásico</span>
+              </button>
+
+              <button
+                onClick={() => setTheme("pink")}
+                title="Modo Rosa"
+                className={`px-2 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  theme === "pink"
+                    ? "bg-pink-500/20 text-pink-300 border border-pink-500/30"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <span>🌸</span>
+              </button>
+            </div>
 
             {user ? (
               <button

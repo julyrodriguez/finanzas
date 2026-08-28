@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState } from "react";
 
-export type Theme = "dark" | "pink";
+export type Theme = "dark" | "pink" | "enterprise" | "glassmorphism";
 
 interface ThemeContextType {
   theme: Theme;
@@ -20,7 +20,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const savedTheme = localStorage.getItem("app-theme") as Theme | null;
-      if (savedTheme === "pink" || savedTheme === "dark") {
+      if (savedTheme === "pink" || savedTheme === "dark" || savedTheme === "enterprise" || savedTheme === "glassmorphism") {
         return savedTheme;
       }
     }

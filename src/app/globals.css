@@ -348,3 +348,246 @@
   background-color: #6366f1 !important; /* indigo-500 */
   color: #ffffff !important;
 }
+
+/* ============================================================
+   DISEÑO 1: THEME ENTERPRISE (STRIPE / VERCEL SAAS PRESTIGE)
+   ============================================================ */
+
+.theme-enterprise {
+  background-color: #090d16 !important;
+  color: #f1f5f9 !important;
+  background-image: 
+    radial-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, #070a10 0%, #0c111c 100%) !important;
+  background-size: 32px 32px, 100% 100% !important;
+}
+
+.theme-enterprise aside {
+  background-color: #0b0f19 !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  box-shadow: 4px 0 24px -2px rgba(0, 0, 0, 0.6) !important;
+}
+
+.theme-enterprise header {
+  background-color: rgba(9, 13, 22, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.theme-enterprise h1,
+.theme-enterprise h2,
+.theme-enterprise h3,
+.theme-enterprise h4,
+.theme-enterprise .text-white {
+  color: #ffffff !important;
+  letter-spacing: -0.025em;
+}
+
+.theme-enterprise .text-gray-400 {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+.theme-enterprise .text-gray-300 {
+  color: #cbd5e1 !important; /* slate-300 */
+}
+
+.theme-enterprise .glass-card,
+.theme-enterprise .glass-panel {
+  background: #111726 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 14px !important;
+}
+
+.theme-enterprise .glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.theme-enterprise input,
+.theme-enterprise select,
+.theme-enterprise textarea {
+  background-color: #0b0f19 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+  border-radius: 8px !important;
+}
+
+.theme-enterprise input:focus,
+.theme-enterprise select:focus,
+.theme-enterprise textarea:focus {
+  border-color: #6366f1 !important; /* Indigo 500 */
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+}
+
+.theme-enterprise aside a[class*="from-emerald-500"],
+.theme-enterprise aside a.active,
+.theme-enterprise aside nav a[class*="text-emerald-300"] {
+  background: rgba(99, 102, 241, 0.12) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #a5b4fc !important; /* Indigo 300 */
+}
+
+.theme-enterprise aside nav a svg {
+  color: #94a3b8;
+}
+
+.theme-enterprise aside nav a:hover svg,
+.theme-enterprise aside nav a[class*="text-emerald-300"] svg {
+  color: #818cf8 !important;
+}
+
+.theme-enterprise th {
+  background-color: #0c121e !important;
+  color: #94a3b8 !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-size: 0.7rem !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.theme-enterprise tr {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.theme-enterprise tr:hover {
+  background-color: rgba(99, 102, 241, 0.04) !important;
+}
+
+.theme-enterprise button[class*="from-emerald-500"],
+.theme-enterprise button[class*="bg-gradient-to-r"] {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35) !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
+
+.theme-enterprise button[class*="from-emerald-500"]:hover,
+.theme-enterprise button[class*="bg-gradient-to-r"]:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%) !important;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.5) !important;
+}
+
+.theme-enterprise button[class*="bg-emerald-500"] {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+}
+
+/* ============================================================
+   DISEÑO 2: THEME GLASSMORPHISM (APPLE VISIONOS / DARK CRYSTAL)
+   ============================================================ */
+
+.theme-glass {
+  background-color: #05070e !important;
+  color: #f8fafc !important;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(6, 182, 212, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%) !important;
+  background-attachment: fixed !important;
+}
+
+.theme-glass aside {
+  background: rgba(10, 14, 26, 0.65) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+.theme-glass header {
+  background: rgba(8, 12, 22, 0.6) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.theme-glass .glass-card,
+.theme-glass .glass-panel {
+  background: rgba(255, 255, 255, 0.035) !important;
+  backdrop-filter: blur(24px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2) !important;
+  border-radius: 20px !important;
+}
+
+.theme-glass .glass-card:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 25px 50px -12px rgba(168, 85, 247, 0.2), inset 0 1px 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.theme-glass h1,
+.theme-glass h2,
+.theme-glass h3 {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.theme-glass input,
+.theme-glass select,
+.theme-glass textarea {
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 14px !important;
+  color: #ffffff !important;
+}
+
+.theme-glass input:focus,
+.theme-glass select:focus,
+.theme-glass textarea:focus {
+  border-color: rgba(168, 85, 247, 0.8) !important;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25), 0 0 20px rgba(168, 85, 247, 0.3) !important;
+}
+
+.theme-glass aside a[class*="from-emerald-500"],
+.theme-glass aside nav a[class*="text-emerald-300"] {
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 4px 12px rgba(168, 85, 247, 0.15) !important;
+  color: #f3e8ff !important; /* Purple 100 */
+}
+
+.theme-glass aside nav a svg {
+  color: #cbd5e1;
+}
+
+.theme-glass aside nav a[class*="text-emerald-300"] svg {
+  color: #c084fc !important; /* Purple 400 */
+}
+
+.theme-glass button[class*="from-emerald-500"],
+.theme-glass button[class*="bg-gradient-to-r"] {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.9) 0%, rgba(99, 102, 241, 0.9) 50%, rgba(6, 182, 212, 0.9) 100%) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 8px 24px -4px rgba(168, 85, 247, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.35) !important;
+  border-radius: 14px !important;
+  color: #ffffff !important;
+}
+
+.theme-glass button[class*="from-emerald-500"]:hover,
+.theme-glass button[class*="bg-gradient-to-r"]:hover {
+  filter: brightness(1.1) !important;
+  box-shadow: 0 12px 28px -4px rgba(168, 85, 247, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+}
+
+.theme-glass th {
+  background: rgba(255, 255, 255, 0.03) !important;
+  backdrop-filter: blur(12px) !important;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.theme-glass tr {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.theme-glass tr:hover {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
