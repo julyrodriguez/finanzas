@@ -44,6 +44,7 @@ export type { Nota, OrdenCompra };
 import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
 import { OrderNotesModal } from "@/components/ordenes/OrderNotesModal";
 import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
+import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { exportToExcel } from "@/lib/exportToExcel";
 
 const generateUniqueId = () => {
@@ -604,6 +605,13 @@ export default function OrdenesDeComprasPage() {
     setSavingNota(false);
   };
 
+  // Optimistic handler for status changes from OrderStatusMenu
+  const handleStatusChange = (ordenId: string, updatedFields: Partial<OrdenCompra>) => {
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
+    );
+  };
+
   // Toggle Liberada Status
   const handleToggleLiberada = async (orden: OrdenCompra) => {
     if (isOrdenesUser) return;
@@ -1064,23 +1072,27 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           {/* Leyenda de Estados */}
           <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
             <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px] mr-1">Guía de Estados:</span>
-            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium">
-              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>🟢 Liberada</span>
+            <span className="inline-flex items-center gap-1.5 bg-slate-500/10 text-slate-300 px-2.5 py-1 rounded-xl border border-slate-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span>Pendiente</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-300 px-2.5 py-1 rounded-xl border border-emerald-500/20 font-medium">
-              <Send className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>🟢 Mandada</span>
+            <span className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-xl border border-amber-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span>Mandada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>🔵 Entregada</span>
+            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>Liberada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/20 font-medium">
-              <X className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>🔴 Cancelada</span>
+            <span className="inline-flex items-center gap-1.5 bg-indigo-500/10 text-indigo-300 px-2.5 py-1 rounded-xl border border-indigo-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+              <span>Entregada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-purple-500/15 text-purple-300 px-2.5 py-1 rounded-xl border border-purple-500/30 font-medium">
+            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              <span>Cancelada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-purple-500/15 text-purple-300 px-2.5 py-1 rounded-xl border border-purple-500/30 font-medium ml-auto">
               <Link2 className="w-3.5 h-3.5" />
               <span>Ref: Solicitadas por la misma persona</span>
             </span>
@@ -1119,7 +1131,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           />
                         </th>
                       )}
-                      <th className="px-4 py-3.5">{isOrdenesUser ? "Estado Autorización" : "Estados"}</th>
+                      <th className="px-4 py-3.5">Estado</th>
                       <th className="px-4 py-3.5">Empresa</th>
                       <th className="px-4 py-3.5">N° Solicitud</th>
                       <th className="px-4 py-3.5">N° OC & Copiar</th>
@@ -1200,84 +1212,14 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                               />
                             </td>
                           )}
-                          {/* Tildes: Liberada & Mandada */}
+                          {/* Selector Desplegable de Estado */}
                           <td className="px-4 py-4">
-                            {isOrdenesUser ? (
-                              orden.cancelada ? (
-                                <span className="px-2.5 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold uppercase tracking-wider">
-                                  Cancelada
-                                </span>
-                              ) : (
-                                <div className="flex items-center">
-                                  {orden.liberada ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
-                                      autorizada
-                                    </span>
-                                  ) : orden.mandada ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
-                                      enviada a autorizar
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-500/10 text-gray-400 border border-gray-500/20 whitespace-nowrap">
-                                      no enviada
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                {orden.cancelada ? (
-                                  <span className="px-2.5 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold uppercase tracking-wider">
-                                    Cancelada
-                                  </span>
-                                ) : (
-                                  <>
-                                    {/* Tilde Liberada */}
-                                    <button
-                                      onClick={() => handleToggleLiberada(orden)}
-                                      className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                        orden.liberada
-                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                          : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                                      }`}
-                                      title={orden.liberada ? "Liberada (Click para desmarcar)" : "Marcar como Liberada"}
-                                    >
-                                      <Check className={`w-3.5 h-3.5 ${orden.liberada ? "stroke-[3]" : "opacity-40"}`} />
-                                    </button>
-
-                                    {/* Tilde Mandada */}
-                                    <button
-                                      onClick={() => handleToggleMandada(orden)}
-                                      className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                        orden.mandada
-                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
-                                          : isPendingSend
-                                            ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
-                                            : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                                      }`}
-                                      title={orden.mandada ? "Mandada (Click para desmarcar)" : "Marcar como Mandada"}
-                                    >
-                                      <Send className={`w-3.5 h-3.5 ${orden.mandada ? "stroke-[2.5]" : isPendingSend ? "stroke-[2.5]" : "opacity-40"}`} />
-                                    </button>
-
-                                    {/* Tilde Entregada (Visible en filtro de Todas, Liberadas o Entregadas) */}
-                                    {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
-                                      <button
-                                        onClick={() => handleToggleEntregada(orden)}
-                                        className={`p-1.5 rounded-lg border transition-all flex items-center justify-center ${
-                                          orden.entregada
-                                            ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
-                                            : "bg-white/5 text-gray-500 border-white/10 hover:border-gray-400"
-                                        }`}
-                                        title={orden.entregada ? "Entregada (Click para desmarcar)" : "Marcar como Entregada"}
-                                      >
-                                        <CheckCircle2 className={`w-3.5 h-3.5 ${orden.entregada ? "stroke-[2]" : "opacity-40"}`} />
-                                      </button>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            )}
+                            <OrderStatusMenu
+                              orden={orden}
+                              isOrdenesUser={isOrdenesUser}
+                              onStatusChange={handleStatusChange}
+                              showToast={showToast}
+                            />
                           </td>
 
                         {/* Empresa Pill */}
@@ -1601,77 +1543,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
                         {/* Status Checkbox Toggles */}
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {isOrdenesUser ? (
-                            orden.cancelada ? (
-                              <span className="px-2.5 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] font-bold uppercase tracking-wider">
-                                Cancelada
-                              </span>
-                            ) : (
-                              <div className="flex items-center">
-                                {orden.liberada ? (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
-                                    autorizada
-                                  </span>
-                                ) : orden.mandada ? (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
-                                    enviada a autorizar
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-gray-500/10 text-gray-400 border border-gray-500/20 whitespace-nowrap">
-                                    no enviada
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          ) : (
-                            orden.cancelada ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-bold uppercase tracking-wider">
-                                Cancelada
-                              </span>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => handleToggleLiberada(orden)}
-                                  className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
-                                    orden.liberada
-                                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-                                      : "bg-white/5 text-gray-500 border-white/10"
-                                  }`}
-                                >
-                                  <Check className="w-2.5 h-2.5" />
-                                  <span>Lib</span>
-                                </button>
-
-                                <button
-                                  onClick={() => handleToggleMandada(orden)}
-                                  className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
-                                    orden.mandada
-                                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
-                                      : isPendingSend
-                                        ? "bg-red-500/20 text-red-400 border-red-500/40 hover:bg-red-500/30 animate-pulse"
-                                        : "bg-white/5 text-gray-500 border-white/10"
-                                  }`}
-                                >
-                                  <Send className="w-2.5 h-2.5" />
-                                  <span>Mand</span>
-                                </button>
-
-                                {(filterEstado === "Todas" || filterEstado === "Liberadas" || filterEstado === "Entregadas") && (
-                                  <button
-                                    onClick={() => handleToggleEntregada(orden)}
-                                    className={`px-2 py-1 rounded-lg border text-[9px] font-bold flex items-center gap-1 transition-all ${
-                                      orden.entregada
-                                        ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/30"
-                                        : "bg-white/5 text-gray-500 border-white/10"
-                                    }`}
-                                  >
-                                    <CheckCircle2 className="w-2.5 h-2.5" />
-                                    <span>Entreg</span>
-                                  </button>
-                                )}
-                              </>
-                            )
-                          )}
+                          <OrderStatusMenu
+                            orden={orden}
+                            isOrdenesUser={isOrdenesUser}
+                            onStatusChange={handleStatusChange}
+                            showToast={showToast}
+                          />
                         </div>
 
                         {/* Internal Notes Button */}
