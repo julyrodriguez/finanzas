@@ -1659,7 +1659,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
       {/* Modal de Detalle, Descripción, Firmas y Notas de la Orden */}
       <OrderDetailModal
-        orden={activeNotesOrden}
+        orden={activeNotesOrden ? (ordenes.find((o) => o.id === activeNotesOrden.id) || activeNotesOrden) : null}
         onClose={() => setActiveNotesOrden(null)}
         isOrdenesUser={isOrdenesUser}
         onEdit={handleOpenEditModal}
