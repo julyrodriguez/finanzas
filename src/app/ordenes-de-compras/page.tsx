@@ -958,10 +958,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         </div>
 
         {/* Buscador & Filters Bar */}
-        <div className="glass-card border border-white/10 p-4 rounded-2xl space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="glass-card border border-white/10 p-4 sm:p-5 rounded-2xl space-y-4 shadow-xl bg-[#0e1322]">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 flex-wrap">
             {/* Buscador Search Input Group */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-xl">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-md">
               {/* Dropdown de campo */}
               <div className="relative flex-shrink-0">
                 <select
@@ -970,19 +970,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setSearchField(e.target.value as "todos" | "numSolicitud" | "numOC" | "razonSocial");
                     setQueryLimit(15);
                   }}
-                  className="w-full sm:w-auto pl-3 pr-8 py-2.5 text-xs rounded-xl bg-[#0b0f19] border border-white/10 text-white focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none"
+                  className="w-full sm:w-auto pl-3 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white font-medium focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none shadow-sm"
                 >
-                  <option value="todos" className="bg-[#0b0f19] text-white">Todos los campos</option>
-                  <option value="numOC" className="bg-[#0b0f19] text-white">N° OC</option>
-                  <option value="numSolicitud" className="bg-[#0b0f19] text-white">N° Solicitud</option>
-                  <option value="razonSocial" className="bg-[#0b0f19] text-white">Proveedor</option>
+                  <option value="todos" className="bg-[#080c16] text-white">Todos los campos</option>
+                  <option value="numOC" className="bg-[#080c16] text-white">N° OC</option>
+                  <option value="numSolicitud" className="bg-[#080c16] text-white">N° Solicitud</option>
+                  <option value="razonSocial" className="bg-[#080c16] text-white">Proveedor</option>
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
 
               {/* Input de búsqueda */}
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -990,8 +990,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setSearchQuery(e.target.value);
                     setQueryLimit(15);
                   }}
-                  placeholder="Buscar..."
-                  className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-[#0b0f19] border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                  placeholder="Buscar orden, proveedor..."
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
                 />
                 {searchQuery && (
                   <button
@@ -999,7 +999,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       setSearchQuery("");
                       setQueryLimit(15);
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1008,71 +1008,93 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Filter Pills for Empresa */}
-            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
-              <span className="text-gray-400 text-[11px] px-2 font-medium">Empresa:</span>
-              {(["Todas", "Hoyts", "CMK"] as const).map((emp) => (
-                <button
-                  key={emp}
-                  onClick={() => {
-                    setFilterEmpresa(emp);
-                    setQueryLimit(15);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                    filterEmpresa === emp
-                      ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {emp}
-                </button>
-              ))}
+            <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner">
+              <span className="text-gray-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Empresa</span>
+              {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
+                const isSelected = filterEmpresa === emp;
+                return (
+                  <button
+                    key={emp}
+                    onClick={() => {
+                      setFilterEmpresa(emp);
+                      setQueryLimit(15);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                      isSelected
+                        ? emp === "Hoyts"
+                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                          : emp === "CMK"
+                          ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
+                          : "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {emp}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Filter Pills for Estado */}
-            <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-xs flex-wrap">
-              <span className="text-gray-400 text-[11px] px-2 font-medium">Estado:</span>
-              {(["Todas", "Pendientes", "Mandadas", "Liberadas", "Entregadas"] as const).map((est) => (
-                <button
-                  key={est}
-                  onClick={() => {
-                    setFilterEstado(est);
-                    setQueryLimit(15);
-                    setSelectedOCIds([]);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                    filterEstado === est
-                      ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {est}
-                </button>
-              ))}
+            <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner flex-wrap gap-0.5">
+              <span className="text-gray-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Estado</span>
+              {(
+                [
+                  { id: "Todas", label: "Todas", dot: null },
+                  { id: "Pendientes", label: "Pendientes", dot: "bg-slate-400" },
+                  { id: "Mandadas", label: "Mandadas", dot: "bg-amber-400" },
+                  { id: "Liberadas", label: "Liberadas", dot: "bg-emerald-400" },
+                  { id: "Entregadas", label: "Entregadas", dot: "bg-indigo-400" },
+                ] as const
+              ).map((est) => {
+                const isSelected = filterEstado === est.id;
+                return (
+                  <button
+                    key={est.id}
+                    onClick={() => {
+                      setFilterEstado(est.id);
+                      setQueryLimit(15);
+                      setSelectedOCIds([]);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                      isSelected
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {est.dot && <span className={`w-1.5 h-1.5 rounded-full ${est.dot}`} />}
+                    <span>{est.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Copiar Todas button if filter is Pendientes */}
-            {filterEstado === "Pendientes" && filteredOrdenes.length > 0 && (
-              <button
-                onClick={handleCopyAll}
-                className="px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20"
-                title="Copiar todas las OCs pendientes"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copiar Todas ({filteredOrdenes.length})</span>
-              </button>
-            )}
+            {/* Action Buttons for Filter Modes */}
+            <div className="flex items-center gap-2">
+              {/* Copiar Todas button if filter is Pendientes */}
+              {filterEstado === "Pendientes" && filteredOrdenes.length > 0 && (
+                <button
+                  onClick={handleCopyAll}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20"
+                  title="Copiar todas las OCs pendientes"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar Todas ({filteredOrdenes.length})</span>
+                </button>
+              )}
 
-            {/* Pegar y Marcar Liberadas button if filter is Liberadas */}
-            {filterEstado === "Liberadas" && (
-              <button
-                onClick={() => setIsBatchLiberateOpen(true)}
-                className="px-4 py-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500 hover:text-white font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20"
-                title="Pegar órdenes de compra en texto y marcarlas como liberadas en lote"
-              >
-                <ClipboardPaste className="w-3.5 h-3.5" />
-                <span>Pegar y Marcar Liberadas</span>
-              </button>
-            )}
+              {/* Pegar y Marcar Liberadas button if filter is Liberadas */}
+              {filterEstado === "Liberadas" && (
+                <button
+                  onClick={() => setIsBatchLiberateOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/15 hover:shadow-indigo-600/30"
+                  title="Pegar órdenes de compra en texto y marcarlas como liberadas en lote"
+                >
+                  <ClipboardPaste className="w-3.5 h-3.5" />
+                  <span>Pegar y Marcar Liberadas</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Seccion CMD de Creacion de Carpetas (solo Julian, en Pendientes, si hay seleccionadas) */}
@@ -1086,7 +1108,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             onCopyCMD={handleCopyCMD}
           />
 
-          {/* Leyenda de Estados */}
+          {/* Leyenda de Estados & Referencia de Mismo Solicitante */}
           <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
             <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px] mr-1">Guía de Estados:</span>
             <span className="inline-flex items-center gap-1.5 bg-slate-500/10 text-slate-300 px-2.5 py-1 rounded-xl border border-slate-500/30 font-medium">
@@ -1109,10 +1131,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
               <span>Cancelada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-purple-500/15 text-purple-300 px-2.5 py-1 rounded-xl border border-purple-500/30 font-medium ml-auto">
-              <Link2 className="w-3.5 h-3.5" />
-              <span>Ref: Solicitadas por la misma persona</span>
-            </span>
+
+            {/* Badge Mejorado de Mismo Solicitante */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-semibold shadow-sm ml-auto">
+              <Link2 className="w-3.5 h-3.5 text-purple-400" />
+              <span>Vinculadas: Mismo Solicitante</span>
+            </div>
           </div>
         </div>
 
