@@ -277,26 +277,34 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           </nav>
         </div>
 
-        {/* Footer Info & Profile */}
-        <div className="p-3 border-t border-white/10 space-y-2.5">
-          {/* Status Box */}
-          {isExpanded && (
-            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 space-y-1 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 flex items-center gap-1.5 text-[11px]">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                  Estado Sistema
+        {/* Footer Info, Theme Switcher & Profile */}
+        <div className="p-3 border-t border-white/10 space-y-2">
+          {/* Theme Switcher Button */}
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Cambiar a Modo Rosa" : "Cambiar a Modo Oscuro"}
+            className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all duration-150 border cursor-pointer ${
+              theme === "pink"
+                ? "bg-pink-500/15 text-pink-300 border-pink-500/30 hover:bg-pink-500/25 shadow-sm"
+                : "bg-white/[0.03] hover:bg-white/[0.08] text-slate-300 border-white/10"
+            } ${isExpanded ? "px-3 py-2.5 justify-between" : "p-2 justify-center"}`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-sm shrink-0">{theme === "dark" ? "🌸" : "🌙"}</span>
+              {isExpanded && (
+                <span className="truncate">
+                  {theme === "dark" ? "Modo Rosa" : "Modo Oscuro"}
                 </span>
-                <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              </div>
-              <p className="text-xs text-gray-300 font-medium truncate">
-                {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Acceso Público")}
-              </p>
+              )}
             </div>
-          )}
+            {isExpanded && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${
+                theme === "pink" ? "bg-pink-500/25 text-pink-200" : "bg-white/10 text-slate-400"
+              }`}>
+                {theme === "pink" ? "Rosa" : "Oscuro"}
+              </span>
+            )}
+          </button>
 
           {/* User Profile & Logout */}
           <div className={`flex items-center gap-2 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
@@ -333,7 +341,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                 <button
                   onClick={handleLogout}
                   title="Cerrar Sesión"
-                  className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors flex-shrink-0"
+                  className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors flex-shrink-0 cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -353,13 +361,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
       {/* Main Content Area (Wide Container) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        {/* Sticky Header with Mobile Hamburger Menu */}
-        <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
+        {/* Sticky Header with Mobile Hamburger Menu & Clean Title */}
+        <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             {/* Hamburger Button for Mobile only */}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0"
+              className="lg:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0 cursor-pointer"
               aria-label="Abrir menú"
               title="Abrir menú lateral"
             >
@@ -367,55 +375,15 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             </button>
 
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-2xl font-bold text-white tracking-tight truncate">
+              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
                 {title}
               </h1>
               {subtitle && (
-                <p className="text-xs text-gray-400 truncate mt-0.5 hidden sm:block">
+                <p className="text-xs text-slate-400 truncate hidden sm:block">
                   {subtitle}
                 </p>
               )}
             </div>
-          </div>
-
-          {/* Right Header Actions */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* Theme Switcher Button */}
-            <button
-              onClick={toggleTheme}
-              title={theme === "dark" ? "Cambiar a Modo Rosa" : "Cambiar a Modo Oscuro"}
-              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-1.5"
-            >
-              {theme === "dark" ? (
-                <>
-                  <span className="text-xs">🌸</span>
-                  <span className="hidden sm:inline">Modo Rosa</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs">🌙</span>
-                  <span className="hidden sm:inline">Modo Oscuro</span>
-                </>
-              )}
-            </button>
-
-            {user ? (
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 transition-colors flex items-center gap-2"
-              >
-                <LogOut className="w-3.5 h-3.5 text-red-400" />
-                <span className="hidden sm:inline">Salir</span>
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-xs text-emerald-400 transition-colors flex items-center gap-2"
-              >
-                <UserIcon className="w-3.5 h-3.5" />
-                <span>Ingresar</span>
-              </Link>
-            )}
           </div>
         </header>
 
