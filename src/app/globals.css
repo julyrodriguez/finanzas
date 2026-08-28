@@ -16,7 +16,6 @@
       radial-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
       linear-gradient(180deg, #070a10 0%, #0c111c 100%);
     background-size: 32px 32px, 100% 100%;
-    background-attachment: fixed;
   }
 }
 

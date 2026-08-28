@@ -32,7 +32,6 @@ interface AppLayoutProps {
 
 export function AppLayout({ title, subtitle, children, publicRoute = false }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
@@ -141,14 +140,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     await logout();
     router.push("/login");
   };
-  // getCleanUsername moved to top of component
 
   // If checking authentication or unauthenticated, block rendering and show loader
   if (loading || (!user && !publicRoute)) {
     return (
       <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-4 p-8 rounded-3xl glass-card border border-white/10 text-center">
-          <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+        <div className="flex flex-col items-center gap-4 p-8 rounded-2xl glass-card border border-white/10 text-center">
+          <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
           <div className="space-y-1">
@@ -160,50 +158,37 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     );
   }
 
-  const isExpanded = sidebarOpen || isHovered;
-
   return (
     <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 ${theme === "pink" ? "pink-theme" : ""}`}>
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          className="lg:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-md transition-opacity duration-300"
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-200"
         />
       )}
 
-      {/* Sidebar Navigation (Hover to expand, Auto-collapse when mouse leaves) */}
+      {/* Sidebar Navigation - Fixed Width lg:w-64 (Zero Layout Reflow, 60fps) */}
       <aside
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => {
-          setIsHovered(false);
-          setSidebarOpen(false);
-        }}
-        className={`fixed lg:sticky lg:top-0 lg:h-screen inset-y-0 left-0 z-50 bg-[#0b0f19] border-r border-white/10 flex flex-col justify-between transition-all duration-300 ease-in-out shadow-2xl lg:shadow-none overflow-hidden ${
-          sidebarOpen
-            ? "translate-x-0 w-72"
-            : "-translate-x-full lg:translate-x-0"
-        } ${
-          isHovered ? "lg:w-72" : "lg:w-20"
+        className={`fixed lg:sticky lg:top-0 lg:h-screen inset-y-0 left-0 z-50 w-64 bg-[#0b0f19] border-r border-white/10 flex flex-col justify-between transition-transform duration-200 ease-out shadow-2xl lg:shadow-none overflow-hidden ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
         {/* Top Header / Branding */}
         <div className="p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3 min-w-0">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5 shadow-lg shadow-indigo-500/20 flex-shrink-0">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5 shadow-md shadow-indigo-500/20 flex-shrink-0">
                 <div className="h-full w-full bg-[#0b0f19] rounded-[10px] flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-indigo-400" />
                 </div>
               </div>
-              {isExpanded && (
-                <div className="transition-opacity duration-200 min-w-0">
-                  <h1 className="font-bold text-lg text-white tracking-tight truncate">
-                    Finanzas
-                  </h1>
-                  <p className="text-xs text-gray-400 truncate">Gestión Corporativa</p>
-                </div>
-              )}
+              <div className="min-w-0">
+                <h1 className="font-bold text-base text-white tracking-tight truncate">
+                  Finanzas
+                </h1>
+                <p className="text-[11px] text-gray-400 truncate">Gestión Corporativa</p>
+              </div>
             </div>
 
             {/* Mobile Close Button inside Sidebar */}
@@ -217,15 +202,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           </div>
 
           {/* Section Title */}
-          {isExpanded && (
-            <div className="px-2 mb-2 flex items-center justify-between text-xs font-semibold text-gray-400 tracking-wider uppercase transition-opacity duration-200">
-              <span>Navegación</span>
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400/80" />
-            </div>
-          )}
+          <div className="px-2 mb-2 flex items-center justify-between text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
+            <span>Navegación</span>
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400/80" />
+          </div>
 
           {/* Navigation Items */}
-          <nav className="space-y-2">
+          <nav className="space-y-1.5">
             {menuItems.map((item) => {
               const active = isActive(item.href, item.exact);
               const Icon = item.icon;
@@ -233,46 +216,36 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                 <Link
                   key={item.name}
                   href={item.href}
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    setIsHovered(false);
-                  }}
-                  className={`group relative flex items-center rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isExpanded ? "px-3.5 py-3" : "px-0 py-3 justify-center"
-                  } ${
+                  onClick={() => setSidebarOpen(false)}
+                  className={`group relative flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors duration-150 ${
                     active
-                      ? "bg-gradient-to-r from-indigo-500/15 to-indigo-500/5 text-indigo-300 border border-indigo-500/30 shadow-sm"
+                      ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 shadow-sm"
                       : "text-gray-400 hover:text-gray-100 hover:bg-white/5 border border-transparent"
                   }`}
-                  title={!isExpanded ? item.name : undefined}
                 >
                   <div
-                    className={`rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
-                      isExpanded
-                        ? "p-2 " + (active ? "bg-indigo-500/20 text-indigo-400" : "bg-[#0b0f19] text-gray-400 group-hover:text-white group-hover:bg-white/10")
-                        : (active ? "text-indigo-400" : "text-gray-400 group-hover:text-white")
+                    className={`p-1.5 rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
+                      active ? "bg-indigo-500/20 text-indigo-400" : "bg-[#0b0f19] text-gray-400 group-hover:text-white group-hover:bg-white/10"
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <Icon className="w-4 h-4" />
                   </div>
 
-                  {isExpanded && (
-                    <div className="ml-3 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-200">
-                      <span className="truncate">{item.name}</span>
-                      {item.badge && (
-                        <span
-                          className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
-                            active
-                              ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
-                              : "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                          }`}
-                        >
-                          <Clock className="w-2.5 h-2.5" />
-                          {item.badge}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="ml-3 flex-1 flex items-center justify-between min-w-0">
+                    <span className="truncate">{item.name}</span>
+                    {item.badge && (
+                      <span
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
+                          active
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                            : "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                        }`}
+                      >
+                        <Clock className="w-2.5 h-2.5" />
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
                 </Link>
               );
             })}
@@ -280,77 +253,68 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         </div>
 
         {/* Footer Info & Profile */}
-        <div className="p-4 border-t border-white/10 space-y-4">
+        <div className="p-4 border-t border-white/10 space-y-3">
           {/* Status Box */}
-          {isExpanded && (
-            <div className="p-3.5 rounded-xl glass-card border border-white/5 space-y-2 transition-opacity duration-200">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                  Estado Sistema
-                </span>
-                <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              </div>
-              <p className="text-xs text-gray-300 font-medium truncate">
-                {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Acceso Público")}
-              </p>
-              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-emerald-500 h-full w-full rounded-full" />
-              </div>
+          <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 flex items-center gap-1.5 text-[11px]">
+                <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                Estado Sistema
+              </span>
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
             </div>
-          )}
+            <p className="text-xs text-gray-300 font-medium truncate">
+              {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Acceso Público")}
+            </p>
+          </div>
 
           {/* User Profile & Logout */}
-          <div className={`flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center font-bold text-white text-xs shadow-md flex-shrink-0">
+          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center font-bold text-white text-xs shadow-sm flex-shrink-0">
                 {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
               </div>
-              {isExpanded && (
-                <div className="min-w-0 transition-opacity duration-200">
-                  <p className="text-xs font-semibold text-gray-200 truncate">
-                    {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
-                  </p>
-                  <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
-                    {isOrdenesUser ? (
-                      <>
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-400" /> Consulta
-                      </>
-                    ) : user ? (
-                      <>
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Activo
-                      </>
-                    ) : (
-                      <>
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Modo Consulta
-                      </>
-                    )}
-                  </p>
-                </div>
-              )}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-200 truncate">
+                  {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
+                </p>
+                <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
+                  {isOrdenesUser ? (
+                    <>
+                      <ShieldCheck className="w-3 h-3 text-amber-400" /> Consulta
+                    </>
+                  ) : user ? (
+                    <>
+                      <ShieldCheck className="w-3 h-3 text-emerald-400" /> Activo
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Modo Consulta
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
 
-            {isExpanded && (
-              user ? (
-                <button
-                  onClick={handleLogout}
-                  title="Cerrar Sesión"
-                  className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  title="Iniciar Sesión"
-                  className="p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center"
-                >
-                  <UserIcon className="w-4 h-4" />
-                </Link>
-              )
+            {user ? (
+              <button
+                onClick={handleLogout}
+                title="Cerrar Sesión"
+                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors flex-shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                title="Iniciar Sesión"
+                className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center flex-shrink-0"
+              >
+                <UserIcon className="w-4 h-4" />
+              </Link>
             )}
           </div>
         </div>
