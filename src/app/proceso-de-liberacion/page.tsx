@@ -227,37 +227,42 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       )}
 
       <div className="space-y-6">
-        <div className="glass-card border border-white/10 p-5 rounded-3xl space-y-4">
+        <div className="glass-card border border-white/10 p-5 rounded-3xl space-y-4 shadow-xl bg-[#0e1322]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-amber-400" />
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-md shadow-amber-500/10">
+                <Clock className="w-5 h-5" />
+              </div>
               <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Órdenes Mandadas Pendientes</h3>
-                <p className="text-[11px] text-gray-400">Verificación y firmas para habilitar su liberación</p>
+                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  Proceso de Liberación
+                </h3>
+                <p className="text-xs text-slate-400">Verificación y firmas de órdenes mandadas para habilitar su liberación</p>
               </div>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-[10px] font-bold text-amber-400 self-start sm:self-auto">
-              {filteredOrdenes.length} Pendientes
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs font-bold text-amber-400 self-start sm:self-auto shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              {filteredOrdenes.length} Mandadas Pendientes
             </span>
           </div>
 
           {/* Buscador y Filtros */}
           {!loading && ordenes.length > 0 && (
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 pt-1">
               {/* Buscador */}
               <div className="relative w-full max-w-md">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar por OC, Solicitud, Proveedor o Motivo..."
-                  className="w-full pl-10 pr-10 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50 transition-all"
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -265,16 +270,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               </div>
 
               {/* Filtros de Envío */}
-              <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5 text-[11px] flex-wrap">
-                <span className="text-gray-400 px-2 font-medium">Envío:</span>
+              <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner flex-wrap gap-0.5">
+                <span className="text-slate-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Envío</span>
                 {(["Todas", "Enviadas", "No Enviadas", "1 firma"] as const).map((filterOpt) => (
                   <button
                     key={filterOpt}
                     onClick={() => setFilterEnvio(filterOpt)}
-                    className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
                       filterEnvio === filterOpt
-                        ? "bg-amber-500 text-[#0d131f] shadow-sm font-bold"
-                        : "text-gray-400 hover:text-white"
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
                     {filterOpt}
@@ -285,23 +290,23 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           )}
 
           {loading ? (
-            <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+            <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
               <p className="text-xs">Cargando proceso de liberación...</p>
             </div>
           ) : ordenes.length === 0 ? (
-            <div className="py-16 text-center rounded-3xl border border-white/5 bg-white/[0.01] p-8 space-y-3">
-              <AlertCircle className="w-10 h-10 text-gray-500 mx-auto" />
+            <div className="py-16 text-center rounded-2xl border border-slate-800 bg-[#080c16] p-8 space-y-3">
+              <AlertCircle className="w-10 h-10 text-slate-500 mx-auto" />
               <h3 className="text-base font-bold text-white">No hay órdenes pendientes</h3>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 Todas las órdenes en estado &quot;Mandada&quot; ya han sido debidamente liberadas.
               </p>
             </div>
           ) : filteredOrdenes.length === 0 ? (
-            <div className="py-16 text-center rounded-3xl border border-white/5 bg-white/[0.01] p-8 space-y-3">
-              <AlertCircle className="w-10 h-10 text-gray-500 mx-auto" />
+            <div className="py-16 text-center rounded-2xl border border-slate-800 bg-[#080c16] p-8 space-y-3">
+              <AlertCircle className="w-10 h-10 text-slate-500 mx-auto" />
               <h3 className="text-base font-bold text-white">Sin resultados</h3>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto">
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 No se encontraron órdenes que coincidan con la búsqueda o filtros aplicados.
               </p>
             </div>
@@ -316,37 +321,37 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 return (
                   <div 
                     key={orden.id} 
-                    className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between space-y-4 hover:border-white/20 transition-all"
+                    className="p-4 sm:p-5 rounded-2xl bg-[#111726] border border-slate-800 flex flex-col justify-between space-y-4 hover:border-slate-700 shadow-lg transition-all duration-200"
                   >
                     {/* Header info */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           orden.empresa === "Hoyts" 
-                            ? "bg-purple-500/10 text-purple-300 border border-purple-500/20" 
-                            : "bg-teal-500/10 text-teal-300 border border-teal-500/20"
+                            ? "bg-purple-950 text-purple-300 border border-purple-800/50" 
+                            : "bg-teal-950 text-teal-300 border border-teal-800/50"
                         }`}>
                           {orden.empresa}
                         </span>
-                        <span className="text-[10px] font-semibold text-gray-400">
+                        <span className="text-[10px] font-semibold text-slate-400">
                           N° Solicitud: {orden.numSolicitud}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2 pb-1">
-                        <h4 className="text-xs font-extrabold text-white">
+                        <h4 className="text-sm font-black text-white font-mono">
                           OC: {orden.numOC}
                         </h4>
                         <button
                           onClick={() => handleCopy(orden)}
-                          className="px-2 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500 hover:text-[#0d131f] text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg border border-slate-700 bg-[#080c16] text-slate-300 hover:text-white hover:bg-white/5 text-[10px] font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                           title="Copiar resumen"
                         >
                           <Copy className="w-3 h-3" />
                           <span>Copiar</span>
                         </button>
                       </div>
-                      <p className="text-[11px] text-gray-300 line-clamp-1">
-                        <strong>Prov:</strong> {orden.razonSocial}
+                      <p className="text-xs text-slate-300 line-clamp-1 font-medium">
+                        <strong className="text-slate-400 font-semibold">Prov:</strong> {orden.razonSocial}
                       </p>
                       <p className="text-[11px] text-gray-400 line-clamp-1">
                         <strong>Monto:</strong> ${Number(orden.monto).toLocaleString("es-AR")} | <strong>Motivo:</strong> {orden.motivo}

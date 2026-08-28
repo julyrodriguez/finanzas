@@ -922,36 +922,53 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       )}
 
       <div className="space-y-6">
-        {/* Top Header Controls: Add Button & Stats */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-emerald-400" />
-              Solicitudes de Órdenes
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Mostrando {visibleOrdenes.length} de {filteredOrdenes.length} órdenes ({ordenes.filter(o => o.liberada).length} liberadas, {ordenes.filter(o => o.mandada).length} mandadas)
-            </p>
+        {/* Top Header Controls: Title, Metrics & Actions */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-500/10">
+                <ShoppingBag className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Solicitudes de Órdenes
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-slate-400 flex-wrap mt-0.5">
+                  <span className="font-medium text-slate-300">
+                    Mostrando <strong className="text-white font-bold">{visibleOrdenes.length}</strong> de <strong className="text-white font-bold">{filteredOrdenes.length}</strong> órdenes
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    {ordenes.filter(o => o.liberada).length} liberadas
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    {ordenes.filter(o => o.mandada && !o.liberada).length} mandadas
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
             {/* Exportar a Excel Button */}
             <button
               onClick={handleExportExcel}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-emerald-400 hover:text-emerald-300 font-semibold text-xs transition-all flex items-center justify-center gap-2"
+              className="px-4 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               title="Descargar listado actual de órdenes en Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-              <span>Exportar a Excel</span>
+              <span>Exportar Excel</span>
             </button>
 
             {!isOrdenesUser && (
               <button
                 onClick={handleOpenAddModal}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Agregar Solicitud de OC</span>
+                <span>Nueva Orden</span>
               </button>
             )}
           </div>
