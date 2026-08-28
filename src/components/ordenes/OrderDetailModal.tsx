@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   X, 
   Eye, 
@@ -20,16 +20,21 @@ import {
   Copy, 
   Edit3, 
   MessageSquare, 
-  Check 
+  Check,
+  PenTool,
+  Trash2
 } from "lucide-react";
-import type { OrdenCompra } from "@/types/ordenes";
+import type { OrdenCompra, Nota } from "@/types/ordenes";
 import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber } from "@/lib/approvalConfig";
+import { getFirebaseDb } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
 interface OrderDetailModalProps {
   orden: OrdenCompra | null;
   onClose: () => void;
   isOrdenesUser?: boolean;
   onEdit?: (orden: OrdenCompra) => void;
+  onStatusChange?: (ordenId: string, updatedFields: Partial<OrdenCompra>) => void;
   newNotaText: string;
   setNewNotaText: (val: string) => void;
   savingNota: boolean;
@@ -43,6 +48,7 @@ export function OrderDetailModal({
   onClose,
   isOrdenesUser,
   onEdit,
+  onStatusChange,
   newNotaText,
   setNewNotaText,
   savingNota,
@@ -58,9 +64,34 @@ export function OrderDetailModal({
     }
   }, []);
 
+  // State for interactive inline signature editing
+  const [editingFirma1, setEditingFirma1] = useState(false);
+  const [selectedF1Signer, setSelectedF1Signer] = useState("");
+  const [customF1Signer, setCustomF1Signer] = useState("");
+
+  const [editingFirma2, setEditingFirma2] = useState(false);
+  const [selectedF2Signer, setSelectedF2Signer] = useState("");
+  const [customF2Signer, setCustomF2Signer] = useState("");
+
+  const [isSavingFirma, setIsSavingFirma] = useState(false);
+
+  // Reset editing states when order changes
+  useEffect(() => {
+    setEditingFirma1(false);
+    setEditingFirma2(false);
+    setSelectedF1Signer("");
+    setCustomF1Signer("");
+    setSelectedF2Signer("");
+    setCustomF2Signer("");
+  }, [orden?.id]);
+
   if (!orden) return null;
 
   const numMonto = parseMontoToNumber(orden.monto);
+
+  const displayMonto = typeof orden.monto === "number"
+    ? `$ ${orden.monto.toLocaleString("es-AR")}`
+    : (typeof orden.monto === "string" ? (orden.monto.startsWith("$") ? orden.monto : `$ ${orden.monto}`) : "$ 0");
 
   const formatSigners = (arr?: string[], fallback: string = "") => {
     if (Array.isArray(arr) && arr.length > 0) return arr.join(", ");
@@ -93,6 +124,31 @@ export function OrderDetailModal({
   const limite1 = config?.limiteNivel1 || 5000000;
   const limite2 = config?.limiteNivel2 || 18000000;
   const limite3 = config?.limiteNivel3 || 150000000;
+
+  // Options list for Firma 1 & 2
+  const f1SignerOptions = (() => {
+    if (numMonto <= limite1) {
+      return [...config.firmantes1Nivel1, "Otro"];
+    } else if (numMonto > limite1 && numMonto <= limite2) {
+      return [...config.firmantes1Nivel2, "Otro"];
+    } else if (numMonto > limite2 && numMonto <= limite3) {
+      return [...config.firmantes1Nivel3, "Otro"];
+    } else {
+      return [...config.firmantes1Nivel4, "Otro"];
+    }
+  })();
+
+  const f2SignerOptions = (() => {
+    if (numMonto <= limite1) {
+      return [...config.firmantes2Nivel1, "Otro"];
+    } else if (numMonto > limite1 && numMonto <= limite2) {
+      return [...config.firmantes2Nivel2, "Otro"];
+    } else if (numMonto > limite2 && numMonto <= limite3) {
+      return [...config.firmantes2Nivel3, "Otro"];
+    } else {
+      return [...config.firmantes2Nivel4, "Otro"];
+    }
+  })();
 
   const tierInfo = (() => {
     if (numMonto <= limite1) {
@@ -158,12 +214,135 @@ export function OrderDetailModal({
     }
   })();
 
+  // Handlers for Manual Signature Registration & Modification
+  const handleSaveFirma1 = async (nameToSave: string) => {
+    if (!orden?.id || !nameToSave.trim()) return;
+    setIsSavingFirma(true);
+    const nowIso = new Date().toISOString();
+    const hasF2Now = Boolean(orden.firmante2?.trim() || orden.firmado2);
+    const willBeLiberada = hasF2Now;
+
+    const updates: Partial<OrdenCompra> = {
+      firmado1: true,
+      firmante1: nameToSave.trim(),
+      fechaFirma1: nowIso,
+      mandada: true,
+      liberada: willBeLiberada,
+      cancelada: false,
+    };
+
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+      } catch (err) {
+        console.error("Error updating firma 1:", err);
+      }
+    }
+
+    if (onStatusChange) onStatusChange(orden.id, updates);
+    if (showToast) {
+      showToast(willBeLiberada 
+        ? `🎉 ¡Firma 1 registrada! La orden quedó 100% LIBERADA`
+        : `✍️ Firma 1 de ${nameToSave.trim()} registrada`
+      );
+    }
+    setEditingFirma1(false);
+    setIsSavingFirma(false);
+  };
+
+  const handleRemoveFirma1 = async () => {
+    if (!orden?.id) return;
+    setIsSavingFirma(true);
+    const updates: Partial<OrdenCompra> = {
+      firmado1: false,
+      firmante1: "",
+      fechaFirma1: "",
+      liberada: false,
+    };
+
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+      } catch (err) {
+        console.error("Error removing firma 1:", err);
+      }
+    }
+
+    if (onStatusChange) onStatusChange(orden.id, updates);
+    if (showToast) showToast("Firma 1 removida");
+    setEditingFirma1(false);
+    setIsSavingFirma(false);
+  };
+
+  const handleSaveFirma2 = async (nameToSave: string) => {
+    if (!orden?.id || !nameToSave.trim()) return;
+    setIsSavingFirma(true);
+    const nowIso = new Date().toISOString();
+    const hasF1Now = Boolean(orden.firmante1?.trim() || orden.firmado1 || (orden.mandada && numMonto <= limite1));
+    const willBeLiberada = hasF1Now;
+
+    const updates: Partial<OrdenCompra> = {
+      firmado2: true,
+      firmante2: nameToSave.trim(),
+      fechaFirma2: nowIso,
+      mandada: true,
+      liberada: willBeLiberada,
+      cancelada: false,
+    };
+
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+      } catch (err) {
+        console.error("Error updating firma 2:", err);
+      }
+    }
+
+    if (onStatusChange) onStatusChange(orden.id, updates);
+    if (showToast) {
+      showToast(willBeLiberada 
+        ? `🎉 ¡Firma 2 registrada! La orden quedó 100% LIBERADA`
+        : `✍️ Firma 2 de ${nameToSave.trim()} registrada`
+      );
+    }
+    setEditingFirma2(false);
+    setIsSavingFirma(false);
+  };
+
+  const handleRemoveFirma2 = async () => {
+    if (!orden?.id) return;
+    setIsSavingFirma(true);
+    const updates: Partial<OrdenCompra> = {
+      firmado2: false,
+      firmante2: "",
+      fechaFirma2: "",
+      liberada: false,
+    };
+
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+      } catch (err) {
+        console.error("Error removing firma 2:", err);
+      }
+    }
+
+    if (onStatusChange) onStatusChange(orden.id, updates);
+    if (showToast) showToast("Firma 2 removida");
+    setEditingFirma2(false);
+    setIsSavingFirma(false);
+  };
+
   const handleCopySummary = () => {
-    const summary = `OC ${orden.numOC || ""} ${orden.empresa || ""}
-Proveedor: ${orden.razonSocial || ""}
-Monto: $ ${Number(orden.monto || 0).toLocaleString("es-AR")}
-Forma de Pago: ${orden.formaPago || "30DFF"}
-Motivo: ${orden.motivo || "Sin motivo"}
+    const summary = `OC ${String(orden.numOC || "")} ${String(orden.empresa || "")}
+Proveedor: ${String(orden.razonSocial || "")}
+Monto: ${displayMonto}
+Forma de Pago: ${String(orden.formaPago || "30DFF")}
+Motivo: ${String(orden.motivo || "Sin motivo")}
 Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}`;
 
     navigator.clipboard.writeText(summary);
@@ -225,17 +404,17 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                   : "bg-teal-950/80 text-teal-300 border-teal-700/60"
               }`}
             >
-              {orden.empresa}
+              {String(orden.empresa || "Hoyts")}
             </span>
 
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-black text-white font-mono tracking-tight">
-                  OC: {orden.numOC}
+                  OC: {String(orden.numOC || "")}
                 </h3>
                 {orden.numSolicitud && (
                   <span className="text-xs font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-lg border border-white/10">
-                    Sol: {orden.numSolicitud}
+                    Sol: {String(orden.numSolicitud)}
                   </span>
                 )}
               </div>
@@ -264,17 +443,17 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                 Proveedor / Razón Social
               </span>
               <div className="text-base font-bold text-white tracking-tight truncate">
-                {orden.razonSocial || "Sin razón social"}
+                {String(orden.razonSocial || "Sin razón social")}
               </div>
               <div className="text-[11px] text-slate-400 flex items-center gap-3 pt-1">
                 <span className="flex items-center gap-1">
                   <CreditCard className="w-3 h-3 text-slate-500" />
-                  {orden.formaPago || "30DFF"}
+                  {String(orden.formaPago || "30DFF")}
                 </span>
                 {orden.creadoPor && (
                   <span className="flex items-center gap-1">
                     <UserIcon className="w-3 h-3 text-slate-500" />
-                    Creado por {orden.creadoPor}
+                    Creado por {String(orden.creadoPor)}
                   </span>
                 )}
               </div>
@@ -286,9 +465,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                 Monto Total
               </span>
               <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-1">
-                {typeof orden.monto === "number"
-                  ? `$ ${orden.monto.toLocaleString("es-AR")}`
-                  : (typeof orden.monto === "string" ? (orden.monto.startsWith("$") ? orden.monto : `$ ${orden.monto}`) : "$ 0")}
+                {displayMonto}
               </div>
             </div>
           </div>
@@ -302,7 +479,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
               </span>
               {orden.linkSharepoint && (
                 <a
-                  href={orden.linkSharepoint}
+                  href={String(orden.linkSharepoint)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:text-white hover:bg-indigo-600 text-[11px] font-semibold transition-all"
@@ -314,11 +491,11 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
             </div>
 
             <p className="text-slate-200 text-xs font-medium leading-relaxed whitespace-pre-wrap bg-[#111726]/60 p-3.5 rounded-xl border border-slate-800/80">
-              {orden.motivo || "Sin descripción o motivo registrado."}
+              {String(orden.motivo || "Sin descripción o motivo registrado.")}
             </p>
           </div>
 
-          {/* Sección de Firmas y Aprobaciones */}
+          {/* Sección de Firmas y Aprobaciones con Acciones Interactivas */}
           <div className="p-4 rounded-2xl bg-[#080c16] border border-slate-800 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
@@ -332,7 +509,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Firma 1 Card */}
-              <div className={`p-3.5 rounded-xl border space-y-1.5 transition-all ${
+              <div className={`p-3.5 rounded-2xl border space-y-2.5 transition-all ${
                 tierInfo.isF1Signed 
                   ? "bg-emerald-500/10 border-emerald-500/30" 
                   : "bg-[#111726]/60 border-slate-800"
@@ -348,19 +525,116 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                     {tierInfo.isF1Signed ? "Firmado" : "Pendiente"}
                   </span>
                 </div>
-                <div className="text-xs font-semibold text-white">
-                  Firmante: <span className={tierInfo.isF1Signed ? "text-emerald-400" : "text-slate-400"}>{tierInfo.f1Signer}</span>
-                </div>
-                {orden.fechaFirma1 && (
-                  <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5">
-                    <Calendar className="w-3 h-3" />
-                    {formatSignDate(orden.fechaFirma1)}
+
+                {!editingFirma1 ? (
+                  <>
+                    <div className="text-xs font-semibold text-white flex items-center justify-between">
+                      <div>
+                        Firmante: <span className={tierInfo.isF1Signed ? "text-emerald-400 font-bold" : "text-slate-400"}>{String(tierInfo.f1Signer)}</span>
+                      </div>
+                    </div>
+
+                    {orden.fechaFirma1 && (
+                      <div className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-0.5">
+                        <Calendar className="w-3 h-3" />
+                        {formatSignDate(orden.fechaFirma1)}
+                      </div>
+                    )}
+
+                    {!isOrdenesUser && (
+                      <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                        {tierInfo.isF1Signed ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingFirma1(true);
+                                setSelectedF1Signer(orden.firmante1 || f1SignerOptions[0] || "");
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Cambiar firmante</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRemoveFirma1}
+                              disabled={isSavingFirma}
+                              className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              title="Quitar esta firma"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Quitar</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFirma1(true);
+                              setSelectedF1Signer(f1SignerOptions[0] || "");
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/40 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <PenTool className="w-3.5 h-3.5" />
+                            <span>✍️ Registrar Firma 1</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-2 p-2.5 rounded-xl bg-[#080c16] border border-slate-700 animate-in fade-in duration-150">
+                    <div className="text-[11px] font-bold text-slate-300">Seleccionar autorizador:</div>
+                    <select
+                      value={selectedF1Signer}
+                      onChange={(e) => setSelectedF1Signer(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                    >
+                      {f1SignerOptions.map((opt) => (
+                        <option key={opt} value={opt} className="bg-[#0b0f19]">
+                          {opt === "Otro" ? "Otro (Escribir nombre manual)" : opt}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedF1Signer === "Otro" && (
+                      <input
+                        type="text"
+                        value={customF1Signer}
+                        onChange={(e) => setCustomF1Signer(e.target.value)}
+                        placeholder="Escribe el nombre del firmante..."
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                      />
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={isSavingFirma || (selectedF1Signer === "Otro" && !customF1Signer.trim())}
+                        onClick={() => {
+                          const finalName = selectedF1Signer === "Otro" ? customF1Signer : selectedF1Signer;
+                          handleSaveFirma1(finalName);
+                        }}
+                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingFirma ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        <span>Confirmar Firma</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFirma1(false)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-semibold transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Firma 2 Card */}
-              <div className={`p-3.5 rounded-xl border space-y-1.5 transition-all ${
+              <div className={`p-3.5 rounded-2xl border space-y-2.5 transition-all ${
                 tierInfo.isF2Signed 
                   ? "bg-emerald-500/10 border-emerald-500/30" 
                   : "bg-[#111726]/60 border-slate-800"
@@ -376,13 +650,110 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                     {tierInfo.isF2Signed ? "Firmado" : "Pendiente"}
                   </span>
                 </div>
-                <div className="text-xs font-semibold text-white">
-                  Firmante: <span className={tierInfo.isF2Signed ? "text-emerald-400" : "text-slate-400"}>{tierInfo.f2Signer}</span>
-                </div>
-                {orden.fechaFirma2 && (
-                  <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5">
-                    <Calendar className="w-3 h-3" />
-                    {formatSignDate(orden.fechaFirma2)}
+
+                {!editingFirma2 ? (
+                  <>
+                    <div className="text-xs font-semibold text-white flex items-center justify-between">
+                      <div>
+                        Firmante: <span className={tierInfo.isF2Signed ? "text-emerald-400 font-bold" : "text-slate-400"}>{String(tierInfo.f2Signer)}</span>
+                      </div>
+                    </div>
+
+                    {orden.fechaFirma2 && (
+                      <div className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-0.5">
+                        <Calendar className="w-3 h-3" />
+                        {formatSignDate(orden.fechaFirma2)}
+                      </div>
+                    )}
+
+                    {!isOrdenesUser && (
+                      <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                        {tierInfo.isF2Signed ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingFirma2(true);
+                                setSelectedF2Signer(orden.firmante2 || f2SignerOptions[0] || "");
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Cambiar firmante</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRemoveFirma2}
+                              disabled={isSavingFirma}
+                              className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              title="Quitar esta firma"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Quitar</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFirma2(true);
+                              setSelectedF2Signer(f2SignerOptions[0] || "");
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/40 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <PenTool className="w-3.5 h-3.5" />
+                            <span>✍️ Registrar Firma 2</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-2 p-2.5 rounded-xl bg-[#080c16] border border-slate-700 animate-in fade-in duration-150">
+                    <div className="text-[11px] font-bold text-slate-300">Seleccionar autorizador:</div>
+                    <select
+                      value={selectedF2Signer}
+                      onChange={(e) => setSelectedF2Signer(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                    >
+                      {f2SignerOptions.map((opt) => (
+                        <option key={opt} value={opt} className="bg-[#0b0f19]">
+                          {opt === "Otro" ? "Otro (Escribir nombre manual)" : opt}
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedF2Signer === "Otro" && (
+                      <input
+                        type="text"
+                        value={customF2Signer}
+                        onChange={(e) => setCustomF2Signer(e.target.value)}
+                        placeholder="Escribe el nombre del firmante..."
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                      />
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={isSavingFirma || (selectedF2Signer === "Otro" && !customF2Signer.trim())}
+                        onClick={() => {
+                          const finalName = selectedF2Signer === "Otro" ? customF2Signer : selectedF2Signer;
+                          handleSaveFirma2(finalName);
+                        }}
+                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingFirma ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        <span>Confirmar Firma</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFirma2(false)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-semibold transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -394,7 +765,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                 <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                Bitácora de Notas ({orden.notas?.length || 0})
+                Bitácora de Notas ({Array.isArray(orden.notas) ? orden.notas.length : 0})
               </span>
             </div>
 
@@ -405,23 +776,23 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                   Aún no hay notas registradas para esta orden.
                 </div>
               ) : (
-                orden.notas.map((nota, idx) => {
-                  const autorText = typeof nota?.autor === "string" ? nota.autor : "Usuario";
-                  const fechaText = formatSignDate(nota?.fecha);
-                  const contenidoText = typeof nota?.texto === "string" ? nota.texto : "";
+                orden.notas.map((nota: Nota, idx: number) => {
+                  const authorStr = typeof nota?.autor === "string" ? nota.autor : "Usuario";
+                  const fechaStr = formatSignDate(nota?.fecha) || (typeof nota?.fecha === "string" ? nota.fecha : "");
+                  const textStr = typeof nota?.texto === "string" ? nota.texto : "";
                   return (
                     <div key={nota?.id || idx} className="p-3 rounded-xl bg-[#111726]/80 border border-slate-800 space-y-1 text-xs">
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-amber-400 flex items-center gap-1">
                           <UserIcon className="w-3 h-3" />
-                          {autorText}
+                          {authorStr}
                         </span>
                         <span className="flex items-center gap-1 text-slate-500 text-[10px]">
                           <Clock className="w-3 h-3" />
-                          {fechaText}
+                          {fechaStr}
                         </span>
                       </div>
-                      <p className="text-slate-200 leading-relaxed font-medium">{contenidoText}</p>
+                      <p className="text-slate-200 leading-relaxed font-medium">{textStr}</p>
                     </div>
                   );
                 })

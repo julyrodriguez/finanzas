@@ -1663,6 +1663,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         onClose={() => setActiveNotesOrden(null)}
         isOrdenesUser={isOrdenesUser}
         onEdit={handleOpenEditModal}
+        onStatusChange={handleStatusChange}
         newNotaText={newNotaText}
         setNewNotaText={setNewNotaText}
         savingNota={savingNota}
