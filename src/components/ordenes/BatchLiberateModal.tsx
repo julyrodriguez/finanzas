@@ -646,22 +646,18 @@ export function BatchLiberateModal({
 
   if (!isOpen) return null;
 
-  const allSignerOptions = [
-    // Nivel 1
-    ...config.firmantes2Nivel1.map(s => ({ label: `${s} (Nivel 1: Área ≤ $${config.limiteNivel1.toLocaleString("es-AR")})`, value: s })),
-    ...config.firmantes1Nivel1.map(s => ({ label: `${s} (Nivel 1: Firma 1 ≤ $${config.limiteNivel1.toLocaleString("es-AR")})`, value: s })),
-    // Nivel 2
-    ...config.firmantes1Nivel2.map(s => ({ label: `${s} (Nivel 2: Firma 1 ≤ $${config.limiteNivel2.toLocaleString("es-AR")})`, value: s })),
-    ...config.firmantes2Nivel2.map(s => ({ label: `${s} (Nivel 2: Firma 2 ≤ $${config.limiteNivel2.toLocaleString("es-AR")})`, value: s })),
-    // Nivel 3
-    ...config.firmantes1Nivel3.map(s => ({ label: `${s} (Nivel 3: Firma 1 ≤ $${config.limiteNivel3.toLocaleString("es-AR")})`, value: s })),
-    ...config.firmantes2Nivel3.map(s => ({ label: `${s} (Nivel 3: Firma 2 ≤ $${config.limiteNivel3.toLocaleString("es-AR")})`, value: s })),
-    // Nivel 4
-    ...config.firmantes1Nivel4.map(s => ({ label: `${s} (Nivel 4: Firma 1 > $${config.limiteNivel3.toLocaleString("es-AR")})`, value: s })),
-    ...config.firmantes2Nivel4.map(s => ({ label: `${s} (Nivel 4: Firma 2 > $${config.limiteNivel3.toLocaleString("es-AR")})`, value: s })),
-    // Otro
-    { label: "Otro (Especificar nombre)", value: "Otro" },
-  ];
+  const uniqueSignerNames = Array.from(
+    new Set([
+      ...config.firmantes2Nivel1,
+      ...config.firmantes1Nivel1,
+      ...config.firmantes1Nivel2,
+      ...config.firmantes2Nivel2,
+      ...config.firmantes1Nivel3,
+      ...config.firmantes2Nivel3,
+      ...config.firmantes1Nivel4,
+      ...config.firmantes2Nivel4,
+    ].map(s => s.trim()).filter(Boolean))
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
@@ -713,11 +709,14 @@ export function BatchLiberateModal({
                   onChange={(e) => setSelectedAuthorizer(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-[#111726] border border-slate-700/80 text-white text-xs font-bold focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm"
                 >
-                  {allSignerOptions.map((opt, i) => (
-                    <option key={`${opt.value}-${i}`} value={opt.value} className="bg-[#0b0f19]">
-                      {opt.label}
+                  {uniqueSignerNames.map((name) => (
+                    <option key={name} value={name} className="bg-[#0b0f19]">
+                      {name}
                     </option>
                   ))}
+                  <option value="Otro" className="bg-[#0b0f19]">
+                    Otro (Especificar nombre)
+                  </option>
                 </select>
               </div>
 
