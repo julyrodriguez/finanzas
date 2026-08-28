@@ -17,8 +17,7 @@ import {
   limit,
   where,
   QueryConstraint,
-  getDocs,
-  Timestamp
+  getDocs
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -44,7 +43,6 @@ import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
 import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
 import { OrderNotesModal } from "@/components/ordenes/OrderNotesModal";
-import { OrderPasteModal } from "@/components/ordenes/OrderPasteModal";
 import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { exportToExcel } from "@/lib/exportToExcel";
 
@@ -96,11 +94,6 @@ export default function OrdenesDeComprasPage() {
 
   // Notification Toast State for Clipboard Copy & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Paste Link Modal State
-  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
-  const [pasteText, setPasteText] = useState("");
-  const [processingPaste, setProcessingPaste] = useState(false);
   
   // Selection state for copying CMD folder creation commands (Julian only)
   const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
@@ -806,162 +799,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     }
   };
 
-  // Helper to parse Spanish currency amounts into numbers or fallback to string
-  const parseMonto = (str: string) => {
-    let clean = str.replace(/\$/g, "").trim();
-    // If it contains dots and commas, it's likely Spanish format: 7.772.661,23 or 7.772.661
-    // Remove the dots and replace commas with dots:
-    clean = clean.replace(/\./g, "").replace(/,/g, ".");
-    const num = Number(clean);
-    return isNaN(num) ? str : num;
-  };
-
-  const handleProcessPasteLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pasteText.trim()) return;
-
-    setProcessingPaste(true);
-
-    try {
-      const text = pasteText.trim();
-      const blocks = text.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
-
-      if (blocks.length === 0) {
-        alert("No se detectó ningún bloque de texto válido.");
-        setProcessingPaste(false);
-        return;
-      }
-
-      const db = getFirebaseDb();
-      if (!db) {
-        showToast("Error de conexión con la base de datos");
-        setProcessingPaste(false);
-        return;
-      }
-
-      const colRef = collection(db, "ordenes_compra");
-      let updatedCount = 0;
-      let createdCount = 0;
-
-      const newItemsLocal: OrdenCompra[] = [];
-      const updatedItemsLocalMap: { [id: string]: Partial<OrdenCompra> } = {};
-
-      for (const block of blocks) {
-        const lines = block.split("\n").map(l => l.trim()).filter(Boolean);
-        
-        let numOC = "";
-        let empresa: "Hoyts" | "CMK" = "Hoyts";
-        let razonSocial = "";
-        let monto: string | number = "";
-        let motivo = "";
-        let formaPago = "";
-        let linkSharepoint = "";
-
-        const urlMatch = block.match(/https?:\/\/[^\s]+/);
-        if (urlMatch) {
-          linkSharepoint = urlMatch[0];
-        }
-
-        for (const line of lines) {
-          const lowerLine = line.toLowerCase();
-          
-          if (lowerLine.startsWith("oc ")) {
-            const match = line.match(/(?:OC|oc)\s+(\S+)(?:\s+(Hoyts|CMK|hoyts|cmk))?/i);
-            if (match) {
-              numOC = match[1];
-              if (match[2]) {
-                const emp = match[2].toLowerCase();
-                empresa = emp === "cmk" ? "CMK" : "Hoyts";
-              }
-            }
-          } else if (lowerLine.startsWith("proveedor:")) {
-            razonSocial = line.substring("proveedor:".length).trim();
-          } else if (lowerLine.startsWith("monto:")) {
-            const montoStr = line.substring("monto:".length).trim();
-            monto = parseMonto(montoStr);
-          } else if (lowerLine.startsWith("detalle:")) {
-            motivo = line.substring("detalle:".length).trim();
-          } else if (lowerLine.startsWith("forma de pago:")) {
-            formaPago = line.substring("forma de pago:".length).trim();
-          }
-        }
-
-        if (!numOC || !linkSharepoint) {
-          continue;
-        }
-
-        const q = query(colRef, where("numOC", "==", numOC.trim()));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const docSnap = querySnapshot.docs[0];
-          const docRef = doc(db, "ordenes_compra", docSnap.id);
-          await updateDoc(docRef, { linkSharepoint });
-
-          updatedItemsLocalMap[docSnap.id] = { linkSharepoint };
-          updatedCount++;
-        } else {
-          const authorName = getCleanUsername();
-          const newOrden: Omit<OrdenCompra, "id"> = {
-            empresa,
-            numSolicitud: "",
-            numOC: numOC.trim(),
-            razonSocial: razonSocial.trim(),
-            monto,
-            motivo: motivo.trim(),
-            formaPago: formaPago.trim() || "30DFF",
-            liberada: false,
-            mandada: false,
-            entregada: false,
-            cancelada: false,
-            creadoPor: authorName,
-            notas: [],
-            createdAt: serverTimestamp(),
-            linkSharepoint: linkSharepoint.trim(),
-          };
-
-          const docAdded = await addDoc(colRef, newOrden);
-          newItemsLocal.push({
-            id: docAdded.id,
-            ...newOrden,
-            createdAt: Timestamp.now()
-          });
-          createdCount++;
-        }
-      }
-
-      if (updatedCount > 0 || createdCount > 0) {
-        setOrdenes((prev) => {
-          let nextState = prev;
-          if (updatedCount > 0) {
-            nextState = nextState.map((item) => {
-              if (item.id && updatedItemsLocalMap[item.id]) {
-                return { ...item, ...updatedItemsLocalMap[item.id] };
-              }
-              return item;
-            });
-          }
-          if (createdCount > 0) {
-            nextState = [...newItemsLocal, ...nextState];
-          }
-          return nextState;
-        });
-
-        showToast(`Vunculación completada: ${updatedCount} actualizadas, ${createdCount} creadas.`);
-      } else {
-        alert("No se pudo vincular ni crear ninguna orden de compra. Revisa el formato pegado.");
-      }
-
-      setIsPasteModalOpen(false);
-      setPasteText("");
-    } catch (err) {
-      console.error("Error al procesar bloque de texto:", err);
-      alert("Hubo un error al procesar el texto.");
-    } finally {
-      setProcessingPaste(false);
-    }
-  };
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
@@ -1096,23 +933,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </button>
 
             {!isOrdenesUser && (
-              <>
-                <button
-                  onClick={() => setIsPasteModalOpen(true)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2"
-                  title="Vincular enlace pegando bloque de texto de OC"
-                >
-                  <Link2 className="w-4 h-4 text-emerald-400" />
-                  <span>Vincular Enlace</span>
-                </button>
-                <button
-                  onClick={handleOpenAddModal}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Agregar Solicitud de OC</span>
-                </button>
-              </>
+              <button
+                onClick={handleOpenAddModal}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Agregar Solicitud de OC</span>
+              </button>
             )}
           </div>
         </div>
@@ -1888,19 +1715,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         setNewNotaText={setNewNotaText}
         savingNota={savingNota}
         onAddNota={handleAddNota}
-      />
-
-      {/* Paste & Link Modal */}
-      <OrderPasteModal
-        isOpen={isPasteModalOpen}
-        onClose={() => {
-          setIsPasteModalOpen(false);
-          setPasteText("");
-        }}
-        pasteText={pasteText}
-        setPasteText={setPasteText}
-        processingPaste={processingPaste}
-        onProcessPaste={handleProcessPasteLink}
       />
 
       {/* Modal para Agregar o Editar Solicitud de OC */}
