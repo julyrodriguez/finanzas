@@ -162,6 +162,25 @@ export default function OrdenesDeComprasPage() {
     return "Usuario";
   };
 
+  const getFormattedCreatedAt = (orden: OrdenCompra | null) => {
+    if (!orden || !orden.createdAt) return "";
+    let date: Date | null = null;
+    const ca = orden.createdAt;
+    
+    if (ca && typeof ca === "object") {
+      if ("toDate" in ca && typeof (ca as { toDate: () => unknown }).toDate === "function") {
+        date = (ca as { toDate: () => Date }).toDate();
+      } else if ("seconds" in ca && typeof (ca as { seconds: number }).seconds === "number") {
+        date = new Date((ca as { seconds: number }).seconds * 1000);
+      } else if ((ca as unknown) instanceof Date) {
+        date = ca as unknown as Date;
+      }
+    }
+    
+    if (!date) return "";
+    return `${date.toLocaleDateString("es-AR")} ${date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+  };
+
   const isSearching = searchQuery.trim() !== "";
   const isJulian = user ? getCleanUsername().toLowerCase() === "julian" : false;
   const showCMDSection = filterEstado === "Pendientes" && isJulian;
@@ -2067,6 +2086,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             <form onSubmit={handleSaveOrden} className="space-y-4 text-xs">
+              {editingOrden && editingOrden.createdAt && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between text-gray-400">
+                  <span className="font-medium text-gray-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    Fecha de Creación
+                  </span>
+                  <span className="font-mono text-white font-semibold">
+                    {getFormattedCreatedAt(editingOrden)}
+                  </span>
+                </div>
+              )}
+
               {/* Selección de Empresa: Hoyts vs CMK */}
               <div>
                 <label className="block text-gray-300 font-medium mb-1.5">Empresa</label>
