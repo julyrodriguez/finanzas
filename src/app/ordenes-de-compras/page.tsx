@@ -37,7 +37,8 @@ import {
   Link2, 
   Folder,
   FolderOpen, 
-  FileSpreadsheet 
+  FileSpreadsheet,
+  ClipboardPaste
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -45,6 +46,7 @@ import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
 import { OrderNotesModal } from "@/components/ordenes/OrderNotesModal";
 import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
+import { BatchLiberateModal } from "@/components/ordenes/BatchLiberateModal";
 import { exportToExcel } from "@/lib/exportToExcel";
 
 const generateUniqueId = () => {
@@ -73,6 +75,9 @@ export default function OrdenesDeComprasPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenCompra | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Modal state for Batch Liberate Paste
+  const [isBatchLiberateOpen, setIsBatchLiberateOpen] = useState(false);
 
   // Modal state for Notes
   const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
@@ -1056,6 +1061,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 <span>Copiar Todas ({filteredOrdenes.length})</span>
               </button>
             )}
+
+            {/* Pegar y Marcar Liberadas button if filter is Liberadas */}
+            {filterEstado === "Liberadas" && (
+              <button
+                onClick={() => setIsBatchLiberateOpen(true)}
+                className="px-4 py-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500 hover:text-white font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20"
+                title="Pegar órdenes de compra en texto y marcarlas como liberadas en lote"
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
+                <span>Pegar y Marcar Liberadas</span>
+              </button>
+            )}
           </div>
 
           {/* Seccion CMD de Creacion de Carpetas (solo Julian, en Pendientes, si hay seleccionadas) */}
@@ -1624,6 +1641,23 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         onSave={handleSaveOrden}
         onDelete={handleDelete}
         getFormattedCreatedAt={getFormattedCreatedAt}
+      />
+
+      {/* Modal para Pegar y Marcar Órdenes como Liberadas en Lote */}
+      <BatchLiberateModal
+        isOpen={isBatchLiberateOpen}
+        onClose={() => setIsBatchLiberateOpen(false)}
+        ordenes={ordenes}
+        onBatchSuccess={(updatedIds) => {
+          setOrdenes((prev) =>
+            prev.map((o) =>
+              o.id && updatedIds.includes(o.id)
+                ? { ...o, liberada: true, mandada: true, cancelada: false }
+                : o
+            )
+          );
+        }}
+        showToast={showToast}
       />
     </AppLayout>
   );
