@@ -1914,8 +1914,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
       {/* Modal para Ver y Agregar Notas de la Orden */}
       {activeNotesOrden && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-8">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto flex items-start justify-center p-4">
+          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-auto">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1998,8 +1998,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       {/* Modal / Form para Agregar o Editar Solicitud de OC */}
       {/* Paste & Link Modal */}
       {isPasteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d131f] p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d131f] p-6 shadow-2xl space-y-4 my-auto">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <h3 className="text-base font-extrabold text-white flex items-center gap-2">
                 <Link2 className="w-5 h-5 text-emerald-400" />
@@ -2068,8 +2068,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       
       {/* Existing Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-8">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto flex items-start justify-center p-4">
+          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-auto">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 {editingOrden ? (
