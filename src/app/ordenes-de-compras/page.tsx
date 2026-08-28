@@ -2247,49 +2247,41 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 />
               </div>
 
-              {/* Checkboxes: Liberada & Mandada & Cancelada */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-1 border-t border-white/5">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="liberadaCheckbox"
-                    checked={liberada}
-                    onChange={(e) => setLiberada(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500/40"
-                  />
-                  <label htmlFor="liberadaCheckbox" className="text-gray-300 font-medium cursor-pointer">
-                    Liberada
+              {/* Opción de Cancelar Orden (Solo al editar) */}
+              {editingOrden && (
+                <div className="pt-3 border-t border-white/5">
+                  <label 
+                    htmlFor="canceladaCheckbox"
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
+                      cancelada 
+                        ? "bg-red-500/10 border-red-500/30 text-red-200 font-semibold" 
+                        : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <span className="font-semibold text-xs flex items-center gap-1.5">
+                        <AlertCircle className={`w-4 h-4 ${cancelada ? "text-red-400 animate-pulse" : "text-gray-400"}`} />
+                        Orden Cancelada
+                      </span>
+                      <p className="text-[10px] text-gray-500 font-normal">
+                        Marcar esta orden como cancelada/desestimada
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        id="canceladaCheckbox"
+                        checked={cancelada}
+                        onChange={(e) => setCancelada(e.target.checked)}
+                        className="sr-only"
+                      />
+                      <div className={`w-9 h-5 rounded-full transition-colors relative ${cancelada ? "bg-red-500" : "bg-white/10"}`}>
+                        <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] left-[3px] transition-transform duration-200 ${cancelada ? "translate-x-4" : ""}`} />
+                      </div>
+                    </div>
                   </label>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="mandadaCheckbox"
-                    checked={mandada}
-                    onChange={(e) => setMandada(e.target.checked)}
-                    className="w-4 h-4 rounded border-white/20 bg-white/5 text-cyan-500 focus:ring-cyan-500/40"
-                  />
-                  <label htmlFor="mandadaCheckbox" className="text-gray-300 font-medium cursor-pointer">
-                    Mandada
-                  </label>
-                </div>
-
-                {editingOrden && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="canceladaCheckbox"
-                      checked={cancelada}
-                      onChange={(e) => setCancelada(e.target.checked)}
-                      className="w-4 h-4 rounded border-white/20 bg-white/5 text-red-500 focus:ring-red-500/40"
-                    />
-                    <label htmlFor="canceladaCheckbox" className="text-red-400 font-semibold cursor-pointer">
-                      Cancelada
-                    </label>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Action Buttons: Delete (when editing) + Cancel + Save */}
               <div className="pt-4 flex items-center justify-between gap-3 border-t border-white/10">
