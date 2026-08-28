@@ -361,31 +361,25 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
       {/* Main Content Area (Wide Container) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        {/* Sticky Header with Mobile Hamburger Menu & Clean Title */}
-        <header className="sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Hamburger Button for Mobile only */}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none flex-shrink-0 cursor-pointer"
-              aria-label="Abrir menú"
-              title="Abrir menú lateral"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
-                {title}
-              </h1>
-              {subtitle && (
-                <p className="text-xs text-slate-400 truncate hidden sm:block">
-                  {subtitle}
-                </p>
-              )}
+        {/* Mobile-Only Bar for Hamburger Menu */}
+        <div className="lg:hidden sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none cursor-pointer"
+            aria-label="Abrir menú"
+            title="Abrir menú lateral"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center space-x-2">
+            <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5">
+              <div className="h-full w-full bg-[#0b0f19] rounded-[6px] flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+              </div>
             </div>
+            <span className="font-bold text-sm text-white">Finanzas</span>
           </div>
-        </header>
+        </div>
 
         {/* Page Content - Full Width Max 1800px */}
         <main className="flex-1 p-4 sm:p-6 md:p-8 w-full max-w-[1800px] mx-auto">
