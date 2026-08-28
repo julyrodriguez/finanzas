@@ -139,6 +139,7 @@ export default function OrdenesDeComprasPage() {
     if (typeof window !== "undefined") {
       const savedPath = localStorage.getItem("cmd_folder_path");
       if (savedPath) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCmdFolderPath(savedPath);
       }
     }
@@ -221,7 +222,8 @@ export default function OrdenesDeComprasPage() {
             }
           }
           
-          constraints.push(limit(100));
+          const fetchLimit = Math.max(100, queryLimit + 1);
+          constraints.push(limit(fetchLimit));
           q = query(colRef, ...constraints);
         } else if (useFilters) {
           // Dynamic status filtering in Firestore to only read matching documents
@@ -281,8 +283,8 @@ export default function OrdenesDeComprasPage() {
               return timeB - timeA;
             });
 
-            // Slice to first 10 if specific creator is filtered
-            const finalDocs = filterCreadoPor !== "todos" ? docs.slice(0, 10) : docs;
+            // Slice to first queryLimit + 1 if specific creator is filtered
+            const finalDocs = filterCreadoPor !== "todos" ? docs.slice(0, queryLimit + 1) : docs;
 
             setTimeout(() => {
               setOrdenes(finalDocs);
@@ -1721,10 +1723,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           {!isOrdenesUser && (
                             <button
                               onClick={() => handleOpenEditModal(orden)}
-                              className="px-2 py-1 rounded-lg bg-white/5 text-gray-300 border border-white/10 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                              className="p-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10 transition-colors inline-flex items-center justify-center"
+                              title="Editar orden"
                             >
                               <Edit3 className="w-3 h-3 text-emerald-400" />
-                              <span>Editar</span>
                             </button>
                           )}
                         </div>
@@ -1869,7 +1871,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Botón Cargar Más */}
-            {hasMore && filterCreadoPor === "todos" && (
+            {hasMore && (
               <div className="py-4 text-center">
                 <button
                   onClick={() => setQueryLimit((prev) => prev + 15)}
