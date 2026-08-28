@@ -21,7 +21,7 @@ import {
   X,
   Copy
 } from "lucide-react";
-import type { OrdenCompra } from "@/app/ordenes-de-compras/page";
+import type { OrdenCompra } from "@/types/ordenes";
 
 export default function ProcesoDeLiberacionPage() {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);

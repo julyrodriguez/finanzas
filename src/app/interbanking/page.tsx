@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/context/AuthContext";
 import { 
@@ -84,7 +84,7 @@ export default function InterbankingPage() {
   const isBusy = status !== "idle" || queue.length > 0;
 
   // Combine logs of previous batches and current batch
-  const allLogs = [...historyLogs, ...logs];
+  const allLogs = useMemo(() => [...historyLogs, ...logs], [historyLogs, logs]);
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -110,11 +110,18 @@ export default function InterbankingPage() {
           if (data.status === "completed") {
             setStatus("completed");
             setDownloadedFiles(data.files || []);
+            if (currentLote) {
+              setCompletedLotes((prev) => [...prev, currentLote]);
+            }
             clearInterval(interval);
           } else if (data.status === "failed") {
             setStatus("failed");
-            setErrorMsg(data.error || "La automatización falló por un error desconocido.");
+            const errDetail = data.error || "La automatización falló por un error desconocido.";
+            setErrorMsg(errDetail);
             setScreenshotUrl(data.screenshotUrl || null);
+            if (currentLote) {
+              setFailedLotes((prev) => [...prev, { lote: currentLote, error: errDetail }]);
+            }
             clearInterval(interval);
           }
         }
@@ -124,7 +131,7 @@ export default function InterbankingPage() {
     }, 1500);
 
     return () => clearInterval(interval);
-  }, [runId, status]);
+  }, [runId, status, currentLote]);
 
   // Descarga automática en el navegador cuando el backend completa la tarea del lote actual
   useEffect(() => {
@@ -186,7 +193,7 @@ export default function InterbankingPage() {
           try {
             const parsed = JSON.parse(customCookies.trim());
             payload.cookies = parsed;
-          } catch (err: unknown) {
+          } catch {
             // Ignoramos, ya validado en submit
           }
         }
@@ -240,12 +247,6 @@ export default function InterbankingPage() {
   // Queue transition: waits after a batch completes/fails, saves its logs to history, and advances
   useEffect(() => {
     if ((status === "completed" || status === "failed") && currentLote) {
-      if (status === "completed") {
-        setCompletedLotes((prev) => [...prev, currentLote]);
-      } else {
-        setFailedLotes((prev) => [...prev, { lote: currentLote, error: errorMsg || "Error desconocido" }]);
-      }
-
       // Esperar 5 segundos para que la descarga termine y no saturar el servidor
       const timer = setTimeout(() => {
         setHistoryLogs((prev) => [
@@ -253,7 +254,7 @@ export default function InterbankingPage() {
           ...logs,
           status === "completed" 
             ? `✅ Lote ${currentLote} completado exitosamente.`
-            : `❌ Lote ${currentLote} falló: ${errorMsg}`,
+            : `❌ Lote ${currentLote} falló: ${errorMsg || "Error"}`,
           `\n`
         ]);
         setLogs([]);
@@ -274,8 +275,8 @@ export default function InterbankingPage() {
               `==================================================`,
               `🎉 [Cola] ¡Proceso de cola terminado!`,
               `Total de lotes procesados: ${totalLotesCount}`,
-              `Exitosos: ${completedLotes.length + (status === "completed" ? 1 : 0)}`,
-              `Fallidos: ${failedLotes.length + (status === "failed" ? 1 : 0)}`,
+              `Exitosos: ${completedLotes.length}`,
+              `Fallidos: ${failedLotes.length}`,
               `==================================================`,
             ]);
           }
@@ -287,7 +288,7 @@ export default function InterbankingPage() {
 
       return () => clearTimeout(timer);
     }
-  }, [status, currentLote, logs, errorMsg]);
+  }, [status, currentLote, logs, errorMsg, completedLotes.length, failedLotes.length, totalLotesCount]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

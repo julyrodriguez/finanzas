@@ -18,8 +18,7 @@ import {
   where,
   QueryConstraint,
   getDocs,
-  Timestamp,
-  FieldValue
+  Timestamp
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -28,57 +27,30 @@ import {
   CheckCircle2, 
   X, 
   ShoppingBag, 
-  Trash2, 
   Edit3, 
-  Loader2,
-  AlertCircle,
-  Check,
-  Send,
-  MessageSquare,
-  User as UserIcon,
-  Clock,
-  SendHorizontal,
-  ChevronDown,
-  Link2,
+  Loader2, 
+  AlertCircle, 
+  Check, 
+  Send, 
+  MessageSquare, 
+  User as UserIcon, 
+  ChevronDown, 
+  Link2, 
   Folder,
-  FolderOpen,
-  FolderPlus,
-  Terminal
+  FolderOpen, 
+  FileSpreadsheet 
 } from "lucide-react";
+import type { Nota, OrdenCompra } from "@/types/ordenes";
+export type { Nota, OrdenCompra };
+import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
+import { OrderNotesModal } from "@/components/ordenes/OrderNotesModal";
+import { OrderPasteModal } from "@/components/ordenes/OrderPasteModal";
+import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
+import { exportToExcel } from "@/lib/exportToExcel";
 
 const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 };
-
-export interface Nota {
-  id: string;
-  texto: string;
-  autor: string;
-  fecha: string;
-}
-
-export interface OrdenCompra {
-  id?: string;
-  empresa: "Hoyts" | "CMK";
-  numSolicitud: string;
-  numOC: string;
-  razonSocial: string;
-  monto: number | string;
-  motivo: string;
-  formaPago: string;
-  liberada: boolean;
-  mandada: boolean;
-  entregada?: boolean;
-  cancelada?: boolean;
-  creadoPor?: string;
-  notas?: Nota[];
-  createdAt?: Timestamp | FieldValue | null;
-  relatedOC?: string;
-  enviado?: boolean;
-  firmado1?: boolean;
-  firmado2?: boolean;
-  linkSharepoint?: string;
-}
 
 export default function OrdenesDeComprasPage() {
   const { user } = useAuth();
@@ -133,7 +105,6 @@ export default function OrdenesDeComprasPage() {
   // Selection state for copying CMD folder creation commands (Julian only)
   const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
   const [cmdFolderPath, setCmdFolderPath] = useState("");
-  const [isOCListOpen, setIsOCListOpen] = useState(false);
 
   // Load cmdFolderPath from localStorage on mount
   useEffect(() => {
@@ -362,6 +333,47 @@ export default function OrdenesDeComprasPage() {
     setIsModalOpen(true);
   };
 
+  // Export filtered orders to Excel (.xlsx)
+  const handleExportExcel = () => {
+    if (filteredOrdenes.length === 0) {
+      showToast("⚠️ No hay órdenes para exportar con los filtros actuales");
+      return;
+    }
+    const dataToExport = filteredOrdenes.map((o) => {
+      let estadoStr = "Pendiente";
+      if (o.cancelada) estadoStr = "Cancelada";
+      else if (o.entregada) estadoStr = "Entregada";
+      else if (o.liberada) estadoStr = "Liberada";
+      else if (o.mandada) estadoStr = "Mandada";
+
+      let fechaStr = "";
+      if (o.createdAt && typeof o.createdAt === "object" && "seconds" in o.createdAt) {
+        fechaStr = new Date(o.createdAt.seconds * 1000).toLocaleDateString("es-AR");
+      }
+
+      return {
+        "Empresa": o.empresa,
+        "N° Solicitud": o.numSolicitud || "-",
+        "N° OC": o.numOC,
+        "Proveedor / Razón Social": o.razonSocial,
+        "Monto ($)": typeof o.monto === "number" ? o.monto : Number(o.monto) || 0,
+        "Forma de Pago": o.formaPago || "30DFF",
+        "Estado": estadoStr,
+        "Firmado 1": o.firmado1 ? "Sí" : "No",
+        "Firmado 2": o.firmado2 ? "Sí" : "No",
+        "Entregada": o.entregada ? "Sí" : "No",
+        "Detalle / Motivo": o.motivo || "",
+        "OC Relacionada": o.relatedOC || "",
+        "Creado Por": o.creadoPor || "Usuario",
+        "Link SharePoint": o.linkSharepoint || "",
+        "Fecha Creación": fechaStr
+      };
+    });
+
+    exportToExcel(dataToExport, `Ordenes_Compra_${new Date().toISOString().split("T")[0]}`);
+    showToast("📊 Planilla de Órdenes exportada a Excel");
+  };
+
   // Sync Bidirectional relationships for OCs in Firestore (Full Clique/Transitive Sync)
   const syncBidirectional = async (
     currentOC: string,
@@ -557,7 +569,6 @@ export default function OrdenesDeComprasPage() {
     setCancelada(false);
     setRelatedOC("");
     setLinkSharepoint("");
-    setIsOCListOpen(false);
   };
 
   // Add Note to Order
@@ -1073,25 +1084,37 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </p>
           </div>
 
-          {!isOrdenesUser && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
-              <button
-                onClick={() => setIsPasteModalOpen(true)}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2"
-                title="Vincular enlace pegando bloque de texto de OC"
-              >
-                <Link2 className="w-4 h-4 text-emerald-400" />
-                <span>Vincular Enlace</span>
-              </button>
-              <button
-                onClick={handleOpenAddModal}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Agregar Solicitud de OC</span>
-              </button>
-            </div>
-          )}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            {/* Exportar a Excel Button */}
+            <button
+              onClick={handleExportExcel}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-emerald-400 hover:text-emerald-300 font-semibold text-xs transition-all flex items-center justify-center gap-2"
+              title="Descargar listado actual de órdenes en Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Exportar a Excel</span>
+            </button>
+
+            {!isOrdenesUser && (
+              <>
+                <button
+                  onClick={() => setIsPasteModalOpen(true)}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2"
+                  title="Vincular enlace pegando bloque de texto de OC"
+                >
+                  <Link2 className="w-4 h-4 text-emerald-400" />
+                  <span>Vincular Enlace</span>
+                </button>
+                <button
+                  onClick={handleOpenAddModal}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Agregar Solicitud de OC</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Buscador & Filters Bar */}
@@ -1201,66 +1224,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
 
           {/* Seccion CMD de Creacion de Carpetas (solo Julian, en Pendientes, si hay seleccionadas) */}
-          {showCMDSection && selectedOCIds.length > 0 && (
-            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 space-y-3 animate-fadeIn">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <h4 className="text-xs font-extrabold text-indigo-300 flex items-center gap-1.5">
-                    <FolderPlus className="w-4 h-4" />
-                    Generador de Carpetas para Windows (CMD)
-                  </h4>
-                  <p className="text-[10px] text-gray-400">
-                    Has seleccionado <strong>{selectedOCIds.length}</strong> órdenes de compra. Ejecuta este comando en la terminal CMD de Windows para crear sus carpetas automáticamente.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedOCIds([])}
-                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-[11px] font-semibold transition-all cursor-pointer"
-                  >
-                    Limpiar selección
-                  </button>
-                  <button
-                    onClick={handleCopyCMD}
-                    className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Terminal className="w-3.5 h-3.5" />
-                    <span>Copiar Comando CMD</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Ruta de carpeta para el CD */}
-              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-black/20 p-2 rounded-xl border border-white/5">
-                <label className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 shrink-0 pl-1">
-                  <Folder className="w-3.5 h-3.5 text-indigo-400" />
-                  Ubicación de Carpeta:
-                </label>
-                <div className="relative w-full">
-                  <input
-                    type="text"
-                    value={cmdFolderPath}
-                    onChange={(e) => handleSavePath(e.target.value)}
-                    placeholder="Ej. C:\Proyectos\Facturas (se guardará automáticamente)"
-                    className="w-full pl-3 pr-8 py-1.5 text-[11px] rounded-lg bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 text-white outline-none transition-all placeholder-gray-600 font-sans"
-                  />
-                  {cmdFolderPath && (
-                    <button
-                      onClick={() => handleSavePath("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                      title="Limpiar ubicación"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-indigo-200 overflow-x-auto whitespace-pre">
-                {getCMDCommand()}
-              </div>
-            </div>
-          )}
+          <OrderCmdBar
+            showCMDSection={showCMDSection}
+            selectedOCIds={selectedOCIds}
+            setSelectedOCIds={setSelectedOCIds}
+            cmdFolderPath={cmdFolderPath}
+            onSavePath={handleSavePath}
+            cmdCommand={getCMDCommand()}
+            onCopyCMD={handleCopyCMD}
+          />
 
           {/* Leyenda de Estados */}
           <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
@@ -1908,502 +1880,60 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       </div>
 
       {/* Modal para Ver y Agregar Notas de la Orden */}
-      {activeNotesOrden && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto flex items-start justify-center p-4">
-          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-amber-400" />
-                  Notas de la OC {activeNotesOrden.numOC} ({activeNotesOrden.empresa})
-                </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Proveedor: {activeNotesOrden.razonSocial}
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveNotesOrden(null)}
-                className="p-1 rounded-xl bg-white/5 text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <OrderNotesModal
+        orden={activeNotesOrden}
+        onClose={() => setActiveNotesOrden(null)}
+        isOrdenesUser={isOrdenesUser}
+        newNotaText={newNotaText}
+        setNewNotaText={setNewNotaText}
+        savingNota={savingNota}
+        onAddNota={handleAddNota}
+      />
 
-            {/* Listado de Notas Existentes */}
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-              {!activeNotesOrden.notas || activeNotesOrden.notas.length === 0 ? (
-                <div className="p-6 text-center bg-white/5 rounded-2xl border border-white/5 text-gray-400 text-xs">
-                  Aún no hay notas registradas para esta orden. ¡Agrega la primera abajo!
-                </div>
-              ) : (
-                activeNotesOrden.notas.map((nota) => (
-                  <div key={nota.id} className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between text-gray-400 text-[11px]">
-                      <span className="font-semibold text-emerald-400 flex items-center gap-1">
-                        <UserIcon className="w-3 h-3" />
-                        {nota.autor}
-                      </span>
-                      <span className="flex items-center gap-1 text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        {nota.fecha}
-                      </span>
-                    </div>
-                    <p className="text-gray-200 leading-relaxed">{nota.texto}</p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Formulario para agregar una nueva Nota */}
-            {!isOrdenesUser && (
-              <form onSubmit={handleAddNota} className="pt-3 border-t border-white/10 space-y-3">
-                <label className="block text-xs font-semibold text-gray-300">
-                  Agregar nueva nota
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={newNotaText}
-                    onChange={(e) => setNewNotaText(e.target.value)}
-                    placeholder="Escribe un comentario o nota sobre esta orden..."
-                    className="flex-1 px-3.5 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500/50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={savingNota || !newNotaText.trim()}
-                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-all flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {savingNota ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <SendHorizontal className="w-4 h-4" />
-                        <span className="hidden sm:inline">Enviar</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Modal / Form para Agregar o Editar Solicitud de OC */}
       {/* Paste & Link Modal */}
-      {isPasteModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d131f] p-6 shadow-2xl space-y-4 my-auto">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <Link2 className="w-5 h-5 text-emerald-400" />
-                Vincular Enlace desde Texto de OC
-              </h3>
-              <button
-                onClick={() => {
-                  setIsPasteModalOpen(false);
-                  setPasteText("");
-                }}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <OrderPasteModal
+        isOpen={isPasteModalOpen}
+        onClose={() => {
+          setIsPasteModalOpen(false);
+          setPasteText("");
+        }}
+        pasteText={pasteText}
+        setPasteText={setPasteText}
+        processingPaste={processingPaste}
+        onProcessPaste={handleProcessPasteLink}
+      />
 
-            <p className="text-[11px] text-gray-400 leading-relaxed">
-              Pega el texto copiado de la orden de compra (que incluya el número de OC y el link de SharePoint al final). El sistema vinculará el link a la orden correspondiente, o la creará si aún no existe.
-            </p>
-
-            <form onSubmit={handleProcessPasteLink} className="space-y-4">
-              <div>
-                <textarea
-                  rows={8}
-                  required
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  placeholder={`OC 12783 Hoyts\nProveedor: Electroclamar\nMonto: $ 7.772.661\nDetalle: Capex reparaciones HVAC Moron\nForma de Pago: 30DFF Y 60% ANTICIPO\nhttps://tuempresa.sharepoint.com/...`}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 font-mono text-xs focus:outline-none focus:border-emerald-500/50 resize-y"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPasteModalOpen(false);
-                    setPasteText("");
-                  }}
-                  className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 text-xs font-semibold transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={processingPaste}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
-                >
-                  {processingPaste ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Procesando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Link2 className="w-3.5 h-3.5" />
-                      <span>Vincular / Crear</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      
-      {/* Existing Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto flex items-start justify-center p-4">
-          <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                {editingOrden ? (
-                  <>
-                    <Edit3 className="w-5 h-5 text-emerald-400" />
-                    Editar Orden de Compra
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-5 h-5 text-emerald-400" />
-                    Agregar Solicitud de OC
-                  </>
-                )}
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-xl bg-white/5 text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveOrden} className="space-y-4 text-xs">
-              {editingOrden && editingOrden.createdAt && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between text-gray-400">
-                  <span className="font-medium text-gray-300 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    Fecha de Creación
-                  </span>
-                  <span className="font-mono text-white font-semibold">
-                    {getFormattedCreatedAt(editingOrden)}
-                  </span>
-                </div>
-              )}
-
-              {/* Selección de Empresa: Hoyts vs CMK */}
-              <div>
-                <label className="block text-gray-300 font-medium mb-1.5">Empresa</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setEmpresa("Hoyts")}
-                    className={`py-2.5 rounded-xl border font-semibold transition-all ${
-                      empresa === "Hoyts"
-                        ? "bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-md"
-                        : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    Hoyts
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEmpresa("CMK")}
-                    className={`py-2.5 rounded-xl border font-semibold transition-all ${
-                      empresa === "CMK"
-                        ? "bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-md"
-                        : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    CMK
-                  </button>
-                </div>
-              </div>
-
-              {/* N° Solicitud (Opcional) & N° OC (Obligatorio) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-300 font-medium mb-1">
-                    N° Solicitud de Orden <span className="text-gray-500 font-normal">(Opcional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={numSolicitud}
-                    onChange={(e) => setNumSolicitud(e.target.value)}
-                    placeholder="ej: SOL-1002 (Opcional)"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-300 font-medium mb-1">
-                    N° Orden de Compra (OC)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={numOC}
-                    onChange={(e) => setNumOC(e.target.value)}
-                    placeholder="ej: 45892"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-              </div>
-
-              {/* Razón Social / Proveedor */}
-              <div>
-                <label className="block text-gray-300 font-medium mb-1">
-                  Razón Social / Proveedor
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={razonSocial}
-                  onChange={(e) => setRazonSocial(e.target.value)}
-                  placeholder="ej: Suministros Industriales S.A."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                />
-              </div>
-
-              {/* Monto & Forma de Pago (Predeterminado 30DFF) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gray-300 font-medium mb-1">
-                    Monto ($)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                    placeholder="ej: 150000"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-300 font-medium mb-1">
-                    Forma de Pago
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formaPago}
-                    onChange={(e) => setFormaPago(e.target.value)}
-                    placeholder="ej: 30DFF"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                  />
-                </div>
-              </div>
-
-              {/* OC Relacionada (Opcional) */}
-              <div>
-                <label className="block text-gray-300 font-medium mb-1">
-                  OC Relacionada (Opcional - Para mandar juntas)
-                </label>
-                <input
-                  type="text"
-                  value={relatedOC}
-                  onChange={(e) => setRelatedOC(e.target.value)}
-                  placeholder="ej: 04859 (N° de OC vinculada)"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                />
-
-                {/* Selección rápida de últimas OCs */}
-                <div className="flex items-center justify-between mt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsOCListOpen(!isOCListOpen)}
-                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors"
-                  >
-                    <span>{isOCListOpen ? "Ocultar últimas OCs" : "Seleccionar de últimas OCs..."}</span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOCListOpen ? "rotate-180" : ""}`} />
-                  </button>
-                </div>
-
-                {isOCListOpen && (
-                  <div className="mt-2 border border-white/10 rounded-xl bg-black/30 max-h-36 overflow-y-auto divide-y divide-white/5 scrollbar-thin">
-                    {ordenes
-                      .filter(o => o.numOC && o.numOC.trim() !== "" && (!editingOrden || o.id !== editingOrden.id))
-                      .map((o) => {
-                        const ocNum = o.numOC.trim();
-                        const isSelected = relatedOC
-                          .split(/[\s,/\-]+/)
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                          .includes(ocNum);
-                        return (
-                          <button
-                            key={o.id}
-                            type="button"
-                            onClick={() => {
-                              let currentOcs = relatedOC
-                                .split(/[\s,/\-]+/)
-                                .map((s) => s.trim())
-                                .filter(Boolean);
-                              if (isSelected) {
-                                currentOcs = currentOcs.filter((num) => num !== ocNum);
-                              } else {
-                                currentOcs.push(ocNum);
-                              }
-                              setRelatedOC(currentOcs.join(", "));
-                            }}
-                            className={`w-full px-3 py-2 text-left flex items-center justify-between transition-colors text-[11px] ${
-                              isSelected 
-                                ? "bg-purple-500/10 text-purple-200" 
-                                : "hover:bg-white/5 text-gray-300"
-                            }`}
-                          >
-                            <div className="flex flex-col min-w-0 pr-2">
-                              <span className="font-mono font-bold text-white flex items-center gap-1.5">
-                                #{ocNum}
-                                <span className={`text-[8px] font-sans px-1 rounded font-bold ${
-                                  o.empresa === "Hoyts"
-                                    ? "bg-purple-500/15 text-purple-300 border border-purple-500/20"
-                                    : "bg-teal-500/15 text-teal-300 border border-teal-500/20"
-                                }`}>
-                                  {o.empresa}
-                                </span>
-                              </span>
-                              <span className="text-[10px] text-gray-400 truncate mt-0.5">
-                                {o.razonSocial}
-                              </span>
-                            </div>
-                            <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded-md font-bold ${
-                              isSelected 
-                                ? "bg-purple-500/25 text-purple-300 border border-purple-500/30" 
-                                : "bg-white/5 text-gray-500 border border-white/5"
-                            }`}>
-                              {isSelected ? "Seleccionada" : "Seleccionar"}
-                            </span>
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-
-              {/* Enlace de SharePoint / OneDrive */}
-              <div>
-                <label className="block text-gray-300 font-medium mb-1">
-                  Enlace de Carpeta (SharePoint / OneDrive)
-                </label>
-                <input
-                  type="text"
-                  value={linkSharepoint}
-                  onChange={(e) => setLinkSharepoint(e.target.value)}
-                  placeholder="ej: https://tuempresa.sharepoint.com/..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                />
-              </div>
-
-              {/* Detalle / Motivo */}
-              <div>
-                <label className="block text-gray-300 font-medium mb-1">
-                  Detalle / Motivo
-                </label>
-                <textarea
-                  required
-                  rows={2}
-                  value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
-                  placeholder="ej: Adquisición de insumos de papelería y cartuchos"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-                />
-              </div>
-
-              {/* Opción de Cancelar Orden (Solo al editar) */}
-              {editingOrden && (
-                <div className="pt-3 border-t border-white/5">
-                  <label 
-                    htmlFor="canceladaCheckbox"
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
-                      cancelada 
-                        ? "bg-red-500/10 border-red-500/30 text-red-200 font-semibold" 
-                        : "bg-white/5 border-white/10 text-gray-300 hover:bg-white/10"
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <span className="font-semibold text-xs flex items-center gap-1.5">
-                        <AlertCircle className={`w-4 h-4 ${cancelada ? "text-red-400 animate-pulse" : "text-gray-400"}`} />
-                        Orden Cancelada
-                      </span>
-                      <p className="text-[10px] text-gray-500 font-normal">
-                        Marcar esta orden como cancelada/desestimada
-                      </p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        id="canceladaCheckbox"
-                        checked={cancelada}
-                        onChange={(e) => setCancelada(e.target.checked)}
-                        className="sr-only"
-                      />
-                      <div className={`w-9 h-5 rounded-full transition-colors relative ${cancelada ? "bg-red-500" : "bg-white/10"}`}>
-                        <div className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] left-[3px] transition-transform duration-200 ${cancelada ? "translate-x-4" : ""}`} />
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              )}
-
-              {/* Action Buttons: Delete (when editing) + Cancel + Save */}
-              <div className="pt-4 flex items-center justify-between gap-3 border-t border-white/10">
-                {editingOrden ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      handleDelete(editingOrden.id);
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-semibold flex items-center gap-1.5 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Eliminar Orden</span>
-                  </button>
-                ) : (
-                  <div />
-                )}
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-medium"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {submitting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        {editingOrden ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                        <span>{editingOrden ? "Guardar Cambios" : "Guardar Orden"}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal para Agregar o Editar Solicitud de OC */}
+      <OrderFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        editingOrden={editingOrden}
+        ordenes={ordenes}
+        empresa={empresa}
+        setEmpresa={setEmpresa}
+        numSolicitud={numSolicitud}
+        setNumSolicitud={setNumSolicitud}
+        numOC={numOC}
+        setNumOC={setNumOC}
+        razonSocial={razonSocial}
+        setRazonSocial={setRazonSocial}
+        monto={monto}
+        setMonto={setMonto}
+        motivo={motivo}
+        setMotivo={setMotivo}
+        formaPago={formaPago}
+        setFormaPago={setFormaPago}
+        cancelada={cancelada}
+        setCancelada={setCancelada}
+        relatedOC={relatedOC}
+        setRelatedOC={setRelatedOC}
+        linkSharepoint={linkSharepoint}
+        setLinkSharepoint={setLinkSharepoint}
+        submitting={submitting}
+        onSave={handleSaveOrden}
+        onDelete={handleDelete}
+        getFormattedCreatedAt={getFormattedCreatedAt}
+      />
     </AppLayout>
   );
 }

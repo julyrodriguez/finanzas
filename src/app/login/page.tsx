@@ -11,14 +11,12 @@ import {
   ArrowRight, 
   AlertCircle, 
   Loader2,
-  UserPlus,
   Percent
 } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const isRegister = false;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

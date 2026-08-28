@@ -1,0 +1,31 @@
+import { Timestamp, FieldValue } from "firebase/firestore";
+
+export interface Nota {
+  id: string;
+  texto: string;
+  autor: string;
+  fecha: string;
+}
+
+export interface OrdenCompra {
+  id?: string;
+  empresa: "Hoyts" | "CMK";
+  numSolicitud: string;
+  numOC: string;
+  razonSocial: string;
+  monto: number | string;
+  motivo: string;
+  formaPago: string;
+  liberada: boolean;
+  mandada: boolean;
+  entregada?: boolean;
+  cancelada?: boolean;
+  creadoPor?: string;
+  notas?: Nota[];
+  createdAt?: Timestamp | FieldValue | null;
+  relatedOC?: string;
+  enviado?: boolean;
+  firmado1?: boolean;
+  firmado2?: boolean;
+  linkSharepoint?: string;
+}

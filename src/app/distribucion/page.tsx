@@ -6,13 +6,15 @@ import {
   Calculator, 
   Lock, 
   Unlock, 
-  ShieldAlert, 
   Save, 
   Sparkles, 
   CheckCircle,
   HelpCircle,
-  Copy
+  Copy,
+  FileSpreadsheet
 } from "lucide-react";
+import { exportToExcel } from "@/lib/exportToExcel";
+import { DistributionPinModal } from "@/components/distribucion/DistributionPinModal";
 
 interface Complejo {
   codigo: string;
@@ -409,6 +411,27 @@ export default function DistribucionPage() {
     showToast("📋 Cuentas Solomon copiadas al portapapeles");
   };
 
+  // Export current distribution table to Excel (.xlsx)
+  const handleExportExcel = () => {
+    const activeRows = tableRows.filter(r => r.isOficina || r.isActive);
+    if (activeRows.length === 0) {
+      showToast("⚠️ No hay filas para exportar");
+      return;
+    }
+    const dataToExport = activeRows.map(r => ({
+      "Código": r.codigo,
+      "Código Cuenta": r.codigoCuenta,
+      "Complejo / Nombre": r.nombre,
+      "Cadena": r.cadena,
+      "Región": r.region,
+      "Attendance": r.attendance,
+      "Porcentaje (%)": Number(r.percentage.toFixed(4)),
+      "Monto Prorrateado ($)": Number(r.montoProrrateado.toFixed(2))
+    }));
+    exportToExcel(dataToExport, `Distribucion_Gastos_${new Date().toISOString().split("T")[0]}`);
+    showToast("📊 Planilla Excel descargada");
+  };
+
   return (
     <AppLayout 
       title="Distribución de Gastos" 
@@ -707,11 +730,21 @@ export default function DistribucionPage() {
             {/* Copy Cuenta y Monto button */}
             <button
               onClick={handleCopyMontosYIds}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
+              className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition-all"
               title="Copia Código de Cuenta y Monto tabulados, ideal para pegar en Excel"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Copiar Cuenta y Monto</span>
+            </button>
+
+            {/* Export to Excel (.xlsx) button */}
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-all"
+              title="Descarga la distribución en archivo Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Exportar a Excel</span>
             </button>
           </div>
         </div>
@@ -881,57 +914,18 @@ export default function DistribucionPage() {
       </div>
 
       {/* 5. Custom security lock PIN modal dialog */}
-      {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-sm p-6 rounded-3xl glass-card border border-white/10 shadow-2xl text-center space-y-4">
-            <div className="h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto">
-              <ShieldAlert className="w-6 h-6 animate-pulse" />
-            </div>
-            
-            <div className="space-y-1">
-              <h3 className="text-white font-bold text-base">Seguridad de Datos</h3>
-              <p className="text-xs text-gray-400">Ingresa el PIN de seguridad para modificar el Attendance 2026</p>
-            </div>
-
-            <form onSubmit={handleVerifyPin} className="space-y-3">
-              <input
-                type="password"
-                required
-                maxLength={4}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="****"
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white font-mono text-center text-lg focus:outline-none focus:border-emerald-500/50"
-                autoFocus
-              />
-
-              {pinError && (
-                <p className="text-[10px] text-red-400 font-semibold">{pinError}</p>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all"
-                >
-                  Confirmar PIN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPinModal(false);
-                    setPinInput("");
-                    setPinError(null);
-                  }}
-                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <DistributionPinModal
+        isOpen={showPinModal}
+        onClose={() => {
+          setShowPinModal(false);
+          setPinInput("");
+          setPinError(null);
+        }}
+        pinInput={pinInput}
+        setPinInput={setPinInput}
+        pinError={pinError}
+        onVerifyPin={handleVerifyPin}
+      />
     </AppLayout>
   );
 }

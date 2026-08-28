@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import { 
   ShoppingBag, 
   TrendingUp, 
@@ -34,19 +35,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const [theme, setTheme] = useState<"dark" | "pink">(() => {
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("app-theme");
-      return savedTheme === "pink" ? "pink" : "dark";
-    }
-    return "dark";
-  });
-
-  const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "pink" : "dark";
-    setTheme(newTheme);
-    localStorage.setItem("app-theme", newTheme);
-  };
+  const { theme, toggleTheme } = useTheme();
 
   const { user, loading, logout } = useAuth();
   const isOrdenesUser = user?.email?.startsWith("ordenes");
