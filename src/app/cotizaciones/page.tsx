@@ -1116,14 +1116,14 @@ export default function CotizacionesPage() {
       {/* Main Grid: Control Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-8">
         {/* Navigation Tabs */}
-        <div className="flex p-1 bg-[#101725] border border-white/5 rounded-2xl">
+        <div className="flex p-1 bg-[#101725] border border-white/5 rounded-2xl overflow-x-auto max-w-full whitespace-nowrap shrink-0">
           <button
             onClick={() => {
               setActiveTab("historial");
               setCurrentQuoteId(null);
               setHasActiveQuote(false);
             }}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${
               activeTab === "historial"
                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
                 : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
@@ -1140,7 +1140,7 @@ export default function CotizacionesPage() {
           <button
             disabled={!hasActiveQuote}
             onClick={() => hasActiveQuote && setActiveTab("editor")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${
               !hasActiveQuote 
                 ? "text-gray-600 cursor-not-allowed opacity-50"
                 : activeTab === "editor"
@@ -1155,7 +1155,7 @@ export default function CotizacionesPage() {
           <button
             disabled={!hasActiveQuote}
             onClick={() => hasActiveQuote && setActiveTab("comparador")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${
               !hasActiveQuote 
                 ? "text-gray-600 cursor-not-allowed opacity-50"
                 : activeTab === "comparador"
@@ -1217,7 +1217,7 @@ export default function CotizacionesPage() {
               />
             </div>
 
-            <div className="space-y-2 col-span-1 lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="col-span-1 lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
               {/* Exchange Rate Input */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
@@ -1392,7 +1392,8 @@ export default function CotizacionesPage() {
               </button>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop View Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-sm text-gray-300">
                 <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/5">
                   <tr>
@@ -1456,6 +1457,67 @@ export default function CotizacionesPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile View Cards */}
+            <div className="block md:hidden space-y-4">
+              {items.map((item) => (
+                <div key={item.id} className="p-4 bg-[#111827]/40 border border-white/5 rounded-2xl space-y-3">
+                  <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Configuración de Ítem</span>
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      disabled={isLocked || items.length === 1}
+                      className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Eliminar ítem"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-gray-400 font-semibold uppercase">Nombre del Insumo</label>
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
+                      placeholder="Ej. Resma A4, Café en Grano..."
+                      disabled={isLocked}
+                      className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-semibold uppercase">U. Medida</label>
+                      <select
+                        value={item.baseUnit}
+                        onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
+                        disabled={isLocked}
+                        className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
+                      >
+                        {DEFAULT_UNITS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-semibold uppercase">Cantidad</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={item.targetQuantity || ""}
+                          onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
+                          placeholder="Cantidad"
+                          disabled={isLocked}
+                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500">
+                          {item.baseUnit}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1740,45 +1802,44 @@ export default function CotizacionesPage() {
               </div>
 
               {/* Matrix Actions */}
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  onClick={handleExportImage}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  Exportar Imagen
-                </button>
-                <button
-                  onClick={handleCopyExcelFormat}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  Copiar Tabla Excel
-                </button>
-                <span className="text-gray-700 hidden sm:inline">|</span>
-                <button
-                  onClick={() => setConvertCurrencies(!convertCurrencies)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    convertCurrencies
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                      : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  Convertir Divisas: {convertCurrencies ? "SÍ" : "NO"}
-                </button>
-                <span className="text-gray-700 hidden sm:inline">|</span>
-                <button
-                  onClick={() => setUseRealLots(!useRealLots)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                    useRealLots
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                      : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  Unidades: {useRealLots ? "Lotes Enteros (Compra Real)" : "Fraccional Exacto"}
-                </button>
-                <span className="text-gray-700 hidden sm:inline">|</span>
-                <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap sm:gap-3">
+                  <button
+                    onClick={handleExportImage}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    Exportar Imagen
+                  </button>
+                  <button
+                    onClick={handleCopyExcelFormat}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Copiar Excel
+                  </button>
+                  <button
+                    onClick={() => setConvertCurrencies(!convertCurrencies)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border text-center ${
+                      convertCurrencies
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    Divisas: {convertCurrencies ? "Conversión" : "Original"}
+                  </button>
+                  <button
+                    onClick={() => setUseRealLots(!useRealLots)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border text-center ${
+                      useRealLots
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    Lotes: {useRealLots ? "Enteros" : "Fracción"}
+                  </button>
+                </div>
+                <div className="flex items-center justify-center sm:justify-start gap-3 text-xs text-gray-400 font-medium py-1 sm:py-0">
                   <span>TC: 1 USD = ${exchangeRate} ARS</span>
                   {convertCurrencies && (
                     <>
@@ -1790,11 +1851,11 @@ export default function CotizacionesPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-gray-300 border-collapse">
                 <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/10">
                   <tr>
-                    <th className="p-4 rounded-tl-xl text-left min-w-[200px]" rowSpan={2}>Nombre del Ítem</th>
+                    <th className="p-4 rounded-tl-xl text-left min-w-[200px] left-0 sticky bg-[#101725] z-20 border-r border-white/10" rowSpan={2}>Nombre del Ítem</th>
                     <th className="p-4 text-center min-w-[100px]" rowSpan={2}>Cantidad</th>
                     {providers.map(prov => (
                       <th key={prov.id} className="p-3 text-center border-l border-white/10" colSpan={2}>
@@ -1813,9 +1874,9 @@ export default function CotizacionesPage() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {items.map((item) => (
-                    <tr key={item.id} className="hover:bg-white/[0.01] transition-colors align-middle border-b border-white/5">
+                    <tr key={item.id} className="group hover:bg-white/[0.01] transition-colors align-middle border-b border-white/5">
                       {/* Item column (truncated if very long, hover title) */}
-                      <td className="p-4 max-w-[250px] truncate" title={item.name}>
+                      <td className="p-4 max-w-[250px] truncate left-0 sticky bg-[#0c121e] group-hover:bg-[#141b2a] transition-colors z-10 border-r border-white/10" title={item.name}>
                         <span className="font-bold text-white text-sm">{item.name || "Ítem sin nombre"}</span>
                       </td>
                       {/* Quantity column */}
@@ -1890,7 +1951,7 @@ export default function CotizacionesPage() {
 
                   {/* SUMMARY TOTAL ROW */}
                   <tr className="bg-[#101725]/60 font-bold border-t-2 border-white/10">
-                    <td className="p-4 rounded-bl-xl text-left font-black text-white text-xs uppercase tracking-wider">
+                    <td className="p-4 rounded-bl-xl text-left font-black text-white text-xs uppercase tracking-wider left-0 sticky bg-[#101725] z-10 border-r border-white/10">
                       TOTAL GENERAL
                     </td>
                     <td className="p-4 text-center text-[10px] text-gray-400 font-normal">
