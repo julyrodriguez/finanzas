@@ -268,6 +268,10 @@ export default function OrdenesDeComprasPage() {
                 enviado: Boolean(data.enviado),
                 firmado1: Boolean(data.firmado1),
                 firmado2: Boolean(data.firmado2),
+                firmante1: data.firmante1 || "",
+                firmante2: data.firmante2 || "",
+                fechaFirma1: data.fechaFirma1 || "",
+                fechaFirma2: data.fechaFirma2 || "",
                 linkSharepoint: data.linkSharepoint || "",
               };
             });
@@ -510,6 +514,10 @@ export default function OrdenesDeComprasPage() {
       enviado: editingOrden ? Boolean(editingOrden.enviado) : false,
       firmado1: editingOrden ? Boolean(editingOrden.firmado1) : false,
       firmado2: editingOrden ? Boolean(editingOrden.firmado2) : false,
+      firmante1: editingOrden?.firmante1 || "",
+      firmante2: editingOrden?.firmante2 || "",
+      fechaFirma1: editingOrden?.fechaFirma1 || "",
+      fechaFirma2: editingOrden?.fechaFirma2 || "",
       linkSharepoint: linkSharepoint.trim(),
     };
 
