@@ -13,9 +13,10 @@
     color: #f1f5f9;
     font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
     background-image: 
-      radial-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
+      radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
       linear-gradient(180deg, #070a10 0%, #0c111c 100%);
     background-size: 32px 32px, 100% 100%;
+    background-attachment: fixed;
   }
 }
 
@@ -133,6 +134,7 @@ button[class*="bg-gradient-to-r"]:hover {
     radial-gradient(rgba(244, 114, 182, 0.09) 1px, transparent 1px),
     linear-gradient(180deg, #180819 0%, #0e030e 100%) !important;
   background-size: 32px 32px, 100% 100% !important;
+  background-attachment: fixed !important;
 }
 
 .pink-theme aside {

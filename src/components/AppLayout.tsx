@@ -145,7 +145,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   // If checking authentication or unauthenticated, block rendering and show loader
   if (loading || (!user && !publicRoute)) {
     return (
-      <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4 p-8 rounded-2xl glass-card border border-white/10 text-center">
           <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
             <Loader2 className="w-6 h-6 animate-spin" />
@@ -162,7 +162,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const isExpanded = sidebarOpen || isHovered;
 
   return (
-    <div className={`flex min-h-screen bg-[#090d16] text-gray-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 ${theme === "pink" ? "pink-theme" : ""}`}>
+    <div className={`flex min-h-screen bg-transparent text-gray-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 ${theme === "pink" ? "pink-theme" : ""}`}>
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div
