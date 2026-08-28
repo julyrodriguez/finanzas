@@ -122,275 +122,185 @@ button[class*="bg-gradient-to-r"]:hover {
   box-shadow: 0 4px 14px rgba(79, 70, 229, 0.5);
 }
 
-/* ==========================================
-   PINK THEME (MODO ROSA OSCURO / WINE-PLUM)
-   ========================================== */
+/* ============================================================
+   ROSE ENTERPRISE DESIGN SYSTEM (MODO ROSA REALISTA / VELVET ROSE)
+   ============================================================ */
 
 .pink-theme {
-  background-color: #1a0510 !important;
-  color: #f3f4f6 !important;
-  background-image: radial-gradient(at 0% 0%, hsla(335, 80%, 15%, 1) 0px, transparent 50%),
-                    radial-gradient(at 50% 0%, hsla(340, 75%, 10%, 1) 0px, transparent 50%),
-                    radial-gradient(at 100% 0%, hsla(330, 80%, 12%, 1) 0px, transparent 50%) !important;
+  background-color: #130614 !important;
+  color: #fff1f2 !important;
+  background-image: 
+    radial-gradient(rgba(244, 114, 182, 0.09) 1px, transparent 1px),
+    linear-gradient(180deg, #180819 0%, #0e030e 100%) !important;
+  background-size: 32px 32px, 100% 100% !important;
 }
 
 .pink-theme aside {
-  background-color: #12020a !important;
-  border-color: rgba(236, 72, 153, 0.15) !important;
-  box-shadow: 10px 0 30px -15px rgba(236, 72, 153, 0.15) !important;
+  background-color: #160817 !important;
+  border-color: rgba(244, 114, 182, 0.18) !important;
+  box-shadow: 10px 0 30px -10px rgba(0, 0, 0, 0.6) !important;
 }
 
 .pink-theme header {
-  background-color: rgba(26, 5, 16, 0.85) !important;
-  border-color: rgba(236, 72, 153, 0.15) !important;
-  backdrop-filter: blur(12px) !important;
+  background-color: rgba(19, 6, 20, 0.9) !important;
+  border-color: rgba(244, 114, 182, 0.15) !important;
 }
 
 .pink-theme h1,
 .pink-theme h2,
 .pink-theme h3,
-.pink-theme h4,
-.pink-theme th,
-.pink-theme .text-white {
-  color: #fbcfe8 !important;
+.pink-theme h4 {
+  color: #ffffff !important;
 }
 
-.pink-theme .text-gray-100 {
-  color: #f3f4f6 !important;
-}
-
-.pink-theme .text-gray-200,
-.pink-theme .text-gray-300,
 .pink-theme .text-gray-400 {
   color: #fda4af !important;
 }
 
-.pink-theme .glass-card {
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.05) 0%, rgba(236, 72, 153, 0.02) 100%) !important;
-  border-color: rgba(236, 72, 153, 0.2) !important;
-  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5) !important;
+.pink-theme .text-gray-300,
+.pink-theme .text-slate-400 {
+  color: #fbcfe8 !important;
 }
 
+.pink-theme .glass-card,
+.pink-theme .glass-panel {
+  background: #1c0b1d !important;
+  border: 1px solid rgba(244, 114, 182, 0.2) !important;
+  box-shadow: 0 4px 20px -2px rgba(8, 1, 8, 0.6) !important;
+}
+
+.pink-theme .glass-card:hover {
+  border-color: rgba(244, 114, 182, 0.4) !important;
+}
+
+/* Inset containers (Search, Segmented Filters, Modals) */
+.pink-theme [class*="bg-[#080c16]"],
+.pink-theme [class*="bg-[#0b0f19]"],
+.pink-theme [class*="bg-[#0e1322]"],
+.pink-theme [class*="bg-[#0d131f]"] {
+  background-color: #140715 !important;
+  border-color: rgba(244, 114, 182, 0.22) !important;
+}
+
+.pink-theme [class*="bg-[#111726]"],
+.pink-theme [class*="bg-[#141b2d]"] {
+  background-color: #1d0c1e !important;
+  border-color: rgba(244, 114, 182, 0.2) !important;
+}
+
+/* Inputs & Form Controls */
 .pink-theme input,
 .pink-theme select,
 .pink-theme textarea {
-  background-color: rgba(26, 5, 16, 0.6) !important;
-  border-color: rgba(236, 72, 153, 0.3) !important;
-  color: #f3f4f6 !important;
+  background-color: #100411 !important;
+  border-color: rgba(244, 114, 182, 0.25) !important;
+  color: #ffffff !important;
 }
 
 .pink-theme input:focus,
 .pink-theme select:focus,
 .pink-theme textarea:focus {
   border-color: #ec4899 !important;
-  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2) !important;
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.3) !important;
 }
 
 .pink-theme input::placeholder,
 .pink-theme textarea::placeholder {
-  color: rgba(244, 63, 94, 0.4) !important;
+  color: rgba(251, 207, 232, 0.4) !important;
 }
 
-.pink-theme aside a[class*="from-emerald-500"],
-.pink-theme aside a.active,
-.pink-theme aside nav a[class*="text-emerald-300"] {
-  background: linear-gradient(to right, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.05)) !important;
-  border-color: rgba(236, 72, 153, 0.4) !important;
+/* Primary buttons & Active filter tabs */
+.pink-theme [class*="bg-indigo-600"],
+.pink-theme button[class*="from-indigo-500"] {
+  background: linear-gradient(135deg, #db2777 0%, #ec4899 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(219, 39, 119, 0.4) !important;
+}
+
+.pink-theme [class*="bg-indigo-600"]:hover,
+.pink-theme button[class*="from-indigo-500"]:hover {
+  background: linear-gradient(135deg, #be185d 0%, #db2777 100%) !important;
+}
+
+/* Accent Indigo Overrides to Rose/Pink */
+.pink-theme [class*="text-indigo-400"],
+.pink-theme [class*="text-indigo-300"] {
   color: #f472b6 !important;
 }
 
-.pink-theme aside nav a svg {
-  color: #f472b6 !important;
+.pink-theme [class*="bg-indigo-500/15"],
+.pink-theme [class*="bg-indigo-500/10"],
+.pink-theme [class*="bg-indigo-500/20"] {
+  background-color: rgba(236, 72, 153, 0.18) !important;
+  border-color: rgba(236, 72, 153, 0.35) !important;
+  color: #fbcfe8 !important;
 }
 
-.pink-theme aside nav a:hover svg,
-.pink-theme aside nav a[class*="from-emerald-500"] svg {
-  color: #f472b6 !important;
+.pink-theme [class*="border-indigo-500"] {
+  border-color: rgba(244, 114, 182, 0.4) !important;
 }
 
-.pink-theme aside a div[class*="bg-emerald-500/20"] {
+/* Navigation Links */
+.pink-theme aside nav a[class*="bg-indigo-500/15"],
+.pink-theme aside a.active {
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.22) 0%, rgba(236, 72, 153, 0.08) 100%) !important;
+  border-color: rgba(236, 72, 153, 0.45) !important;
+  color: #fbcfe8 !important;
+}
+
+.pink-theme aside nav a:hover {
+  background-color: rgba(244, 114, 182, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.pink-theme aside nav a div[class*="bg-indigo-500/20"] {
   background-color: rgba(236, 72, 153, 0.25) !important;
   color: #f472b6 !important;
 }
 
-.pink-theme aside a div[class*="text-emerald-400"] {
-  color: #f472b6 !important;
-}
-
-.pink-theme aside a div[class*="text-gray-400"]:hover,
-.pink-theme aside a:hover {
-  background-color: rgba(236, 72, 153, 0.1) !important;
-  color: #fbcfe8 !important;
-}
-
-.pink-theme aside a span[class*="bg-emerald-500/20"] {
-  background-color: rgba(236, 72, 153, 0.2) !important;
-  color: #f472b6 !important;
-  border-color: rgba(236, 72, 153, 0.3) !important;
-}
-
+/* Tables */
+.pink-theme thead,
 .pink-theme th {
-  background-color: #270617 !important;
+  background-color: #200b21 !important;
   color: #fbcfe8 !important;
-  border-bottom: 2px solid rgba(236, 72, 153, 0.3) !important;
+  border-bottom: 1px solid rgba(244, 114, 182, 0.25) !important;
 }
 
-.pink-theme tr {
-  border-color: rgba(236, 72, 153, 0.15) !important;
+.pink-theme tbody tr {
+  border-color: rgba(244, 114, 182, 0.12) !important;
 }
 
-.pink-theme tr:hover {
-  background-color: rgba(236, 72, 153, 0.04) !important;
+.pink-theme tbody tr:hover {
+  background-color: rgba(244, 114, 182, 0.06) !important;
 }
 
-.pink-theme button[class*="from-emerald-500"],
-.pink-theme button[class*="bg-gradient-to-r"] {
-  background: linear-gradient(to right, #ec4899, #f43f5e) !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 15px -3px rgba(236, 72, 153, 0.4) !important;
+/* Slate Element Overrides */
+.pink-theme [class*="bg-slate-800"],
+.pink-theme [class*="bg-slate-700"] {
+  background-color: #1e0d20 !important;
+  border-color: rgba(244, 114, 182, 0.25) !important;
 }
 
-.pink-theme button[class*="from-emerald-500"]:hover,
-.pink-theme button[class*="bg-gradient-to-r"]:hover {
-  background: linear-gradient(to right, #db2777, #e11d48) !important;
+.pink-theme [class*="border-slate-800"],
+.pink-theme [class*="border-slate-700"] {
+  border-color: rgba(244, 114, 182, 0.2) !important;
 }
 
-.pink-theme button[class*="bg-emerald-500"] {
-  background-color: #ec4899 !important;
-  color: #ffffff !important;
+.pink-theme [class*="hover:bg-slate-700"]:hover,
+.pink-theme [class*="hover:bg-slate-800"]:hover {
+  background-color: #28112b !important;
 }
 
-.pink-theme .bg-white\/5 {
-  background-color: rgba(236, 72, 153, 0.06) !important;
-  border-color: rgba(236, 72, 153, 0.2) !important;
-}
-
-.pink-theme div[class*="bg-emerald-500/15"],
-.pink-theme div[class*="bg-teal-500/15"],
-.pink-theme div[class*="bg-emerald-500/10"],
-.pink-theme div[class*="bg-teal-500/10"] {
-  background-color: rgba(236, 72, 153, 0.12) !important;
-}
-
+/* Scrollbars */
 .pink-theme ::-webkit-scrollbar-track {
   background: rgba(236, 72, 153, 0.05);
 }
 
 .pink-theme ::-webkit-scrollbar-thumb {
-  background: rgba(236, 72, 153, 0.25);
+  background: rgba(236, 72, 153, 0.3);
+  border-radius: 4px;
 }
 
 .pink-theme ::-webkit-scrollbar-thumb:hover {
-  background: rgba(236, 72, 153, 0.4);
-}
-
-.pink-theme div[class*="bg-black/70"] {
-  background-color: rgba(26, 5, 16, 0.8) !important;
-}
-
-.pink-theme .glass-card button[class*="bg-red-500/10"] {
-  background-color: rgba(239, 68, 68, 0.15) !important;
-  color: #f87171 !important;
-  border-color: rgba(239, 68, 68, 0.3) !important;
-}
-
-.pink-theme .glass-card button[class*="bg-red-500/10"]:hover {
-  background-color: rgba(239, 68, 68, 0.25) !important;
-}
-
-.pink-theme span[class*="bg-emerald-500/15"] {
-  background-color: rgba(236, 72, 153, 0.2) !important;
-  color: #f472b6 !important;
-  border-color: rgba(236, 72, 153, 0.3) !important;
-}
-
-.pink-theme span[class*="bg-teal-500/15"] {
-  background-color: rgba(20, 184, 166, 0.15) !important;
-  color: #2dd4bf !important;
-  border-color: rgba(20, 184, 166, 0.3) !important;
-}
-
-.pink-theme button[class*="bg-emerald-500/20"] {
-  background-color: rgba(236, 72, 153, 0.25) !important;
-  color: #f472b6 !important;
-  border-color: rgba(236, 72, 153, 0.4) !important;
-}
-
-.pink-theme tr[class*="bg-red-500/5"] {
-  background-color: rgba(239, 68, 68, 0.1) !important;
-  border-left: 3px solid #f87171 !important;
-}
-
-.pink-theme div[class*="bg-gradient-to-tr from-emerald-500 to-teal-500"] {
-  background: linear-gradient(to right, #ec4899, #f43f5e) !important;
-}
-
-.pink-theme span[class*="bg-purple-500/15"] {
-  background-color: rgba(216, 180, 254, 0.15) !important;
-  color: #c084fc !important;
-  border-color: rgba(216, 180, 254, 0.3) !important;
-}
-
-.pink-theme span[class*="bg-teal-500/15"],
-.pink-theme span[class*="text-teal-300"] {
-  background-color: rgba(45, 212, 191, 0.15) !important;
-  color: #2dd4bf !important;
-  border-color: rgba(45, 212, 191, 0.3) !important;
-}
-
-.pink-theme form button[class*="border-white/10"] {
-  background-color: rgba(236, 72, 153, 0.05) !important;
-  color: #fda4af !important;
-  border-color: rgba(236, 72, 153, 0.2) !important;
-}
-
-.pink-theme form button[class*="border-white/10"]:hover {
-  background-color: rgba(236, 72, 153, 0.1) !important;
-}
-
-.pink-theme form button[class*="bg-purple-500/20"] {
-  background-color: #7c3aed !important;
-  color: #ffffff !important;
-  border-color: #7c3aed !important;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3) !important;
-}
-
-.pink-theme form button[class*="bg-teal-500/20"] {
-  background-color: #0d9488 !important;
-  color: #ffffff !important;
-  border-color: #0d9488 !important;
-  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3) !important;
-}
-
-.pink-theme .text-emerald-400,
-.pink-theme .text-emerald-300,
-.pink-theme .text-emerald-500,
-.pink-theme font-bold[class*="text-emerald-400"],
-.pink-theme span[class*="text-emerald-400"],
-.pink-theme span[class*="text-emerald-300"] {
-  color: #34d399 !important;
-}
-
-.pink-theme span[class*="bg-emerald-500/10"],
-.pink-theme span[class*="bg-emerald-500/15"] {
-  background-color: rgba(52, 211, 153, 0.15) !important;
-  border-color: rgba(52, 211, 153, 0.3) !important;
-  color: #34d399 !important;
-}
-
-.pink-theme button[class*="bg-emerald-500/20"] {
-  background-color: rgba(52, 211, 153, 0.15) !important;
-  color: #34d399 !important;
-  border-color: rgba(52, 211, 153, 0.3) !important;
-}
-
-.pink-theme button[class*="bg-indigo-500/20"] {
-  background-color: rgba(99, 102, 241, 0.15) !important;
-  color: #818cf8 !important;
-  border-color: rgba(99, 102, 241, 0.3) !important;
-}
-
-.pink-theme button[class*="bg-indigo-500/20"]:hover {
-  background-color: #6366f1 !important;
-  color: #ffffff !important;
+  background: rgba(236, 72, 153, 0.5);
 }
