@@ -438,7 +438,7 @@ export default function ProcesoDeLiberacionPage() {
         </div>
 
         {/* KPI Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           <div className="p-4 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-1 shadow-sm">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Send className="w-3.5 h-3.5 text-amber-400" />
@@ -447,18 +447,7 @@ export default function ProcesoDeLiberacionPage() {
             <div className="text-2xl font-black text-white font-mono">
               {stats.totalCount}
             </div>
-            <p className="text-[10.5px] text-slate-500">A la espera de doble firma</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5" />
-              Monto Total en Proceso
-            </span>
-            <div className="text-2xl font-black text-emerald-400 font-mono">
-              $ {stats.totalMonto.toLocaleString("es-AR")}
-            </div>
-            <p className="text-[10.5px] text-slate-400">Suma de OCs en seguimiento</p>
+            <p className="text-[10.5px] text-slate-500">Total en proceso de seguimiento</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-sm">
