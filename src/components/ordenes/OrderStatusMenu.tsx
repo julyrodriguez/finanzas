@@ -14,7 +14,7 @@ import {
 import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
-import { getStoredApprovalConfig } from "@/lib/approvalConfig";
+import { getStoredApprovalConfig, parseMontoToNumber } from "@/lib/approvalConfig";
 
 export type OrderStatusKey = "pendiente" | "mandada" | "liberada" | "entregada" | "cancelada";
 
@@ -127,7 +127,7 @@ export function OrderStatusMenu({
     setIsUpdating(true);
 
     const configApproval = getStoredApprovalConfig();
-    const numMonto = typeof orden.monto === "number" ? orden.monto : Number(String(orden.monto).replace(/[^0-9.-]+/g, "")) || 0;
+    const numMonto = parseMontoToNumber(orden.monto);
     let updateData: Partial<OrdenCompra> = {};
 
     switch (targetStatus) {

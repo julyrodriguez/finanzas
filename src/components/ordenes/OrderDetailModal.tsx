@@ -23,7 +23,7 @@ import {
   Check 
 } from "lucide-react";
 import type { OrdenCompra } from "@/types/ordenes";
-import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG } from "@/lib/approvalConfig";
+import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber } from "@/lib/approvalConfig";
 
 interface OrderDetailModalProps {
   orden: OrdenCompra | null;
@@ -60,9 +60,7 @@ export function OrderDetailModal({
 
   if (!orden) return null;
 
-  const numMonto = typeof orden.monto === "number" 
-    ? orden.monto 
-    : Number(String(orden.monto || "0").replace(/[^0-9.-]+/g, "")) || 0;
+  const numMonto = parseMontoToNumber(orden.monto);
 
   const formatSigners = (arr?: string[], fallback: string = "") => {
     if (Array.isArray(arr) && arr.length > 0) return arr.join(", ");

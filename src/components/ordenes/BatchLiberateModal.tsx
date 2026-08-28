@@ -29,7 +29,8 @@ import {
   ApprovalConfig, 
   DEFAULT_APPROVAL_CONFIG, 
   getStoredApprovalConfig,
-  isNameInList
+  isNameInList,
+  parseMontoToNumber
 } from "@/lib/approvalConfig";
 
 interface BatchLiberateModalProps {
@@ -179,9 +180,7 @@ export function BatchLiberateModal({
             continue;
           }
 
-          const numMonto = typeof matchedOrder.monto === "number" 
-            ? matchedOrder.monto 
-            : Number(String(matchedOrder.monto).replace(/[^0-9.-]+/g, "")) || 0;
+          const numMonto = parseMontoToNumber(matchedOrder.monto);
 
           // ==========================================
           // TIER 1: Hasta $5M (Tomás + Área)

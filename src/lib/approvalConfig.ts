@@ -120,3 +120,34 @@ export function isNameInList(name: string, list: string[]): boolean {
     return target === it || target.includes(it) || it.includes(target);
   });
 }
+
+export function parseMontoToNumber(val: any): number {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  let str = String(val).trim();
+  str = str.replace(/[^0-9.,-]/g, "");
+  if (!str) return 0;
+
+  if (str.includes(",") && str.includes(".")) {
+    if (str.lastIndexOf(",") > str.lastIndexOf(".")) {
+      str = str.replace(/\./g, "").replace(",", ".");
+    } else {
+      str = str.replace(/,/g, "");
+    }
+  } else if (str.includes(",")) {
+    const parts = str.split(",");
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      str = str.replace(/,/g, "");
+    } else {
+      str = str.replace(",", ".");
+    }
+  } else if (str.includes(".")) {
+    const parts = str.split(".");
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      str = str.replace(/\./g, "");
+    }
+  }
+
+  const result = parseFloat(str);
+  return isNaN(result) ? 0 : result;
+}
