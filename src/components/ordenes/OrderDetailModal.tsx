@@ -98,52 +98,64 @@ export function OrderDetailModal({
 
   const tierInfo = (() => {
     if (numMonto <= limite1) {
-      const isF1 = Boolean(orden.liberada || orden.firmado1 || orden.firmante1 || (orden.mandada && numMonto <= limite1));
-      const isF2 = Boolean(orden.liberada || orden.firmado2 || orden.firmante2);
+      const hasF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada);
+      const hasF2 = Boolean(orden.firmante2?.trim() || orden.liberada);
+      const f1Name = orden.firmante1?.trim() || (hasF1 ? "Tomas" : "");
+      const f2Name = orden.firmante2?.trim() || (orden.liberada ? "Área" : "");
+
       return {
         tierName: `Nivel 1 (Hasta $${limite1.toLocaleString("es-AR")})`,
         f1Label: "Firma 1 (Base): Tomás",
         f2Label: `Firma 2 (Área): ${formatSigners(config?.firmantes2Nivel1, "Victoria, Tristán, Pablo G., Jorgelina")}`,
-        isF1Signed: isF1,
-        f1Signer: orden.firmante1?.trim() || (isF1 ? "Tomas" : "Pendiente"),
-        isF2Signed: isF2,
-        f2Signer: orden.firmante2?.trim() || (isF2 ? "Firmado" : "Pendiente de Área"),
+        isF1Signed: hasF1,
+        f1Signer: f1Name || "Pendiente",
+        isF2Signed: hasF2,
+        f2Signer: f2Name || "Pendiente de Área",
       };
     } else if (numMonto > limite1 && numMonto <= limite2) {
-      const isF1 = Boolean(orden.liberada || orden.firmado1 || orden.firmante1);
-      const isF2 = Boolean(orden.liberada || orden.firmado2 || orden.firmante2);
+      const hasF1 = Boolean(orden.firmante1?.trim());
+      const hasF2 = Boolean(orden.firmante2?.trim());
+      const f1Name = orden.firmante1?.trim() || "";
+      const f2Name = orden.firmante2?.trim() || "";
+
       return {
         tierName: `Nivel 2 (De $${limite1.toLocaleString("es-AR")} a $${limite2.toLocaleString("es-AR")})`,
         f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel2, "Pablo Mondelo")}`,
         f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel2, "Darío")}`,
-        isF1Signed: isF1,
-        f1Signer: orden.firmante1?.trim() || (isF1 ? "Pablo Mondelo" : "Pendiente de P. Mondelo"),
-        isF2Signed: isF2,
-        f2Signer: orden.firmante2?.trim() || (isF2 ? "Darío" : "Pendiente de Darío"),
+        isF1Signed: hasF1,
+        f1Signer: f1Name || "Pendiente de P. Mondelo",
+        isF2Signed: hasF2,
+        f2Signer: f2Name || "Pendiente de Darío",
       };
     } else if (numMonto > limite2 && numMonto <= limite3) {
-      const isF1 = Boolean(orden.liberada || orden.firmado1 || orden.firmante1);
-      const isF2 = Boolean(orden.liberada || orden.firmado2 || orden.firmante2);
+      const hasF1 = Boolean(orden.firmante1?.trim());
+      const hasF2 = Boolean(orden.firmante2?.trim());
+      const f1Name = orden.firmante1?.trim() || "";
+      const f2Name = orden.firmante2?.trim() || "";
+
       return {
         tierName: `Nivel 3 (De $${limite2.toLocaleString("es-AR")} a $${limite3.toLocaleString("es-AR")})`,
         f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel3, "Matías, Hernán")}`,
         f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel3, "Darío")}`,
-        isF1Signed: isF1,
-        f1Signer: orden.firmante1?.trim() || (isF1 ? "Firmado" : "Pendiente de Matías/Hernán"),
-        isF2Signed: isF2,
-        f2Signer: orden.firmante2?.trim() || (isF2 ? "Darío" : "Pendiente de Darío"),
+        isF1Signed: hasF1,
+        f1Signer: f1Name || "Pendiente de Matías/Hernán",
+        isF2Signed: hasF2,
+        f2Signer: f2Name || "Pendiente de Darío",
       };
     } else {
-      const isF1 = Boolean(orden.liberada || orden.firmado1 || orden.firmante1);
-      const isF2 = Boolean(orden.liberada || orden.firmado2 || orden.firmante2);
+      const hasF1 = Boolean(orden.firmante1?.trim());
+      const hasF2 = Boolean(orden.firmante2?.trim());
+      const f1Name = orden.firmante1?.trim() || "";
+      const f2Name = orden.firmante2?.trim() || "";
+
       return {
         tierName: `Nivel 4 (Más de $${limite3.toLocaleString("es-AR")})`,
         f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel4, "Darío, Hernán")}`,
         f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel4, "Martín")}`,
-        isF1Signed: isF1,
-        f1Signer: orden.firmante1?.trim() || (isF1 ? "Firmado" : "Pendiente de Darío/Hernán"),
-        isF2Signed: isF2,
-        f2Signer: orden.firmante2?.trim() || (isF2 ? "Martín" : "Pendiente de Martín"),
+        isF1Signed: hasF1,
+        f1Signer: f1Name || "Pendiente de Darío/Hernán",
+        isF2Signed: hasF2,
+        f2Signer: f2Name || "Pendiente de Martín",
       };
     }
   })();
