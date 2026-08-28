@@ -276,19 +276,47 @@ button[class*="bg-gradient-to-r"]:hover {
 
 /* Slate Element Overrides */
 .pink-theme [class*="bg-slate-800"],
-.pink-theme [class*="bg-slate-700"] {
+.pink-theme [class*="bg-slate-700"],
+.pink-theme [class*="bg-slate-900"] {
   background-color: #1e0d20 !important;
   border-color: rgba(244, 114, 182, 0.25) !important;
 }
 
 .pink-theme [class*="border-slate-800"],
-.pink-theme [class*="border-slate-700"] {
+.pink-theme [class*="border-slate-700"],
+.pink-theme [class*="border-slate-600"] {
   border-color: rgba(244, 114, 182, 0.2) !important;
 }
 
 .pink-theme [class*="hover:bg-slate-700"]:hover,
-.pink-theme [class*="hover:bg-slate-800"]:hover {
+.pink-theme [class*="hover:bg-slate-800"]:hover,
+.pink-theme [class*="hover:bg-slate-900"]:hover {
   background-color: #28112b !important;
+}
+
+/* Calendar & Day Cells */
+.pink-theme div[class*="bg-[#0b0f19]"],
+.pink-theme div[class*="bg-[#0d131f]"],
+.pink-theme div[class*="bg-[#0a0e17]"] {
+  background-color: #150716 !important;
+  border-color: rgba(244, 114, 182, 0.2) !important;
+}
+
+/* Cotizaciones, Interbanking & Terminal Consoles */
+.pink-theme pre,
+.pink-theme code,
+.pink-theme div[class*="font-mono"][class*="bg-black"],
+.pink-theme div[class*="font-mono"][class*="bg-[#050811]"] {
+  background-color: #100311 !important;
+  border-color: rgba(244, 114, 182, 0.25) !important;
+  color: #fbcfe8 !important;
+}
+
+/* Modals & Backdrop Blur */
+.pink-theme div[class*="bg-black/70"],
+.pink-theme div[class*="bg-black/80"],
+.pink-theme div[class*="bg-slate-950/80"] {
+  background-color: rgba(14, 4, 15, 0.85) !important;
 }
 
 /* Scrollbars */
