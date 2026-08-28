@@ -69,14 +69,26 @@ export function OrderDetailModal({
     return fallback;
   };
 
-  const formatSignDate = (dateVal?: string) => {
+  const formatSignDate = (dateVal: any): string => {
     if (!dateVal) return "";
     try {
+      if (typeof dateVal === "object") {
+        if (typeof dateVal.toDate === "function") {
+          const d = dateVal.toDate();
+          return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+        }
+        if (typeof dateVal.seconds === "number") {
+          const d = new Date(dateVal.seconds * 1000);
+          return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+        }
+      }
       const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return String(dateVal);
-      return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+      if (!isNaN(d.getTime())) {
+        return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+      }
+      return typeof dateVal === "string" ? dateVal : "";
     } catch {
-      return String(dateVal);
+      return "";
     }
   };
 
@@ -258,7 +270,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
               <div className="text-2xl font-extrabold text-emerald-400 font-mono mt-1">
                 {typeof orden.monto === "number"
                   ? `$ ${orden.monto.toLocaleString("es-AR")}`
-                  : `$ ${orden.monto}`}
+                  : (typeof orden.monto === "string" ? (orden.monto.startsWith("$") ? orden.monto : `$ ${orden.monto}`) : "$ 0")}
               </div>
             </div>
           </div>
@@ -370,26 +382,31 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
 
             {/* Listado de Notas */}
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {!orden.notas || orden.notas.length === 0 ? (
+              {!Array.isArray(orden.notas) || orden.notas.length === 0 ? (
                 <div className="p-4 text-center bg-[#111726]/40 rounded-xl border border-slate-800 text-slate-400 text-xs">
                   Aún no hay notas registradas para esta orden.
                 </div>
               ) : (
-                orden.notas.map((nota) => (
-                  <div key={nota.id} className="p-3 rounded-xl bg-[#111726]/80 border border-slate-800 space-y-1 text-xs">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-amber-400 flex items-center gap-1">
-                        <UserIcon className="w-3 h-3" />
-                        {nota.autor}
-                      </span>
-                      <span className="flex items-center gap-1 text-slate-500 text-[10px]">
-                        <Clock className="w-3 h-3" />
-                        {nota.fecha}
-                      </span>
+                orden.notas.map((nota, idx) => {
+                  const autorText = typeof nota?.autor === "string" ? nota.autor : "Usuario";
+                  const fechaText = formatSignDate(nota?.fecha);
+                  const contenidoText = typeof nota?.texto === "string" ? nota.texto : "";
+                  return (
+                    <div key={nota?.id || idx} className="p-3 rounded-xl bg-[#111726]/80 border border-slate-800 space-y-1 text-xs">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-amber-400 flex items-center gap-1">
+                          <UserIcon className="w-3 h-3" />
+                          {autorText}
+                        </span>
+                        <span className="flex items-center gap-1 text-slate-500 text-[10px]">
+                          <Clock className="w-3 h-3" />
+                          {fechaText}
+                        </span>
+                      </div>
+                      <p className="text-slate-200 leading-relaxed font-medium">{contenidoText}</p>
                     </div>
-                    <p className="text-slate-200 leading-relaxed font-medium">{nota.texto}</p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
