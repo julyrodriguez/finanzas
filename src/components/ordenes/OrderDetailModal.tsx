@@ -542,7 +542,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                     )}
 
                     {!isOrdenesUser && (
-                      <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
                         {tierInfo.isF1Signed ? (
                           <>
                             <button
@@ -551,19 +551,19 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                                 setEditingFirma1(true);
                                 setSelectedF1Signer(orden.firmante1 || f1SignerOptions[0] || "");
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/70 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                             >
-                              <Edit3 className="w-3 h-3" />
+                              <Edit3 className="w-3.5 h-3.5 text-slate-400" />
                               <span>Cambiar firmante</span>
                             </button>
                             <button
                               type="button"
                               onClick={handleRemoveFirma1}
                               disabled={isSavingFirma}
-                              className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/25 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                               title="Quitar esta firma"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5 text-red-400" />
                               <span>Quitar</span>
                             </button>
                           </>
@@ -574,22 +574,22 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                               setEditingFirma1(true);
                               setSelectedF1Signer(f1SignerOptions[0] || "");
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/40 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            className="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-indigo-950/60 text-slate-200 hover:text-indigo-200 border border-slate-700/80 hover:border-indigo-500/40 text-[11px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm group"
                           >
-                            <PenTool className="w-3.5 h-3.5" />
-                            <span>✍️ Registrar Firma 1</span>
+                            <PenTool className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
+                            <span>Registrar firma manual</span>
                           </button>
                         )}
                       </div>
                     )}
                   </>
                 ) : (
-                  <div className="space-y-2 p-2.5 rounded-xl bg-[#080c16] border border-slate-700 animate-in fade-in duration-150">
+                  <div className="space-y-2.5 p-3 rounded-xl bg-[#080c16] border border-slate-700/80 animate-in fade-in duration-150">
                     <div className="text-[11px] font-bold text-slate-300">Seleccionar autorizador:</div>
                     <select
                       value={selectedF1Signer}
                       onChange={(e) => setSelectedF1Signer(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-2 rounded-xl bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
                     >
                       {f1SignerOptions.map((opt) => (
                         <option key={opt} value={opt} className="bg-[#0b0f19]">
@@ -604,7 +604,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                         value={customF1Signer}
                         onChange={(e) => setCustomF1Signer(e.target.value)}
                         placeholder="Escribe el nombre del firmante..."
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                        className="w-full px-3 py-2 rounded-xl bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
                       />
                     )}
 
@@ -616,15 +616,15 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                           const finalName = selectedF1Signer === "Otro" ? customF1Signer : selectedF1Signer;
                           handleSaveFirma1(finalName);
                         }}
-                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md"
                       >
-                        {isSavingFirma ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        {isSavingFirma ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         <span>Confirmar Firma</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingFirma1(false)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-semibold transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[11px] font-semibold transition-all cursor-pointer"
                       >
                         Cancelar
                       </button>
@@ -667,7 +667,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                     )}
 
                     {!isOrdenesUser && (
-                      <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
                         {tierInfo.isF2Signed ? (
                           <>
                             <button
@@ -676,19 +676,19 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                                 setEditingFirma2(true);
                                 setSelectedF2Signer(orden.firmante2 || f2SignerOptions[0] || "");
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/70 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                             >
-                              <Edit3 className="w-3 h-3" />
+                              <Edit3 className="w-3.5 h-3.5 text-slate-400" />
                               <span>Cambiar firmante</span>
                             </button>
                             <button
                               type="button"
                               onClick={handleRemoveFirma2}
                               disabled={isSavingFirma}
-                              className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-[10.5px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/25 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                               title="Quitar esta firma"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5 text-red-400" />
                               <span>Quitar</span>
                             </button>
                           </>
@@ -699,22 +699,22 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                               setEditingFirma2(true);
                               setSelectedF2Signer(f2SignerOptions[0] || "");
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-black border border-emerald-500/40 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            className="w-full py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-indigo-950/60 text-slate-200 hover:text-indigo-200 border border-slate-700/80 hover:border-indigo-500/40 text-[11px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm group"
                           >
-                            <PenTool className="w-3.5 h-3.5" />
-                            <span>✍️ Registrar Firma 2</span>
+                            <PenTool className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
+                            <span>Registrar firma manual</span>
                           </button>
                         )}
                       </div>
                     )}
                   </>
                 ) : (
-                  <div className="space-y-2 p-2.5 rounded-xl bg-[#080c16] border border-slate-700 animate-in fade-in duration-150">
+                  <div className="space-y-2.5 p-3 rounded-xl bg-[#080c16] border border-slate-700/80 animate-in fade-in duration-150">
                     <div className="text-[11px] font-bold text-slate-300">Seleccionar autorizador:</div>
                     <select
                       value={selectedF2Signer}
                       onChange={(e) => setSelectedF2Signer(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-2 rounded-xl bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
                     >
                       {f2SignerOptions.map((opt) => (
                         <option key={opt} value={opt} className="bg-[#0b0f19]">
@@ -729,7 +729,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                         value={customF2Signer}
                         onChange={(e) => setCustomF2Signer(e.target.value)}
                         placeholder="Escribe el nombre del firmante..."
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
+                        className="w-full px-3 py-2 rounded-xl bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500"
                       />
                     )}
 
@@ -741,15 +741,15 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                           const finalName = selectedF2Signer === "Otro" ? customF2Signer : selectedF2Signer;
                           handleSaveFirma2(finalName);
                         }}
-                        className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md"
                       >
-                        {isSavingFirma ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        {isSavingFirma ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         <span>Confirmar Firma</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingFirma2(false)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-semibold transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[11px] font-semibold transition-all cursor-pointer"
                       >
                         Cancelar
                       </button>
@@ -801,19 +801,19 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
 
             {/* Formulario para agregar una nueva Nota */}
             {!isOrdenesUser && (
-              <form onSubmit={onAddNota} className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
+              <form onSubmit={onAddNota} className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <input
                   type="text"
                   required
                   value={newNotaText}
                   onChange={(e) => setNewNotaText(e.target.value)}
                   placeholder="Escribir una nueva nota o comentario..."
-                  className="flex-1 px-3.5 py-2 text-xs rounded-xl bg-[#111726] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                  className="w-full sm:flex-1 px-3.5 py-2.5 sm:py-2 text-xs rounded-xl bg-[#111726] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 min-w-0"
                 />
                 <button
                   type="submit"
                   disabled={savingNota || !newNotaText.trim()}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
+                  className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
                 >
                   {savingNota ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -830,17 +830,17 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-white/10 bg-[#0b0f19] flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-white/10 bg-[#0b0f19] flex flex-wrap items-center justify-between gap-2.5">
           <button
             type="button"
             onClick={handleCopySummary}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Copy className="w-3.5 h-3.5" />
             <span>Copiar Resumen</span>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             {!isOrdenesUser && onEdit && (
               <button
                 type="button"
@@ -848,7 +848,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                   onClose();
                   onEdit(orden);
                 }}
-                className="px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Editar Orden</span>
