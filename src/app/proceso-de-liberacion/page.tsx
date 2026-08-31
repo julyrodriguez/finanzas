@@ -43,6 +43,7 @@ import {
   isNameInList
 } from "@/lib/approvalConfig";
 import { BatchLiberateModal } from "@/components/ordenes/BatchLiberateModal";
+import { BatchSendToSignModal } from "@/components/ordenes/BatchSendToSignModal";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { ApprovalConfigModal } from "@/components/ordenes/ApprovalConfigModal";
 import { useAuth } from "@/context/AuthContext";
@@ -61,6 +62,7 @@ export default function ProcesoDeLiberacionPage() {
 
   // Modals
   const [isBatchLiberateOpen, setIsBatchLiberateOpen] = useState(false);
+  const [isBatchSendOpen, setIsBatchSendOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
 
@@ -135,6 +137,10 @@ export default function ProcesoDeLiberacionPage() {
             createdAt: data.createdAt || null,
             relatedOC: data.relatedOC || "",
             enviado: Boolean(data.enviado),
+            enviadoA1: data.enviadoA1 || "",
+            enviadoA2: data.enviadoA2 || "",
+            fechaEnvio1: data.fechaEnvio1 || "",
+            fechaEnvio2: data.fechaEnvio2 || "",
             firmado1: Boolean(data.firmado1),
             firmado2: Boolean(data.firmado2),
             firmante1: data.firmante1 || "",
@@ -154,7 +160,7 @@ export default function ProcesoDeLiberacionPage() {
       }
     );
 
-    // Also load all orders for BatchLiberateModal reference
+    // Also load all orders for BatchLiberateModal and BatchSendToSignModal reference
     const qAll = query(colRef);
     const unsubAll = onSnapshot(qAll, (snapshot) => {
       const allDocs = snapshot.docs.map(docSnap => {
@@ -177,6 +183,10 @@ export default function ProcesoDeLiberacionPage() {
           createdAt: data.createdAt || null,
           relatedOC: data.relatedOC || "",
           enviado: Boolean(data.enviado),
+          enviadoA1: data.enviadoA1 || "",
+          enviadoA2: data.enviadoA2 || "",
+          fechaEnvio1: data.fechaEnvio1 || "",
+          fechaEnvio2: data.fechaEnvio2 || "",
           firmado1: Boolean(data.firmado1),
           firmado2: Boolean(data.firmado2),
           firmante1: data.firmante1 || "",
@@ -420,8 +430,18 @@ export default function ProcesoDeLiberacionPage() {
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
+              onClick={() => setIsBatchSendOpen(true)}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-blue-950/50 flex items-center gap-2 cursor-pointer border border-blue-400/30"
+              title="Pegar texto de órdenes y marcar como enviadas a firmar"
+            >
+              <Send className="w-4 h-4" />
+              <span>📤 Pegar y Enviar a Firmar</span>
+            </button>
+
+            <button
               onClick={() => setIsBatchLiberateOpen(true)}
               className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer border border-emerald-400/30"
+              title="Pegar texto de órdenes y registrar autorizaciones / liberar"
             >
               <PenTool className="w-4 h-4" />
               <span>✍️ Pegar y Autorizar / Liberar</span>
@@ -674,6 +694,8 @@ export default function ProcesoDeLiberacionPage() {
                     <div className={"p-2.5 rounded-xl border flex items-center justify-between gap-2 " + (
                       sigInfo.isF1Signed 
                         ? "bg-emerald-500/10 border-emerald-500/30" 
+                        : orden.enviadoA1
+                        ? "bg-blue-500/10 border-blue-500/30"
                         : "bg-[#111726]/60 border-slate-800"
                     )}>
                       <div className="space-y-0.5">
@@ -686,6 +708,11 @@ export default function ProcesoDeLiberacionPage() {
                               <Check className="w-3 h-3" />
                               {sigInfo.f1Signer}
                             </span>
+                          ) : orden.enviadoA1 ? (
+                            <span className="text-blue-300 font-bold flex items-center gap-1">
+                              <Send className="w-3 h-3 text-blue-400" />
+                              Enviado a {orden.enviadoA1}
+                            </span>
                           ) : (
                             <span className="text-slate-400">Falta autorizar</span>
                           )}
@@ -695,9 +722,11 @@ export default function ProcesoDeLiberacionPage() {
                       <span className={"px-2 py-0.5 rounded-md text-[10px] font-bold " + (
                         sigInfo.isF1Signed 
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                          : orden.enviadoA1
+                          ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
                           : "bg-white/5 text-slate-400 border border-white/10"
                       )}>
-                        {sigInfo.isF1Signed ? "Firmado" : "Pendiente"}
+                        {sigInfo.isF1Signed ? "Firmado" : orden.enviadoA1 ? "Enviado" : "Pendiente"}
                       </span>
                     </div>
 
@@ -705,6 +734,8 @@ export default function ProcesoDeLiberacionPage() {
                     <div className={"p-2.5 rounded-xl border flex items-center justify-between gap-2 " + (
                       sigInfo.isF2Signed 
                         ? "bg-emerald-500/10 border-emerald-500/30" 
+                        : orden.enviadoA2
+                        ? "bg-indigo-500/10 border-indigo-500/30"
                         : "bg-[#111726]/60 border-slate-800"
                     )}>
                       <div className="space-y-0.5">
@@ -717,6 +748,11 @@ export default function ProcesoDeLiberacionPage() {
                               <Check className="w-3 h-3" />
                               {sigInfo.f2Signer}
                             </span>
+                          ) : orden.enviadoA2 ? (
+                            <span className="text-indigo-300 font-bold flex items-center gap-1">
+                              <Send className="w-3 h-3 text-indigo-400" />
+                              Enviado a {orden.enviadoA2}
+                            </span>
                           ) : (
                             <span className="text-slate-400">Falta autorizar</span>
                           )}
@@ -726,9 +762,11 @@ export default function ProcesoDeLiberacionPage() {
                       <span className={"px-2 py-0.5 rounded-md text-[10px] font-bold " + (
                         sigInfo.isF2Signed 
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                          : orden.enviadoA2
+                          ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
                           : "bg-white/5 text-slate-400 border border-white/10"
                       )}>
-                        {sigInfo.isF2Signed ? "Firmado" : "Pendiente"}
+                        {sigInfo.isF2Signed ? "Firmado" : orden.enviadoA2 ? "Enviado" : "Pendiente"}
                       </span>
                     </div>
 
@@ -751,6 +789,28 @@ export default function ProcesoDeLiberacionPage() {
         setNewNotaText={setNewNotaText}
         savingNota={savingNota}
         onAddNota={handleAddNota}
+        showToast={showToast}
+      />
+
+      {/* Modal para Pegar y Marcar Órdenes como Enviadas a Firmar en Lote */}
+      <BatchSendToSignModal
+        isOpen={isBatchSendOpen}
+        onClose={() => setIsBatchSendOpen(false)}
+        ordenes={allOrdersForBatch.length > 0 ? allOrdersForBatch : ordenes}
+        onBatchSuccess={(updatedEntries) => {
+          const updateMap = new Map<string, Partial<OrdenCompra>>();
+          for (const entry of updatedEntries) {
+            updateMap.set(entry.id, entry.updates);
+          }
+          setOrdenes((prev) =>
+            prev.map((o) => {
+              if (o.id && updateMap.has(o.id)) {
+                return { ...o, ...updateMap.get(o.id) };
+              }
+              return o;
+            }).filter(o => !o.liberada && !o.cancelada)
+          );
+        }}
         showToast={showToast}
       />
 

@@ -22,7 +22,8 @@ import {
   MessageSquare, 
   Check,
   PenTool,
-  Trash2
+  Trash2,
+  Send
 } from "lucide-react";
 import type { OrdenCompra, Nota } from "@/types/ordenes";
 import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber } from "@/lib/approvalConfig";
@@ -534,6 +535,13 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                       </div>
                     </div>
 
+                    {!tierInfo.isF1Signed && orden.enviadoA1 && (
+                      <div className="text-[11px] text-blue-300 font-medium flex items-center gap-1.5 bg-blue-500/10 px-2 py-1 rounded-lg border border-blue-500/20">
+                        <Send className="w-3 h-3 text-blue-400" />
+                        <span>Enviado a: <strong className="text-white">{orden.enviadoA1}</strong></span>
+                      </div>
+                    )}
+
                     {orden.fechaFirma1 && (
                       <div className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-0.5">
                         <Calendar className="w-3 h-3" />
@@ -658,6 +666,13 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                         Firmante: <span className={tierInfo.isF2Signed ? "text-emerald-400 font-bold" : "text-slate-400"}>{String(tierInfo.f2Signer)}</span>
                       </div>
                     </div>
+
+                    {!tierInfo.isF2Signed && orden.enviadoA2 && (
+                      <div className="text-[11px] text-indigo-300 font-medium flex items-center gap-1.5 bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20">
+                        <Send className="w-3 h-3 text-indigo-400" />
+                        <span>Enviado a: <strong className="text-white">{orden.enviadoA2}</strong></span>
+                      </div>
+                    )}
 
                     {orden.fechaFirma2 && (
                       <div className="text-[10.5px] text-slate-500 flex items-center gap-1 pt-0.5">

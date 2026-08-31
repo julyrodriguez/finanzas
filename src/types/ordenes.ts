@@ -32,4 +32,8 @@ export interface OrdenCompra {
   fechaFirma1?: string;
   fechaFirma2?: string;
   linkSharepoint?: string;
+  enviadoA1?: string;
+  enviadoA2?: string;
+  fechaEnvio1?: string;
+  fechaEnvio2?: string;
 }
