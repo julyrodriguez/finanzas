@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { 
   ChevronDown, 
   Check, 
@@ -88,34 +89,84 @@ export function OrderStatusMenu({
 }: OrderStatusMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; openUpward: boolean }>({
+    top: 0,
+    left: 0,
+    openUpward: false,
+  });
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentStatus = getOrderStatus(orden);
   const config = STATUS_CONFIG[currentStatus];
-  const Icon = config.icon;
 
-  // Close dropdown on outside click or escape key
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const dropdownHeight = 260;
+    const dropdownWidth = 224;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+    let left = rect.left;
+    if (left + dropdownWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - dropdownWidth - 12);
+    }
+    if (left < 12) {
+      left = 12;
+    }
+
+    setMenuPosition({
+      top: openUpward ? rect.top - 6 : rect.bottom + 6,
+      left,
+      openUpward,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updatePosition();
+
+    function handleScrollOrResize() {
+      updatePosition();
+    }
+
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     }
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsOpen(false);
       }
     }
 
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleKeyDown);
-    }
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+
     return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   const handleSelectStatus = async (targetStatus: OrderStatusKey) => {
     if (targetStatus === currentStatus) {
@@ -224,11 +275,17 @@ export function OrderStatusMenu({
   }
 
   return (
-    <div className="relative inline-block text-left" ref={menuRef}>
+    <>
       {/* Trigger Button (Smart Pill) */}
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen) {
+            updatePosition();
+          }
+          setIsOpen(!isOpen);
+        }}
         disabled={isUpdating}
         className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 shadow-sm cursor-pointer ${
           config.badgeClass
@@ -244,9 +301,19 @@ export function OrderStatusMenu({
         />
       </button>
 
-      {/* Dropdown Menu Modal / Popover */}
-      {isOpen && (
-        <div className="absolute left-0 z-50 mt-1.5 w-56 rounded-2xl bg-[#0b0f19] border border-slate-700/80 shadow-2xl p-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+      {/* Dropdown Menu Modal / Popover via Portal */}
+      {isOpen && mounted && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            top: `${menuPosition.top}px`,
+            left: `${menuPosition.left}px`,
+            transform: menuPosition.openUpward ? "translateY(-100%)" : "none",
+            zIndex: 9999,
+          }}
+          className="w-56 rounded-2xl bg-[#0b0f19] border border-slate-700/80 shadow-2xl p-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
+        >
           <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/5 mb-1">
             Cambiar Estado
           </div>
@@ -254,7 +321,6 @@ export function OrderStatusMenu({
           <div className="space-y-0.5">
             {(["pendiente", "mandada", "liberada", "entregada", "cancelada"] as const).map((key) => {
               const itemConfig = STATUS_CONFIG[key];
-              const ItemIcon = itemConfig.icon;
               const isSelected = key === currentStatus;
 
               return (
@@ -262,7 +328,7 @@ export function OrderStatusMenu({
                   key={key}
                   type="button"
                   onClick={() => handleSelectStatus(key)}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-colors ${
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
                     isSelected
                       ? "bg-white/10 text-white font-bold"
                       : "text-slate-300 hover:bg-white/5 hover:text-white"
@@ -283,8 +349,9 @@ export function OrderStatusMenu({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
