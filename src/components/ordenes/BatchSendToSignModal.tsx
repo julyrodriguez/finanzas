@@ -199,14 +199,16 @@ export function BatchSendToSignModal({
           const isTier1 = numMonto <= config.limiteNivel1;
 
           // Check if it already has 1st signature
+          // (In Tier 1, <= $5M, Tomás is always auto-signed for 1st signature)
           const has1raFirma = Boolean(
+            isTier1 ||
             matchedOrder.firmado1 || 
-            (isTier1 && matchedOrder.mandada && matchedOrder.firmante1) ||
-            matchedOrder.fechaFirma1
+            Boolean(matchedOrder.firmante1?.trim()) ||
+            Boolean(matchedOrder.fechaFirma1?.trim())
           );
 
           if (!has1raFirma) {
-            // Stage: 1st signature
+            // Stage: 1st signature (Tier 2, 3, 4 without 1st signature)
             results.push({
               rawToken: token,
               normalizedOC: normToken,
@@ -221,8 +223,8 @@ export function BatchSendToSignModal({
               },
             });
           } else {
-            // Stage: 2nd signature
-            const f1Name = matchedOrder.firmante1 || (isTier1 ? "Tomás" : "1ra Firma");
+            // Stage: 2nd signature (Tier 1 auto-signed by Tomás, or Tiers 2/3/4 with 1st signature ready)
+            const f1Name = matchedOrder.firmante1?.trim() || (isTier1 ? (config.firmantes1Nivel1[0] || "Tomás") : "1ra Firma");
             results.push({
               rawToken: token,
               normalizedOC: normToken,
@@ -234,6 +236,11 @@ export function BatchSendToSignModal({
                 enviado: true,
                 enviadoA2: activeRecipient,
                 fechaEnvio2: nowIso,
+                ...(isTier1 ? {
+                  firmado1: true,
+                  firmante1: matchedOrder.firmante1?.trim() || config.firmantes1Nivel1[0] || "Tomas",
+                  fechaFirma1: matchedOrder.fechaFirma1 || nowIso,
+                } : {}),
               },
             });
           }
