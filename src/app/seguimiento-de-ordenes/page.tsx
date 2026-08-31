@@ -6,6 +6,7 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
+  limit,
   doc, 
   updateDoc, 
   arrayUnion 
@@ -70,11 +71,9 @@ export default function SeguimientoDeOrdenesPage() {
   // Search, Filters and Pagination
   const [searchQuery, setSearchQuery] = useState("");
   const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [statusFilter, setStatusFilter] = useState<
-    "todas" | "sin_enviar" | "enviadas" | "mandadas" | "liberadas" | "entregadas" | "pendientes" | "canceladas"
-  >("todas");
-  const [tierFilter, setTierFilter] = useState<string>("Todos");
-  const [visibleLimit, setVisibleLimit] = useState(15);
+  const [queryLimit, setQueryLimit] = useState(15);
+
+  const isSearching = Boolean(searchQuery.trim());
 
   // Modals
   const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
@@ -132,7 +131,8 @@ export default function SeguimientoDeOrdenesPage() {
     return () => unsubConfig();
   }, []);
 
-  // Real-time Firestore Listener for ALL Orders
+  // Real-time Firestore Listener: Reads ONLY 15 (+1) docs initially to save Firebase read quotas.
+  // When searching, expands limit to 300 to search across all records.
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
@@ -140,7 +140,13 @@ export default function SeguimientoDeOrdenesPage() {
       return;
     }
 
-    const q = query(collection(db, "ordenes_compra"), orderBy("createdAt", "desc"));
+    const fetchLimit = isSearching ? 300 : queryLimit + 1;
+    const q = query(
+      collection(db, "ordenes_compra"),
+      orderBy("createdAt", "desc"),
+      limit(fetchLimit)
+    );
+
     const unsub = onSnapshot(
       q,
       (snapshot) => {
@@ -187,7 +193,7 @@ export default function SeguimientoDeOrdenesPage() {
     );
 
     return () => unsub();
-  }, []);
+  }, [queryLimit, isSearching]);
 
   // Compute Signature and Tier Info
   const getOrderSignatureInfo = (orden: OrdenCompra) => {
@@ -356,51 +362,25 @@ export default function SeguimientoDeOrdenesPage() {
         }
       }
 
-      // 3. Status Filter
-      if (statusFilter === "sin_enviar") {
-        if (!isOrderNotSent(ord)) return false;
-      } else if (statusFilter === "enviadas") {
-        if (!isOrderSent(ord)) return false;
-      } else if (statusFilter === "mandadas") {
-        if (getOrderStatus(ord) !== "mandada") return false;
-      } else if (statusFilter === "liberadas") {
-        if (getOrderStatus(ord) !== "liberada") return false;
-      } else if (statusFilter === "entregadas") {
-        if (getOrderStatus(ord) !== "entregada") return false;
-      } else if (statusFilter === "pendientes") {
-        if (getOrderStatus(ord) !== "pendiente") return false;
-      } else if (statusFilter === "canceladas") {
-        if (getOrderStatus(ord) !== "cancelada") return false;
-      }
-
-      // 4. Tier Filter
-      if (tierFilter !== "Todos") {
-        const info = getOrderSignatureInfo(ord);
-        if (info.tierKey !== tierFilter) return false;
-      }
-
       return true;
     });
-  }, [ordenes, searchQuery, empresaFilter, statusFilter, tierFilter, config]);
-
-  // Is actively searching query
-  const isSearching = Boolean(searchQuery.trim());
+  }, [ordenes, searchQuery, empresaFilter]);
 
   // Paginated visible orders: If searching, search across all DB orders and show all matches.
-  // Otherwise, start with 15 and allow "Cargar más".
+  // Otherwise, slice up to queryLimit.
   const visibleOrdenes = useMemo(() => {
     if (isSearching) {
       return filteredOrdenes;
     }
-    return filteredOrdenes.slice(0, visibleLimit);
-  }, [filteredOrdenes, isSearching, visibleLimit]);
+    return filteredOrdenes.slice(0, queryLimit);
+  }, [filteredOrdenes, isSearching, queryLimit]);
 
-  const hasMore = !isSearching && filteredOrdenes.length > visibleLimit;
+  const hasMore = !isSearching && (ordenes.length > queryLimit || filteredOrdenes.length > queryLimit);
 
   // Reset pagination limit when changing primary filters
   useEffect(() => {
-    setVisibleLimit(15);
-  }, [empresaFilter, statusFilter, tierFilter]);
+    setQueryLimit(15);
+  }, [empresaFilter]);
 
   // Copy helpers
   const getOrderCopyText = (orden: OrdenCompra) => {
@@ -669,7 +649,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   <button
                     key={emp}
                     onClick={() => setEmpresaFilter(emp)}
-                    className={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer " + (
+                    className={"px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer " + (
                       isSelected
                         ? emp === "Hoyts"
                           ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
@@ -683,136 +663,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   </button>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Secondary Filter Tabs */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => setStatusFilter("todas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer " + (
-                  statusFilter === "todas"
-                    ? "bg-slate-700 text-white border border-slate-600"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                Todas ({ordenes.length})
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("sin_enviar")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "sin_enviar"
-                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>📫 Sin Enviar</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-rose-500/30 text-rose-300 text-[10px] font-mono">
-                  {stats.countSinEnviar}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("enviadas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "enviadas"
-                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>📤 Enviadas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-blue-500/30 text-blue-300 text-[10px] font-mono">
-                  {stats.countEnviadas}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("mandadas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "mandadas"
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>🟡 Mandadas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500/30 text-amber-300 text-[10px] font-mono">
-                  {stats.countMandadas}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("liberadas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "liberadas"
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>✅ Liberadas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-emerald-300 text-[10px] font-mono">
-                  {stats.countLiberadas}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("entregadas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "entregadas"
-                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>📦 Entregadas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/30 text-indigo-300 text-[10px] font-mono">
-                  {stats.countEntregadas}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("pendientes")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "pendientes"
-                    ? "bg-slate-700 text-white border border-slate-600"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>⚪ Pendientes</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-slate-600 text-[10px] font-mono">
-                  {stats.countPendientes}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("canceladas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "canceladas"
-                    ? "bg-red-500/20 text-red-300 border border-red-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>❌ Canceladas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-red-500/30 text-red-300 text-[10px] font-mono">
-                  {stats.countCanceladas}
-                </span>
-              </button>
-            </div>
-
-            {/* Tier / Level Filter */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Escala:</span>
-              <select
-                value={tierFilter}
-                onChange={(e) => setTierFilter(e.target.value)}
-                className="px-2.5 py-1 rounded-xl bg-[#111726] border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer"
-              >
-                <option value="Todos">Todos los niveles</option>
-                <option value="Nivel 1">Nivel 1 (Hasta $5M)</option>
-                <option value="Nivel 2">Nivel 2 ($5M - $18M)</option>
-                <option value="Nivel 3">Nivel 3 ($18M - $150M)</option>
-                <option value="Nivel 4">Nivel 4 (&gt; $150M)</option>
-              </select>
             </div>
           </div>
         </div>
@@ -1116,12 +966,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {hasMore && (
               <div className="flex flex-col items-center justify-center pt-4 pb-2 gap-2">
                 <button
-                  onClick={() => setVisibleLimit((prev) => prev + 15)}
+                  onClick={() => setQueryLimit((prev) => prev + 15)}
                   className="px-6 py-3 rounded-2xl bg-[#111726] hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 text-white font-bold text-xs transition-all shadow-lg flex items-center gap-2.5 cursor-pointer"
                 >
                   <span>Cargar más órdenes (+15)</span>
                   <span className="text-[11px] text-slate-400 font-mono">
-                    (Mostrando {visibleOrdenes.length} de {filteredOrdenes.length})
+                    (Mostrando {visibleOrdenes.length} órdenes)
                   </span>
                 </button>
               </div>
