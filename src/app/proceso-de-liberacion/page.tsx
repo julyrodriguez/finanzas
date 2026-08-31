@@ -530,7 +530,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               title="Pegar texto de órdenes y marcar como enviadas a firmar"
             >
               <Send className="w-4 h-4" />
-              <span>📤 Pegar y Enviar a Firmar</span>
+              <span>📤 Pegar Enviadas a Firmar</span>
             </button>
 
             <button
@@ -539,7 +539,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               title="Pegar texto de órdenes y registrar autorizaciones / liberar"
             >
               <PenTool className="w-4 h-4" />
-              <span>✍️ Pegar y Autorizar / Liberar</span>
+              <span>✍️ Pegar Órdenes Autorizadas</span>
             </button>
 
             <button
@@ -791,7 +791,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
                       {orden.numSolicitud && (
                         <span className="text-[11px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
-                          Sol: {orden.numSolicitud}
+                          SC: {orden.numSolicitud}
                         </span>
                       )}
 

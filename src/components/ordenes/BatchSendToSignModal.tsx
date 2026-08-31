@@ -399,7 +399,7 @@ export function BatchSendToSignModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <span>Pegar y Marcar Enviado a Firmar</span>
+                <span>Pegar Enviadas a Firmar</span>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
                   Detección Automática 1ra/2da Firma
                 </span>

@@ -415,7 +415,7 @@ Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}
                 </h3>
                 {orden.numSolicitud && (
                   <span className="text-xs font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-lg border border-white/10">
-                    Sol: {String(orden.numSolicitud)}
+                    SC: {String(orden.numSolicitud)}
                   </span>
                 )}
               </div>

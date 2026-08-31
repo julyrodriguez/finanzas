@@ -673,7 +673,7 @@ export function BatchLiberateModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-white tracking-tight">
-                Pegar y Marcar Órdenes Liberadas
+                Pegar Órdenes Autorizadas
               </h3>
               <p className="text-xs text-slate-400">
                 Pega las órdenes y el sistema evaluará las firmas por escala ($5M / $18M / $150M / &gt;$150M)
