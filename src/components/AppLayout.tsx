@@ -149,8 +149,10 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     router.push("/login");
   };
 
-  // If checking authentication or unauthenticated, block rendering and show loader
-  if (loading || (!user && !publicRoute)) {
+  // If checking authentication, unauthenticated, or forbidden page for ordenes user, block rendering and show loader
+  const isForbiddenForOrdenes = !loading && Boolean(user) && Boolean(isOrdenesUser) && pathname !== "/seguimiento-de-ordenes";
+
+  if (loading || (!user && !publicRoute) || isForbiddenForOrdenes) {
     return (
       <div className="min-h-screen bg-transparent flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4 p-8 rounded-2xl glass-card border border-white/10 text-center">
@@ -158,8 +160,8 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-white font-bold text-base">Verificando sesión...</h3>
-            <p className="text-xs text-gray-400">Acceso protegido a la plataforma de Finanzas</p>
+            <h3 className="text-white font-bold text-base">Cargando...</h3>
+            <p className="text-xs text-gray-400">Preparando tu sesión...</p>
           </div>
         </div>
       </div>

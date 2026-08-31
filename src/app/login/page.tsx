@@ -39,7 +39,11 @@ export default function LoginPage() {
 
     try {
       await loginWithEmail(fullEmail, password);
-      router.push("/");
+      if (fullEmail.toLowerCase().startsWith("ordenes")) {
+        router.push("/seguimiento-de-ordenes");
+      } else {
+        router.push("/");
+      }
     } catch (err) {
       console.error(err);
       const error = err as { code?: string };
