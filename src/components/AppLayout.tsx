@@ -53,14 +53,14 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const isJulian = user ? getCleanUsername().toLowerCase() === "julian" : false;
 
   // Strict Protected Route Guard: If not logged in and not public, redirect immediately to /login
-  // Redirect forbidden pages for 'ordenes' user to /ordenes-de-compras
+  // Redirect forbidden pages for 'ordenes' user to /seguimiento-de-ordenes
   useEffect(() => {
     if (!loading && !user && !publicRoute) {
       router.push("/login");
       return;
     }
-    if (!loading && user && isOrdenesUser && pathname !== "/ordenes-de-compras") {
-      router.push("/ordenes-de-compras");
+    if (!loading && user && isOrdenesUser && pathname !== "/seguimiento-de-ordenes") {
+      router.push("/seguimiento-de-ordenes");
     }
   }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
@@ -87,10 +87,17 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       hideForOrders: true,
     },
     {
-      name: isOrdenesUser ? "Consulta de Órdenes" : "Órdenes de Compra",
+      name: "Seguimiento de Órdenes",
+      href: "/seguimiento-de-ordenes",
+      icon: ShieldCheck,
+      exact: false,
+    },
+    {
+      name: "Órdenes de Compra",
       href: "/ordenes-de-compras",
       icon: ShoppingBag,
       exact: false,
+      hideForOrders: true,
     },
     {
       name: "Proceso de Liberación",
