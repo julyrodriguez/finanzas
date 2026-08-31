@@ -845,7 +845,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </p>
           </div>
         ) : (
-          <div className="space-y-3.5">
+          <div className="space-y-5">
             {visibleOrdenes.map((orden) => {
               const sigInfo = getOrderSignatureInfo(orden);
               const numMonto = parseMontoToNumber(orden.monto);
@@ -856,22 +856,22 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               return (
                 <div
                   key={orden.id}
-                  className="p-4 sm:p-5 rounded-3xl bg-[#0b0f19] border border-slate-800 hover:border-slate-700 transition-all shadow-md space-y-3.5 group"
+                  className="rounded-3xl bg-[#0f1629] border-2 border-slate-700/70 hover:border-indigo-500/60 transition-all shadow-2xl shadow-black/60 overflow-hidden group"
                 >
-                  {/* Top Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  {/* Card Header Bar */}
+                  <div className="px-5 py-3.5 bg-[#141d34] border-b border-slate-700/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={"px-2.5 py-0.5 rounded-lg text-[11px] font-bold font-mono tracking-wider border shadow-sm " + (
                           orden.empresa === "Hoyts"
-                            ? "bg-purple-950/80 text-purple-300 border-purple-700/60"
-                            : "bg-teal-950/80 text-teal-300 border-teal-700/60"
+                            ? "bg-purple-950/90 text-purple-300 border-purple-600/70"
+                            : "bg-teal-950/90 text-teal-300 border-teal-600/70"
                         )}
                       >
                         {orden.empresa}
                       </span>
 
-                      <div className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">
+                      <div className="inline-flex items-center gap-1.5 bg-[#0b101e] border border-slate-600/80 px-2.5 py-0.5 rounded-lg shadow-sm">
                         <span className="text-sm font-black text-white font-mono tracking-tight">
                           OC: {orden.numOC}
                         </span>
@@ -886,30 +886,30 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       </div>
 
                       {orden.numSolicitud && (
-                        <span className="text-[11px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
+                        <span className="text-[11px] font-mono text-slate-300 bg-[#0b101e] px-2.5 py-0.5 rounded-md border border-slate-700">
                           SC: {orden.numSolicitud}
                         </span>
                       )}
 
                       {/* General Status Badge */}
-                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1 ${statusCfg.badgeClass}`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1 shadow-sm ${statusCfg.badgeClass}`}>
                         <StatusIcon className="w-3 h-3" />
                         <span>{statusCfg.label}</span>
                       </span>
 
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-700/60">
+                      <span className="text-[10px] font-semibold text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-600">
                         {sigInfo.tierName}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-black text-emerald-400 font-mono">
+                    <div className="flex items-center gap-3">
+                      <span className="text-base font-black text-emerald-400 font-mono tracking-tight">
                         $ {numMonto.toLocaleString("es-AR")}
                       </span>
 
                       <button
                         onClick={() => setActiveNotesOrden(orden)}
-                        className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ml-2"
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-950/50"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Ver Detalle</span>
@@ -917,204 +917,194 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     </div>
                   </div>
 
-                  {/* Middle Content */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 border-t border-slate-800/60 text-xs">
-                    <div className="md:col-span-2 space-y-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Proveedor:</span>
-                        <span className="text-white font-bold text-sm tracking-tight">{orden.razonSocial}</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider shrink-0 mt-0.5">Motivo:</span>
-                        <p className="text-slate-300 font-medium leading-relaxed">{orden.motivo}</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 bg-[#070a12] p-2.5 rounded-2xl border border-slate-800/80 text-[11px]">
-                      <div className="flex items-center justify-between text-slate-400">
-                        <span>Forma de Pago:</span>
-                        <span className="text-slate-200 font-bold">{orden.formaPago}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-400">
-                        <span>Creado por:</span>
-                        <span className="text-slate-300 font-medium">{orden.creadoPor || "-"}</span>
-                      </div>
-                      {orden.linkSharepoint && (
-                        <div className="pt-1 border-t border-slate-800/60 flex justify-end">
-                          <a
-                            href={orden.linkSharepoint}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 transition-colors"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>Abrir SharePoint</span>
-                          </a>
+                  {/* Card Body */}
+                  <div className="p-5 space-y-4 bg-[#0a0f1d]">
+                    {/* Middle Details Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      <div className="md:col-span-2 space-y-1.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Proveedor:</span>
+                          <span className="text-white font-bold text-sm tracking-tight">{orden.razonSocial}</span>
                         </div>
-                      )}
-                    </div>
-                  </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider shrink-0 mt-0.5">Motivo:</span>
+                          <p className="text-slate-200 font-medium leading-relaxed">{orden.motivo}</p>
+                        </div>
+                      </div>
 
-                  {/* Signatures and Sent Tracking Timeline Bar */}
-                  <div className="p-3 rounded-2xl bg-[#060810] border border-slate-800/80 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                        Seguimiento de Firmas y Envíos
-                      </span>
-                      {orden.notas && orden.notas.length > 0 && (
-                        <span className="text-[10px] text-amber-400/90 font-medium">
-                          💬 {orden.notas.length} nota(s) registrada(s)
+                      <div className="space-y-1.5 bg-[#0e1526] p-3 rounded-2xl border border-slate-700/70 text-[11px]">
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Forma de Pago:</span>
+                          <span className="text-white font-bold">{orden.formaPago}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-400">
+                          <span>Creado por:</span>
+                          <span className="text-slate-200 font-medium">{orden.creadoPor || "-"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Signatures and Sent Tracking Timeline Bar */}
+                    <div className="p-3.5 rounded-2xl bg-[#070b14] border border-slate-800 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                          Seguimiento de Firmas y Envíos
                         </span>
-                      )}
-                    </div>
+                        {orden.notas && orden.notas.length > 0 && (
+                          <span className="text-[10.5px] text-amber-300 font-medium">
+                            💬 {orden.notas.length} nota(s) registrada(s)
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                      
-                      {/* 1ra Firma */}
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2.5 ${
-                        sigInfo.isF1Signed 
-                          ? "bg-emerald-950/30 border-emerald-700/50 text-emerald-300"
-                          : orden.enviadoA1?.trim()
-                          ? "bg-blue-950/30 border-blue-700/50 text-blue-300"
-                          : "bg-slate-900/60 border-slate-800 text-slate-400"
-                      }`}>
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                        
+                        {/* 1ra Firma */}
+                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${
                           sigInfo.isF1Signed 
-                            ? "bg-emerald-500 text-black" 
+                            ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
                             : orden.enviadoA1?.trim()
-                            ? "bg-blue-500 text-white"
-                            : "bg-slate-800 text-slate-400"
+                            ? "bg-blue-950/40 border-blue-600/60 text-blue-300"
+                            : "bg-[#0d1322] border-slate-700 text-slate-400"
                         }`}>
-                          1
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                              1ra Firma ({sigInfo.f1Label})
-                            </span>
-                            {sigInfo.isF1Signed ? (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
-                                LISTA
-                              </span>
-                            ) : orden.enviadoA1?.trim() ? (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
-                                ENVIADA
-                              </span>
-                            ) : (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-300">
-                                SIN ENVIAR
-                              </span>
-                            )}
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
+                            sigInfo.isF1Signed 
+                              ? "bg-emerald-500 text-black" 
+                              : orden.enviadoA1?.trim()
+                              ? "bg-blue-500 text-white"
+                              : "bg-slate-700 text-slate-300"
+                          }`}>
+                            1
                           </div>
-                          <p className="text-[11px] font-semibold truncate text-white">
-                            {sigInfo.isF1Signed ? (
-                              `Firmado por ${sigInfo.f1Signer || "Tomás"}`
-                            ) : orden.enviadoA1?.trim() ? (
-                              `Enviado a ${orden.enviadoA1}`
-                            ) : (
-                              "Pendiente de envío"
-                            )}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
+                                1ra Firma ({sigInfo.f1Label})
+                              </span>
+                              {sigInfo.isF1Signed ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
+                                  LISTA
+                                </span>
+                              ) : orden.enviadoA1?.trim() ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
+                                  ENVIADA
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-300">
+                                  SIN ENVIAR
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-semibold truncate text-white mt-0.5">
+                              {sigInfo.isF1Signed ? (
+                                `Firmado por ${sigInfo.f1Signer || "Tomás"}`
+                              ) : orden.enviadoA1?.trim() ? (
+                                `Enviado a ${orden.enviadoA1}`
+                              ) : (
+                                "Pendiente de envío"
+                              )}
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* 2da Firma */}
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2.5 ${
-                        sigInfo.isF2Signed 
-                          ? "bg-emerald-950/30 border-emerald-700/50 text-emerald-300"
-                          : orden.enviadoA2?.trim()
-                          ? "bg-blue-950/30 border-blue-700/50 text-blue-300"
-                          : "bg-slate-900/60 border-slate-800 text-slate-400"
-                      }`}>
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
+                        {/* 2da Firma */}
+                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${
                           sigInfo.isF2Signed 
-                            ? "bg-emerald-500 text-black" 
+                            ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
                             : orden.enviadoA2?.trim()
-                            ? "bg-blue-500 text-white"
-                            : "bg-slate-800 text-slate-400"
+                            ? "bg-blue-950/40 border-blue-600/60 text-blue-300"
+                            : "bg-[#0d1322] border-slate-700 text-slate-400"
                         }`}>
-                          2
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                              2da Firma ({sigInfo.f2Label})
-                            </span>
-                            {sigInfo.isF2Signed ? (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
-                                LISTA
-                              </span>
-                            ) : orden.enviadoA2?.trim() ? (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
-                                ENVIADA
-                              </span>
-                            ) : (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-300">
-                                SIN ENVIAR
-                              </span>
-                            )}
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
+                            sigInfo.isF2Signed 
+                              ? "bg-emerald-500 text-black" 
+                              : orden.enviadoA2?.trim()
+                              ? "bg-blue-500 text-white"
+                              : "bg-slate-700 text-slate-300"
+                          }`}>
+                            2
                           </div>
-                          <p className="text-[11px] font-semibold truncate text-white">
-                            {sigInfo.isF2Signed ? (
-                              `Firmado por ${sigInfo.f2Signer}`
-                            ) : orden.enviadoA2?.trim() ? (
-                              `Enviado a ${orden.enviadoA2}`
-                            ) : (
-                              "Pendiente de envío"
-                            )}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
+                                2da Firma ({sigInfo.f2Label})
+                              </span>
+                              {sigInfo.isF2Signed ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
+                                  LISTA
+                                </span>
+                              ) : orden.enviadoA2?.trim() ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
+                                  ENVIADA
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-300">
+                                  SIN ENVIAR
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-semibold truncate text-white mt-0.5">
+                              {sigInfo.isF2Signed ? (
+                                `Firmado por ${sigInfo.f2Signer}`
+                              ) : orden.enviadoA2?.trim() ? (
+                                `Enviado a ${orden.enviadoA2}`
+                              ) : (
+                                "Pendiente de envío"
+                              )}
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Estado Entrega / Pago */}
-                      <div className={`p-2.5 rounded-xl border flex items-center gap-2.5 ${
-                        orden.entregada 
-                          ? "bg-indigo-950/30 border-indigo-700/50 text-indigo-300"
-                          : orden.liberada
-                          ? "bg-emerald-950/30 border-emerald-700/50 text-emerald-300"
-                          : "bg-slate-900/60 border-slate-800 text-slate-400"
-                      }`}>
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
+                        {/* Estado Entrega / Pago */}
+                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${
                           orden.entregada 
-                            ? "bg-indigo-500 text-white" 
+                            ? "bg-indigo-950/40 border-indigo-600/60 text-indigo-300"
                             : orden.liberada
-                            ? "bg-emerald-500 text-black"
-                            : "bg-slate-800 text-slate-400"
+                            ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
+                            : "bg-[#0d1322] border-slate-700 text-slate-400"
                         }`}>
-                          ✓
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                              Entrega / Pago
-                            </span>
-                            {orden.entregada ? (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">
-                                ENTREGADA
-                              </span>
-                            ) : orden.liberada ? (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
-                                LIBERADA
-                              </span>
-                            ) : (
-                              <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                                PENDIENTE
-                              </span>
-                            )}
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
+                            orden.entregada 
+                              ? "bg-indigo-500 text-white" 
+                              : orden.liberada
+                              ? "bg-emerald-500 text-black"
+                              : "bg-slate-700 text-slate-300"
+                          }`}>
+                            ✓
                           </div>
-                          <p className="text-[11px] font-semibold truncate text-white">
-                            {orden.entregada ? (
-                              "Comprobante / pago entregado"
-                            ) : orden.liberada ? (
-                              "Autorizada para pago"
-                            ) : (
-                              "En proceso de autorización"
-                            )}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
+                                Entrega / Pago
+                              </span>
+                              {orden.entregada ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">
+                                  ENTREGADA
+                                </span>
+                              ) : orden.liberada ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
+                                  LIBERADA
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
+                                  PENDIENTE
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-semibold truncate text-white mt-0.5">
+                              {orden.entregada ? (
+                                "Comprobante / pago entregado"
+                              ) : orden.liberada ? (
+                                "Autorizada para pago"
+                              ) : (
+                                "En proceso de autorización"
+                              )}
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
+                      </div>
                     </div>
                   </div>
 
