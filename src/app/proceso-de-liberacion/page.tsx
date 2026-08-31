@@ -435,6 +435,46 @@ export default function ProcesoDeLiberacionPage() {
     setSavingNota(false);
   };
 
+  // Helper to generate the text format for a single order (same as in Ordenes de Compras)
+  const getOrderCopyText = (orden: OrdenCompra) => {
+    if (orden.liberada) {
+      return `OC 0${orden.numOC} - ${orden.razonSocial}`;
+    }
+
+    const formattedMonto = typeof orden.monto === "number"
+      ? `$ ${orden.monto.toLocaleString("es-AR")}`
+      : orden.monto;
+
+    const notasPart = orden.notas && orden.notas.length > 0
+      ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
+      : "";
+
+    const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
+
+    return `\n\n\nOC ${orden.numOC} ${orden.empresa}
+Proveedor: ${orden.razonSocial}
+Monto: ${formattedMonto}
+Detalle: ${orden.motivo}
+Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
+  };
+
+  // Copy Single Order Format
+  const handleCopy = (orden: OrdenCompra) => {
+    const copyText = getOrderCopyText(orden);
+    navigator.clipboard.writeText(copyText);
+    showToast(`¡Copiada OC ${orden.numOC}!`);
+  };
+
+  // Copy All Filtered Orders to Clipboard
+  const handleCopyAll = () => {
+    if (filteredOrdenes.length === 0) return;
+    const joinedText = filteredOrdenes
+      .map((orden) => getOrderCopyText(orden))
+      .join("\n");
+    navigator.clipboard.writeText(joinedText);
+    showToast(`¡Copiadas ${filteredOrdenes.length} órdenes al portapapeles!`);
+  };
+
   return (
     <AppLayout
       title="Proceso de Liberación"
@@ -472,6 +512,18 @@ export default function ProcesoDeLiberacionPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Copiar Todas button (desktop only) */}
+            {filteredOrdenes.length > 0 && (
+              <button
+                onClick={handleCopyAll}
+                className="hidden sm:inline-flex px-4 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs transition-all items-center gap-2 shadow-sm cursor-pointer"
+                title="Copiar todas las órdenes mandadas al portapapeles"
+              >
+                <Copy className="w-4 h-4 text-emerald-400" />
+                <span>Copiar Todas ({filteredOrdenes.length})</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsBatchSendOpen(true)}
               className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-blue-950/50 flex items-center gap-2 cursor-pointer border border-blue-400/30"
@@ -723,9 +775,19 @@ export default function ProcesoDeLiberacionPage() {
                         {orden.empresa}
                       </span>
 
-                      <span className="text-sm font-black text-white font-mono tracking-tight">
-                        OC: {orden.numOC}
-                      </span>
+                      <div className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg">
+                        <span className="text-sm font-black text-white font-mono tracking-tight">
+                          OC: {orden.numOC}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(orden)}
+                          className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          title="Copiar datos de esta orden"
+                        >
+                          <Copy className="w-3 h-3 text-emerald-400" />
+                        </button>
+                      </div>
 
                       {orden.numSolicitud && (
                         <span className="text-[11px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">

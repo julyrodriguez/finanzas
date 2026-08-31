@@ -1106,12 +1106,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
             {/* Action Buttons for Filter Modes */}
             <div className="flex items-center gap-2">
-              {/* Copiar Todas button if filter is Pendientes */}
-              {filterEstado === "Pendientes" && filteredOrdenes.length > 0 && (
+              {/* Copiar Todas button (desktop only) */}
+              {filteredOrdenes.length > 0 && (
                 <button
                   onClick={handleCopyAll}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20"
-                  title="Copiar todas las OCs pendientes"
+                  className="hidden sm:inline-flex px-3.5 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500 hover:text-white font-semibold text-xs transition-all items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20"
+                  title="Copiar listado de órdenes actuales"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>Copiar Todas ({filteredOrdenes.length})</span>
