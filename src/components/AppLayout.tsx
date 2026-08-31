@@ -54,6 +54,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
   // Strict Protected Route Guard: If not logged in and not public, redirect immediately to /login
   // Redirect forbidden pages for 'ordenes' user to /seguimiento-de-ordenes
+  // Redirect /seguimiento-de-ordenes for other users to /ordenes-de-compras
   useEffect(() => {
     if (!loading && !user && !publicRoute) {
       router.push("/login");
@@ -61,6 +62,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     }
     if (!loading && user && isOrdenesUser && pathname !== "/seguimiento-de-ordenes") {
       router.push("/seguimiento-de-ordenes");
+    }
+    if (!loading && user && !isOrdenesUser && pathname === "/seguimiento-de-ordenes") {
+      router.push("/ordenes-de-compras");
     }
   }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
@@ -71,6 +75,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     exact: boolean;
     badge?: string;
     hideForOrders?: boolean;
+    onlyForOrders?: boolean;
   }[] = [
     {
       name: "Calendario",
@@ -91,6 +96,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       href: "/seguimiento-de-ordenes",
       icon: ShieldCheck,
       exact: false,
+      onlyForOrders: true,
     },
     {
       name: "Órdenes de Compra",
@@ -128,7 +134,10 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       hideForOrders: true,
     },
   ].filter(item => {
-    if (isOrdenesUser && item.hideForOrders) {
+    if (isOrdenesUser) {
+      return !item.hideForOrders;
+    }
+    if (item.onlyForOrders) {
       return false;
     }
     if (item.href === "/interbanking") {
@@ -149,10 +158,11 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     router.push("/login");
   };
 
-  // If checking authentication, unauthenticated, or forbidden page for ordenes user, block rendering and show loader
+  // If checking authentication, unauthenticated, or forbidden page for ordenes user / other users, block rendering and show loader
   const isForbiddenForOrdenes = !loading && Boolean(user) && Boolean(isOrdenesUser) && pathname !== "/seguimiento-de-ordenes";
+  const isForbiddenForOtherUsers = !loading && Boolean(user) && !isOrdenesUser && pathname === "/seguimiento-de-ordenes";
 
-  if (loading || (!user && !publicRoute) || isForbiddenForOrdenes) {
+  if (loading || (!user && !publicRoute) || isForbiddenForOrdenes || isForbiddenForOtherUsers) {
     return (
       <div className="min-h-screen bg-transparent flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4 p-8 rounded-2xl glass-card border border-white/10 text-center">
