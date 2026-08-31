@@ -560,60 +560,81 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         </div>
 
         {/* KPI Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-          <div className="p-4 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              Total Órdenes
-            </span>
-            <div className="text-2xl font-black text-white font-mono">
-              {stats.totalCount}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+            <div className="p-4 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-1 shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                Total Órdenes
+              </span>
+              <div className="text-2xl font-black text-white font-mono">
+                {stats.totalCount}
+              </div>
+              <p className="text-[10.5px] text-slate-500">
+                {isSearching ? "Encontradas en base de datos" : `Últimas ${visibleOrdenes.length} cargadas`}
+              </p>
             </div>
-            <p className="text-[10.5px] text-slate-500">Registradas en sistema</p>
+
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-1 shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-rose-400" />
+                📫 Sin Enviar
+              </span>
+              <div className="text-2xl font-black text-rose-400 font-mono">
+                {stats.countSinEnviar}
+              </div>
+              <p className="text-[10.5px] text-slate-400">
+                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                <Send className="w-3.5 h-3.5 text-amber-400" />
+                🟡 En Proceso
+              </span>
+              <div className="text-2xl font-black text-amber-400 font-mono">
+                {stats.countMandadas}
+              </div>
+              <p className="text-[10.5px] text-slate-400">
+                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1 shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                ✅ Liberadas
+              </span>
+              <div className="text-2xl font-black text-emerald-400 font-mono">
+                {stats.countLiberadas}
+              </div>
+              <p className="text-[10.5px] text-slate-400">
+                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 space-y-1 shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                <PackageCheck className="w-3.5 h-3.5 text-indigo-400" />
+                📦 Entregadas
+              </span>
+              <div className="text-2xl font-black text-indigo-400 font-mono">
+                {stats.countEntregadas}
+              </div>
+              <p className="text-[10.5px] text-slate-400">
+                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
+              </p>
+            </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-rose-400" />
-              📫 Sin Enviar
+          <div className="flex items-center gap-2 px-1 text-[11px] text-slate-400">
+            <span className="text-indigo-400 font-bold">ℹ️ Nota:</span>
+            <span>
+              {isSearching
+                ? "Búsqueda activa: Se están revisando todas las órdenes cargadas en la base de datos."
+                : `Los totales son en referencia a las últimas ${visibleOrdenes.length} órdenes. Al utilizar el buscador se revisará en todas las órdenes cargadas en la base de datos.`}
             </span>
-            <div className="text-2xl font-black text-rose-400 font-mono">
-              {stats.countSinEnviar}
-            </div>
-            <p className="text-[10.5px] text-slate-400">Falta enviar a firmar</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-              <Send className="w-3.5 h-3.5 text-amber-400" />
-              🟡 En Proceso
-            </span>
-            <div className="text-2xl font-black text-amber-400 font-mono">
-              {stats.countMandadas}
-            </div>
-            <p className="text-[10.5px] text-slate-400">Mandadas a autorizar</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              ✅ Liberadas
-            </span>
-            <div className="text-2xl font-black text-emerald-400 font-mono">
-              {stats.countLiberadas}
-            </div>
-            <p className="text-[10.5px] text-slate-400">Firmadas y autorizadas</p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
-              <PackageCheck className="w-3.5 h-3.5 text-indigo-400" />
-              📦 Entregadas
-            </span>
-            <div className="text-2xl font-black text-indigo-400 font-mono">
-              {stats.countEntregadas}
-            </div>
-            <p className="text-[10.5px] text-slate-400">Comprobante entregado</p>
           </div>
         </div>
 
