@@ -57,7 +57,7 @@ export default function ProcesoDeLiberacionPage() {
   // Search and Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todas" | "sin_enviar" | "enviadas" | "falta_2da" | "falta_1ra">("todas");
-  const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "Cinemark">("Todas");
+  const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [tierFilter, setTierFilter] = useState<string>("Todos");
 
   // Modals
@@ -354,8 +354,13 @@ export default function ProcesoDeLiberacionPage() {
       }
 
       // 2. Empresa Filter
-      if (empresaFilter !== "Todas" && ord.empresa !== empresaFilter) {
-        return false;
+      if (empresaFilter !== "Todas") {
+        const ordEmp = String(ord.empresa || "");
+        if (empresaFilter === "CMK") {
+          if (ordEmp !== "CMK" && ordEmp !== "Cinemark") return false;
+        } else if (empresaFilter === "Hoyts") {
+          if (ordEmp !== "Hoyts") return false;
+        }
       }
 
       // 3. Signature / Sent Status Filter
@@ -568,19 +573,26 @@ export default function ProcesoDeLiberacionPage() {
 
             {/* Empresa Selector */}
             <div className="flex items-center gap-1.5 bg-[#111726] p-1 rounded-2xl border border-slate-700/80 shrink-0">
-              {(["Todas", "Hoyts", "Cinemark"] as const).map((emp) => (
-                <button
-                  key={emp}
-                  onClick={() => setEmpresaFilter(emp)}
-                  className={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer " + (
-                    empresaFilter === emp
-                      ? "bg-indigo-600 text-white shadow-md"
-                      : "text-slate-400 hover:text-white"
-                  )}
-                >
-                  {emp}
-                </button>
-              ))}
+              {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
+                const isSelected = empresaFilter === emp;
+                return (
+                  <button
+                    key={emp}
+                    onClick={() => setEmpresaFilter(emp)}
+                    className={"px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer " + (
+                      isSelected
+                        ? emp === "Hoyts"
+                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                          : emp === "CMK"
+                          ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
+                          : "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
+                    )}
+                  >
+                    {emp === "CMK" ? "CMK (Cinemark)" : emp}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
