@@ -67,13 +67,14 @@ export default function SeguimientoDeOrdenesPage() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Search and Filters
+  // Search, Filters and Pagination
   const [searchQuery, setSearchQuery] = useState("");
   const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [statusFilter, setStatusFilter] = useState<
     "todas" | "sin_enviar" | "enviadas" | "mandadas" | "liberadas" | "entregadas" | "pendientes" | "canceladas"
   >("todas");
   const [tierFilter, setTierFilter] = useState<string>("Todos");
+  const [visibleLimit, setVisibleLimit] = useState(15);
 
   // Modals
   const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
@@ -381,6 +382,25 @@ export default function SeguimientoDeOrdenesPage() {
       return true;
     });
   }, [ordenes, searchQuery, empresaFilter, statusFilter, tierFilter, config]);
+
+  // Is actively searching query
+  const isSearching = Boolean(searchQuery.trim());
+
+  // Paginated visible orders: If searching, search across all DB orders and show all matches.
+  // Otherwise, start with 15 and allow "Cargar más".
+  const visibleOrdenes = useMemo(() => {
+    if (isSearching) {
+      return filteredOrdenes;
+    }
+    return filteredOrdenes.slice(0, visibleLimit);
+  }, [filteredOrdenes, isSearching, visibleLimit]);
+
+  const hasMore = !isSearching && filteredOrdenes.length > visibleLimit;
+
+  // Reset pagination limit when changing primary filters
+  useEffect(() => {
+    setVisibleLimit(15);
+  }, [empresaFilter, statusFilter, tierFilter]);
 
   // Copy helpers
   const getOrderCopyText = (orden: OrdenCompra) => {
@@ -797,6 +817,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
         </div>
 
+        {/* Search Feedback Banner */}
+        {isSearching && (
+          <div className="px-4 py-2.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs flex items-center justify-between shadow-sm">
+            <span className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5" />
+              <span>Buscando en <strong>todas</strong> las órdenes de la base de datos</span>
+            </span>
+            <span className="font-mono font-bold text-white bg-indigo-500/20 px-2 py-0.5 rounded-lg border border-indigo-500/30">
+              {filteredOrdenes.length} {filteredOrdenes.length === 1 ? "resultado" : "resultados"}
+            </span>
+          </div>
+        )}
+
         {/* Orders List / Cards */}
         {loading ? (
           <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 flex flex-col items-center justify-center gap-3">
@@ -813,7 +846,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
         ) : (
           <div className="space-y-3.5">
-            {filteredOrdenes.map((orden) => {
+            {visibleOrdenes.map((orden) => {
               const sigInfo = getOrderSignatureInfo(orden);
               const numMonto = parseMontoToNumber(orden.monto);
               const orderStatusKey = getOrderStatus(orden);
@@ -1088,6 +1121,21 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 </div>
               );
             })}
+
+            {/* Cargar más órdenes button */}
+            {hasMore && (
+              <div className="flex flex-col items-center justify-center pt-4 pb-2 gap-2">
+                <button
+                  onClick={() => setVisibleLimit((prev) => prev + 15)}
+                  className="px-6 py-3 rounded-2xl bg-[#111726] hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 text-white font-bold text-xs transition-all shadow-lg flex items-center gap-2.5 cursor-pointer"
+                >
+                  <span>Cargar más órdenes (+15)</span>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    (Mostrando {visibleOrdenes.length} de {filteredOrdenes.length})
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
