@@ -56,7 +56,7 @@ export default function ProcesoDeLiberacionPage() {
 
   // Search and Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"todas" | "falta_2da" | "falta_1ra">("todas");
+  const [statusFilter, setStatusFilter] = useState<"todas" | "sin_enviar" | "enviadas" | "falta_2da" | "falta_1ra">("todas");
   const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "Cinemark">("Todas");
   const [tierFilter, setTierFilter] = useState<string>("Todos");
 
@@ -280,11 +280,37 @@ export default function ProcesoDeLiberacionPage() {
     }
   };
 
+  // Helper to check if an order's next pending signature has NOT been sent
+  const isOrderNotSent = (orden: OrdenCompra) => {
+    const info = getOrderSignatureInfo(orden);
+    if (!info.isF1Signed) {
+      return !orden.enviadoA1?.trim();
+    }
+    if (!info.isF2Signed) {
+      return !orden.enviadoA2?.trim();
+    }
+    return false;
+  };
+
+  // Helper to check if an order's next pending signature HAS been sent
+  const isOrderSent = (orden: OrdenCompra) => {
+    const info = getOrderSignatureInfo(orden);
+    if (!info.isF1Signed) {
+      return Boolean(orden.enviadoA1?.trim());
+    }
+    if (!info.isF2Signed) {
+      return Boolean(orden.enviadoA2?.trim());
+    }
+    return false;
+  };
+
   // KPIs
   const stats = useMemo(() => {
     let totalMonto = 0;
     let countFalta2da = 0;
     let countFalta1ra = 0;
+    let countSinEnviar = 0;
+    let countEnviadas = 0;
 
     for (const ord of ordenes) {
       totalMonto += parseMontoToNumber(ord.monto);
@@ -294,6 +320,12 @@ export default function ProcesoDeLiberacionPage() {
       } else if (info.isPendingBoth) {
         countFalta1ra++;
       }
+
+      if (isOrderNotSent(ord)) {
+        countSinEnviar++;
+      } else if (isOrderSent(ord)) {
+        countEnviadas++;
+      }
     }
 
     return {
@@ -301,6 +333,8 @@ export default function ProcesoDeLiberacionPage() {
       totalMonto,
       countFalta2da,
       countFalta1ra,
+      countSinEnviar,
+      countEnviadas,
     };
   }, [ordenes, config]);
 
@@ -324,9 +358,13 @@ export default function ProcesoDeLiberacionPage() {
         return false;
       }
 
-      // 3. Signature Status Filter
+      // 3. Signature / Sent Status Filter
       const info = getOrderSignatureInfo(ord);
-      if (statusFilter === "falta_2da") {
+      if (statusFilter === "sin_enviar") {
+        if (!isOrderNotSent(ord)) return false;
+      } else if (statusFilter === "enviadas") {
+        if (!isOrderSent(ord)) return false;
+      } else if (statusFilter === "falta_2da") {
         if (!info.isPartial) return false;
       } else if (statusFilter === "falta_1ra") {
         if (!info.isPendingBoth) return false;
@@ -458,7 +496,7 @@ export default function ProcesoDeLiberacionPage() {
         </div>
 
         {/* KPI Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
           <div className="p-4 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-1 shadow-sm">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Send className="w-3.5 h-3.5 text-amber-400" />
@@ -467,7 +505,18 @@ export default function ProcesoDeLiberacionPage() {
             <div className="text-2xl font-black text-white font-mono">
               {stats.totalCount}
             </div>
-            <p className="text-[10.5px] text-slate-500">Total en proceso de seguimiento</p>
+            <p className="text-[10.5px] text-slate-500">Total en proceso</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-1 shadow-sm">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-rose-400" />
+              📫 Sin Enviar
+            </span>
+            <div className="text-2xl font-black text-rose-400 font-mono">
+              {stats.countSinEnviar}
+            </div>
+            <p className="text-[10.5px] text-slate-400">Falta enviar a firmar</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-sm">
@@ -484,12 +533,12 @@ export default function ProcesoDeLiberacionPage() {
           <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-1 shadow-sm">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              Pendientes de 1ra Firma
+              Pendientes 1ra Firma
             </span>
             <div className="text-2xl font-black text-slate-300 font-mono">
               {stats.countFalta1ra}
             </div>
-            <p className="text-[10.5px] text-slate-500">Aún no tienen firmas cargadas</p>
+            <p className="text-[10.5px] text-slate-500">Aún sin 1ra firma</p>
           </div>
         </div>
 
@@ -547,6 +596,34 @@ export default function ProcesoDeLiberacionPage() {
                 )}
               >
                 Todas ({ordenes.length})
+              </button>
+
+              <button
+                onClick={() => setStatusFilter("sin_enviar")}
+                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
+                  statusFilter === "sin_enviar"
+                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                    : "bg-white/5 text-slate-400 hover:text-white"
+                )}
+              >
+                <span>📫 Sin Enviar</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-500/30 text-rose-300 text-[10px] font-mono">
+                  {stats.countSinEnviar}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter("enviadas")}
+                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
+                  statusFilter === "enviadas"
+                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+                    : "bg-white/5 text-slate-400 hover:text-white"
+                )}
+              >
+                <span>📤 Enviadas</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-500/30 text-blue-300 text-[10px] font-mono">
+                  {stats.countEnviadas}
+                </span>
               </button>
 
               <button
