@@ -7,6 +7,8 @@ import {
   query, 
   orderBy, 
   limit,
+  where,
+  getDocs,
   doc, 
   updateDoc, 
   arrayUnion 
@@ -64,6 +66,8 @@ const DEFAULT_CONFIG: ApprovalConfig = {
 
 export default function SeguimientoDeOrdenesPage() {
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
+  const [dbSearchResults, setDbSearchResults] = useState<OrdenCompra[]>([]);
+  const [isSearchingDb, setIsSearchingDb] = useState(false);
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -131,8 +135,39 @@ export default function SeguimientoDeOrdenesPage() {
     return () => unsubConfig();
   }, []);
 
+  const parseSeguimientoDoc = (id: string, data: Record<string, any>): OrdenCompra => ({
+    id,
+    empresa: data.empresa || "Hoyts",
+    numSolicitud: data.numSolicitud || "",
+    numOC: data.numOC || "",
+    razonSocial: data.razonSocial || "",
+    monto: data.monto || 0,
+    motivo: data.motivo || "",
+    formaPago: data.formaPago || "Transferencia",
+    liberada: Boolean(data.liberada),
+    mandada: Boolean(data.mandada),
+    entregada: Boolean(data.entregada),
+    cancelada: Boolean(data.cancelada),
+    creadoPor: data.creadoPor || "",
+    notas: data.notas || [],
+    createdAt: data.createdAt || null,
+    relatedOC: data.relatedOC || "",
+    enviado: Boolean(data.enviado),
+    firmado1: Boolean(data.firmado1),
+    firmado2: Boolean(data.firmado2),
+    firmante1: data.firmante1 || "",
+    firmante2: data.firmante2 || "",
+    fechaFirma1: data.fechaFirma1 || "",
+    fechaFirma2: data.fechaFirma2 || "",
+    linkSharepoint: data.linkSharepoint || "",
+    enviadoA1: data.enviadoA1 || "",
+    enviadoA2: data.enviadoA2 || "",
+    fechaEnvio1: data.fechaEnvio1 || "",
+    fechaEnvio2: data.fechaEnvio2 || "",
+  });
+
   // Real-time Firestore Listener: Reads ONLY 15 (+1) docs initially to save Firebase read quotas.
-  // When searching, expands limit to 300 to search across all records.
+  // Kept permanently connected for live updates without restarting on search.
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
@@ -140,7 +175,7 @@ export default function SeguimientoDeOrdenesPage() {
       return;
     }
 
-    const fetchLimit = isSearching ? 300 : queryLimit + 1;
+    const fetchLimit = queryLimit + 1;
     const q = query(
       collection(db, "ordenes_compra"),
       orderBy("createdAt", "desc"),
@@ -151,37 +186,7 @@ export default function SeguimientoDeOrdenesPage() {
       q,
       (snapshot) => {
         const items: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            empresa: data.empresa || "Hoyts",
-            numSolicitud: data.numSolicitud || "",
-            numOC: data.numOC || "",
-            razonSocial: data.razonSocial || "",
-            monto: data.monto || 0,
-            motivo: data.motivo || "",
-            formaPago: data.formaPago || "Transferencia",
-            liberada: Boolean(data.liberada),
-            mandada: Boolean(data.mandada),
-            entregada: Boolean(data.entregada),
-            cancelada: Boolean(data.cancelada),
-            creadoPor: data.creadoPor || "",
-            notas: data.notas || [],
-            createdAt: data.createdAt || null,
-            relatedOC: data.relatedOC || "",
-            enviado: Boolean(data.enviado),
-            firmado1: Boolean(data.firmado1),
-            firmado2: Boolean(data.firmado2),
-            firmante1: data.firmante1 || "",
-            firmante2: data.firmante2 || "",
-            fechaFirma1: data.fechaFirma1 || "",
-            fechaFirma2: data.fechaFirma2 || "",
-            linkSharepoint: data.linkSharepoint || "",
-            enviadoA1: data.enviadoA1 || "",
-            enviadoA2: data.enviadoA2 || "",
-            fechaEnvio1: data.fechaEnvio1 || "",
-            fechaEnvio2: data.fechaEnvio2 || "",
-          };
+          return parseSeguimientoDoc(docSnap.id, docSnap.data());
         });
         setOrdenes(items);
         setLoading(false);
@@ -193,7 +198,75 @@ export default function SeguimientoDeOrdenesPage() {
     );
 
     return () => unsub();
-  }, [queryLimit, isSearching]);
+  }, [queryLimit]);
+
+  // Targeted background search for older orders (e.g. 3+ digits or text)
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (term.length < 3) {
+      setDbSearchResults([]);
+      setIsSearchingDb(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const db = getFirebaseDb();
+      if (!db) return;
+      setIsSearchingDb(true);
+
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        const foundDocsMap = new Map<string, OrdenCompra>();
+
+        // Prefix match on numOC and numSolicitud
+        const queries = [
+          query(colRef, where("numOC", ">=", term), where("numOC", "<=", term + "\uf8ff"), limit(25)),
+          query(colRef, where("numSolicitud", ">=", term), where("numSolicitud", "<=", term + "\uf8ff"), limit(25)),
+        ];
+
+        // Also handle numeric search if term is numeric
+        const numVal = Number(term);
+        if (!isNaN(numVal)) {
+          queries.push(query(colRef, where("numOC", "==", numVal), limit(10)));
+        }
+
+        const snapshots = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
+        snapshots.forEach((snap) => {
+          if (!snap) return;
+          snap.docs.forEach((docSnap) => {
+            foundDocsMap.set(docSnap.id, parseSeguimientoDoc(docSnap.id, docSnap.data()));
+          });
+        });
+
+        // Fallback shallow scan for substring match
+        if (foundDocsMap.size === 0) {
+          const fallbackSnap = await getDocs(query(colRef, orderBy("createdAt", "desc"), limit(80))).catch(() => null);
+          if (fallbackSnap) {
+            const termLower = term.toLowerCase();
+            fallbackSnap.docs.forEach((docSnap) => {
+              const item = parseSeguimientoDoc(docSnap.id, docSnap.data());
+              if (
+                item.numOC.toLowerCase().includes(termLower) ||
+                item.razonSocial.toLowerCase().includes(termLower) ||
+                item.numSolicitud.toLowerCase().includes(termLower) ||
+                (item.relatedOC && item.relatedOC.toLowerCase().includes(termLower))
+              ) {
+                foundDocsMap.set(docSnap.id, item);
+              }
+            });
+          }
+        }
+
+        setDbSearchResults(Array.from(foundDocsMap.values()));
+      } catch (err) {
+        console.warn("Error searching Firestore:", err);
+      } finally {
+        setIsSearchingDb(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Compute Signature and Tier Info
   const getOrderSignatureInfo = (orden: OrdenCompra) => {
@@ -332,9 +405,26 @@ export default function SeguimientoDeOrdenesPage() {
     };
   }, [ordenes, config]);
 
+  // Combine live real-time orders with any deep search results from Firestore
+  const combinedOrdenes = useMemo(() => {
+    if (dbSearchResults.length === 0) return ordenes;
+    const map = new Map<string, OrdenCompra>();
+    ordenes.forEach((o) => {
+      const key = o.id || o.numOC;
+      if (key) map.set(key, o);
+    });
+    dbSearchResults.forEach((o) => {
+      const key = o.id || o.numOC;
+      if (key && !map.has(key)) {
+        map.set(key, o);
+      }
+    });
+    return Array.from(map.values());
+  }, [ordenes, dbSearchResults]);
+
   // Filtered Orders
   const filteredOrdenes = useMemo(() => {
-    return ordenes.filter((ord) => {
+    return combinedOrdenes.filter((ord) => {
       // 1. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -364,7 +454,7 @@ export default function SeguimientoDeOrdenesPage() {
 
       return true;
     });
-  }, [ordenes, searchQuery, empresaFilter]);
+  }, [combinedOrdenes, searchQuery, empresaFilter]);
 
   // Paginated visible orders: If searching, search across all DB orders and show all matches.
   // Otherwise, slice up to queryLimit.
@@ -652,14 +742,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 placeholder="Buscar por OC, SC, Proveedor, Detalle o Firmante..."
                 className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-[#111726] border border-slate-700/80 text-white text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
               />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-md cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+                {isSearchingDb && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 absolute right-9 top-1/2 -translate-y-1/2 pointer-events-none" />
+                )}
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-md cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
             </div>
 
             {/* Empresa Selector */}

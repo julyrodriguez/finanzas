@@ -1,6 +1,12 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager, 
+  Firestore 
+} from "firebase/firestore";
 
 const getFirebaseConfig = () => ({
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -52,7 +58,20 @@ export const getFirebaseDb = (): Firestore | null => {
   try {
     const app = getFirebaseApp();
     if (app) {
-      cachedDb = getFirestore(app);
+      if (typeof window !== "undefined") {
+        try {
+          cachedDb = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+              tabManager: persistentMultipleTabManager(),
+            }),
+          });
+        } catch {
+          // If already initialized or unsupported, fallback to getFirestore
+          cachedDb = getFirestore(app);
+        }
+      } else {
+        cachedDb = getFirestore(app);
+      }
     }
     return cachedDb;
   } catch (error) {

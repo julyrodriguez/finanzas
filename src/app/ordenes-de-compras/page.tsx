@@ -56,6 +56,8 @@ export default function OrdenesDeComprasPage() {
   const { user } = useAuth();
   const isOrdenesUser = user?.email?.startsWith("ordenes");
   const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
+  const [dbSearchResults, setDbSearchResults] = useState<OrdenCompra[]>([]);
+  const [isSearchingDb, setIsSearchingDb] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchField, setSearchField] = useState<"todos" | "numSolicitud" | "numOC" | "razonSocial">("todos");
@@ -170,7 +172,40 @@ export default function OrdenesDeComprasPage() {
     return Array.from(set);
   }, [ordenes]);
 
+  // Helper to map Firestore doc to OrdenCompra
+  const parseOrdenDoc = (id: string, data: Record<string, any>): OrdenCompra => ({
+    id,
+    empresa: data.empresa || "Hoyts",
+    numSolicitud: data.numSolicitud || "",
+    numOC: data.numOC || "",
+    razonSocial: data.razonSocial || "",
+    monto: data.monto ?? "",
+    motivo: data.motivo || "",
+    formaPago: data.formaPago || "30DFF",
+    liberada: Boolean(data.liberada),
+    mandada: Boolean(data.mandada),
+    entregada: Boolean(data.entregada),
+    cancelada: Boolean(data.cancelada),
+    creadoPor: data.creadoPor || "Usuario",
+    notas: data.notas || [],
+    createdAt: data.createdAt || null,
+    relatedOC: data.relatedOC || "",
+    enviado: Boolean(data.enviado),
+    enviadoA1: data.enviadoA1 || "",
+    enviadoA2: data.enviadoA2 || "",
+    fechaEnvio1: data.fechaEnvio1 || "",
+    fechaEnvio2: data.fechaEnvio2 || "",
+    firmado1: Boolean(data.firmado1),
+    firmado2: Boolean(data.firmado2),
+    firmante1: data.firmante1 || "",
+    firmante2: data.firmante2 || "",
+    fechaFirma1: data.fechaFirma1 || "",
+    fechaFirma2: data.fechaFirma2 || "",
+    linkSharepoint: data.linkSharepoint || "",
+  });
+
   // Load Firestore real-time data with query limits and status filters
+  // Note: isSearching does NOT restart this listener to protect free tier quotas & preserve real-time updates!
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
@@ -187,9 +222,7 @@ export default function OrdenesDeComprasPage() {
         const colRef = collection(db, "ordenes_compra");
         let q;
 
-        if (isSearching) {
-          q = query(colRef, orderBy("createdAt", "desc"), limit(300));
-        } else if (filterCreadoPor !== "todos") {
+        if (filterCreadoPor !== "todos") {
           // If a specific creator is filtered, query exactly the latest 100 for them
           // We DO NOT use orderBy to avoid composite index requirements!
           const constraints: QueryConstraint[] = [
@@ -230,44 +263,14 @@ export default function OrdenesDeComprasPage() {
           q = query(colRef, ...constraints);
         } else {
           // Fallback query (or when state is 'Todas' and Creador is 'Todos')
-          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 100));
+          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
         }
 
         unsubscribe = onSnapshot(
           q,
           (snapshot) => {
             const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-              const data = docSnap.data();
-              return {
-                id: docSnap.id,
-                empresa: data.empresa || "Hoyts",
-                numSolicitud: data.numSolicitud || "",
-                numOC: data.numOC || "",
-                razonSocial: data.razonSocial || "",
-                monto: data.monto ?? "",
-                motivo: data.motivo || "",
-                formaPago: data.formaPago || "30DFF",
-                liberada: Boolean(data.liberada),
-                mandada: Boolean(data.mandada),
-                entregada: Boolean(data.entregada),
-                cancelada: Boolean(data.cancelada),
-                creadoPor: data.creadoPor || "Usuario",
-                notas: data.notas || [],
-                createdAt: data.createdAt || null,
-                relatedOC: data.relatedOC || "",
-                enviado: Boolean(data.enviado),
-                enviadoA1: data.enviadoA1 || "",
-                enviadoA2: data.enviadoA2 || "",
-                fechaEnvio1: data.fechaEnvio1 || "",
-                fechaEnvio2: data.fechaEnvio2 || "",
-                firmado1: Boolean(data.firmado1),
-                firmado2: Boolean(data.firmado2),
-                firmante1: data.firmante1 || "",
-                firmante2: data.firmante2 || "",
-                fechaFirma1: data.fechaFirma1 || "",
-                fechaFirma2: data.fechaFirma2 || "",
-                linkSharepoint: data.linkSharepoint || "",
-              };
+              return parseOrdenDoc(docSnap.id, docSnap.data());
             });
 
             // Sort manually on client to handle missing createdAt fields cleanly
@@ -309,7 +312,75 @@ export default function OrdenesDeComprasPage() {
 
     startListener(true);
     return () => unsubscribe();
-  }, [queryLimit, isSearching, filterEstado, filterCreadoPor]);
+  }, [queryLimit, filterEstado, filterCreadoPor]);
+
+  // Targeted background search for older orders (e.g. 3+ digits or text)
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (term.length < 3) {
+      setDbSearchResults([]);
+      setIsSearchingDb(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const db = getFirebaseDb();
+      if (!db) return;
+      setIsSearchingDb(true);
+
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        const foundDocsMap = new Map<string, OrdenCompra>();
+
+        // Prefix match on numOC and numSolicitud
+        const queries = [
+          query(colRef, where("numOC", ">=", term), where("numOC", "<=", term + "\uf8ff"), limit(25)),
+          query(colRef, where("numSolicitud", ">=", term), where("numSolicitud", "<=", term + "\uf8ff"), limit(25)),
+        ];
+
+        // Also handle numeric search if term is numeric
+        const numVal = Number(term);
+        if (!isNaN(numVal)) {
+          queries.push(query(colRef, where("numOC", "==", numVal), limit(10)));
+        }
+
+        const snapshots = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
+        snapshots.forEach((snap) => {
+          if (!snap) return;
+          snap.docs.forEach((docSnap) => {
+            foundDocsMap.set(docSnap.id, parseOrdenDoc(docSnap.id, docSnap.data()));
+          });
+        });
+
+        // If prefix found nothing and term is alphanumeric, search recent 80 records for substring match
+        if (foundDocsMap.size === 0) {
+          const fallbackSnap = await getDocs(query(colRef, orderBy("createdAt", "desc"), limit(80))).catch(() => null);
+          if (fallbackSnap) {
+            const termLower = term.toLowerCase();
+            fallbackSnap.docs.forEach((docSnap) => {
+              const item = parseOrdenDoc(docSnap.id, docSnap.data());
+              if (
+                item.numOC.toLowerCase().includes(termLower) ||
+                item.razonSocial.toLowerCase().includes(termLower) ||
+                item.numSolicitud.toLowerCase().includes(termLower) ||
+                (item.relatedOC && item.relatedOC.toLowerCase().includes(termLower))
+              ) {
+                foundDocsMap.set(docSnap.id, item);
+              }
+            });
+          }
+        }
+
+        setDbSearchResults(Array.from(foundDocsMap.values()));
+      } catch (err) {
+        console.warn("Error searching Firestore:", err);
+      } finally {
+        setIsSearchingDb(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
@@ -825,8 +896,25 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // Combine live real-time orders with any deep search results from Firestore
+  const combinedOrdenes = useMemo(() => {
+    if (dbSearchResults.length === 0) return ordenes;
+    const map = new Map<string, OrdenCompra>();
+    ordenes.forEach((o) => {
+      const key = o.id || o.numOC;
+      if (key) map.set(key, o);
+    });
+    dbSearchResults.forEach((o) => {
+      const key = o.id || o.numOC;
+      if (key && !map.has(key)) {
+        map.set(key, o);
+      }
+    });
+    return Array.from(map.values());
+  }, [ordenes, dbSearchResults]);
+
   // Filtered list
-  const filteredOrdenes = ordenes.filter((orden) => {
+  const filteredOrdenes = combinedOrdenes.filter((orden) => {
     const matchesSearch = (() => {
       if (!searchQuery.trim()) return true;
       const queryText = searchQuery.toLowerCase();
@@ -1018,6 +1106,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   placeholder="Buscar orden, proveedor..."
                   className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
                 />
+                {isSearchingDb && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
+                )}
                 {searchQuery && (
                   <button
                     onClick={() => {
