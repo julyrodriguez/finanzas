@@ -209,10 +209,14 @@ export default function SeguimientoDeOrdenesPage() {
       return;
     }
 
+    setIsSearchingDb(true);
+
     const timer = setTimeout(async () => {
       const db = getFirebaseDb();
-      if (!db) return;
-      setIsSearchingDb(true);
+      if (!db) {
+        setIsSearchingDb(false);
+        return;
+      }
 
       try {
         const colRef = collection(db, "ordenes_compra");
@@ -799,6 +803,14 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
             <span className="text-xs font-semibold text-slate-400">Cargando órdenes del sistema...</span>
+          </div>
+        ) : isSearchingDb && filteredOrdenes.length === 0 ? (
+          <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 space-y-3">
+            <Loader2 className="w-9 h-9 text-indigo-400 animate-spin mx-auto" />
+            <h4 className="text-base font-bold text-white">Buscando en la base de datos...</h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Consultando órdenes históricas coincidentes con &quot;{searchQuery}&quot;...
+            </p>
           </div>
         ) : filteredOrdenes.length === 0 ? (
           <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 space-y-2">

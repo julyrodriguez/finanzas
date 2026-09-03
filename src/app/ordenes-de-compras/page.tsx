@@ -323,10 +323,14 @@ export default function OrdenesDeComprasPage() {
       return;
     }
 
+    setIsSearchingDb(true);
+
     const timer = setTimeout(async () => {
       const db = getFirebaseDb();
-      if (!db) return;
-      setIsSearchingDb(true);
+      if (!db) {
+        setIsSearchingDb(false);
+        return;
+      }
 
       try {
         const colRef = collection(db, "ordenes_compra");
@@ -1299,7 +1303,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-gray-300">
-                    {visibleOrdenes.length === 0 ? (
+                    {isSearchingDb && visibleOrdenes.length === 0 ? (
+                      <tr>
+                        <td colSpan={showCMDSection ? 11 : isOrdenesUser ? 9 : 10} className="px-4 py-14 text-center text-gray-400">
+                          <div className="space-y-3 flex flex-col items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
+                            <p className="font-semibold text-xs text-indigo-200">Buscando en la base de datos...</p>
+                            <p className="text-[11px] text-gray-400 max-w-sm mx-auto">
+                              Consultando órdenes coincidentes con &quot;{searchQuery}&quot;...
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : visibleOrdenes.length === 0 ? (
                       <tr>
                         <td colSpan={showCMDSection ? 11 : isOrdenesUser ? 9 : 10} className="px-4 py-12 text-center text-gray-500">
                           <div className="space-y-2 flex flex-col items-center justify-center">
@@ -1504,7 +1520,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
               {/* Mobile / Tablet Cards View */}
               <div className="lg:hidden space-y-4">
-                {visibleOrdenes.length === 0 ? (
+                {isSearchingDb && visibleOrdenes.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 px-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="space-y-2 flex flex-col items-center justify-center">
+                      <Loader2 className="w-7 h-7 text-indigo-400 animate-spin mx-auto" />
+                      <p className="font-semibold text-xs text-indigo-200">Buscando en la base de datos...</p>
+                      <p className="text-[10px] text-gray-400 max-w-xs mx-auto">
+                        Consultando órdenes con &quot;{searchQuery}&quot;...
+                      </p>
+                    </div>
+                  </div>
+                ) : visibleOrdenes.length === 0 ? (
                   <div className="py-12 text-center text-gray-500 px-4 rounded-2xl bg-white/5 border border-white/10">
                     <div className="space-y-1.5 flex flex-col items-center justify-center">
                       <AlertCircle className="w-7 h-7 text-gray-600 mx-auto" />
