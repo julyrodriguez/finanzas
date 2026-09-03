@@ -38,7 +38,8 @@ import {
   Folder,
   FolderOpen, 
   FileSpreadsheet,
-  Eye
+  Eye,
+  Database
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -68,6 +69,8 @@ export default function OrdenesDeComprasPage() {
   
   // Pagination State: Limit initial query reads to 15
   const [queryLimit, setQueryLimit] = useState(15);
+  const [hasLoadedAllFromDb, setHasLoadedAllFromDb] = useState(false);
+  const [loadingAllDb, setLoadingAllDb] = useState(false);
 
   // Filter creator state
   const [filterCreadoPor, setFilterCreadoPor] = useState<string>("todos");
@@ -900,6 +903,27 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const handleLoadAllFromDb = async () => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    setLoadingAllDb(true);
+    try {
+      const colRef = collection(db, "ordenes_compra");
+      const q = query(colRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      const allDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
+      setOrdenes(allDocs);
+      setQueryLimit(allDocs.length);
+      setHasLoadedAllFromDb(true);
+      showToast(`¡Se cargaron ${allDocs.length} órdenes de la base de datos!`);
+    } catch (err) {
+      console.error("Error al cargar todas las órdenes:", err);
+      showToast("Error al cargar toda la base de datos.");
+    } finally {
+      setLoadingAllDb(false);
+    }
+  };
+
   // Combine live real-time orders with any deep search results from Firestore
   const combinedOrdenes = useMemo(() => {
     if (dbSearchResults.length === 0) return ordenes;
@@ -1052,6 +1076,27 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            {/* Cargar toda la base de datos Button */}
+            <button
+              onClick={handleLoadAllFromDb}
+              disabled={loadingAllDb || hasLoadedAllFromDb}
+              className={`px-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
+                hasLoadedAllFromDb
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+                  : "bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+              }`}
+              title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
+            >
+              {loadingAllDb ? (
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              ) : hasLoadedAllFromDb ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Database className="w-4 h-4 text-indigo-400" />
+              )}
+              <span>{loadingAllDb ? "Cargando todo..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
+            </button>
+
             {/* Exportar a Excel Button */}
             <button
               onClick={handleExportExcel}
@@ -1714,18 +1759,38 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               </div>
             </div>
 
-            {/* Botón Cargar Más */}
-            {hasMore && (
-              <div className="py-4 text-center">
+            {/* Botón Cargar Más y Cargar Todo */}
+            <div className="py-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {hasMore && !hasLoadedAllFromDb && (
                 <button
                   onClick={() => setQueryLimit((prev) => prev + 15)}
-                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 group"
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 group cursor-pointer"
                 >
                   <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
-                  <span>Cargar más órdenes</span>
+                  <span>Cargar más órdenes (+15)</span>
                 </button>
-              </div>
-            )}
+              )}
+              {!hasLoadedAllFromDb && (
+                <button
+                  onClick={handleLoadAllFromDb}
+                  disabled={loadingAllDb}
+                  className="px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 cursor-pointer"
+                >
+                  {loadingAllDb ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                  ) : (
+                    <Database className="w-4 h-4 text-indigo-400" />
+                  )}
+                  <span>{loadingAllDb ? "Cargando toda la base de datos..." : "Cargar todas las de la base de datos"}</span>
+                </button>
+              )}
+              {hasLoadedAllFromDb && (
+                <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 rounded-xl inline-flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  <span>Todas las órdenes de la base de datos están cargadas ({ordenes.length})</span>
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

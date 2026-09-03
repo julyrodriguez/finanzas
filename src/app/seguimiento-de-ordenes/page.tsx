@@ -29,7 +29,9 @@ import {
   ExternalLink,
   PackageCheck,
   FileSpreadsheet,
-  Layers
+  Layers,
+  Database,
+  Check
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
@@ -76,6 +78,8 @@ export default function SeguimientoDeOrdenesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [queryLimit, setQueryLimit] = useState(15);
+  const [hasLoadedAllFromDb, setHasLoadedAllFromDb] = useState(false);
+  const [loadingAllDb, setLoadingAllDb] = useState(false);
 
   const isSearching = Boolean(searchQuery.trim());
 
@@ -93,6 +97,27 @@ export default function SeguimientoDeOrdenesPage() {
     setTimeout(() => {
       setToastMessage((prev) => (prev === message ? null : prev));
     }, 3000);
+  };
+
+  const handleLoadAllFromDb = async () => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    setLoadingAllDb(true);
+    try {
+      const colRef = collection(db, "ordenes_compra");
+      const q = query(colRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      const allDocs = snap.docs.map((d) => parseSeguimientoDoc(d.id, d.data()));
+      setOrdenes(allDocs);
+      setQueryLimit(allDocs.length);
+      setHasLoadedAllFromDb(true);
+      showToast(`¡Se cargaron ${allDocs.length} órdenes de la base de datos!`);
+    } catch (err) {
+      console.error("Error al cargar toda la base de datos:", err);
+      showToast("Error al cargar todas las órdenes.");
+    } finally {
+      setLoadingAllDb(false);
+    }
   };
 
   // Helper to parse currency / amount
@@ -629,6 +654,27 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Cargar toda la base de datos Button */}
+            <button
+              onClick={handleLoadAllFromDb}
+              disabled={loadingAllDb || hasLoadedAllFromDb}
+              className={`px-4 py-2.5 rounded-2xl border font-bold text-xs transition-all flex items-center gap-2 shadow-sm ${
+                hasLoadedAllFromDb
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+                  : "bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+              }`}
+              title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
+            >
+              {loadingAllDb ? (
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              ) : hasLoadedAllFromDb ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Database className="w-4 h-4 text-indigo-400" />
+              )}
+              <span>{loadingAllDb ? "Cargando..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
+            </button>
+
             {/* Copiar Todas button (desktop only) */}
             {filteredOrdenes.length > 0 && (
               <button
@@ -1088,9 +1134,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               );
             })}
 
-            {/* Cargar más órdenes button */}
-            {hasMore && (
-              <div className="flex flex-col items-center justify-center pt-4 pb-2 gap-2">
+            {/* Cargar más órdenes y Cargar Todo */}
+            <div className="flex flex-col sm:flex-row items-center justify-center pt-4 pb-2 gap-3">
+              {hasMore && !hasLoadedAllFromDb && (
                 <button
                   onClick={() => setQueryLimit((prev) => prev + 15)}
                   className="px-6 py-3 rounded-2xl bg-[#111726] hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 text-white font-bold text-xs transition-all shadow-lg flex items-center gap-2.5 cursor-pointer"
@@ -1100,8 +1146,28 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     (Mostrando {visibleOrdenes.length} órdenes)
                   </span>
                 </button>
-              </div>
-            )}
+              )}
+              {!hasLoadedAllFromDb && (
+                <button
+                  onClick={handleLoadAllFromDb}
+                  disabled={loadingAllDb}
+                  className="px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                >
+                  {loadingAllDb ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                  ) : (
+                    <Database className="w-4 h-4 text-indigo-400" />
+                  )}
+                  <span>{loadingAllDb ? "Cargando toda la base de datos..." : "Cargar todas las de la base de datos"}</span>
+                </button>
+              )}
+              {hasLoadedAllFromDb && (
+                <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-4 py-2.5 rounded-2xl inline-flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  <span>Todas las órdenes de la base de datos están cargadas ({ordenes.length})</span>
+                </span>
+              )}
+            </div>
           </div>
         )}
 
