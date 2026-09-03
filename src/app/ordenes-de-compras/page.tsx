@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -11,6 +11,8 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
+  getDoc,
+  setDoc,
   serverTimestamp,
   query,
   orderBy,
@@ -105,6 +107,7 @@ export default function OrdenesDeComprasPage() {
   // Selection state for copying CMD folder creation commands (Julian only)
   const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
   const [cmdFolderPath, setCmdFolderPath] = useState("");
+  const savePathTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get current clean username without @equipo.local
   const getCleanUsername = () => {
@@ -116,25 +119,76 @@ export default function OrdenesDeComprasPage() {
     return "julian";
   };
 
-  // Load cmdFolderPath from localStorage on mount or default to C:\Users\<username>\
+  // Load cmdFolderPath from Firestore database (with fallback to localStorage / default)
   useEffect(() => {
+    let isMounted = true;
+    const username = getCleanUsername();
+    const defaultPath = `C:\\Users\\${username}\\`;
+
+    // 1. Instant local display
     if (typeof window !== "undefined") {
-      const savedPath = localStorage.getItem("cmd_folder_path");
-      if (savedPath) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setCmdFolderPath(savedPath);
+      const localSaved = localStorage.getItem("cmd_folder_path");
+      if (localSaved) {
+        setCmdFolderPath(localSaved);
       } else {
-        const username = getCleanUsername();
-        setCmdFolderPath(`C:\\Users\\${username}\\`);
+        setCmdFolderPath(defaultPath);
       }
     }
+
+    // 2. Fetch official saved path from Firestore database
+    const fetchPathFromDb = async () => {
+      const db = getFirebaseDb();
+      if (!db || !username) return;
+      try {
+        const docRef = doc(db, "user_preferences", username.toLowerCase());
+        const snap = await getDoc(docRef);
+        if (snap.exists() && isMounted) {
+          const data = snap.data();
+          if (data?.cmdFolderPath) {
+            setCmdFolderPath(data.cmdFolderPath);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("cmd_folder_path", data.cmdFolderPath);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch user cmd path from Firestore:", err);
+      }
+    };
+
+    fetchPathFromDb();
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const handleSavePath = (path: string) => {
     setCmdFolderPath(path);
+
+    // Save locally for instant offline cache
     if (typeof window !== "undefined") {
       localStorage.setItem("cmd_folder_path", path);
     }
+
+    // Debounced sync to Firestore database (protects free tier writes)
+    if (savePathTimeoutRef.current) {
+      clearTimeout(savePathTimeoutRef.current);
+    }
+
+    savePathTimeoutRef.current = setTimeout(async () => {
+      const db = getFirebaseDb();
+      const username = getCleanUsername();
+      if (!db || !username) return;
+      try {
+        const docRef = doc(db, "user_preferences", username.toLowerCase());
+        await setDoc(docRef, { 
+          cmdFolderPath: path,
+          updatedAt: serverTimestamp() 
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Could not save cmd path to Firestore:", err);
+      }
+    }, 600);
   };
 
   const getFormattedCreatedAt = (orden: OrdenCompra | null) => {
