@@ -264,7 +264,7 @@ export default function OrdenesDeComprasPage() {
     linkSharepoint: data.linkSharepoint || "",
   });
 
-  // Load Firestore real-time data with query limits and status filters
+  // Load Firestore real-time data with status filters and query limits
   // Note: isSearching does NOT restart this listener to protect free tier quotas & preserve real-time updates!
   useEffect(() => {
     const db = getFirebaseDb();
@@ -275,104 +275,71 @@ export default function OrdenesDeComprasPage() {
       return;
     }
 
+    if (hasLoadedAllFromDb) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
     let unsubscribe: () => void = () => {};
 
-    const startListener = (useFilters: boolean) => {
-      try {
-        const colRef = collection(db, "ordenes_compra");
-        let q;
+    try {
+      const colRef = collection(db, "ordenes_compra");
+      let q;
 
-        if (filterCreadoPor !== "todos") {
-          // If a specific creator is filtered, query exactly the latest 100 for them
-          // We DO NOT use orderBy to avoid composite index requirements!
-          const constraints: QueryConstraint[] = [
-            where("creadoPor", "==", filterCreadoPor)
-          ];
-          
-          if (useFilters) {
-            if (filterEstado === "Liberadas") {
-              constraints.unshift(where("liberada", "==", true));
-            } else if (filterEstado === "Mandadas") {
-              constraints.unshift(where("mandada", "==", true));
-            } else if (filterEstado === "Entregadas") {
-              constraints.unshift(where("entregada", "==", true));
-            } else if (filterEstado === "Pendientes") {
-              constraints.unshift(where("liberada", "==", false));
-            }
-          }
-          
-          const fetchLimit = Math.max(100, queryLimit + 1);
-          constraints.push(limit(fetchLimit));
-          q = query(colRef, ...constraints);
-        } else if (useFilters) {
-          // Dynamic status filtering in Firestore to only read matching documents
-          const constraints: QueryConstraint[] = [orderBy("createdAt", "desc")];
-          
-          if (filterEstado === "Liberadas") {
-            constraints.unshift(where("liberada", "==", true));
-          } else if (filterEstado === "Mandadas") {
-            constraints.unshift(where("mandada", "==", true));
-          } else if (filterEstado === "Entregadas") {
-            constraints.unshift(where("entregada", "==", true));
-          } else if (filterEstado === "Pendientes") {
-            // Pendientes are !liberada && !mandada, query by liberada === false
-            constraints.unshift(where("liberada", "==", false));
-          }
-
-          constraints.push(limit(queryLimit + 1));
-          q = query(colRef, ...constraints);
-        } else {
-          // Fallback query (or when state is 'Todas' and Creador is 'Todos')
-          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
-        }
-
-        unsubscribe = onSnapshot(
-          q,
-          (snapshot) => {
-            const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-              return parseOrdenDoc(docSnap.id, docSnap.data());
-            });
-
-            // Sort manually on client to handle missing createdAt fields cleanly
-            docs.sort((a, b) => {
-              const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-              const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
-              return timeB - timeA;
-            });
-
-            // Slice to first queryLimit + 1 if specific creator is filtered
-            const finalDocs = filterCreadoPor !== "todos" ? docs.slice(0, queryLimit + 1) : docs;
-
-            setTimeout(() => {
-              setOrdenes(finalDocs);
-              setLoading(false);
-            }, 0);
-          },
-          (error: Error) => {
-            // Check if error is due to missing index
-            if (useFilters && error.message && error.message.includes("index")) {
-              console.warn("Firestore index missing. Falling back to client-side filtering query...", error);
-              // Retry without Firestore status filters (fall back to client-side filtering)
-              startListener(false);
-            } else {
-              console.warn("Firestore snapshot listener error:", error);
-              setTimeout(() => {
-                setLoading(false);
-              }, 0);
-            }
-          }
-        );
-      } catch (err) {
-        console.warn("Firestore collection error:", err);
-        setTimeout(() => {
-          setLoading(false);
-        }, 0);
+      // When filtering by specific status, query using single-field equality filters without orderBy.
+      // Firestore automatically indexes single fields, so NO composite index is needed.
+      if (filterEstado === "Liberadas") {
+        q = query(colRef, where("liberada", "==", true));
+      } else if (filterEstado === "Entregadas") {
+        q = query(colRef, where("entregada", "==", true));
+      } else if (filterEstado === "Mandadas") {
+        q = query(colRef, where("mandada", "==", true));
+      } else if (filterEstado === "Pendientes") {
+        q = query(colRef, where("liberada", "==", false));
+      } else if (filterCreadoPor !== "todos") {
+        q = query(colRef, where("creadoPor", "==", filterCreadoPor));
+      } else {
+        // "Todas" without creator filter: paginate from newest to oldest using single-field index on createdAt
+        q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
       }
-    };
 
-    startListener(true);
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
+            return parseOrdenDoc(docSnap.id, docSnap.data());
+          });
+
+          // Sort manually on client to handle missing createdAt fields cleanly
+          docs.sort((a, b) => {
+            const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+            const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+            return timeB - timeA;
+          });
+
+          setTimeout(() => {
+            setOrdenes(docs);
+            setLoading(false);
+          }, 0);
+        },
+        (error: Error) => {
+          console.warn("Firestore snapshot listener error:", error);
+          setTimeout(() => {
+            setLoading(false);
+          }, 0);
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore collection error:", err);
+      setTimeout(() => {
+        setLoading(false);
+      }, 0);
+    }
+
     return () => unsubscribe();
-  }, [queryLimit, filterEstado, filterCreadoPor]);
+  }, [queryLimit, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
 
   // Targeted background search for older orders (e.g. 3+ digits or text)
   useEffect(() => {
@@ -970,7 +937,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       const snap = await getDocs(q);
       const allDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
       setOrdenes(allDocs);
-      setQueryLimit(allDocs.length);
       setHasLoadedAllFromDb(true);
       showToast(`¡Se cargaron ${allDocs.length} órdenes de la base de datos!`);
     } catch (err) {
@@ -1052,9 +1018,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   });
 
   // Limit visible items to queryLimit (slicing off the extra placeholder item we fetched to check hasMore)
-  // Bypass slice when actively searching so they can see all matched items up to 300 documents
-  const visibleOrdenes = isSearching ? filteredOrdenes : filteredOrdenes.slice(0, queryLimit);
-  const hasMore = isSearching ? false : ordenes.length > queryLimit;
+  // Bypass slice when actively searching, when viewing filtered statuses, or when all DB is loaded
+  const visibleOrdenes = (isSearching || filterEstado !== "Todas" || hasLoadedAllFromDb)
+    ? filteredOrdenes
+    : filteredOrdenes.slice(0, queryLimit);
+  const hasMore = (isSearching || filterEstado !== "Todas" || hasLoadedAllFromDb)
+    ? false
+    : ordenes.length > queryLimit;
 
   // Helper to sanitize Windows folder names
   const sanitizeFolderName = (name: string) => {
