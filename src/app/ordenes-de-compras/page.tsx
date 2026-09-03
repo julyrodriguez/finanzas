@@ -280,7 +280,9 @@ export default function OrdenesDeComprasPage() {
       return;
     }
 
-    setLoading(true);
+    if (ordenes.length === 0) {
+      setLoading(true);
+    }
 
     let unsubscribe: () => void = () => {};
 
@@ -339,7 +341,7 @@ export default function OrdenesDeComprasPage() {
     }
 
     return () => unsubscribe();
-  }, [queryLimit, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
+  }, [filterEstado === "Todas" ? queryLimit : null, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
 
   // Targeted background search for older orders (e.g. 3+ digits or text)
   useEffect(() => {
@@ -1018,13 +1020,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   });
 
   // Limit visible items to queryLimit (slicing off the extra placeholder item we fetched to check hasMore)
-  // Bypass slice when actively searching, when viewing filtered statuses, or when all DB is loaded
-  const visibleOrdenes = (isSearching || filterEstado !== "Todas" || hasLoadedAllFromDb)
+  // Bypass slice when actively searching or when all DB is loaded
+  const visibleOrdenes = (isSearching || hasLoadedAllFromDb)
     ? filteredOrdenes
     : filteredOrdenes.slice(0, queryLimit);
-  const hasMore = (isSearching || filterEstado !== "Todas" || hasLoadedAllFromDb)
+  const hasMore = (isSearching || hasLoadedAllFromDb)
     ? false
-    : ordenes.length > queryLimit;
+    : filterEstado === "Todas"
+      ? ordenes.length > queryLimit
+      : filteredOrdenes.length > queryLimit;
 
   // Helper to sanitize Windows folder names
   const sanitizeFolderName = (name: string) => {
