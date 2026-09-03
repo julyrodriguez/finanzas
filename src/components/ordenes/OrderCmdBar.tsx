@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FolderPlus, Terminal, Folder, X } from "lucide-react";
+import { FolderPlus, Terminal, Folder, X, Download } from "lucide-react";
 
 interface OrderCmdBarProps {
   showCMDSection: boolean;
@@ -11,6 +11,7 @@ interface OrderCmdBarProps {
   onSavePath: (path: string) => void;
   cmdCommand: string;
   onCopyCMD: () => void;
+  onDownloadBat?: () => void;
 }
 
 export function OrderCmdBar({
@@ -21,6 +22,7 @@ export function OrderCmdBar({
   onSavePath,
   cmdCommand,
   onCopyCMD,
+  onDownloadBat,
 }: OrderCmdBarProps) {
   if (!showCMDSection || selectedOCIds.length === 0) return null;
 
@@ -33,23 +35,33 @@ export function OrderCmdBar({
             Generador de Carpetas para Windows (CMD)
           </h4>
           <p className="text-[10px] text-gray-400">
-            Has seleccionado <strong>{selectedOCIds.length}</strong> órdenes de compra. Ejecuta este comando en la terminal CMD de Windows para crear sus carpetas automáticamente.
+            Has seleccionado <strong>{selectedOCIds.length}</strong> órdenes de compra. Ejecuta este comando en la terminal CMD de Windows o descarga el archivo .bat para crearlas automáticamente.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setSelectedOCIds([])}
             className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-[11px] font-semibold transition-all cursor-pointer"
           >
-            Limpiar selección
+            Limpiar
           </button>
           <button
             onClick={onCopyCMD}
-            className="px-3.5 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>Copiar Comando CMD</span>
+            <span>Copiar CMD</span>
           </button>
+          {onDownloadBat && (
+            <button
+              onClick={onDownloadBat}
+              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Descarga el archivo .bat: hacés clic y Windows crea todas las carpetas automáticamente"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Ejecutar (.bat)</span>
+            </button>
+          )}
         </div>
       </div>
 

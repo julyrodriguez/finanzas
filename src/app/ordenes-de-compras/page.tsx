@@ -106,32 +106,35 @@ export default function OrdenesDeComprasPage() {
   const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
   const [cmdFolderPath, setCmdFolderPath] = useState("");
 
-  // Load cmdFolderPath from localStorage on mount
+  // Get current clean username without @equipo.local
+  const getCleanUsername = () => {
+    if (!user) return "julian";
+    if (user.displayName) return user.displayName;
+    if (user.email) {
+      return user.email.split("@")[0];
+    }
+    return "julian";
+  };
+
+  // Load cmdFolderPath from localStorage on mount or default to C:\Users\<username>\
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedPath = localStorage.getItem("cmd_folder_path");
       if (savedPath) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setCmdFolderPath(savedPath);
+      } else {
+        const username = getCleanUsername();
+        setCmdFolderPath(`C:\\Users\\${username}\\`);
       }
     }
-  }, []);
+  }, [user]);
 
   const handleSavePath = (path: string) => {
     setCmdFolderPath(path);
     if (typeof window !== "undefined") {
       localStorage.setItem("cmd_folder_path", path);
     }
-  };
-
-  // Get current clean username without @equipo.local
-  const getCleanUsername = () => {
-    if (!user) return "Usuario";
-    if (user.displayName) return user.displayName;
-    if (user.email) {
-      return user.email.split("@")[0];
-    }
-    return "Usuario";
   };
 
   const getFormattedCreatedAt = (orden: OrdenCompra | null) => {
@@ -1032,6 +1035,25 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     showToast("¡Comando CMD de carpetas copiado al portapapeles!");
   };
 
+  const handleDownloadBat = () => {
+    const cmd = getCMDCommand();
+    if (!cmd) {
+      alert("Por favor selecciona al menos una orden de compra.");
+      return;
+    }
+    const batContent = `@echo off\r\nchcp 65001 >nul\r\n${cmd}\r\necho.\r\necho Carpetas creadas con exito!\r\ntimeout /t 3 >nul\r\n`;
+    const blob = new Blob([batContent], { type: "application/x-bat;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "crear_carpetas.bat";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("¡Archivo .bat descargado! Hacé clic para ejecutarlo.");
+  };
+
   return (
     <AppLayout 
       title="Órdenes de Compra" 
@@ -1244,6 +1266,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             onSavePath={handleSavePath}
             cmdCommand={getCMDCommand()}
             onCopyCMD={handleCopyCMD}
+            onDownloadBat={handleDownloadBat}
           />
 
           {/* Leyenda de Estados & Referencia de Mismo Solicitante */}
