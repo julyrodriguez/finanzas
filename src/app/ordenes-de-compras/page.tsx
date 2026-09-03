@@ -286,62 +286,77 @@ export default function OrdenesDeComprasPage() {
 
     let unsubscribe: () => void = () => {};
 
-    try {
-      const colRef = collection(db, "ordenes_compra");
-      let q;
+    const startListener = (withOrderBy: boolean) => {
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        let q;
 
-      // When filtering by specific status, query using single-field equality filters without orderBy.
-      // Firestore automatically indexes single fields, so NO composite index is needed.
-      if (filterEstado === "Liberadas") {
-        q = query(colRef, where("liberada", "==", true));
-      } else if (filterEstado === "Entregadas") {
-        q = query(colRef, where("entregada", "==", true));
-      } else if (filterEstado === "Mandadas") {
-        q = query(colRef, where("mandada", "==", true));
-      } else if (filterEstado === "Pendientes") {
-        q = query(colRef, where("liberada", "==", false));
-      } else if (filterCreadoPor !== "todos") {
-        q = query(colRef, where("creadoPor", "==", filterCreadoPor));
-      } else {
-        // "Todas" without creator filter: paginate from newest to oldest using single-field index on createdAt
-        q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
-      }
-
-      unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-            return parseOrdenDoc(docSnap.id, docSnap.data());
-          });
-
-          // Sort manually on client to handle missing createdAt fields cleanly
-          docs.sort((a, b) => {
-            const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-            const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
-            return timeB - timeA;
-          });
-
-          setTimeout(() => {
-            setOrdenes(docs);
-            setLoading(false);
-          }, 0);
-        },
-        (error: Error) => {
-          console.warn("Firestore snapshot listener error:", error);
-          setTimeout(() => {
-            setLoading(false);
-          }, 0);
+        if (filterEstado === "Liberadas") {
+          q = withOrderBy
+            ? query(colRef, where("liberada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("liberada", "==", true));
+        } else if (filterEstado === "Entregadas") {
+          q = withOrderBy
+            ? query(colRef, where("entregada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("entregada", "==", true));
+        } else if (filterEstado === "Mandadas") {
+          q = withOrderBy
+            ? query(colRef, where("mandada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("mandada", "==", true));
+        } else if (filterEstado === "Pendientes") {
+          q = withOrderBy
+            ? query(colRef, where("liberada", "==", false), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("liberada", "==", false));
+        } else if (filterCreadoPor !== "todos") {
+          q = query(colRef, where("creadoPor", "==", filterCreadoPor));
+        } else {
+          // "Todas" without creator filter: paginate from newest to oldest
+          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
         }
-      );
-    } catch (err) {
-      console.warn("Firestore collection error:", err);
-      setTimeout(() => {
-        setLoading(false);
-      }, 0);
-    }
 
+        unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
+              return parseOrdenDoc(docSnap.id, docSnap.data());
+            });
+
+            // Sort manually on client to guarantee ordering
+            docs.sort((a, b) => {
+              const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+              const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+              return timeB - timeA;
+            });
+
+            setTimeout(() => {
+              setOrdenes(docs);
+              setLoading(false);
+            }, 0);
+          },
+          (error: Error) => {
+            // If composite index is building or not yet active, fall back gracefully to status query
+            if (withOrderBy && error.message && error.message.includes("index")) {
+              console.warn("Composite index pending in Firebase. Falling back to status query without orderBy...", error);
+              startListener(false);
+            } else {
+              console.warn("Firestore snapshot listener error:", error);
+              setTimeout(() => {
+                setLoading(false);
+              }, 0);
+            }
+          }
+        );
+      } catch (err) {
+        console.warn("Firestore collection error:", err);
+        setTimeout(() => {
+          setLoading(false);
+        }, 0);
+      }
+    };
+
+    startListener(true);
     return () => unsubscribe();
-  }, [filterEstado === "Todas" ? queryLimit : null, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
+  }, [queryLimit, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
 
   // Targeted background search for older orders (e.g. 3+ digits or text)
   useEffect(() => {
@@ -1026,9 +1041,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     : filteredOrdenes.slice(0, queryLimit);
   const hasMore = (isSearching || hasLoadedAllFromDb)
     ? false
-    : filterEstado === "Todas"
-      ? ordenes.length > queryLimit
-      : filteredOrdenes.length > queryLimit;
+    : (ordenes.length > queryLimit || filteredOrdenes.length > queryLimit);
 
   // Helper to sanitize Windows folder names
   const sanitizeFolderName = (name: string) => {

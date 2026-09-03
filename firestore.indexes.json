@@ -1,0 +1,47 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "ordenes_compra",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "liberada",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_compra",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entregada",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_compra",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "mandada",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
