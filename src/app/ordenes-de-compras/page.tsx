@@ -19,7 +19,8 @@ import {
   limit,
   where,
   QueryConstraint,
-  getDocs
+  getDocs,
+  writeBatch
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -41,7 +42,8 @@ import {
   FolderOpen, 
   FileSpreadsheet,
   Eye,
-  Database
+  Database,
+  Sparkles
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -73,6 +75,7 @@ export default function OrdenesDeComprasPage() {
   const [queryLimit, setQueryLimit] = useState(15);
   const [hasLoadedAllFromDb, setHasLoadedAllFromDb] = useState(false);
   const [loadingAllDb, setLoadingAllDb] = useState(false);
+  const [sanitizingDb, setSanitizingDb] = useState(false);
 
   // Filter creator state
   const [filterCreadoPor, setFilterCreadoPor] = useState<string>("todos");
@@ -610,6 +613,25 @@ export default function OrdenesDeComprasPage() {
 
     const authorName = getCleanUsername();
 
+    let finalLiberada = liberada;
+    let finalMandada = mandada;
+    let finalEntregada = editingOrden ? Boolean(editingOrden.entregada) : false;
+
+    if (cancelada) {
+      finalLiberada = false;
+      finalMandada = false;
+      finalEntregada = false;
+    } else if (finalEntregada) {
+      finalLiberada = false;
+      finalMandada = false;
+    } else if (finalLiberada) {
+      finalMandada = false;
+      finalEntregada = false;
+    } else if (finalMandada) {
+      finalLiberada = false;
+      finalEntregada = false;
+    }
+
     const dataToSave = {
       empresa,
       numSolicitud: numSolicitud.trim(),
@@ -618,9 +640,9 @@ export default function OrdenesDeComprasPage() {
       monto: Number(monto) || monto,
       motivo: motivo.trim(),
       formaPago: formaPago.trim() || "30DFF",
-      liberada,
-      mandada,
-      entregada: editingOrden ? Boolean(editingOrden.entregada) : false,
+      liberada: finalLiberada,
+      mandada: finalMandada,
+      entregada: finalEntregada,
       cancelada,
       creadoPor: editingOrden?.creadoPor || authorName,
       relatedOC: relatedOC.trim(),
@@ -753,28 +775,24 @@ export default function OrdenesDeComprasPage() {
       : `¿Estás seguro de marcar la OC ${orden.numOC} como LIBERADA?`;
     if (!confirm(msg)) return;
 
+    const updateData: Partial<OrdenCompra> = newLiberada
+      ? { liberada: true, mandada: false, entregada: false }
+      : { liberada: false, mandada: false, entregada: false, enviado: false, firmado1: false, firmado2: false };
+
     setOrdenes((prev) =>
-      prev.map((item) => (item.id === orden.id ? { ...item, ...(!newLiberada ? { enviado: false, firmado1: false, firmado2: false } : {}), liberada: newLiberada } : item))
+      prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
 
     const db = getFirebaseDb();
     if (db && orden.id) {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
-        const updateData: Partial<OrdenCompra> = { liberada: newLiberada };
-        if (!newLiberada) {
-          updateData.enviado = false;
-          updateData.firmado1 = false;
-          updateData.firmado2 = false;
-        }
         await updateDoc(docRef, updateData);
       } catch (err) {
         console.error("Error al actualizar liberada:", err);
       }
     }
   };
-
-
 
   // Toggle Mandada Status
   const handleToggleMandada = async (orden: OrdenCompra) => {
@@ -785,15 +803,19 @@ export default function OrdenesDeComprasPage() {
       : `¿Estás seguro de marcar la OC ${orden.numOC} como MANDADA?`;
     if (!confirm(msg)) return;
 
+    const updateData: Partial<OrdenCompra> = newMandada
+      ? { mandada: true, liberada: false, entregada: false }
+      : { mandada: false, liberada: false, entregada: false };
+
     setOrdenes((prev) =>
-      prev.map((item) => (item.id === orden.id ? { ...item, mandada: newMandada } : item))
+      prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
 
     const db = getFirebaseDb();
     if (db && orden.id) {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
-        await updateDoc(docRef, { mandada: newMandada });
+        await updateDoc(docRef, updateData);
       } catch (err) {
         console.error("Error al actualizar mandada:", err);
       }
@@ -809,15 +831,19 @@ export default function OrdenesDeComprasPage() {
       : `¿Estás seguro de marcar la OC ${orden.numOC} como ENTREGADA?`;
     if (!confirm(msg)) return;
 
+    const updateData: Partial<OrdenCompra> = newEntregada
+      ? { entregada: true, liberada: false, mandada: false }
+      : { entregada: false, liberada: true, mandada: false };
+
     setOrdenes((prev) =>
-      prev.map((item) => (item.id === orden.id ? { ...item, entregada: newEntregada } : item))
+      prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
 
     const db = getFirebaseDb();
     if (db && orden.id) {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
-        await updateDoc(docRef, { entregada: newEntregada });
+        await updateDoc(docRef, updateData);
       } catch (err) {
         console.error("Error al actualizar entregada:", err);
       }
@@ -964,6 +990,85 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     }
   };
 
+  // Julian only: Sanitize statuses across all orders in Firestore
+  const handleSanitizeStatuses = async () => {
+    if (
+      !confirm(
+        "Esta acción recorrerá todas las órdenes en Firebase para sanear sus estados:\n\n" +
+        "1. Si una orden está ENTREGADA: se asegurará de que 'liberada' y 'mandada' queden en false.\n" +
+        "2. Si una orden está LIBERADA: se asegurará de que 'mandada' quede en false.\n\n" +
+        "¿Deseas ejecutar el saneamiento ahora?"
+      )
+    ) {
+      return;
+    }
+
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    setSanitizingDb(true);
+    try {
+      const colRef = collection(db, "ordenes_compra");
+      const snap = await getDocs(colRef);
+      let updatedCount = 0;
+
+      const batchSize = 450;
+      let currentBatch = writeBatch(db);
+      let opsInBatch = 0;
+
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        let needsUpdate = false;
+        const updates: Record<string, any> = {};
+
+        if (data.entregada === true) {
+          if (data.liberada === true || data.mandada === true) {
+            updates.liberada = false;
+            updates.mandada = false;
+            needsUpdate = true;
+          }
+        } else if (data.liberada === true) {
+          if (data.mandada === true) {
+            updates.mandada = false;
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
+          currentBatch.update(docSnap.ref, updates);
+          opsInBatch++;
+          updatedCount++;
+
+          if (opsInBatch >= batchSize) {
+            await currentBatch.commit();
+            currentBatch = writeBatch(db);
+            opsInBatch = 0;
+          }
+        }
+      }
+
+      if (opsInBatch > 0) {
+        await currentBatch.commit();
+      }
+
+      // Optimistically update memory
+      setOrdenes((prev) =>
+        prev.map((o) => {
+          if (o.entregada) return { ...o, liberada: false, mandada: false };
+          if (o.liberada) return { ...o, mandada: false };
+          return o;
+        })
+      );
+
+      showToast(`✨ ¡Saneamiento completado! Se actualizaron ${updatedCount} órdenes en Firebase.`);
+    } catch (err) {
+      console.error("Error en saneamiento de base de datos:", err);
+      showToast("Error al ejecutar el saneamiento de la base de datos.");
+    } finally {
+      setSanitizingDb(false);
+    }
+  };
+
   // Combine live real-time orders with any deep search results from Firestore
   const combinedOrdenes = useMemo(() => {
     if (dbSearchResults.length === 0) return ordenes;
@@ -1018,10 +1123,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       // If filtering for other active states, exclude cancelled orders
       if (orden.cancelada) return false;
       
-      if (filterEstado === "Liberadas") return orden.liberada && !orden.entregada;
-      if (filterEstado === "Mandadas") return orden.mandada && !orden.liberada;
+      if (filterEstado === "Liberadas") return Boolean(orden.liberada) && !orden.entregada;
+      if (filterEstado === "Mandadas") return Boolean(orden.mandada) && !orden.liberada && !orden.entregada;
       if (filterEstado === "Entregadas") return Boolean(orden.entregada);
-      if (filterEstado === "Pendientes") return !orden.liberada && !orden.mandada;
+      if (filterEstado === "Pendientes") return !orden.liberada && !orden.mandada && !orden.entregada;
       
       return true;
     })();
@@ -1833,6 +1938,21 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   <Check className="w-4 h-4" />
                   <span>Todas las órdenes de la base de datos están cargadas ({ordenes.length})</span>
                 </span>
+              )}
+              {isJulian && (
+                <button
+                  onClick={handleSanitizeStatuses}
+                  disabled={sanitizingDb}
+                  className="px-6 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 hover:text-amber-200 text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 cursor-pointer"
+                  title="Recorre todas las órdenes en Firebase y asegura que las entregadas no tengan liberada=true"
+                >
+                  {sanitizingDb ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                  )}
+                  <span>{sanitizingDb ? "Saneando estados..." : "Sanear estados en Firebase"}</span>
+                </button>
               )}
             </div>
           </div>

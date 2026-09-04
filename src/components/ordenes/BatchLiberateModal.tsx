@@ -200,7 +200,8 @@ export function BatchLiberateModal({
                 statusDetail: `Liberada: ${matchedOrder.firmante1 || config.firmantes1Nivel1[0] || "Tomás"} (F1) + ${activeAuthorizer} (F2)`,
                 updatesToApply: {
                   liberada: true,
-                  mandada: true,
+                  mandada: false,
+                  entregada: false,
                   cancelada: false,
                   firmado1: true,
                   firmante1: matchedOrder.firmante1 || config.firmantes1Nivel1[0] || "Tomas",
@@ -222,7 +223,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado1: true,
                     firmante1: activeAuthorizer,
@@ -273,7 +275,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado1: true,
                     firmante1: activeAuthorizer,
@@ -307,7 +310,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado2: true,
                     firmante2: activeAuthorizer,
@@ -358,7 +362,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado1: true,
                     firmante1: activeAuthorizer,
@@ -392,7 +397,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado2: true,
                     firmante2: activeAuthorizer,
@@ -443,7 +449,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado1: true,
                     firmante1: activeAuthorizer,
@@ -477,7 +484,8 @@ export function BatchLiberateModal({
                   statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
                   updatesToApply: {
                     liberada: true,
-                    mandada: true,
+                    mandada: false,
+                    entregada: false,
                     cancelada: false,
                     firmado2: true,
                     firmante2: activeAuthorizer,

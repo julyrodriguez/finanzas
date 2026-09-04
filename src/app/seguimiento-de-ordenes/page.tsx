@@ -305,8 +305,8 @@ export default function SeguimientoDeOrdenesPage() {
     const limite3 = config.limiteNivel3;
 
     if (numMonto <= limite1) {
-      const isF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada);
-      const isF2 = Boolean(orden.firmante2?.trim() || orden.liberada);
+      const isF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada || orden.entregada);
+      const isF2 = Boolean(orden.firmante2?.trim() || orden.liberada || orden.entregada);
       return {
         tierName: "Nivel 1 (Hasta $5M)",
         tierKey: "Nivel 1",

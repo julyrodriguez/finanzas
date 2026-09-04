@@ -153,10 +153,10 @@ export function OrderDetailModal({
 
   const tierInfo = (() => {
     if (numMonto <= limite1) {
-      const hasF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada);
-      const hasF2 = Boolean(orden.firmante2?.trim() || orden.liberada);
+      const hasF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada || orden.entregada);
+      const hasF2 = Boolean(orden.firmante2?.trim() || orden.liberada || orden.entregada);
       const f1Name = orden.firmante1?.trim() || (hasF1 ? "Tomas" : "");
-      const f2Name = orden.firmante2?.trim() || (orden.liberada ? "Área" : "");
+      const f2Name = orden.firmante2?.trim() || (orden.liberada || orden.entregada ? "Área" : "");
 
       return {
         tierName: `Nivel 1 (Hasta $${limite1.toLocaleString("es-AR")})`,
@@ -344,7 +344,7 @@ Proveedor: ${String(orden.razonSocial || "")}
 Monto: ${displayMonto}
 Forma de Pago: ${String(orden.formaPago || "30DFF")}
 Motivo: ${String(orden.motivo || "Sin motivo")}
-Estado: ${orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}`;
+Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.mandada ? "Mandada" : "Pendiente"}`;
 
     navigator.clipboard.writeText(summary);
     if (showToast) showToast(`📋 Resumen de OC ${orden.numOC} copiado al portapapeles`);

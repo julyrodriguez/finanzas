@@ -388,7 +388,7 @@ export default function ProcesoDeLiberacionPage() {
   const handleStatusChange = (ordenId: string, updatedFields: Partial<OrdenCompra>) => {
     setOrdenes((prev) =>
       prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
-        .filter(item => !item.liberada && !item.cancelada)
+        .filter(item => !item.liberada && !item.entregada && !item.cancelada)
     );
   };
 
@@ -959,7 +959,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 return { ...o, ...updateMap.get(o.id) };
               }
               return o;
-            }).filter(o => !o.liberada && !o.cancelada)
+            }).filter(o => !o.liberada && !o.entregada && !o.cancelada)
           );
         }}
         showToast={showToast}
@@ -981,7 +981,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 return { ...o, ...updateMap.get(o.id) };
               }
               return o;
-            }).filter(o => !o.liberada && !o.cancelada)
+            }).filter(o => !o.liberada && !o.entregada && !o.cancelada)
           );
         }}
         showToast={showToast}

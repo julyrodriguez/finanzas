@@ -215,7 +215,7 @@ export function OrderStatusMenu({
       case "liberada":
         updateData = {
           liberada: true,
-          mandada: true,
+          mandada: false,
           entregada: false,
           cancelada: false,
           firmado1: true,
@@ -224,8 +224,8 @@ export function OrderStatusMenu({
         break;
       case "entregada":
         updateData = {
-          liberada: true,
-          mandada: true,
+          liberada: false,
+          mandada: false,
           entregada: true,
           cancelada: false,
         };
