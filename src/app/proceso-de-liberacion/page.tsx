@@ -56,7 +56,9 @@ export default function ProcesoDeLiberacionPage() {
 
   // Search and Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"todas" | "sin_enviar" | "enviadas" | "falta_2da" | "falta_1ra">("todas");
+  const [statusFilter, setStatusFilter] = useState<
+    "todas" | "sin_firmas_sin_enviar" | "enviado_1ra" | "con_1ra_esperando" | "con_1ra_enviado_2da"
+  >("todas");
   const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [tierFilter, setTierFilter] = useState<string>("Todos");
 
@@ -280,61 +282,49 @@ export default function ProcesoDeLiberacionPage() {
     }
   };
 
-  // Helper to check if an order's next pending signature has NOT been sent
-  const isOrderNotSent = (orden: OrdenCompra) => {
-    const info = getOrderSignatureInfo(orden);
-    if (!info.isF1Signed) {
-      return !orden.enviadoA1?.trim();
-    }
-    if (!info.isF2Signed) {
-      return !orden.enviadoA2?.trim();
-    }
-    return false;
-  };
+  // Helper to determine workflow stage regarding signatures and sends
+  const getOrderWorkflowStage = (ord: OrdenCompra, info: ReturnType<typeof getOrderSignatureInfo>) => {
+    const isSentToF1 = Boolean(ord.enviadoA1?.trim() || (ord.enviado && !info.isF1Signed));
+    const isSentToF2 = Boolean(ord.enviadoA2?.trim());
 
-  // Helper to check if an order's next pending signature HAS been sent
-  const isOrderSent = (orden: OrdenCompra) => {
-    const info = getOrderSignatureInfo(orden);
-    if (!info.isF1Signed) {
-      return Boolean(orden.enviadoA1?.trim());
+    if (!info.isF1Signed && !info.isF2Signed) {
+      return isSentToF1 ? "enviado_1ra" : "sin_firmas_sin_enviar";
     }
-    if (!info.isF2Signed) {
-      return Boolean(orden.enviadoA2?.trim());
+    if (info.isF1Signed && !info.isF2Signed) {
+      return isSentToF2 ? "con_1ra_enviado_2da" : "con_1ra_esperando";
     }
-    return false;
+    if (!info.isF1Signed && info.isF2Signed) {
+      return isSentToF1 ? "con_1ra_enviado_2da" : "con_1ra_esperando";
+    }
+    return "completas";
   };
 
   // KPIs
   const stats = useMemo(() => {
     let totalMonto = 0;
-    let countFalta2da = 0;
-    let countFalta1ra = 0;
-    let countSinEnviar = 0;
-    let countEnviadas = 0;
+    let countSinFirmasSinEnviar = 0;
+    let countEnviado1ra = 0;
+    let countCon1raEsperando = 0;
+    let countCon1raEnviado2da = 0;
 
     for (const ord of ordenes) {
       totalMonto += parseMontoToNumber(ord.monto);
       const info = getOrderSignatureInfo(ord);
-      if (info.isPartial) {
-        countFalta2da++;
-      } else if (info.isPendingBoth) {
-        countFalta1ra++;
-      }
+      const stage = getOrderWorkflowStage(ord, info);
 
-      if (isOrderNotSent(ord)) {
-        countSinEnviar++;
-      } else if (isOrderSent(ord)) {
-        countEnviadas++;
-      }
+      if (stage === "sin_firmas_sin_enviar") countSinFirmasSinEnviar++;
+      else if (stage === "enviado_1ra") countEnviado1ra++;
+      else if (stage === "con_1ra_esperando") countCon1raEsperando++;
+      else if (stage === "con_1ra_enviado_2da") countCon1raEnviado2da++;
     }
 
     return {
       totalCount: ordenes.length,
       totalMonto,
-      countFalta2da,
-      countFalta1ra,
-      countSinEnviar,
-      countEnviadas,
+      countSinFirmasSinEnviar,
+      countEnviado1ra,
+      countCon1raEsperando,
+      countCon1raEnviado2da,
     };
   }, [ordenes, config]);
 
@@ -365,14 +355,9 @@ export default function ProcesoDeLiberacionPage() {
 
       // 3. Signature / Sent Status Filter
       const info = getOrderSignatureInfo(ord);
-      if (statusFilter === "sin_enviar") {
-        if (!isOrderNotSent(ord)) return false;
-      } else if (statusFilter === "enviadas") {
-        if (!isOrderSent(ord)) return false;
-      } else if (statusFilter === "falta_2da") {
-        if (!info.isPartial) return false;
-      } else if (statusFilter === "falta_1ra") {
-        if (!info.isPendingBoth) return false;
+      if (statusFilter !== "todas") {
+        const stage = getOrderWorkflowStage(ord, info);
+        if (stage !== statusFilter) return false;
       }
 
       // 4. Tier Filter
@@ -565,37 +550,48 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <p className="text-[10.5px] text-slate-500">Total en proceso</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-rose-400" />
-              📫 Sin Enviar
+          <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-1 shadow-sm">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              Sin Firmas y Sin Enviar
             </span>
-            <div className="text-2xl font-black text-rose-400 font-mono">
-              {stats.countSinEnviar}
+            <div className="text-2xl font-black text-slate-300 font-mono">
+              {stats.countSinFirmasSinEnviar}
             </div>
-            <p className="text-[10.5px] text-slate-400">Falta enviar a firmar</p>
+            <p className="text-[10.5px] text-slate-500">Aún sin enviar a firmar</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-1 shadow-sm">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+              <Send className="w-3.5 h-3.5 text-blue-400" />
+              Enviado a 1ra Firma
+            </span>
+            <div className="text-2xl font-black text-blue-400 font-mono">
+              {stats.countEnviado1ra}
+            </div>
+            <p className="text-[10.5px] text-slate-400">Esperando 1ra firma</p>
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-sm">
             <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Con 1 Firma Lista
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              Con 1ra Firma Esperando
             </span>
             <div className="text-2xl font-black text-amber-400 font-mono">
-              {stats.countFalta2da}
+              {stats.countCon1raEsperando}
             </div>
-            <p className="text-[10.5px] text-slate-400">Falta 2da firma para liberar</p>
+            <p className="text-[10.5px] text-slate-400">Falta enviar a 2da firma</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-700/60 space-y-1 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              Pendientes 1ra Firma
+          <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 space-y-1 shadow-sm">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+              Con 1ra y Enviado a 2da
             </span>
-            <div className="text-2xl font-black text-slate-300 font-mono">
-              {stats.countFalta1ra}
+            <div className="text-2xl font-black text-purple-400 font-mono">
+              {stats.countCon1raEnviado2da}
             </div>
-            <p className="text-[10.5px] text-slate-500">Aún sin 1ra firma</p>
+            <p className="text-[10.5px] text-slate-400">Esperando 2da firma</p>
           </div>
         </div>
 
@@ -663,58 +659,58 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               </button>
 
               <button
-                onClick={() => setStatusFilter("sin_enviar")}
+                onClick={() => setStatusFilter("sin_firmas_sin_enviar")}
                 className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "sin_enviar"
-                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                  statusFilter === "sin_firmas_sin_enviar"
+                    ? "bg-slate-700 text-white border border-slate-600 shadow-md"
                     : "bg-white/5 text-slate-400 hover:text-white"
                 )}
               >
-                <span>📫 Sin Enviar</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-rose-500/30 text-rose-300 text-[10px] font-mono">
-                  {stats.countSinEnviar}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("enviadas")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "enviadas"
-                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>📤 Enviadas</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-blue-500/30 text-blue-300 text-[10px] font-mono">
-                  {stats.countEnviadas}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("falta_2da")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "falta_2da"
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>🟡 Con 1 Firma</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500/30 text-[10px] font-mono">
-                  {stats.countFalta2da}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setStatusFilter("falta_1ra")}
-                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
-                  statusFilter === "falta_1ra"
-                    ? "bg-slate-700 text-white border border-slate-600"
-                    : "bg-white/5 text-slate-400 hover:text-white"
-                )}
-              >
-                <span>⚪ Sin Firmas</span>
+                <span>⚪ Sin ninguna firma y sin enviar</span>
                 <span className="px-1.5 py-0.2 rounded-full bg-slate-600 text-[10px] font-mono">
-                  {stats.countFalta1ra}
+                  {stats.countSinFirmasSinEnviar}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter("enviado_1ra")}
+                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
+                  statusFilter === "enviado_1ra"
+                    ? "bg-blue-500/25 text-blue-200 border border-blue-500/40 shadow-md shadow-blue-500/20"
+                    : "bg-white/5 text-slate-400 hover:text-white"
+                )}
+              >
+                <span>📤 Enviado a primera firma</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-blue-500/30 text-blue-300 text-[10px] font-mono">
+                  {stats.countEnviado1ra}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter("con_1ra_esperando")}
+                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
+                  statusFilter === "con_1ra_esperando"
+                    ? "bg-amber-500/25 text-amber-200 border border-amber-500/40 shadow-md shadow-amber-500/20"
+                    : "bg-white/5 text-slate-400 hover:text-white"
+                )}
+              >
+                <span>🟡 Con primera firma esperando</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500/30 text-amber-300 text-[10px] font-mono">
+                  {stats.countCon1raEsperando}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter("con_1ra_enviado_2da")}
+                className={"px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 " + (
+                  statusFilter === "con_1ra_enviado_2da"
+                    ? "bg-purple-500/25 text-purple-200 border border-purple-500/40 shadow-md shadow-purple-500/20"
+                    : "bg-white/5 text-slate-400 hover:text-white"
+                )}
+              >
+                <span>📬 Con primera firma y enviado a segunda firma</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-purple-500/30 text-purple-300 text-[10px] font-mono">
+                  {stats.countCon1raEnviado2da}
                 </span>
               </button>
             </div>
