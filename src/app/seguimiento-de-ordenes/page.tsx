@@ -36,6 +36,7 @@ import {
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { getOrderStatus, STATUS_CONFIG } from "@/components/ordenes/OrderStatusMenu";
+import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
 
 interface ApprovalConfig {
@@ -654,6 +655,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Valor Dólar Venta BNA (Leftmost) */}
+            <DolarVentaBadge />
+
             {/* Cargar toda la base de datos Button */}
             <button
               onClick={handleLoadAllFromDb}

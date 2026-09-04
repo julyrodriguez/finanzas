@@ -49,6 +49,7 @@ import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
+import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
 
 const generateUniqueId = () => {
@@ -1143,6 +1144,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            {/* Valor Dólar Venta BNA (Leftmost) */}
+            <DolarVentaBadge />
+
             {/* Cargar toda la base de datos Button */}
             <button
               onClick={handleLoadAllFromDb}

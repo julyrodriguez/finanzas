@@ -334,3 +334,31 @@ button[class*="bg-gradient-to-r"]:hover {
 .pink-theme ::-webkit-scrollbar-thumb:hover {
   background: rgba(236, 72, 153, 0.5);
 }
+
+/* ============================================================
+   BROKER COTIZACIONES TICKER TAPE
+   ============================================================ */
+
+@keyframes broker-ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-broker-ticker {
+  display: flex;
+  width: max-content;
+  animation: broker-ticker 22s linear infinite;
+}
+
+.animate-broker-ticker:hover {
+  animation-play-state: paused;
+}
+
+.ticker-fade-mask {
+  mask-image: linear-gradient(to right, transparent 0%, black 14px, black calc(100% - 14px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 14px, black calc(100% - 14px), transparent 100%);
+}

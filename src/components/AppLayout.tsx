@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { CotizacionesTicker } from "@/components/CotizacionesTicker";
 import { 
   ShoppingBag, 
   TrendingUp, 
@@ -324,6 +325,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
               </span>
             )}
           </button>
+
+          {/* Cotizaciones BNA Broker Ticker Tape */}
+          <CotizacionesTicker isExpanded={isExpanded} />
 
           {/* User Profile & Logout */}
           <div className={`flex items-center gap-2 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
