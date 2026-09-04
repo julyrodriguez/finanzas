@@ -711,7 +711,7 @@ export default function DistribucionPage() {
             {/* Copy Cuentas button */}
             <button
               onClick={handleCopyCuentas}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
               title="Copia solo las cuentas listadas (un valor por renglón)"
             >
               <Copy className="w-3.5 h-3.5" />
