@@ -70,7 +70,7 @@ export default function CalculadoraPage() {
         if (json?.venta) {
           setDolarVenta(json.venta);
           setDolarCompra(json.compra || 1480);
-          setDolarHora(json.horaActualizacionBNA || "");
+          setDolarHora(json.horaActualizacion || json.horaActualizacionBNA || "");
           setDolarFecha(json.fecha || "");
           if (dolarType === "venta") {
             setConvertArs((100 * json.venta).toString());

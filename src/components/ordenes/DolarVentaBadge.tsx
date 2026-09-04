@@ -29,7 +29,7 @@ export function DolarVentaBadge() {
           setData({
             venta: json.venta,
             compra: json.compra || 0,
-            horaActualizacionBNA: json.horaActualizacionBNA || "",
+            horaActualizacionBNA: json.horaActualizacion || json.horaActualizacionBNA || "",
             fecha: json.fecha || "",
           });
         }

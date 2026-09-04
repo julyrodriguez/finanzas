@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Clock } from "lucide-react";
 
 interface CotizacionesData {
   dolarVenta: number;
@@ -34,7 +34,7 @@ export function CotizacionesTicker({ isExpanded }: { isExpanded: boolean }) {
           dolarVenta: dolar,
           euroVenta: euro,
           realVenta: real,
-          horaActualizacion: json?.horaActualizacionBNA || "",
+          horaActualizacion: json?.horaActualizacion || json?.horaActualizacionBNA || "",
           fecha: json?.fecha || "",
         });
       }
@@ -127,6 +127,17 @@ export function CotizacionesTicker({ isExpanded }: { isExpanded: boolean }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Franja pequeña de última actualización */}
+      <div className="mt-1 pt-1 border-t border-white/5 flex items-center justify-between px-1 text-[8.5px] font-mono text-slate-400 select-none">
+        <span className="flex items-center gap-1 text-slate-400">
+          <Clock className="w-2.5 h-2.5 text-slate-400" />
+          <span>Últ. act:</span>
+        </span>
+        <span className="text-slate-300 font-semibold tracking-wide">
+          {data?.horaActualizacion ? `${data.horaActualizacion} hs` : "Reciente"}
+        </span>
       </div>
     </div>
   );
