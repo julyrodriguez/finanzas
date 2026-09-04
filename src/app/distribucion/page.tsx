@@ -87,7 +87,7 @@ export default function DistribucionPage() {
   const [ambitoFilter, setAmbitoFilter] = useState<
     "todos" | "todos_oficina" | "caba" | "gba" | "amba" | "amba_oficina" | "interior" | "personalizado"
   >("todos");
-  const [redondear, setRedondear] = useState<boolean>(false);
+  const [redondear, setRedondear] = useState<boolean>(true);
 
   const [complejos, setComplejos] = useState<Complejo[]>(INITIAL_COMPLEJOS);
   const [editableComplejos, setEditableComplejos] = useState<Complejo[]>(INITIAL_COMPLEJOS);
@@ -708,16 +708,6 @@ export default function DistribucionPage() {
               </button>
             )}
 
-            {/* Copy button */}
-            <button
-              onClick={handleCopyMontos}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-              title="Copia solo los importes listados (un valor por renglón)"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copiar Montos</span>
-            </button>
-
             {/* Copy Cuentas button */}
             <button
               onClick={handleCopyCuentas}
@@ -728,16 +718,6 @@ export default function DistribucionPage() {
               <span>Copiar Cuentas</span>
             </button>
 
-            {/* Copy Cuentas Solomon button */}
-            <button
-              onClick={handleCopyCuentasSolomon}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-              title="Copia las cuentas en formato Solomon (sin ceros adelante y con subcuenta de 17 ceros)"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>Copiar Solomon</span>
-            </button>
-
             {/* Copy Cuenta y Monto button */}
             <button
               onClick={handleCopyMontosYIds}
@@ -746,6 +726,26 @@ export default function DistribucionPage() {
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Copiar Cuenta y Monto</span>
+            </button>
+
+            {/* Copy button */}
+            <button
+              onClick={handleCopyMontos}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              title="Copia solo los importes listados (un valor por renglón)"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar Montos</span>
+            </button>
+
+            {/* Copy Cuentas Solomon button */}
+            <button
+              onClick={handleCopyCuentasSolomon}
+              className="px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              title="Copia las cuentas en formato Solomon (sin ceros adelante y con subcuenta de 17 ceros)"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copiar Cuentas Solomon</span>
             </button>
 
             {/* Export to Excel (.xlsx) button */}
