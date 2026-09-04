@@ -1,1126 +1,1917 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
-import { 
-  Plus, 
-  ChevronLeft, 
-  ChevronRight, 
-  Calendar as CalendarIcon, 
-  Clock, 
-  Trash2, 
-  X, 
-  AlertCircle, 
-  Check, 
-  Sparkles,
-  Info
-} from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
 import { 
   collection, 
-  query, 
+  addDoc, 
   onSnapshot, 
+  updateDoc, 
+  deleteDoc, 
   doc, 
-  setDoc, 
-  deleteDoc
+  getDoc,
+  setDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+  limit,
+  where,
+  QueryConstraint,
+  getDocs
 } from "firebase/firestore";
+import { 
+  Plus, 
+  Search, 
+  Copy, 
+  CheckCircle2, 
+  X, 
+  ShoppingBag, 
+  Edit3, 
+  Loader2, 
+  AlertCircle, 
+  Check, 
+  Send, 
+  MessageSquare, 
+  User as UserIcon, 
+  ChevronDown, 
+  Link2, 
+  Folder,
+  FolderOpen, 
+  FileSpreadsheet,
+  Eye,
+  Database
+} from "lucide-react";
+import type { Nota, OrdenCompra } from "@/types/ordenes";
+export type { Nota, OrdenCompra };
+import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
+import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
+import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
+import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
+import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
+import { exportToExcel } from "@/lib/exportToExcel";
 
-interface CalendarEvent {
-  id: string;
-  title: string;
-  description?: string;
-  date: string; // YYYY-MM-DD
-  startTime: string; // HH:MM
-  endTime: string; // HH:MM
-  category: "finanzas" | "reunion" | "operaciones" | "personal";
-}
-
-const CATEGORY_STYLES = {
-  finanzas: {
-    bg: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20",
-    dot: "bg-emerald-400",
-    badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    label: "Finanzas",
-  },
-  reunion: {
-    bg: "bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20",
-    dot: "bg-sky-400",
-    badge: "bg-sky-500/20 text-sky-300 border-sky-500/30",
-    label: "Reunión",
-  },
-  operaciones: {
-    bg: "bg-violet-500/10 border-violet-500/30 text-violet-400 hover:bg-violet-500/20",
-    dot: "bg-violet-400",
-    badge: "bg-violet-500/20 text-violet-300 border-violet-500/30",
-    label: "Operaciones",
-  },
-  personal: {
-    bg: "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20",
-    dot: "bg-amber-400",
-    badge: "bg-amber-500/20 text-amber-300 border-amber-500/20",
-    label: "Personal",
-  },
+const generateUniqueId = () => {
+  return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 };
 
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8:00 to 22:00
-
-export default function CalendarioPage() {
-  const [viewMode, setViewMode] = useState<"month" | "week">("month");
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+export default function OrdenesDeComprasPage() {
+  const { user } = useAuth();
+  const isOrdenesUser = user?.email?.startsWith("ordenes");
+  const [ordenes, setOrdenes] = useState<OrdenCompra[]>([]);
+  const [dbSearchResults, setDbSearchResults] = useState<OrdenCompra[]>([]);
+  const [isSearchingDb, setIsSearchingDb] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchField, setSearchField] = useState<"todos" | "numSolicitud" | "numOC" | "razonSocial">("todos");
+  const [filterEmpresa, setFilterEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
+  const [filterEstado, setFilterEstado] = useState<
+    "Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes"
+  >("Todas");
   
-  // Modal states
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  
-  // Form states
-  const [formTitle, setFormTitle] = useState("");
-  const [formDescription, setFormDescription] = useState("");
-  const [formDate, setFormDate] = useState("");
-  const [formStartTime, setFormStartTime] = useState("09:00");
-  const [formEndTime, setFormEndTime] = useState("10:00");
-  const [formCategory, setFormCategory] = useState<"finanzas" | "reunion" | "operaciones" | "personal">("finanzas");
-  const [formError, setFormError] = useState<string | null>(null);
+  // Pagination State: Limit initial query reads to 15
+  const [queryLimit, setQueryLimit] = useState(15);
+  const [hasLoadedAllFromDb, setHasLoadedAllFromDb] = useState(false);
+  const [loadingAllDb, setLoadingAllDb] = useState(false);
 
-  // Success toast
+  // Filter creator state
+  const [filterCreadoPor, setFilterCreadoPor] = useState<string>("todos");
+
+  // Modal state for Add/Edit Order
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingOrden, setEditingOrden] = useState<OrdenCompra | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Modal state for Notes
+  const [activeNotesOrden, setActiveNotesOrden] = useState<OrdenCompra | null>(null);
+  const [newNotaText, setNewNotaText] = useState("");
+  const [savingNota, setSavingNota] = useState(false);
+
+  // Form State
+  const [empresa, setEmpresa] = useState<"Hoyts" | "CMK">("Hoyts");
+  const [numSolicitud, setNumSolicitud] = useState("");
+  const [numOC, setNumOC] = useState("");
+  const [razonSocial, setRazonSocial] = useState("");
+  const [monto, setMonto] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [formaPago, setFormaPago] = useState("30DFF");
+  const [liberada, setLiberada] = useState(false);
+  const [mandada, setMandada] = useState(false);
+  const [cancelada, setCancelada] = useState(false);
+  const [relatedOC, setRelatedOC] = useState("");
+  const [linkSharepoint, setLinkSharepoint] = useState("");
+
+  // Notification Toast State for Clipboard Copy & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
+  // Selection state for copying CMD folder creation commands (Julian only)
+  const [selectedOCIds, setSelectedOCIds] = useState<string[]>([]);
+  const [cmdFolderPath, setCmdFolderPath] = useState("");
+  const savePathTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get current clean username without @equipo.local
+  const getCleanUsername = () => {
+    if (!user) return "julian";
+    if (user.displayName) return user.displayName;
+    if (user.email) {
+      return user.email.split("@")[0];
+    }
+    return "julian";
+  };
+
+  // Load cmdFolderPath from Firestore database (with fallback to localStorage / default)
+  useEffect(() => {
+    let isMounted = true;
+    const username = getCleanUsername();
+    const defaultPath = `C:\\Users\\${username}\\`;
+
+    // 1. Instant local display
+    if (typeof window !== "undefined") {
+      const localSaved = localStorage.getItem("cmd_folder_path");
+      if (localSaved) {
+        setCmdFolderPath(localSaved);
+      } else {
+        setCmdFolderPath(defaultPath);
+      }
+    }
+
+    // 2. Fetch official saved path from Firestore database
+    const fetchPathFromDb = async () => {
+      const db = getFirebaseDb();
+      if (!db || !username) return;
+      try {
+        const docRef = doc(db, "user_preferences", username.toLowerCase());
+        const snap = await getDoc(docRef);
+        if (snap.exists() && isMounted) {
+          const data = snap.data();
+          if (data?.cmdFolderPath) {
+            setCmdFolderPath(data.cmdFolderPath);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("cmd_folder_path", data.cmdFolderPath);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch user cmd path from Firestore:", err);
+      }
+    };
+
+    fetchPathFromDb();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const handleSavePath = (path: string) => {
+    setCmdFolderPath(path);
+
+    // Save locally for instant offline cache
+    if (typeof window !== "undefined") {
+      localStorage.setItem("cmd_folder_path", path);
+    }
+
+    // Debounced sync to Firestore database (protects free tier writes)
+    if (savePathTimeoutRef.current) {
+      clearTimeout(savePathTimeoutRef.current);
+    }
+
+    savePathTimeoutRef.current = setTimeout(async () => {
+      const db = getFirebaseDb();
+      const username = getCleanUsername();
+      if (!db || !username) return;
+      try {
+        const docRef = doc(db, "user_preferences", username.toLowerCase());
+        await setDoc(docRef, { 
+          cmdFolderPath: path,
+          updatedAt: serverTimestamp() 
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Could not save cmd path to Firestore:", err);
+      }
+    }, 600);
+  };
+
+  const getFormattedCreatedAt = (orden: OrdenCompra | null) => {
+    if (!orden || !orden.createdAt) return "";
+    let date: Date | null = null;
+    const ca = orden.createdAt;
+    
+    if (ca && typeof ca === "object") {
+      if ("toDate" in ca && typeof (ca as { toDate: () => unknown }).toDate === "function") {
+        date = (ca as { toDate: () => Date }).toDate();
+      } else if ("seconds" in ca && typeof (ca as { seconds: number }).seconds === "number") {
+        date = new Date((ca as { seconds: number }).seconds * 1000);
+      } else if ((ca as unknown) instanceof Date) {
+        date = ca as unknown as Date;
+      }
+    }
+    
+    if (!date) return "";
+    return `${date.toLocaleDateString("es-AR")} ${date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+  };
+
+  const isSearching = searchQuery.trim() !== "";
+  const isJulian = user ? getCleanUsername().toLowerCase() === "julian" : false;
+  const showCMDSection = filterEstado === "Pendientes" && isJulian;
+
+  // Unique list of creators
+  const uniqueCreators = useMemo(() => {
+    const set = new Set<string>();
+    // Pre-populate with standard requested users
+    set.add("julian");
+    set.add("oalvarez");
+    set.add("talbrecht");
+    
+    // Scan loaded orders to add any others
+    ordenes.forEach(o => {
+      if (o.creadoPor) {
+        set.add(o.creadoPor.trim());
+      }
+    });
+    
+    return Array.from(set);
+  }, [ordenes]);
+
+  // Helper to map Firestore doc to OrdenCompra
+  const parseOrdenDoc = (id: string, data: Record<string, any>): OrdenCompra => ({
+    id,
+    empresa: data.empresa || "Hoyts",
+    numSolicitud: data.numSolicitud || "",
+    numOC: data.numOC || "",
+    razonSocial: data.razonSocial || "",
+    monto: data.monto ?? "",
+    motivo: data.motivo || "",
+    formaPago: data.formaPago || "30DFF",
+    liberada: Boolean(data.liberada),
+    mandada: Boolean(data.mandada),
+    entregada: Boolean(data.entregada),
+    cancelada: Boolean(data.cancelada),
+    creadoPor: data.creadoPor || "Usuario",
+    notas: data.notas || [],
+    createdAt: data.createdAt || null,
+    relatedOC: data.relatedOC || "",
+    enviado: Boolean(data.enviado),
+    enviadoA1: data.enviadoA1 || "",
+    enviadoA2: data.enviadoA2 || "",
+    fechaEnvio1: data.fechaEnvio1 || "",
+    fechaEnvio2: data.fechaEnvio2 || "",
+    firmado1: Boolean(data.firmado1),
+    firmado2: Boolean(data.firmado2),
+    firmante1: data.firmante1 || "",
+    firmante2: data.firmante2 || "",
+    fechaFirma1: data.fechaFirma1 || "",
+    fechaFirma2: data.fechaFirma2 || "",
+    linkSharepoint: data.linkSharepoint || "",
+  });
+
+  // Load Firestore real-time data with status filters and query limits
+  // Note: isSearching does NOT restart this listener to protect free tier quotas & preserve real-time updates!
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) {
+      setTimeout(() => {
+        setLoading(false);
+      }, 0);
+      return;
+    }
+
+    if (hasLoadedAllFromDb) {
+      setLoading(false);
+      return;
+    }
+
+    if (ordenes.length === 0) {
+      setLoading(true);
+    }
+
+    let unsubscribe: () => void = () => {};
+
+    const startListener = (withOrderBy: boolean) => {
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        let q;
+
+        if (filterEstado === "Liberadas") {
+          q = withOrderBy
+            ? query(colRef, where("liberada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("liberada", "==", true));
+        } else if (filterEstado === "Entregadas") {
+          q = withOrderBy
+            ? query(colRef, where("entregada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("entregada", "==", true));
+        } else if (filterEstado === "Mandadas") {
+          q = withOrderBy
+            ? query(colRef, where("mandada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("mandada", "==", true));
+        } else if (filterEstado === "Pendientes") {
+          q = withOrderBy
+            ? query(colRef, where("liberada", "==", false), orderBy("createdAt", "desc"), limit(queryLimit + 1))
+            : query(colRef, where("liberada", "==", false));
+        } else if (filterCreadoPor !== "todos") {
+          q = query(colRef, where("creadoPor", "==", filterCreadoPor));
+        } else {
+          // "Todas" without creator filter: paginate from newest to oldest
+          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
+        }
+
+        unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
+              return parseOrdenDoc(docSnap.id, docSnap.data());
+            });
+
+            // Sort manually on client to guarantee ordering
+            docs.sort((a, b) => {
+              const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+              const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+              return timeB - timeA;
+            });
+
+            setTimeout(() => {
+              setOrdenes(docs);
+              setLoading(false);
+            }, 0);
+          },
+          (error: Error) => {
+            // If composite index is building or not yet active, fall back gracefully to status query
+            if (withOrderBy && error.message && error.message.includes("index")) {
+              console.warn("Composite index pending in Firebase. Falling back to status query without orderBy...", error);
+              startListener(false);
+            } else {
+              console.warn("Firestore snapshot listener error:", error);
+              setTimeout(() => {
+                setLoading(false);
+              }, 0);
+            }
+          }
+        );
+      } catch (err) {
+        console.warn("Firestore collection error:", err);
+        setTimeout(() => {
+          setLoading(false);
+        }, 0);
+      }
+    };
+
+    startListener(true);
+    return () => unsubscribe();
+  }, [queryLimit, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
+
+  // Targeted background search for older orders (e.g. 3+ digits or text)
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (term.length < 3) {
+      setDbSearchResults([]);
+      setIsSearchingDb(false);
+      return;
+    }
+
+    setIsSearchingDb(true);
+
+    const timer = setTimeout(async () => {
+      const db = getFirebaseDb();
+      if (!db) {
+        setIsSearchingDb(false);
+        return;
+      }
+
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        const foundDocsMap = new Map<string, OrdenCompra>();
+
+        // Prefix match on numOC and numSolicitud
+        const queries = [
+          query(colRef, where("numOC", ">=", term), where("numOC", "<=", term + "\uf8ff"), limit(25)),
+          query(colRef, where("numSolicitud", ">=", term), where("numSolicitud", "<=", term + "\uf8ff"), limit(25)),
+        ];
+
+        // Also handle numeric search if term is numeric
+        const numVal = Number(term);
+        if (!isNaN(numVal)) {
+          queries.push(query(colRef, where("numOC", "==", numVal), limit(10)));
+        }
+
+        const snapshots = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
+        snapshots.forEach((snap) => {
+          if (!snap) return;
+          snap.docs.forEach((docSnap) => {
+            foundDocsMap.set(docSnap.id, parseOrdenDoc(docSnap.id, docSnap.data()));
+          });
+        });
+
+        // If prefix found nothing and term is alphanumeric, search recent 80 records for substring match
+        if (foundDocsMap.size === 0) {
+          const fallbackSnap = await getDocs(query(colRef, orderBy("createdAt", "desc"), limit(80))).catch(() => null);
+          if (fallbackSnap) {
+            const termLower = term.toLowerCase();
+            fallbackSnap.docs.forEach((docSnap) => {
+              const item = parseOrdenDoc(docSnap.id, docSnap.data());
+              if (
+                item.numOC.toLowerCase().includes(termLower) ||
+                item.razonSocial.toLowerCase().includes(termLower) ||
+                item.numSolicitud.toLowerCase().includes(termLower) ||
+                (item.relatedOC && item.relatedOC.toLowerCase().includes(termLower))
+              ) {
+                foundDocsMap.set(docSnap.id, item);
+              }
+            });
+          }
+        }
+
+        setDbSearchResults(Array.from(foundDocsMap.values()));
+      } catch (err) {
+        console.warn("Error searching Firestore:", err);
+      } finally {
+        setIsSearchingDb(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Open Modal for Add
+  const handleOpenAddModal = () => {
+    setEditingOrden(null);
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  // Open Modal for Edit
+  const handleOpenEditModal = (orden: OrdenCompra) => {
+    setEditingOrden(orden);
+    setEmpresa(orden.empresa || "Hoyts");
+    setNumSolicitud(orden.numSolicitud || "");
+    setNumOC(orden.numOC || "");
+    setRazonSocial(orden.razonSocial || "");
+    setMonto(orden.monto?.toString() || "");
+    setMotivo(orden.motivo || "");
+    setFormaPago(orden.formaPago || "30DFF");
+    setLiberada(Boolean(orden.liberada));
+    setMandada(Boolean(orden.mandada));
+    setCancelada(Boolean(orden.cancelada));
+    setRelatedOC(orden.relatedOC || "");
+    setLinkSharepoint(orden.linkSharepoint || "");
+    setIsModalOpen(true);
+  };
+
+  // Export filtered orders to Excel (.xlsx)
+  const handleExportExcel = () => {
+    if (filteredOrdenes.length === 0) {
+      showToast("⚠️ No hay órdenes para exportar con los filtros actuales");
+      return;
+    }
+    const dataToExport = filteredOrdenes.map((o) => {
+      let estadoStr = "Pendiente";
+      if (o.cancelada) estadoStr = "Cancelada";
+      else if (o.entregada) estadoStr = "Entregada";
+      else if (o.liberada) estadoStr = "Liberada";
+      else if (o.mandada) estadoStr = "Mandada";
+
+      let fechaStr = "";
+      if (o.createdAt && typeof o.createdAt === "object" && "seconds" in o.createdAt) {
+        fechaStr = new Date(o.createdAt.seconds * 1000).toLocaleDateString("es-AR");
+      }
+
+      return {
+        "Empresa": o.empresa,
+        "N° Solicitud": o.numSolicitud || "-",
+        "N° OC": o.numOC,
+        "Proveedor / Razón Social": o.razonSocial,
+        "Monto ($)": typeof o.monto === "number" ? o.monto : Number(o.monto) || 0,
+        "Forma de Pago": o.formaPago || "30DFF",
+        "Estado": estadoStr,
+        "Firmado 1": o.firmado1 ? "Sí" : "No",
+        "Firmado 2": o.firmado2 ? "Sí" : "No",
+        "Entregada": o.entregada ? "Sí" : "No",
+        "Detalle / Motivo": o.motivo || "",
+        "OC Relacionada": o.relatedOC || "",
+        "Creado Por": o.creadoPor || "Usuario",
+        "Link SharePoint": o.linkSharepoint || "",
+        "Fecha Creación": fechaStr
+      };
+    });
+
+    exportToExcel(dataToExport, `Ordenes_Compra_${new Date().toISOString().split("T")[0]}`);
+    showToast("📊 Planilla de Órdenes exportada a Excel");
+  };
+
+  // Sync Bidirectional relationships for OCs in Firestore (Full Clique/Transitive Sync)
+  const syncBidirectional = async (
+    currentOC: string,
+    oldOC: string,
+    newRelatedStr: string,
+    oldRelatedStr: string
+  ) => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    const newOcs = newRelatedStr.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean);
+    const oldOcs = oldRelatedStr.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean);
+
+    const hasNameChanged = oldOC && oldOC !== currentOC;
+
+    const colRef = collection(db, "ordenes_compra");
+
+    // Helper to get search values for any format (string/number/leading zeros)
+    const getSearchValues = (val: string) => {
+      const searchValues: (string | number)[] = [val];
+      const numVal = Number(val);
+      if (!isNaN(numVal)) {
+        searchValues.push(numVal);
+        searchValues.push(numVal.toString());
+      }
+      return Array.from(new Set(searchValues));
+    };
+
+    // Calculate cliques
+    const newClique = Array.from(new Set([currentOC, ...newOcs]));
+    const oldClique = oldOC ? Array.from(new Set([oldOC, ...oldOcs])) : [];
+
+    // OCs that were removed from the relationship
+    const removedOcs = oldClique.filter(x => !newClique.includes(x));
+
+    // 1. Sync all active members of the new clique so they all list each other
+    for (const member of newClique) {
+      try {
+        const uniqueSearchValues = getSearchValues(member);
+        const q = query(colRef, where("numOC", "in", uniqueSearchValues));
+        const querySnapshot = await getDocs(q);
+
+        const linksToAdd = newClique.filter(x => x !== member);
+
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          let relList = (data.relatedOC || "").split(/[\s,/\-]+/).map((s: string) => s.trim()).filter(Boolean);
+
+          // Clean old reference if name changed
+          if (hasNameChanged && oldOC) {
+            relList = relList.filter((x: string) => x !== oldOC && Number(x) !== Number(oldOC));
+          }
+
+          // Clean any removed member references
+          for (const rem of removedOcs) {
+            relList = relList.filter((x: string) => x !== rem && Number(x) !== Number(rem));
+          }
+
+          // Add links from new clique
+          for (const link of linksToAdd) {
+            const hasLink = relList.some((x: string) => x === link || Number(x) === Number(link));
+            if (!hasLink) {
+              relList.push(link);
+            }
+          }
+
+          await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+            relatedOC: relList.join(", ")
+          });
+        }
+      } catch (err) {
+        console.error("Error syncing clique member:", err);
+      }
+    }
+
+    // 2. Remove references from the removed OCs
+    for (const rem of removedOcs) {
+      try {
+        const uniqueSearchValues = getSearchValues(rem);
+        const q = query(colRef, where("numOC", "in", uniqueSearchValues));
+        const querySnapshot = await getDocs(q);
+
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          let relList = (data.relatedOC || "").split(/[\s,/\-]+/).map((s: string) => s.trim()).filter(Boolean);
+
+          // Remove all members of the new clique from the removed OC
+          for (const member of newClique) {
+            relList = relList.filter((x: string) => x !== member && Number(x) !== Number(member));
+          }
+
+          // Also remove oldOC if name changed
+          if (oldOC) {
+            relList = relList.filter((x: string) => x !== oldOC && Number(x) !== Number(oldOC));
+          }
+
+          await updateDoc(doc(db, "ordenes_compra", docSnap.id), {
+            relatedOC: relList.join(", ")
+          });
+        }
+      } catch (err) {
+        console.error("Error cleaning removed clique member:", err);
+      }
+    }
+  };
+
+  // Handle Save (Add or Edit)
+  const handleSaveOrden = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isOrdenesUser) return;
+    setSubmitting(true);
+
+    const authorName = getCleanUsername();
+
+    let finalLiberada = liberada;
+    let finalMandada = mandada;
+    let finalEntregada = editingOrden ? Boolean(editingOrden.entregada) : false;
+
+    if (cancelada) {
+      finalLiberada = false;
+      finalMandada = false;
+      finalEntregada = false;
+    } else if (finalEntregada) {
+      finalLiberada = false;
+      finalMandada = false;
+    } else if (finalLiberada) {
+      finalMandada = false;
+      finalEntregada = false;
+    } else if (finalMandada) {
+      finalLiberada = false;
+      finalEntregada = false;
+    }
+
+    const dataToSave = {
+      empresa,
+      numSolicitud: numSolicitud.trim(),
+      numOC: numOC.trim(),
+      razonSocial: razonSocial.trim(),
+      monto: Number(monto) || monto,
+      motivo: motivo.trim(),
+      formaPago: formaPago.trim() || "30DFF",
+      liberada: finalLiberada,
+      mandada: finalMandada,
+      entregada: finalEntregada,
+      cancelada,
+      creadoPor: editingOrden?.creadoPor || authorName,
+      relatedOC: relatedOC.trim(),
+      enviado: editingOrden ? Boolean(editingOrden.enviado) : false,
+      firmado1: editingOrden ? Boolean(editingOrden.firmado1) : false,
+      firmado2: editingOrden ? Boolean(editingOrden.firmado2) : false,
+      firmante1: editingOrden?.firmante1 || "",
+      firmante2: editingOrden?.firmante2 || "",
+      fechaFirma1: editingOrden?.fechaFirma1 || "",
+      fechaFirma2: editingOrden?.fechaFirma2 || "",
+      linkSharepoint: linkSharepoint.trim(),
+    };
+
+    const db = getFirebaseDb();
+
+    if (editingOrden && editingOrden.id) {
+      // Update existing order
+      setOrdenes((prev) =>
+        prev.map((item) => (item.id === editingOrden.id ? { ...item, ...dataToSave } : item))
+      );
+
+      if (db) {
+        try {
+          const docRef = doc(db, "ordenes_compra", editingOrden.id);
+          await updateDoc(docRef, dataToSave);
+          // Sync bidirectional relationships in Firestore
+          syncBidirectional(numOC.trim(), editingOrden.numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
+          showToast("¡Orden de compra actualizada!");
+        } catch (err) {
+          console.error("Error al actualizar orden:", err);
+        }
+      }
+    } else {
+      // Add new order
+      const newOrden: Omit<OrdenCompra, "id"> = {
+        ...dataToSave,
+        notas: [],
+        createdAt: serverTimestamp(),
+      };
+
+      const tempId = generateUniqueId();
+      if (db) {
+        try {
+          await addDoc(collection(db, "ordenes_compra"), newOrden);
+          // Sync bidirectional relationships in Firestore
+          syncBidirectional(numOC.trim(), numOC.trim(), relatedOC.trim(), "");
+          showToast("¡Orden de compra agregada!");
+        } catch (err) {
+          console.error("Error al agregar orden:", err);
+          setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
+        }
+      } else {
+        setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
+      }
+    }
+
+    resetForm();
+    setIsModalOpen(false);
+    setSubmitting(false);
+  };
+
+  const resetForm = () => {
+    setEmpresa("Hoyts");
+    setNumSolicitud("");
+    setNumOC("");
+    setRazonSocial("");
+    setMonto("");
+    setMotivo("");
+    setFormaPago("30DFF");
+    setLiberada(false);
+    setMandada(false);
+    setCancelada(false);
+    setRelatedOC("");
+    setLinkSharepoint("");
+  };
+
+  // Add Note to Order
+  const handleAddNota = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNotaText.trim() || !activeNotesOrden || !activeNotesOrden.id) return;
+
+    setSavingNota(true);
+
+    const now = new Date();
+    const formattedDate = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`;
+
+    const nuevaNota: Nota = {
+      id: generateUniqueId(),
+      texto: newNotaText.trim(),
+      autor: getCleanUsername(),
+      fecha: formattedDate,
+    };
+
+    const updatedNotas = [...(activeNotesOrden.notas || []), nuevaNota];
+
+    // Optimistic UI update
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === activeNotesOrden.id ? { ...item, notas: updatedNotas } : item))
+    );
+    setActiveNotesOrden((prev) => (prev ? { ...prev, notas: updatedNotas } : null));
+
+    const db = getFirebaseDb();
+    if (db && activeNotesOrden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", activeNotesOrden.id);
+        await updateDoc(docRef, { notas: updatedNotas });
+        showToast("Nota agregada");
+      } catch (err) {
+        console.error("Error al agregar nota:", err);
+      }
+    }
+
+    setNewNotaText("");
+    setSavingNota(false);
+  };
+
+  // Optimistic handler for status changes from OrderStatusMenu
+  const handleStatusChange = (ordenId: string, updatedFields: Partial<OrdenCompra>) => {
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
+    );
+  };
+
+  // Toggle Liberada Status
+  const handleToggleLiberada = async (orden: OrdenCompra) => {
+    if (isOrdenesUser) return;
+    const newLiberada = !orden.liberada;
+    const msg = orden.liberada
+      ? `¿Estás seguro de marcar la OC ${orden.numOC} como NO liberada?`
+      : `¿Estás seguro de marcar la OC ${orden.numOC} como LIBERADA?`;
+    if (!confirm(msg)) return;
+
+    const updateData: Partial<OrdenCompra> = newLiberada
+      ? { liberada: true, mandada: false, entregada: false }
+      : { liberada: false, mandada: false, entregada: false, enviado: false, firmado1: false, firmado2: false };
+
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
+    );
+
+    const db = getFirebaseDb();
+    if (db && orden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", orden.id);
+        await updateDoc(docRef, updateData);
+      } catch (err) {
+        console.error("Error al actualizar liberada:", err);
+      }
+    }
+  };
+
+  // Toggle Mandada Status
+  const handleToggleMandada = async (orden: OrdenCompra) => {
+    if (isOrdenesUser) return;
+    const newMandada = !orden.mandada;
+    const msg = orden.mandada
+      ? `¿Estás seguro de marcar la OC ${orden.numOC} como NO mandada?`
+      : `¿Estás seguro de marcar la OC ${orden.numOC} como MANDADA?`;
+    if (!confirm(msg)) return;
+
+    const updateData: Partial<OrdenCompra> = newMandada
+      ? { mandada: true, liberada: false, entregada: false }
+      : { mandada: false, liberada: false, entregada: false };
+
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
+    );
+
+    const db = getFirebaseDb();
+    if (db && orden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", orden.id);
+        await updateDoc(docRef, updateData);
+      } catch (err) {
+        console.error("Error al actualizar mandada:", err);
+      }
+    }
+  };
+
+  // Toggle Entregada Status
+  const handleToggleEntregada = async (orden: OrdenCompra) => {
+    if (isOrdenesUser) return;
+    const newEntregada = !orden.entregada;
+    const msg = orden.entregada
+      ? `¿Estás seguro de marcar la OC ${orden.numOC} como NO entregada?`
+      : `¿Estás seguro de marcar la OC ${orden.numOC} como ENTREGADA?`;
+    if (!confirm(msg)) return;
+
+    const updateData: Partial<OrdenCompra> = newEntregada
+      ? { entregada: true, liberada: false, mandada: false }
+      : { entregada: false, liberada: true, mandada: false };
+
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
+    );
+
+    const db = getFirebaseDb();
+    if (db && orden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", orden.id);
+        await updateDoc(docRef, updateData);
+      } catch (err) {
+        console.error("Error al actualizar entregada:", err);
+      }
+    }
+  };
+
+  // Delete Order
+  const handleDelete = async (id?: string) => {
+    if (isOrdenesUser) return;
+    if (!id) return;
+    if (!confirm("¿Estás seguro de eliminar esta orden de compra?")) return;
+
+    setOrdenes((prev) => prev.filter((item) => item.id !== id));
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        await deleteDoc(doc(db, "ordenes_compra", id));
+        showToast("Orden eliminada");
+      } catch (err) {
+        console.error("Error al eliminar orden:", err);
+      }
+    }
+  };
+
+  // Helper to generate the text format for a single order
+  const getOrderCopyText = (orden: OrdenCompra, estado: string) => {
+    if (estado === "Liberadas") {
+      return `OC 0${orden.numOC} - ${orden.razonSocial}`;
+    }
+
+    const formattedMonto = typeof orden.monto === "number"
+      ? `$ ${orden.monto.toLocaleString("es-AR")}`
+      : orden.monto;
+
+    const notasPart = orden.notas && orden.notas.length > 0
+      ? "\nNotas:\n" + orden.notas.map(n => `- ${n.texto}`).join("\n")
+      : "";
+
+    const linkPart = orden.linkSharepoint ? `\nLink: ${orden.linkSharepoint}` : "";
+
+    return `\n\n\nOC ${orden.numOC} ${orden.empresa}
+Proveedor: ${orden.razonSocial}
+Monto: ${formattedMonto}
+Detalle: ${orden.motivo}
+Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
+  };
+
+  // Copy Order Format to Clipboard
+  const handleCopy = (orden: OrdenCompra) => {
+    const copyText = getOrderCopyText(orden, filterEstado);
+    navigator.clipboard.writeText(copyText);
+    showToast(`¡Copiado OC ${orden.numOC}!`);
+  };
+
+  // Copy All Filtered Orders to Clipboard
+  const handleCopyAll = () => {
+    if (filteredOrdenes.length === 0) return;
+    const joinSeparator = filterEstado === "Liberadas" ? "\n\n\n" : "\n";
+    const joinedText = filteredOrdenes
+      .map((orden) => getOrderCopyText(orden, filterEstado))
+      .join(joinSeparator);
+    navigator.clipboard.writeText(joinedText);
+    showToast(`¡Copiadas ${filteredOrdenes.length} órdenes al portapapeles!`);
+  };
+
+  // Handle Drop Link for SharePoint / OneDrive folder
+  const handleDropLink = async (e: React.DragEvent, orden: OrdenCompra) => {
+    e.preventDefault();
+    if (isOrdenesUser) return;
+    const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      const db = getFirebaseDb();
+      if (db && orden.id) {
+        try {
+          const docRef = doc(db, "ordenes_compra", orden.id);
+          await updateDoc(docRef, { linkSharepoint: url });
+          
+          setOrdenes((prev) =>
+            prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: url } : item))
+          );
+          
+          showToast(`¡Enlace de carpeta guardado para OC ${orden.numOC}!`);
+        } catch (err) {
+          console.error("Error al guardar enlace:", err);
+          showToast("Error al vincular el enlace");
+        }
+      }
+    } else {
+      showToast("Por favor suelta un enlace válido");
+    }
+  };
+
+  // Prompt user to paste SharePoint / OneDrive link
+  const handlePromptLink = async (orden: OrdenCompra) => {
+    if (isOrdenesUser) return;
+    const url = prompt(`Pega el enlace de SharePoint/OneDrive para la OC ${orden.numOC}:`);
+    if (url === null) return; // User cancelled
+    
+    const cleanUrl = url.trim();
+    if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+      const db = getFirebaseDb();
+      if (db && orden.id) {
+        try {
+          const docRef = doc(db, "ordenes_compra", orden.id);
+          await updateDoc(docRef, { linkSharepoint: cleanUrl });
+          
+          setOrdenes((prev) =>
+            prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: cleanUrl } : item))
+          );
+          
+          showToast(`¡Enlace guardado para OC ${orden.numOC}!`);
+        } catch (err) {
+          console.error("Error al guardar enlace:", err);
+          showToast("Error al guardar el enlace");
+        }
+      }
+    } else if (cleanUrl) {
+      alert("Por favor, ingresa un enlace válido (debe empezar con http:// o https://)");
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 1. Initial Load of Events (Firestore real-time listener + LocalStorage fallback)
-  useEffect(() => {
+  const handleLoadAllFromDb = async () => {
     const db = getFirebaseDb();
-    if (!db) {
-      // LocalStorage Fallback
-      const saved = localStorage.getItem("finanzas-calendar-events");
-      if (saved) {
-        try {
-          const parsedEvents = JSON.parse(saved);
-          setTimeout(() => {
-            setEvents(parsedEvents);
-          }, 0);
-        } catch (error) {
-          console.error("Error parsing saved events:", error);
-        }
-      } else {
-        setTimeout(() => {
-          setEvents([]);
-        }, 0);
+    if (!db) return;
+    setLoadingAllDb(true);
+    try {
+      const colRef = collection(db, "ordenes_compra");
+      const q = query(colRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      const allDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
+      setOrdenes(allDocs);
+      setHasLoadedAllFromDb(true);
+      showToast(`¡Se cargaron ${allDocs.length} órdenes de la base de datos!`);
+    } catch (err) {
+      console.error("Error al cargar todas las órdenes:", err);
+      showToast("Error al cargar toda la base de datos.");
+    } finally {
+      setLoadingAllDb(false);
+    }
+  };
+
+  // Combine live real-time orders with any deep search results from Firestore
+  const combinedOrdenes = useMemo(() => {
+    if (dbSearchResults.length === 0) return ordenes;
+    const map = new Map<string, OrdenCompra>();
+    ordenes.forEach((o) => {
+      const key = o.id || o.numOC;
+      if (key) map.set(key, o);
+    });
+    dbSearchResults.forEach((o) => {
+      const key = o.id || o.numOC;
+      if (key && !map.has(key)) {
+        map.set(key, o);
       }
+    });
+    return Array.from(map.values());
+  }, [ordenes, dbSearchResults]);
+
+  // Filtered list
+  const filteredOrdenes = combinedOrdenes.filter((orden) => {
+    const matchesSearch = (() => {
+      if (!searchQuery.trim()) return true;
+      const queryText = searchQuery.toLowerCase();
+      switch (searchField) {
+        case "numSolicitud":
+          return orden.numSolicitud.toLowerCase().includes(queryText);
+        case "numOC":
+          return (
+            orden.numOC.toLowerCase().includes(queryText) ||
+            (orden.relatedOC && orden.relatedOC.toLowerCase().includes(queryText))
+          );
+        case "razonSocial":
+          return orden.razonSocial.toLowerCase().includes(queryText);
+        case "todos":
+        default:
+          return (
+            orden.numOC.toLowerCase().includes(queryText) ||
+            (orden.relatedOC && orden.relatedOC.toLowerCase().includes(queryText)) ||
+            orden.numSolicitud.toLowerCase().includes(queryText) ||
+            orden.razonSocial.toLowerCase().includes(queryText) ||
+            orden.motivo.toLowerCase().includes(queryText) ||
+            (orden.creadoPor && orden.creadoPor.toLowerCase().includes(queryText))
+          );
+      }
+    })();
+
+    const matchesEmpresa =
+      filterEmpresa === "Todas" || orden.empresa === filterEmpresa;
+
+    const matchesEstado = (() => {
+      if (filterEstado === "Todas") return true;
+      
+      // If filtering for other active states, exclude cancelled orders
+      if (orden.cancelada) return false;
+      
+      if (filterEstado === "Liberadas") return Boolean(orden.liberada) && !orden.entregada;
+      if (filterEstado === "Mandadas") return Boolean(orden.mandada) && !orden.liberada && !orden.entregada;
+      if (filterEstado === "Entregadas") return Boolean(orden.entregada);
+      if (filterEstado === "Pendientes") return !orden.liberada && !orden.mandada && !orden.entregada;
+      
+      return true;
+    })();
+
+    const matchesCreadoPor = (() => {
+      if (filterCreadoPor === "todos") return true;
+      return (orden.creadoPor || "").toLowerCase().trim() === filterCreadoPor.toLowerCase().trim();
+    })();
+
+    return matchesSearch && matchesEmpresa && matchesEstado && matchesCreadoPor;
+  });
+
+  // Limit visible items to queryLimit (slicing off the extra placeholder item we fetched to check hasMore)
+  // Bypass slice when actively searching or when all DB is loaded
+  const visibleOrdenes = (isSearching || hasLoadedAllFromDb)
+    ? filteredOrdenes
+    : filteredOrdenes.slice(0, queryLimit);
+  const hasMore = (isSearching || hasLoadedAllFromDb)
+    ? false
+    : (ordenes.length > queryLimit || filteredOrdenes.length > queryLimit);
+
+  // Helper to sanitize Windows folder names
+  const sanitizeFolderName = (name: string) => {
+    return name.replace(/[\\/:*?"<>|]/g, "").trim();
+  };
+
+  const getCMDCommand = () => {
+    const selectedOrders = filteredOrdenes.filter(o => o.id && selectedOCIds.includes(o.id));
+    if (selectedOrders.length === 0) return "";
+    
+    const folderNames = selectedOrders.map(orden => {
+      const name = `OC ${orden.numOC} ${orden.empresa} ${orden.razonSocial}`;
+      return `"${sanitizeFolderName(name)}"`;
+    });
+
+    const mkdirCmd = `mkdir ${folderNames.join(" ")}`;
+    
+    if (cmdFolderPath.trim()) {
+      return `cd /d "${cmdFolderPath.trim()}"\r\n${mkdirCmd}`;
+    }
+    
+    return mkdirCmd;
+  };
+
+  const handleCopyCMD = () => {
+    const cmd = getCMDCommand();
+    if (!cmd) {
+      alert("Por favor selecciona al menos una orden de compra.");
       return;
     }
-
-    // Firestore Listener
-    const colRef = collection(db, "calendar_events");
-    const q = query(colRef);
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docs: CalendarEvent[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            title: data.title || "",
-            description: data.description || "",
-            date: data.date || "",
-            startTime: data.startTime || "",
-            endTime: data.endTime || "",
-            category: data.category || "finanzas",
-          };
-        });
-
-        setTimeout(() => {
-          setEvents(docs);
-        }, 0);
-      },
-      (error) => {
-        console.error("Firestore loading error, using local fallback:", error);
-        const saved = localStorage.getItem("finanzas-calendar-events");
-        if (saved) {
-          try {
-            const parsedEvents = JSON.parse(saved);
-            setTimeout(() => {
-              setEvents(parsedEvents);
-            }, 0);
-          } catch (err) {
-            console.error("Error parsing saved events on fallback:", err);
-          }
-        }
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  // 2. Navigation Helpers
-  const handlePrev = () => {
-    if (viewMode === "month") {
-      const prevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-      setCurrentDate(prevMonth);
-    } else {
-      const prevWeek = new Date(currentDate);
-      prevWeek.setDate(currentDate.getDate() - 7);
-      setCurrentDate(prevWeek);
-    }
+    navigator.clipboard.writeText(cmd);
+    showToast("¡Comando CMD de carpetas copiado al portapapeles!");
   };
-
-  const handleNext = () => {
-    if (viewMode === "month") {
-      const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-      setCurrentDate(nextMonth);
-    } else {
-      const nextWeek = new Date(currentDate);
-      nextWeek.setDate(currentDate.getDate() + 7);
-      setCurrentDate(nextWeek);
-    }
-  };
-
-  const handleToday = () => {
-    const today = new Date();
-    setCurrentDate(today);
-    setSelectedDate(today);
-  };
-
-  // 3. Modal Form Helpers
-  const openAddModal = (dateStr?: string, defaultHour?: number) => {
-    setEditingEvent(null);
-    setFormTitle("");
-    setFormDescription("");
-    
-    // Date fallback
-    if (dateStr) {
-      setFormDate(dateStr);
-    } else {
-      setFormDate(selectedDate.toISOString().split("T")[0]);
-    }
-
-    // Time fallback
-    if (defaultHour !== undefined) {
-      const hourStr = defaultHour.toString().padStart(2, "0");
-      setFormStartTime(`${hourStr}:00`);
-      setFormEndTime(`${(defaultHour + 1).toString().padStart(2, "0")}:00`);
-    } else {
-      setFormStartTime("09:00");
-      setFormEndTime("10:00");
-    }
-    
-    setFormCategory("finanzas");
-    setFormError(null);
-    setShowEventModal(true);
-  };
-
-  const openEditModal = (event: CalendarEvent, e: React.MouseEvent) => {
-    e.stopPropagation(); // prevent triggering day/slot click
-    setEditingEvent(event);
-    setFormTitle(event.title);
-    setFormDescription(event.description || "");
-    setFormDate(event.date);
-    setFormStartTime(event.startTime);
-    setFormEndTime(event.endTime);
-    setFormCategory(event.category);
-    setFormError(null);
-    setShowEventModal(true);
-  };
-
-  const handleSaveEvent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-
-    if (!formTitle.trim()) {
-      setFormError("El título es obligatorio.");
-      return;
-    }
-
-    // Validate times
-    if (formStartTime >= formEndTime) {
-      setFormError("La hora de inicio debe ser anterior a la hora de fin.");
-      return;
-    }
-
-    const eventId = editingEvent ? editingEvent.id : `evt-${Date.now()}`;
-    const eventData = {
-      title: formTitle.trim(),
-      description: formDescription.trim() || "",
-      date: formDate,
-      startTime: formStartTime,
-      endTime: formEndTime,
-      category: formCategory,
-    };
-
-    const db = getFirebaseDb();
-    if (db) {
-      try {
-        await setDoc(doc(db, "calendar_events", eventId), eventData);
-        showToast(editingEvent ? "📝 Evento guardado en BD" : "➕ Evento creado en BD");
-      } catch (err) {
-        console.error("Error saving event to Firestore:", err);
-        setFormError("Error al guardar el evento en la base de datos.");
-        return;
-      }
-    } else {
-      // LocalStorage Fallback
-      const newLocalEvent: CalendarEvent = { id: eventId, ...eventData };
-      let updatedEvents: CalendarEvent[];
-      if (editingEvent) {
-        updatedEvents = events.map(e => e.id === editingEvent.id ? newLocalEvent : e);
-        showToast("📝 Evento modificado localmente");
-      } else {
-        updatedEvents = [...events, newLocalEvent];
-        showToast("➕ Evento añadido localmente");
-      }
-      setEvents(updatedEvents);
-      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
-    }
-
-    setShowEventModal(false);
-    setEditingEvent(null);
-  };
-
-  const handleDeleteEvent = async () => {
-    if (!editingEvent) return;
-
-    const db = getFirebaseDb();
-    if (db) {
-      try {
-        await deleteDoc(doc(db, "calendar_events", editingEvent.id));
-        showToast("🗑️ Evento eliminado de BD");
-      } catch (err) {
-        console.error("Error deleting event from Firestore:", err);
-        setFormError("Error al eliminar el evento de la base de datos.");
-        return;
-      }
-    } else {
-      // LocalStorage Fallback
-      const updatedEvents = events.filter(e => e.id !== editingEvent.id);
-      setEvents(updatedEvents);
-      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
-      showToast("🗑️ Evento eliminado localmente");
-    }
-
-    setShowEventModal(false);
-    setEditingEvent(null);
-  };
-
-  // 4. Date Math for Month View
-  const getDaysInMonth = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-
-    const firstDay = new Date(year, month, 1);
-    // Shift so Monday is 0, Sunday is 6
-    const startDayOffset = (firstDay.getDay() + 6) % 7;
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    const prevMonthTotalDays = new Date(year, month, 0).getDate();
-
-    const dayCells: { date: Date; isCurrentMonth: boolean; key: string }[] = [];
-
-    // Previous month padding
-    for (let i = startDayOffset - 1; i >= 0; i--) {
-      const d = new Date(year, month - 1, prevMonthTotalDays - i);
-      dayCells.push({
-        date: d,
-        isCurrentMonth: false,
-        key: `prev-${prevMonthTotalDays - i}`,
-      });
-    }
-
-    // Current month days
-    for (let i = 1; i <= totalDays; i++) {
-      const d = new Date(year, month, i);
-      dayCells.push({
-        date: d,
-        isCurrentMonth: true,
-        key: `curr-${i}`,
-      });
-    }
-
-    // Next month padding (total cells must be multiple of 7, usually 35 or 42)
-    const totalCells = dayCells.length;
-    const nextMonthPadding = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-    for (let i = 1; i <= nextMonthPadding; i++) {
-      const d = new Date(year, month + 1, i);
-      dayCells.push({
-        date: d,
-        isCurrentMonth: false,
-        key: `next-${i}`,
-      });
-    }
-
-    return dayCells;
-  };
-
-  // 5. Date Math for Week View
-  const getDaysInWeek = () => {
-    // Shift so Monday is 0, Sunday is 6
-    const dayOfWeek = (currentDate.getDay() + 6) % 7;
-    
-    // Get Monday of current week
-    const monday = new Date(currentDate);
-    monday.setDate(currentDate.getDate() - dayOfWeek);
-
-    const weekDays: Date[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      weekDays.push(d);
-    }
-    return weekDays;
-  };
-
-  // Helpers for checking dates
-  const isSameDay = (d1: Date, d2: Date) => {
-    return (
-      d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate()
-    );
-  };
-
-  const getFormattedDateStr = (date: Date) => {
-    return date.toISOString().split("T")[0];
-  };
-
-  const getEventsForDate = (date: Date) => {
-    const dateStr = getFormattedDateStr(date);
-    return events
-      .filter(e => e.date === dateStr)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  };
-
-  // Get localized names
-  const getMonthName = () => {
-    return currentDate.toLocaleString("es-AR", { month: "long", year: "numeric" });
-  };
-
-  const getWeekRangeName = (weekDays: Date[]) => {
-    if (weekDays.length === 0) return "";
-    const start = weekDays[0];
-    const end = weekDays[6];
-
-    const formatDay = (d: Date) => d.toLocaleString("es-AR", { day: "numeric", month: "short" });
-    const formatYear = (d: Date) => d.toLocaleString("es-AR", { year: "numeric" });
-
-    if (start.getFullYear() !== end.getFullYear()) {
-      return `Semana: ${formatDay(start)} ${formatYear(start)} - ${formatDay(end)} ${formatYear(end)}`;
-    }
-    return `Semana: ${formatDay(start)} - ${formatDay(end)} (${formatYear(start)})`;
-  };
-
-  const weekDays = getDaysInWeek();
-  const monthDays = getDaysInMonth();
-  const selectedDayEvents = getEventsForDate(selectedDate);
 
   return (
     <AppLayout 
-      title="Calendario Operativo" 
-      subtitle="Planifica tus tareas, reuniones y prorrateos de gastos"
+      title="Órdenes de Compra" 
+      subtitle="Gestión, edición, notas internas y copia rápida de solicitudes"
     >
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-[#0d131f] border border-emerald-500/30 px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold text-emerald-400 flex items-center gap-2 animate-bounce">
-          <Check className="w-4 h-4 text-emerald-400" />
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-emerald-500 text-white font-semibold text-xs shadow-2xl flex items-center gap-2 animate-bounce">
+          <CheckCircle2 className="w-4 h-4" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Main Container */}
       <div className="space-y-6">
-        {/* 1. Header Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 glass-card p-4 rounded-2xl border border-white/10 shadow-lg">
-          {/* Month/Week Navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrev}
-              className="p-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
-              title="Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            
-            <button
-              onClick={handleToday}
-              className="px-3.5 py-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-200 transition-colors"
-            >
-              Hoy
-            </button>
-
-            <button
-              onClick={handleNext}
-              className="p-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
-              title="Siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-
-            <h2 className="ml-2 font-bold text-sm sm:text-base text-white capitalize tracking-wide">
-              {viewMode === "month" ? getMonthName() : getWeekRangeName(weekDays)}
-            </h2>
+        {/* Top Header Controls: Title, Metrics & Actions */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-500/10">
+                <ShoppingBag className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Solicitudes de Órdenes
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-slate-400 flex-wrap mt-0.5">
+                  <span className="font-medium text-slate-300">
+                    Mostrando <strong className="text-white font-bold">{visibleOrdenes.length}</strong> de <strong className="text-white font-bold">{filteredOrdenes.length}</strong> órdenes
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    {ordenes.filter(o => o.liberada).length} liberadas
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    {ordenes.filter(o => o.mandada && !o.liberada).length} mandadas
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* View Toggles & Add Event */}
-          <div className="flex items-center justify-between sm:justify-end gap-3">
-            {/* Monthly / Weekly toggle */}
-            <div className="flex bg-[#0b0f19] border border-white/10 p-1 rounded-xl gap-1">
-              <button
-                onClick={() => setViewMode("month")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  viewMode === "month"
-                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Mensual
-              </button>
-              <button
-                onClick={() => setViewMode("week")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  viewMode === "week"
-                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Semanal
-              </button>
-            </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+            {/* Valor Dólar Venta BNA (Leftmost) */}
+            <DolarVentaBadge />
 
-            {/* "+ Nuevo" Button */}
+            {/* Cargar toda la base de datos Button */}
             <button
-              onClick={() => openAddModal()}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all"
+              onClick={handleLoadAllFromDb}
+              disabled={loadingAllDb || hasLoadedAllFromDb}
+              className={`px-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
+                hasLoadedAllFromDb
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+                  : "bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+              }`}
+              title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
             >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Nuevo Evento</span>
-              <span className="sm:hidden">Nuevo</span>
+              {loadingAllDb ? (
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              ) : hasLoadedAllFromDb ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Database className="w-4 h-4 text-indigo-400" />
+              )}
+              <span>{loadingAllDb ? "Cargando todo..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
             </button>
+
+            {/* Exportar a Excel Button */}
+            <button
+              onClick={handleExportExcel}
+              className="px-4 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              title="Descargar listado actual de órdenes en Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Exportar Excel</span>
+            </button>
+
+            {!isOrdenesUser && (
+              <button
+                onClick={handleOpenAddModal}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nueva Orden</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 2. Calendar Views Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-          {/* Main Grid: Left 3/4 on large screens */}
-          <div className="xl:col-span-3 space-y-6">
-            
-            {/* MONTH VIEW */}
-            {viewMode === "month" && (
-              <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-2xl">
-                {/* Weekday headers */}
-                <div className="grid grid-cols-7 bg-[#0c121e] border-b border-white/10 text-center font-bold text-gray-400 py-3 text-xs uppercase tracking-wider">
-                  <div>Lun</div>
-                  <div>Mar</div>
-                  <div>Mié</div>
-                  <div>Jue</div>
-                  <div>Vie</div>
-                  <div>Sáb</div>
-                  <div>Dom</div>
-                </div>
+        {/* Buscador & Filters Bar */}
+        <div className="glass-card border border-white/10 p-4 sm:p-5 rounded-2xl space-y-4 shadow-xl bg-[#0e1322]">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 flex-wrap">
+            {/* Buscador Search Input Group */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-md">
+              {/* Dropdown de campo */}
+              <div className="relative flex-shrink-0">
+                <select
+                  value={searchField}
+                  onChange={(e) => {
+                    setSearchField(e.target.value as "todos" | "numSolicitud" | "numOC" | "razonSocial");
+                    setQueryLimit(15);
+                  }}
+                  className="w-full sm:w-auto pl-3 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white font-medium focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none shadow-sm"
+                >
+                  <option value="todos" className="bg-[#080c16] text-white">Todos los campos</option>
+                  <option value="numOC" className="bg-[#080c16] text-white">N° OC</option>
+                  <option value="numSolicitud" className="bg-[#080c16] text-white">N° Solicitud</option>
+                  <option value="razonSocial" className="bg-[#080c16] text-white">Proveedor</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
 
-                {/* Day cells grid */}
-                <div className="grid grid-cols-7 grid-rows-6 auto-rows-fr min-h-[320px] md:min-h-[550px] divide-x divide-y divide-white/5 bg-[#090d16]/30">
-                  {monthDays.map((cell) => {
-                    const isSelected = isSameDay(cell.date, selectedDate);
-                    const isToday = isSameDay(cell.date, new Date());
-                    const dayEvents = getEventsForDate(cell.date);
+              {/* Input de búsqueda */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setQueryLimit(15);
+                  }}
+                  placeholder="Buscar orden, proveedor..."
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
+                />
+                {isSearchingDb && (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
+                )}
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setQueryLimit(15);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
 
-                    return (
-                      <div
-                        key={cell.key}
-                        onClick={() => setSelectedDate(cell.date)}
-                        className={`p-1.5 md:p-2 transition-all cursor-pointer relative min-h-[50px] md:min-h-[90px] flex flex-col justify-between ${
-                          cell.isCurrentMonth ? "text-white" : "text-gray-600 bg-white/[0.01]"
-                        } ${
-                          isSelected ? "bg-emerald-500/5 ring-1 ring-emerald-500/30" : "hover:bg-white/[0.02]"
-                        }`}
-                      >
-                        {/* Day Number */}
-                        <div className="flex justify-between items-center mb-1">
+            {/* Filter Pills for Empresa */}
+            <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner">
+              <span className="text-gray-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Empresa</span>
+              {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
+                const isSelected = filterEmpresa === emp;
+                return (
+                  <button
+                    key={emp}
+                    onClick={() => {
+                      setFilterEmpresa(emp);
+                      setQueryLimit(15);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                      isSelected
+                        ? emp === "Hoyts"
+                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                          : emp === "CMK"
+                          ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
+                          : "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {emp}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Filter Pills for Estado */}
+            <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner flex-wrap gap-0.5">
+              <span className="text-gray-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Estado</span>
+              {(
+                [
+                  { id: "Todas", label: "Todas", dot: null },
+                  { id: "Pendientes", label: "Pendientes", dot: "bg-slate-400" },
+                  { id: "Mandadas", label: "Mandadas", dot: "bg-amber-400" },
+                  { id: "Liberadas", label: "Liberadas", dot: "bg-emerald-400" },
+                  { id: "Entregadas", label: "Entregadas", dot: "bg-indigo-400" },
+                ] as const
+              ).map((est) => {
+                const isSelected = filterEstado === est.id;
+                return (
+                  <button
+                    key={est.id}
+                    onClick={() => {
+                      setFilterEstado(est.id);
+                      setQueryLimit(15);
+                      setSelectedOCIds([]);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                      isSelected
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {est.dot && <span className={`w-1.5 h-1.5 rounded-full ${est.dot}`} />}
+                    <span>{est.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Seccion CMD de Creacion de Carpetas (solo Julian, en Pendientes, si hay seleccionadas) */}
+          <OrderCmdBar
+            showCMDSection={showCMDSection}
+            selectedOCIds={selectedOCIds}
+            setSelectedOCIds={setSelectedOCIds}
+            cmdFolderPath={cmdFolderPath}
+            onSavePath={handleSavePath}
+            cmdCommand={getCMDCommand()}
+            onCopyCMD={handleCopyCMD}
+          />
+
+          {/* Leyenda de Estados & Referencia de Mismo Solicitante */}
+          <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
+            <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px] mr-1">Guía de Estados:</span>
+            <span className="inline-flex items-center gap-1.5 bg-slate-500/10 text-slate-300 px-2.5 py-1 rounded-xl border border-slate-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span>Pendiente</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-xl border border-amber-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span>Mandada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>Liberada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-indigo-500/10 text-indigo-300 px-2.5 py-1 rounded-xl border border-indigo-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+              <span>Entregada</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              <span>Cancelada</span>
+            </span>
+
+            {/* Badge Mejorado de Mismo Solicitante */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-semibold shadow-sm ml-auto">
+              <Link2 className="w-3.5 h-3.5 text-purple-400" />
+              <span>Vinculadas: Mismo Solicitante</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Table / List View */}
+        {loading ? (
+          <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+            <p className="text-xs">Cargando órdenes de compra de Firestore...</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-semibold">
+                    <tr>
+                      {showCMDSection && (
+                        <th className="px-4 py-3.5 w-10">
+                          <input
+                            type="checkbox"
+                            checked={visibleOrdenes.length > 0 && visibleOrdenes.every(o => o.id && selectedOCIds.includes(o.id))}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                const newIds = [...new Set([...selectedOCIds, ...visibleOrdenes.map(o => o.id || "").filter(Boolean)])];
+                                setSelectedOCIds(newIds);
+                              } else {
+                                const visibleIds = visibleOrdenes.map(o => o.id || "");
+                                setSelectedOCIds(prev => prev.filter(id => !visibleIds.includes(id)));
+                              }
+                            }}
+                            className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                          />
+                        </th>
+                      )}
+                      <th className="px-4 py-3.5">Estado</th>
+                      <th className="px-4 py-3.5">Empresa</th>
+                      <th className="px-4 py-3.5">N° Solicitud</th>
+                      <th className="px-4 py-3.5">N° OC & Copiar</th>
+                      <th className="px-4 py-3.5">
+                        <div className="flex items-center gap-1">
+                          <span>Creado Por</span>
+                          <select
+                            value={filterCreadoPor}
+                            onChange={(e) => {
+                              setFilterCreadoPor(e.target.value);
+                              setQueryLimit(15);
+                            }}
+                            className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-semibold text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none pr-4.5 lowercase"
+                            style={{ 
+                              backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(156, 163, 175, 0.8)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
+                              backgroundPosition: 'right 4px center', 
+                              backgroundSize: '8px', 
+                              backgroundRepeat: 'no-repeat' 
+                            }}
+                          >
+                            <option value="todos" className="bg-[#090d16] text-gray-300 uppercase">Todos</option>
+                            {uniqueCreators.map((creator) => (
+                              <option key={creator} value={creator} className="bg-[#090d16] text-gray-300">
+                                {creator}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </th>
+                      <th className="px-4 py-3.5">Proveedor</th>
+                      <th className="px-4 py-3.5">Monto</th>
+                      <th className="px-4 py-3.5">Forma Pago</th>
+                      <th className="px-4 py-3.5">Descripción y Notas</th>
+                      {!isOrdenesUser && <th className="px-4 py-3.5 text-right">Editar</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-gray-300">
+                    {isSearchingDb && visibleOrdenes.length === 0 ? (
+                      <tr>
+                        <td colSpan={showCMDSection ? 11 : isOrdenesUser ? 9 : 10} className="px-4 py-14 text-center text-gray-400">
+                          <div className="space-y-3 flex flex-col items-center justify-center">
+                            <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
+                            <p className="font-semibold text-xs text-indigo-200">Buscando en la base de datos...</p>
+                            <p className="text-[11px] text-gray-400 max-w-sm mx-auto">
+                              Consultando órdenes coincidentes con &quot;{searchQuery}&quot;...
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : visibleOrdenes.length === 0 ? (
+                      <tr>
+                        <td colSpan={showCMDSection ? 11 : isOrdenesUser ? 9 : 10} className="px-4 py-12 text-center text-gray-500">
+                          <div className="space-y-2 flex flex-col items-center justify-center">
+                            <AlertCircle className="w-8 h-8 text-gray-600 mx-auto" />
+                            <p className="font-semibold text-xs text-gray-300">No se encontraron órdenes de compra</p>
+                            <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                              {searchQuery || filterEmpresa !== "Todas" || filterEstado !== "Todas" || filterCreadoPor !== "todos"
+                                ? "Intenta modificar los filtros o la búsqueda."
+                                : "Aún no hay órdenes de compra registradas. ¡Agrega la primera!"}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      visibleOrdenes.map((orden) => {
+                      const isPendingSend = orden.liberada && !orden.mandada;
+                      let rowClass = "hover:bg-white/[0.02] transition-all duration-200";
+                      
+                      if (orden.cancelada) {
+                        rowClass = "bg-red-950/10 opacity-60 hover:opacity-80 border-l-4 border-l-red-600 transition-all duration-200";
+                      } else if (isPendingSend) {
+                        rowClass = "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500 transition-all duration-200";
+                      }
+                      return (
+                        <tr key={orden.id} className={rowClass}>
+                          {showCMDSection && (
+                            <td className="px-4 py-4 w-10">
+                              <input
+                                type="checkbox"
+                                checked={orden.id ? selectedOCIds.includes(orden.id) : false}
+                                onChange={() => {
+                                  if (!orden.id) return;
+                                  setSelectedOCIds(prev =>
+                                    prev.includes(orden.id!)
+                                      ? prev.filter(id => id !== orden.id)
+                                      : [...prev, orden.id!]
+                                  );
+                                }}
+                                className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                              />
+                            </td>
+                          )}
+                          {/* Selector Desplegable de Estado */}
+                          <td className="px-4 py-4">
+                            <OrderStatusMenu
+                              orden={orden}
+                              isOrdenesUser={isOrdenesUser}
+                              onStatusChange={handleStatusChange}
+                              showToast={showToast}
+                            />
+                          </td>
+
+                        {/* Empresa Pill */}
+                        <td className="px-4 py-4">
                           <span
-                            className={`flex items-center justify-center text-[11px] md:text-xs font-bold w-5 h-5 md:w-6 md:h-6 rounded-lg ${
-                              isToday
-                                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                                : cell.isCurrentMonth
-                                ? "text-gray-200"
-                                : "text-gray-600"
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                              orden.empresa === "Hoyts"
+                                ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                                : "bg-teal-500/15 text-teal-300 border-teal-500/30"
                             }`}
                           >
-                            {cell.date.getDate()}
+                            {orden.empresa}
                           </span>
+                        </td>
 
-                          {/* "+" quick add link shown on hover (Desktop only) */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openAddModal(getFormattedDateStr(cell.date));
-                            }}
-                            className="hidden md:inline-flex opacity-0 hover:opacity-100 group-hover:opacity-100 p-0.5 rounded bg-white/5 text-gray-400 hover:text-white hover:bg-emerald-500/20 transition-all text-[10px]"
-                            title="Añadir evento en este día"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
+                        {/* N° Solicitud (Opcional) */}
+                        <td className="px-4 py-4 font-mono text-gray-300">
+                          {orden.numSolicitud || "-"}
+                        </td>
 
-                        {/* Event dot indicators (Mobile only, replaces text list) */}
-                        {dayEvents.length > 0 && (
-                          <div className="flex md:hidden justify-center gap-0.5 mt-0.5 pb-0.5">
-                            {dayEvents.slice(0, 3).map((evt) => {
-                              const styles = CATEGORY_STYLES[evt.category] || CATEGORY_STYLES.finanzas;
-                              return (
-                                <span key={evt.id} className={`w-1 h-1 rounded-full ${styles.dot}`} />
-                              );
-                            })}
-                            {dayEvents.length > 3 && (
-                              <span className="w-1 h-1 rounded-full bg-gray-400" />
+                        {/* N° OC + Copy Button */}
+                        <td 
+                          className="px-4 py-4"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDropLink(e, orden)}
+                        >
+                          <div className="flex flex-col items-start gap-1">
+                            <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
+                              <span className="font-mono font-bold text-emerald-400">
+                                {orden.numOC}
+                              </span>
+                              <button
+                                onClick={() => handleCopy(orden)}
+                                className={`p-1 rounded transition-colors ${
+                                  filterEstado === "Liberadas"
+                                    ? "bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
+                                    : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white"
+                                }`}
+                                title="Copiar resumen de OC"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              {orden.linkSharepoint ? (
+                                <a
+                                  href={orden.linkSharepoint}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500 hover:text-white transition-colors"
+                                  title="Abrir carpeta vinculada"
+                                >
+                                  <FolderOpen className="w-3.5 h-3.5" />
+                                </a>
+                              ) : (
+                                <button 
+                                  onClick={() => handlePromptLink(orden)}
+                                  className="p-1 rounded border border-dashed border-white/20 text-gray-500 hover:text-gray-300 hover:border-gray-400 cursor-pointer transition-all flex items-center justify-center bg-transparent"
+                                  title="Haz clic para pegar enlace o arrastra un enlace web aquí"
+                                >
+                                  <Folder className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {orden.relatedOC && (
+                              <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
+                                {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => setSearchQuery(ocNum)}
+                                    className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all"
+                                    title={`Click para buscar la OC ${ocNum}`}
+                                  >
+                                    <Link2 className="w-2.5 h-2.5" />
+                                    <span>Ref: OC {ocNum}</span>
+                                  </button>
+                                ))}
+                              </div>
                             )}
                           </div>
-                        )}
+                        </td>
 
-                        {/* Events list inside day cell (Desktop only) */}
-                        <div className="hidden md:flex flex-1 flex-col gap-1 overflow-hidden">
-                          {dayEvents.slice(0, 3).map((event) => {
-                            const styles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.finanzas;
-                            return (
-                              <div
-                                key={event.id}
-                                onClick={(e) => openEditModal(event, e)}
-                                className={`text-[10px] px-2 py-0.5 rounded border font-semibold truncate ${styles.bg}`}
-                                title={`${event.startTime} - ${event.title}`}
-                              >
-                                {event.startTime} {event.title}
-                              </div>
-                            );
-                          })}
-                          {dayEvents.length > 3 && (
-                            <div className="text-[9px] text-gray-500 font-bold pl-1">
-                              + {dayEvents.length - 3} más
+                        {/* Creado Por */}
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 font-medium text-[11px]">
+                            <UserIcon className="w-3 h-3 text-emerald-400" />
+                            {orden.creadoPor || "Usuario"}
+                          </span>
+                        </td>
+
+                        {/* Proveedor */}
+                        <td className="px-4 py-4 max-w-xs">
+                          <div className="font-medium text-white truncate">
+                            {orden.razonSocial}
+                          </div>
+                          {orden.cancelada && (
+                            <div className="text-[10px] text-red-400 mt-1 bg-red-950/20 border border-red-500/20 px-2 py-1 rounded-lg">
+                              <span className="font-bold">Motivo Cancelación:</span>{" "}
+                              {orden.notas && orden.notas.length > 0
+                                ? orden.notas[orden.notas.length - 1].texto
+                                : "(Sin notas registradas)"}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Monto */}
+                        <td className="px-4 py-4 font-semibold text-emerald-300">
+                          {typeof orden.monto === "number"
+                            ? `$ ${orden.monto.toLocaleString("es-AR")}`
+                            : orden.monto}
+                        </td>
+
+                        {/* Forma Pago */}
+                        <td className="px-4 py-4 text-gray-300 font-medium">
+                          {orden.formaPago || "30DFF"}
+                        </td>
+
+                        {/* Botón Ver Descripción / Card Detalle */}
+                        <td className="px-4 py-4">
+                          <button
+                            onClick={() => setActiveNotesOrden(orden)}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/25 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                            title="Ver descripción completa, firmas y notas de la orden"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Ver Descripción</span>
+                            {orden.notas && orden.notas.length > 0 && (
+                              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                                {orden.notas.length}
+                              </span>
+                            )}
+                          </button>
+                        </td>
+
+                        {/* Action: Open Edit Form (Icon-only) */}
+                        {!isOrdenesUser && (
+                          <td className="px-4 py-4 text-right">
+                            <button
+                              onClick={() => handleOpenEditModal(orden)}
+                              className="p-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 ml-auto transition-colors inline-flex items-center justify-center"
+                              title="Editar orden"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                      );
+                    })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile / Tablet Cards View */}
+              <div className="lg:hidden space-y-4">
+                {isSearchingDb && visibleOrdenes.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 px-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="space-y-2 flex flex-col items-center justify-center">
+                      <Loader2 className="w-7 h-7 text-indigo-400 animate-spin mx-auto" />
+                      <p className="font-semibold text-xs text-indigo-200">Buscando en la base de datos...</p>
+                      <p className="text-[10px] text-gray-400 max-w-xs mx-auto">
+                        Consultando órdenes con &quot;{searchQuery}&quot;...
+                      </p>
+                    </div>
+                  </div>
+                ) : visibleOrdenes.length === 0 ? (
+                  <div className="py-12 text-center text-gray-500 px-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="space-y-1.5 flex flex-col items-center justify-center">
+                      <AlertCircle className="w-7 h-7 text-gray-600 mx-auto" />
+                      <p className="font-semibold text-xs text-gray-300">No se encontraron órdenes</p>
+                      <p className="text-[10px] text-gray-500 max-w-xs mx-auto">
+                        Prueba ajustando la búsqueda o seleccionando otro creador.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  visibleOrdenes.map((orden) => {
+                  const isPendingSend = orden.liberada && !orden.mandada;
+                  let cardClass = "p-4 space-y-3 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  if (orden.cancelada) {
+                    cardClass = "p-4 space-y-3 bg-red-950/10 opacity-60 border-l-4 border-l-red-600 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  } else if (isPendingSend) {
+                    cardClass = "p-4 space-y-3 bg-red-500/5 border-l-4 border-l-red-500 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
+                  }
+                  return (
+                    <div key={orden.id} className={cardClass}>
+                      {/* Top Row: Empresa, OC number and Actions (Copiar/Editar) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {showCMDSection && (
+                            <input
+                              type="checkbox"
+                              checked={orden.id ? selectedOCIds.includes(orden.id) : false}
+                              onChange={() => {
+                                if (!orden.id) return;
+                                setSelectedOCIds(prev =>
+                                  prev.includes(orden.id!)
+                                    ? prev.filter(id => id !== orden.id)
+                                    : [...prev, orden.id!]
+                                );
+                              }}
+                              className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer mr-1.5"
+                            />
+                          )}
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                              orden.empresa === "Hoyts"
+                                ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                                : "bg-teal-500/15 text-teal-300 border-teal-500/30"
+                            }`}
+                          >
+                            {orden.empresa}
+                          </span>
+                          <span className="font-mono text-emerald-400 font-bold text-xs">
+                            #{orden.numOC}
+                          </span>
+                          {orden.relatedOC && (
+                            <div className="flex flex-wrap items-center gap-1 ml-1.5">
+                              {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => setSearchQuery(ocNum)}
+                                  className="flex items-center gap-1 text-[8px] text-purple-300 font-bold bg-purple-500/15 px-1 rounded border border-purple-500/20 active:bg-purple-500/30 transition-all"
+                                  title={`Click para buscar la OC ${ocNum}`}
+                                >
+                                  <Link2 className="w-2 h-2" />
+                                  <span>Ref: {ocNum}</span>
+                                </button>
+                              ))}
                             </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
-            {/* WEEK TIMELINE VIEW */}
-            {viewMode === "week" && (
-              <div className="rounded-3xl glass-card border border-white/10 overflow-hidden shadow-2xl bg-[#090d16]/20">
-                
-                {/* 2.1 Desktop Week View (7 columns side-by-side) */}
-                <div className="hidden md:block overflow-x-auto">
-                  <div className="min-w-[700px] flex flex-col">
-                    
-                    {/* Header Columns */}
-                    <div className="flex border-b border-white/10 bg-white/5">
-                      {/* Empty corner for Hours label */}
-                      <div className="w-16 flex-shrink-0 border-r border-white/10 py-3 text-center text-[10px] font-bold text-gray-500 uppercase">
-                        Hora
-                      </div>
-                      
-                      {/* Weekday labels */}
-                      {weekDays.map((day) => {
-                        const isToday = isSameDay(day, new Date());
-                        const isSelected = isSameDay(day, selectedDate);
-                        
-                        return (
-                          <div
-                            key={day.toString()}
-                            onClick={() => setSelectedDate(day)}
-                            className={`flex-1 py-3 text-center cursor-pointer border-r border-white/5 transition-colors ${
-                              isSelected ? "bg-emerald-500/5" : "hover:bg-white/[0.01]"
+                        {/* Actions (Copiar & Editar) */}
+                        <div className="flex items-center gap-1.5">
+                          {orden.linkSharepoint && (
+                            <a
+                              href={orden.linkSharepoint}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-1 rounded-lg border border-blue-500/30 bg-blue-500/20 text-blue-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                              title="Abrir carpeta vinculada"
+                            >
+                              <FolderOpen className="w-3 h-3" />
+                              <span>Carpeta</span>
+                            </a>
+                          )}
+                          <button
+                            onClick={() => handleCopy(orden)}
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                              filterEstado === "Liberadas"
+                                ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-300"
+                                : "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
                             }`}
+                            title="Copiar resumen"
                           >
-                            <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                              {day.toLocaleString("es-AR", { weekday: "short" })}
-                            </span>
-                            <span
-                              className={`inline-flex items-center justify-center font-bold text-sm w-7 h-7 rounded-lg mt-1 ${
-                                isToday
-                                  ? "bg-emerald-500 text-white shadow-lg"
-                                  : "text-white"
-                              }`}
+                            <Copy className="w-3 h-3" />
+                            <span>Copiar</span>
+                          </button>
+                          {!isOrdenesUser && (
+                            <button
+                              onClick={() => handleOpenEditModal(orden)}
+                              className="p-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10 transition-colors inline-flex items-center justify-center"
+                              title="Editar orden"
                             >
-                              {day.getDate()}
+                              <Edit3 className="w-3 h-3 text-emerald-400" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Middle Details (Proveedor, Monto, Forma Pago) */}
+                      <div className="space-y-1.5 pt-1">
+                        <p className="text-xs font-semibold text-white truncate">
+                          <span className="text-gray-400 font-normal">Proveedor: </span>
+                          {orden.razonSocial}
+                        </p>
+                        
+                        {orden.cancelada && (
+                          <div className="p-2.5 rounded-xl bg-red-950/20 border border-red-500/20 text-red-400 text-xs mt-1.5">
+                            <span className="font-bold block text-[10px] uppercase tracking-wider">Motivo de Cancelación:</span>
+                            <span className="block mt-0.5 text-gray-300">
+                              {orden.notas && orden.notas.length > 0
+                                ? orden.notas[orden.notas.length - 1].texto
+                                : "(Sin notas registradas)"}
                             </span>
                           </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Timeline Body (Hour Rows + Absolute Event overlay) */}
-                    <div className="relative flex" style={{ height: "600px" }}>
-                      
-                      {/* Hours Y-Axis sidebar */}
-                      <div className="w-16 flex-shrink-0 border-r border-white/10 bg-white/[0.01] flex flex-col justify-between text-right pr-2 text-[10px] font-mono text-gray-500 py-1">
-                        {HOURS.map((hour) => (
-                          <div key={hour} style={{ height: `${600 / HOURS.length}px` }} className="flex items-start justify-end pt-1">
-                            {hour.toString().padStart(2, "0")}:00
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Day Columns containing grid lines and events */}
-                      <div className="flex-1 flex relative divide-x divide-white/5">
-                        
-                        {/* Background Grid Lines (Horizontal hour spans) */}
-                        <div className="absolute inset-0 flex flex-col pointer-events-none divide-y divide-white/5">
-                          {HOURS.map((hour) => (
-                            <div key={hour} style={{ height: `${600 / HOURS.length}px` }} />
-                          ))}
-                        </div>
-
-                        {/* Event placing columns */}
-                        {weekDays.map((day) => {
-                          const dateStr = getFormattedDateStr(day);
-                          const dayEvents = getEventsForDate(day);
-                          const isSelected = isSameDay(day, selectedDate);
-
-                          return (
-                            <div
-                              key={day.toString()}
-                              className={`flex-1 relative h-full transition-colors ${
-                                isSelected ? "bg-emerald-500/[0.01]" : ""
-                              }`}
-                              // Click empty space in timeline to create an event at that day/hour!
-                              onClick={(e) => {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const clickY = e.clientY - rect.top;
-                                const percentY = clickY / rect.height;
-                                const clickedHourDecimal = 8 + percentY * 14;
-                                const roundedHour = Math.floor(clickedHourDecimal);
-                                openAddModal(dateStr, Math.min(21, Math.max(8, roundedHour)));
-                              }}
-                            >
-                              {/* Render events inside this day column */}
-                              {dayEvents.map((event) => {
-                                const [sH, sM] = event.startTime.split(":").map(Number);
-                                const [eH, eM] = event.endTime.split(":").map(Number);
-                                const startDec = sH + sM / 60;
-                                const endDec = eH + eM / 60;
-                                
-                                const timelineStart = 8;
-                                const timelineEnd = 22;
-                                
-                                if (startDec >= timelineEnd || endDec <= timelineStart) {
-                                  return null;
-                                }
-                                
-                                const startClamped = Math.max(timelineStart, startDec);
-                                const endClamped = Math.min(timelineEnd, endDec);
-                                
-                                const topPercent = ((startClamped - timelineStart) / (timelineEnd - timelineStart)) * 100;
-                                const heightPercent = ((endClamped - startClamped) / (timelineEnd - timelineStart)) * 100;
-                                
-                                const styles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.finanzas;
-
-                                return (
-                                  <div
-                                    key={event.id}
-                                    onClick={(e) => openEditModal(event, e)}
-                                    style={{
-                                      top: `${topPercent}%`,
-                                      height: `${heightPercent}%`,
-                                      width: "92%",
-                                      left: "4%",
-                                    }}
-                                    className={`absolute rounded-xl border p-2 flex flex-col justify-between text-left overflow-hidden cursor-pointer shadow-lg transition-all hover:scale-[1.02] hover:z-20 ${styles.bg}`}
-                                  >
-                                    <div className="space-y-0.5">
-                                      <div className="flex items-center gap-1 text-[9px] font-bold opacity-80 font-mono">
-                                        <Clock className="w-2.5 h-2.5" />
-                                        <span>{event.startTime} - {event.endTime}</span>
-                                      </div>
-                                      <h4 className="text-[11px] font-bold leading-tight truncate">
-                                        {event.title}
-                                      </h4>
-                                    </div>
-                                    
-                                    <div className="flex items-center mt-1">
-                                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${styles.badge}`}>
-                                        {styles.label}
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2.2 Mobile Single-Day Timeline View (Slide selector at top + wide column below) */}
-                <div className="block md:hidden w-full flex flex-col">
-                  {/* Horizontal week slider tabs */}
-                  <div className="flex bg-white/5 border-b border-white/10 p-2 gap-1 overflow-x-auto justify-between">
-                    {weekDays.map((day) => {
-                      const isToday = isSameDay(day, new Date());
-                      const isSelected = isSameDay(day, selectedDate);
-                      return (
-                        <button
-                          key={day.toString()}
-                          onClick={() => setSelectedDate(day)}
-                          className={`flex-1 min-w-[46px] py-2 rounded-2xl flex flex-col items-center justify-center transition-all ${
-                            isSelected
-                              ? "bg-gradient-to-tr from-emerald-500 to-teal-500 text-white font-bold shadow-lg"
-                              : "bg-white/[0.02] border border-white/5 text-gray-400 hover:text-white"
-                          }`}
-                        >
-                          <span className="text-[8px] uppercase font-bold tracking-wider">
-                            {day.toLocaleString("es-AR", { weekday: "short" })}
-                          </span>
-                          <span className={`text-sm font-extrabold mt-0.5 ${isToday && !isSelected ? "text-emerald-400" : ""}`}>
-                            {day.getDate()}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Single Column Hourly Grid */}
-                  <div className="relative flex" style={{ height: "550px" }}>
-                    
-                    {/* Hours Y-Axis sidebar */}
-                    <div className="w-14 flex-shrink-0 border-r border-white/10 bg-white/[0.01] flex flex-col justify-between text-right pr-2 text-[10px] font-mono text-gray-500 py-1">
-                      {HOURS.map((hour) => (
-                        <div key={hour} style={{ height: `${550 / HOURS.length}px` }} className="flex items-start justify-end pt-1">
-                          {hour.toString().padStart(2, "0")}:00
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Single column area containing events for selectedDate only */}
-                    <div
-                      className="flex-1 relative h-full bg-[#0d131f]/20"
-                      onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const clickY = e.clientY - rect.top;
-                        const percentY = clickY / rect.height;
-                        const clickedHourDecimal = 8 + percentY * 14;
-                        const roundedHour = Math.floor(clickedHourDecimal);
-                        openAddModal(getFormattedDateStr(selectedDate), Math.min(21, Math.max(8, roundedHour)));
-                      }}
-                    >
-                      {/* Background Grid Lines (Horizontal hour spans) */}
-                      <div className="absolute inset-0 flex flex-col pointer-events-none divide-y divide-white/5">
-                        {HOURS.map((hour) => (
-                          <div key={hour} style={{ height: `${550 / HOURS.length}px` }} />
-                        ))}
-                      </div>
-
-                      {/* Render events for selected day only */}
-                      {getEventsForDate(selectedDate).map((event) => {
-                        const [sH, sM] = event.startTime.split(":").map(Number);
-                        const [eH, eM] = event.endTime.split(":").map(Number);
-                        const startDec = sH + sM / 60;
-                        const endDec = eH + eM / 60;
-                        
-                        const timelineStart = 8;
-                        const timelineEnd = 22;
-                        
-                        if (startDec >= timelineEnd || endDec <= timelineStart) {
-                          return null;
-                        }
-                        
-                        const startClamped = Math.max(timelineStart, startDec);
-                        const endClamped = Math.min(timelineEnd, endDec);
-                        
-                        const topPercent = ((startClamped - timelineStart) / (timelineEnd - timelineStart)) * 100;
-                        const heightPercent = ((endClamped - startClamped) / (timelineEnd - timelineStart)) * 100;
-                        
-                        const styles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.finanzas;
-
-                        return (
-                          <div
-                            key={event.id}
-                            onClick={(e) => openEditModal(event, e)}
-                            style={{
-                              top: `${topPercent}%`,
-                              height: `${heightPercent}%`,
-                              width: "94%",
-                              left: "3%",
-                            }}
-                            className={`absolute rounded-xl border p-2 flex flex-col justify-between text-left overflow-hidden cursor-pointer shadow-lg transition-all ${styles.bg}`}
-                          >
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1 text-[9px] font-bold opacity-85 font-mono">
-                                <Clock className="w-2.5 h-2.5" />
-                                <span>{event.startTime} - {event.endTime}</span>
-                              </div>
-                              <h4 className="text-[11px] font-bold leading-tight">
-                                {event.title}
-                              </h4>
-                              {event.description && (
-                                <p className="text-[9px] text-gray-400 line-clamp-1 leading-normal">
-                                  {event.description}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center mt-1">
-                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${styles.badge}`}>
-                                {styles.label}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-          </div>
-
-          {/* Sidebar / Detailed Events panel: Right 1/4 on large screens */}
-          <div className="xl:col-span-1 space-y-6">
-            
-            {/* Selected day summary card */}
-            <div className="p-5 rounded-3xl glass-card border border-white/10 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="space-y-0.5">
-                  <h3 className="text-sm font-extrabold text-white">Eventos del Día</h3>
-                  <p className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wider">
-                    {selectedDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short" })}
-                  </p>
-                </div>
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                  <CalendarIcon className="w-4 h-4" />
-                </div>
-              </div>
-
-              {/* Day's events listing */}
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                {selectedDayEvents.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 space-y-2">
-                    <Info className="w-8 h-8 mx-auto text-gray-600 opacity-60" />
-                    <p className="text-xs">No hay eventos planificados para este día.</p>
-                    <button
-                      onClick={() => openAddModal(getFormattedDateStr(selectedDate))}
-                      className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold transition-colors underline"
-                    >
-                      Añadir uno ahora
-                    </button>
-                  </div>
-                ) : (
-                  selectedDayEvents.map((event) => {
-                    const styles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.finanzas;
-                    return (
-                      <div
-                        key={event.id}
-                        onClick={(e) => openEditModal(event, e)}
-                        className="p-3 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-emerald-500/30 hover:bg-white/[0.04] transition-all cursor-pointer space-y-2 group"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors leading-tight">
-                            {event.title}
-                          </h4>
-                          <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${styles.dot}`} />
-                        </div>
-                        
-                        {event.description && (
-                          <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">
-                            {event.description}
-                          </p>
                         )}
+                        
+                        <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
+                          <div>
+                            <span className="text-gray-400 block text-[10px]">Monto</span>
+                            <span className="font-bold text-emerald-300 text-xs">
+                              {typeof orden.monto === "number"
+                                ? `$ ${orden.monto.toLocaleString("es-AR")}`
+                                : orden.monto}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block text-[10px]">Forma de Pago</span>
+                            <span className="text-gray-200 font-medium">{orden.formaPago || "30DFF"}</span>
+                          </div>
+                        </div>
 
-                        <div className="flex items-center justify-between text-[9px] text-gray-500 font-bold font-mono pt-1">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-emerald-400/80" />
-                            {event.startTime} - {event.endTime}
-                          </span>
-                          <span className={`px-1.5 py-0.5 rounded border uppercase ${styles.badge}`}>
-                            {styles.label}
-                          </span>
+                        {orden.motivo && (
+                          <div className="pt-1 text-[11px] text-gray-400 truncate">
+                            <span className="text-gray-500">Detalle: </span>
+                            {orden.motivo}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-gray-500 flex items-center gap-1 pt-1">
+                          <UserIcon className="w-3 h-3 text-emerald-400" />
+                          <span>Creado por: {orden.creadoPor || "Usuario"}</span>
                         </div>
                       </div>
-                    );
-                  })
+
+                      {/* Bottom Row: Status Checkboxes & Notes Button */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
+                        {/* Status Checkbox Toggles */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <OrderStatusMenu
+                            orden={orden}
+                            isOrdenesUser={isOrdenesUser}
+                            onStatusChange={handleStatusChange}
+                            showToast={showToast}
+                          />
+                        </div>
+
+                        {/* Botón Ver Descripción */}
+                        <button
+                          onClick={() => setActiveNotesOrden(orden)}
+                          className="px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Ver Descripción</span>
+                          {orden.notas && orden.notas.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">
+                              {orden.notas.length}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
                 )}
               </div>
+            </div>
 
-              {/* Add event specifically for this day */}
-              {selectedDayEvents.length > 0 && (
+            {/* Botón Cargar Más y Cargar Todo */}
+            <div className="py-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {hasMore && !hasLoadedAllFromDb && (
                 <button
-                  onClick={() => openAddModal(getFormattedDateStr(selectedDate))}
-                  className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 hover:text-white text-[11px] font-bold transition-colors flex items-center justify-center gap-1.5"
+                  onClick={() => setQueryLimit((prev) => prev + 15)}
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 group cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Añadir Evento</span>
+                  <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                  <span>Cargar más órdenes (+15)</span>
                 </button>
               )}
+              {!hasLoadedAllFromDb && (
+                <button
+                  onClick={handleLoadAllFromDb}
+                  disabled={loadingAllDb}
+                  className="px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 cursor-pointer"
+                >
+                  {loadingAllDb ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                  ) : (
+                    <Database className="w-4 h-4 text-indigo-400" />
+                  )}
+                  <span>{loadingAllDb ? "Cargando toda la base de datos..." : "Cargar todas las de la base de datos"}</span>
+                </button>
+              )}
+              {hasLoadedAllFromDb && (
+                <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 rounded-xl inline-flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  <span>Todas las órdenes de la base de datos están cargadas ({ordenes.length})</span>
+                </span>
+              )}
             </div>
-
-            {/* Help guidelines widget */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 text-xs text-gray-400 space-y-2.5 shadow-md">
-              <span className="font-bold text-white flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>Tips del Calendario</span>
-              </span>
-              <ul className="list-disc list-inside space-y-1.5 text-[11px]">
-                <li>Haga clic en cualquier día del mes para ver sus eventos en este panel.</li>
-                <li>En la vista **Semanal**, haga clic directo sobre cualquier bloque horario libre para crear un evento allí.</li>
-                <li>Edite o elimine haciendo clic en el evento correspondiente.</li>
-                <li>Los datos se guardan de manera local y automática.</li>
-              </ul>
-            </div>
-
           </div>
-        </div>
-
+        )}
       </div>
 
-      {/* 3. EVENT CREATION/EDIT MODAL */}
-      {showEventModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md p-6 rounded-3xl glass-card border border-white/10 shadow-2xl space-y-4">
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-emerald-400" />
-                <span>{editingEvent ? "Modificar Evento" : "Crear Nuevo Evento"}</span>
-              </h3>
-              <button
-                onClick={() => setShowEventModal(false)}
-                className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Modal de Detalle, Descripción, Firmas y Notas de la Orden */}
+      <OrderDetailModal
+        orden={activeNotesOrden ? (ordenes.find((o) => o.id === activeNotesOrden.id) || activeNotesOrden) : null}
+        onClose={() => setActiveNotesOrden(null)}
+        isOrdenesUser={isOrdenesUser}
+        onEdit={handleOpenEditModal}
+        onStatusChange={handleStatusChange}
+        newNotaText={newNotaText}
+        setNewNotaText={setNewNotaText}
+        savingNota={savingNota}
+        onAddNota={handleAddNota}
+        showToast={showToast}
+        getFormattedCreatedAt={getFormattedCreatedAt}
+      />
 
-            {/* Error alerts */}
-            {formError && (
-              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleSaveEvent} className="space-y-4">
-              
-              {/* Event Title */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">Título del Evento</label>
-                <input
-                  type="text"
-                  required
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="ej: Cerrar conciliación bancaria"
-                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30"
-                  maxLength={50}
-                />
-              </div>
-
-              {/* Date */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">Fecha</label>
-                <input
-                  type="date"
-                  required
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
-                />
-              </div>
-
-              {/* Start & End Hours */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Hora Inicio</label>
-                  <input
-                    type="time"
-                    required
-                    value={formStartTime}
-                    onChange={(e) => setFormStartTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Hora Fin</label>
-                  <input
-                    type="time"
-                    required
-                    value={formEndTime}
-                    onChange={(e) => setFormEndTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
-                  />
-                </div>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">Categoría</label>
-                <select
-                  value={formCategory}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormCategory(e.target.value as "finanzas" | "reunion" | "operaciones" | "personal")}
-                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
-                >
-                  <option value="finanzas" className="bg-[#0d131f] text-white">Finanzas (Verde)</option>
-                  <option value="reunion" className="bg-[#0d131f] text-white">Reunión (Azul)</option>
-                  <option value="operaciones" className="bg-[#0d131f] text-white">Operaciones (Morado)</option>
-                  <option value="personal" className="bg-[#0d131f] text-white">Personal (Naranja)</option>
-                </select>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">Descripción (Opcional)</label>
-                <textarea
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="Detalles del evento..."
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 resize-none"
-                  maxLength={200}
-                />
-              </div>
-
-              {/* Footer actions */}
-              <div className="flex gap-2 pt-2 border-t border-white/5">
-                {editingEvent && (
-                  <button
-                    type="button"
-                    onClick={handleDeleteEvent}
-                    className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition-all flex items-center gap-1.5"
-                    title="Eliminar Evento"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Eliminar</span>
-                  </button>
-                )}
-
-                <div className="flex-1 flex gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowEventModal(false)}
-                    className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-500/20"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </div>
-
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal para Agregar o Editar Solicitud de OC */}
+      <OrderFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        editingOrden={editingOrden}
+        ordenes={ordenes}
+        empresa={empresa}
+        setEmpresa={setEmpresa}
+        numSolicitud={numSolicitud}
+        setNumSolicitud={setNumSolicitud}
+        numOC={numOC}
+        setNumOC={setNumOC}
+        razonSocial={razonSocial}
+        setRazonSocial={setRazonSocial}
+        monto={monto}
+        setMonto={setMonto}
+        motivo={motivo}
+        setMotivo={setMotivo}
+        formaPago={formaPago}
+        setFormaPago={setFormaPago}
+        cancelada={cancelada}
+        setCancelada={setCancelada}
+        relatedOC={relatedOC}
+        setRelatedOC={setRelatedOC}
+        linkSharepoint={linkSharepoint}
+        setLinkSharepoint={setLinkSharepoint}
+        submitting={submitting}
+        onSave={handleSaveOrden}
+        onDelete={handleDelete}
+        getFormattedCreatedAt={getFormattedCreatedAt}
+      />
 
     </AppLayout>
   );

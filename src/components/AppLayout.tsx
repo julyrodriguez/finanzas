@@ -66,7 +66,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       router.push("/seguimiento-de-ordenes");
     }
     if (!loading && user && !isOrdenesUser && pathname === "/seguimiento-de-ordenes") {
-      router.push("/ordenes-de-compras");
+      router.push("/");
     }
   }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
@@ -81,7 +81,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   }[] = [
     {
       name: "Calendario",
-      href: "/",
+      href: "/calendario",
       icon: Calendar,
       exact: true,
       hideForOrders: true,
@@ -95,7 +95,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     },
     {
       name: "Órdenes de Compra",
-      href: "/ordenes-de-compras",
+      href: "/",
       icon: ShoppingBag,
       exact: false,
       hideForOrders: true,
@@ -156,8 +156,14 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   });
 
   const isActive = (href: string, exact: boolean) => {
+    if (href === "/calendario") {
+      return pathname === "/calendario";
+    }
+    if (href === "/") {
+      return pathname === "/" || pathname === "/ordenes-de-compras" || pathname === "/inicio";
+    }
     if (exact) {
-      return pathname === href || pathname === "/inicio" || pathname === "/calendario";
+      return pathname === href;
     }
     return pathname.startsWith(href);
   };
