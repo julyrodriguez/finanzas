@@ -21,7 +21,8 @@ import {
   Percent, 
   Calendar, 
   Calculator, 
-  ClipboardList 
+  ClipboardList,
+  Scale
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -123,6 +124,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     {
       name: "Cotizaciones",
       href: "/cotizaciones",
+      icon: Scale,
+      exact: false,
+      hideForOrders: true,
+    },
+    {
+      name: "Calculadora",
+      href: "/calculadora",
       icon: Calculator,
       exact: false,
       hideForOrders: true,
