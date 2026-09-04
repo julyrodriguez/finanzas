@@ -211,49 +211,54 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         }}
         className={`fixed top-0 left-0 h-screen z-50 bg-[#0b0f19] border-r border-white/10 flex flex-col justify-between transition-[width,transform] duration-200 ease-out overflow-hidden ${
           sidebarOpen
-            ? "translate-x-0 w-72 shadow-2xl"
+            ? "translate-x-0 w-64 shadow-2xl"
             : "-translate-x-full lg:translate-x-0"
         } ${
           isHovered
-            ? "lg:w-72 lg:shadow-[0_0_50px_rgba(0,0,0,0.8)] lg:border-r-slate-700/60"
+            ? "lg:w-64 lg:shadow-[0_0_50px_rgba(0,0,0,0.8)] lg:border-r-slate-700/60"
             : "lg:w-20"
         }`}
       >
-        {/* Top Header / Branding */}
-        <div className="p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3 min-w-0">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5 shadow-md shadow-indigo-500/20 flex-shrink-0">
-                <div className="h-full w-full bg-[#0b0f19] rounded-[10px] flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-indigo-400" />
+        {/* Top Header / Branding (shrink-0) */}
+        <div className="p-3 sm:px-4 sm:py-3 border-b border-white/5 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5 shadow-md shadow-indigo-500/20 flex-shrink-0">
+                <div className="h-full w-full bg-[#0b0f19] rounded-[6px] flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-indigo-400" />
                 </div>
               </div>
               <div className={`min-w-0 transition-opacity duration-150 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
-                <h1 className="font-bold text-base text-white tracking-tight truncate">
+                <h1 className="font-bold text-sm text-white tracking-tight truncate">
                   Finanzas
                 </h1>
-                <p className="text-[11px] text-gray-400 truncate">Gestión Corporativa</p>
+                <p className="text-[10px] text-gray-400 truncate">Gestión Corporativa</p>
               </div>
             </div>
 
             {/* Mobile Close Button inside Sidebar */}
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white"
+              className="lg:hidden p-1.5 rounded-lg bg-white/5 text-gray-400 hover:text-white"
               aria-label="Cerrar menú"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
+        </div>
 
+        {/* Scrollable Navigation List (flex-1 min-h-0 overflow-y-auto) */}
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-2 py-1.5 space-y-0.5">
           {/* Section Title */}
-          <div className={`px-2 mb-2 flex items-center justify-between text-[11px] font-semibold text-gray-400 tracking-wider uppercase transition-opacity duration-150 ${isExpanded ? "opacity-100" : "opacity-0 lg:hidden"}`}>
-            <span>Navegación</span>
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400/80" />
-          </div>
+          {isExpanded && (
+            <div className="px-2.5 py-1 flex items-center justify-between text-[10px] font-bold text-gray-400 tracking-wider uppercase">
+              <span>Navegación</span>
+              <Sparkles className="w-3 h-3 text-indigo-400/80" />
+            </div>
+          )}
 
           {/* Navigation Items */}
-          <nav className="space-y-1.5">
+          <nav className="space-y-0.5">
             {menuItems.map((item) => {
               const active = isActive(item.href, item.exact);
               const Icon = item.icon;
@@ -265,8 +270,8 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                     setSidebarOpen(false);
                     setIsHovered(false);
                   }}
-                  className={`group relative flex items-center rounded-xl text-xs font-semibold transition-colors duration-150 ${
-                    isExpanded ? "px-3 py-2.5" : "px-0 py-2.5 justify-center"
+                  className={`group relative flex items-center rounded-lg text-[11px] font-medium transition-colors duration-150 ${
+                    isExpanded ? "px-2.5 py-1.5" : "px-0 py-2 justify-center"
                   } ${
                     active
                       ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 shadow-sm"
@@ -275,20 +280,20 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                   title={!isExpanded ? item.name : undefined}
                 >
                   <div
-                    className={`rounded-lg transition-colors flex items-center justify-center flex-shrink-0 ${
+                    className={`rounded-md transition-colors flex items-center justify-center flex-shrink-0 ${
                       isExpanded
-                        ? "p-1.5 " + (active ? "bg-indigo-500/20 text-indigo-400" : "bg-[#0b0f19] text-gray-400 group-hover:text-white group-hover:bg-white/10")
+                        ? "p-1 " + (active ? "bg-indigo-500/20 text-indigo-400" : "bg-[#0b0f19] text-gray-400 group-hover:text-white group-hover:bg-white/10")
                         : (active ? "text-indigo-400" : "text-gray-400 group-hover:text-white")
                     }`}
                   >
-                    <Icon className="w-4.5 h-4.5" />
+                    <Icon className="w-4 h-4" />
                   </div>
 
-                  <div className={`ml-3 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-150 ${isExpanded ? "opacity-100" : "opacity-0 hidden"}`}>
+                  <div className={`ml-2.5 flex-1 flex items-center justify-between min-w-0 transition-opacity duration-150 ${isExpanded ? "opacity-100" : "opacity-0 hidden"}`}>
                     <span className="truncate">{item.name}</span>
                     {item.badge && (
                       <span
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 border ml-2 ${
+                        className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full flex items-center gap-1 border ml-1.5 ${
                           active
                             ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
                             : "bg-amber-500/10 text-amber-300 border-amber-500/20"
@@ -305,20 +310,20 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           </nav>
         </div>
 
-        {/* Footer Info, Theme Switcher & Profile */}
-        <div className="p-3 border-t border-white/10 space-y-2">
+        {/* Footer Info, Theme Switcher & Profile (Pinned at bottom, shrink-0) */}
+        <div className="p-2.5 border-t border-white/10 space-y-1.5 shrink-0 bg-[#080c14]">
           {/* Theme Switcher Button */}
           <button
             onClick={toggleTheme}
             title={theme === "dark" ? "Cambiar a Modo Rosa" : "Cambiar a Modo Oscuro"}
-            className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all duration-150 border cursor-pointer ${
+            className={`w-full flex items-center rounded-lg text-[11px] font-medium transition-all duration-150 border cursor-pointer ${
               theme === "pink"
                 ? "bg-pink-500/15 text-pink-300 border-pink-500/30 hover:bg-pink-500/25 shadow-sm"
                 : "bg-white/[0.03] hover:bg-white/[0.08] text-slate-300 border-white/10"
-            } ${isExpanded ? "px-3 py-2.5 justify-between" : "p-2 justify-center"}`}
+            } ${isExpanded ? "px-2.5 py-1.5 justify-between" : "p-1.5 justify-center"}`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-sm shrink-0">{theme === "dark" ? "🌸" : "🌙"}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs shrink-0">{theme === "dark" ? "🌸" : "🌙"}</span>
               {isExpanded && (
                 <span className="truncate">
                   {theme === "dark" ? "Modo Rosa" : "Modo Oscuro"}
@@ -326,7 +331,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
               )}
             </div>
             {isExpanded && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
                 theme === "pink" ? "bg-pink-500/25 text-pink-200" : "bg-white/10 text-slate-400"
               }`}>
                 {theme === "pink" ? "Rosa" : "Oscuro"}
@@ -338,28 +343,28 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           <CotizacionesTicker isExpanded={isExpanded} />
 
           {/* User Profile & Logout */}
-          <div className={`flex items-center gap-2 p-1.5 rounded-xl bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
+          <div className={`flex items-center gap-2 p-1.5 rounded-lg bg-white/[0.02] border border-white/5 ${isExpanded ? "justify-between" : "justify-center"}`}>
             <div className="flex items-center gap-2 min-w-0">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center font-bold text-white text-xs shadow-sm flex-shrink-0">
+              <div className="h-7 w-7 rounded-md bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center font-bold text-white text-[11px] shadow-sm flex-shrink-0">
                 {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
               </div>
               {isExpanded && (
                 <div className="min-w-0 animate-in fade-in duration-150">
-                  <p className="text-xs font-semibold text-gray-200 truncate">
+                  <p className="text-[11px] font-semibold text-gray-200 truncate leading-tight">
                     {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
                   </p>
-                  <p className="text-[10px] text-gray-400 truncate flex items-center gap-1">
+                  <p className="text-[9px] text-gray-400 truncate flex items-center gap-1 leading-tight">
                     {isOrdenesUser ? (
                       <>
-                        <ShieldCheck className="w-3 h-3 text-amber-400" /> Consulta
+                        <ShieldCheck className="w-2.5 h-2.5 text-amber-400" /> Consulta
                       </>
                     ) : user ? (
                       <>
-                        <ShieldCheck className="w-3 h-3 text-emerald-400" /> Activo
+                        <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" /> Activo
                       </>
                     ) : (
                       <>
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Modo Consulta
+                        <span className="w-1 h-1 rounded-full bg-gray-400"></span> Consulta
                       </>
                     )}
                   </p>
@@ -372,17 +377,17 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                 <button
                   onClick={handleLogout}
                   title="Cerrar Sesión"
-                  className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors flex-shrink-0 cursor-pointer"
+                  className="p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-colors flex-shrink-0 cursor-pointer"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               ) : (
                 <Link
                   href="/login"
                   title="Iniciar Sesión"
-                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center flex-shrink-0"
+                  className="p-1.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors flex items-center justify-center flex-shrink-0"
                 >
-                  <UserIcon className="w-4 h-4" />
+                  <UserIcon className="w-3.5 h-3.5" />
                 </Link>
               )
             )}

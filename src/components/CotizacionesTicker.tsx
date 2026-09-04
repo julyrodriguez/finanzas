@@ -93,7 +93,7 @@ export function CotizacionesTicker({ isExpanded }: { isExpanded: boolean }) {
   return (
     <div
       title={tooltipText}
-      className="relative w-full rounded-xl bg-slate-950/70 hover:bg-slate-950/90 border border-white/10 p-2 overflow-hidden shadow-inner group transition-all"
+      className="relative w-full rounded-lg bg-slate-950/70 hover:bg-slate-950/90 border border-white/10 p-1.5 overflow-hidden shadow-inner group transition-all"
     >
       {/* Mini Header / Indicator */}
       <div className="flex items-center justify-between px-1 mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-400">
