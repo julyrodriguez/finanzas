@@ -196,10 +196,9 @@ export default function PendientesPage() {
     return sorted;
   }, [pendingItems, completedItems, completedItemsAll, filterEstado, isSearching]);
 
-  // Distinct categories (defaults + stored custom categories + categories in items)
+  // Distinct categories created by user or in existing items (no hardcoded defaults)
   const allCategories = useMemo(() => {
     const catsSet = new Set<string>();
-    ["Administración", "Finanzas", "Operaciones", "Compras"].forEach((c) => catsSet.add(c));
     customCategories.forEach((c) => {
       if (c && c.trim()) catsSet.add(c.trim());
     });
@@ -439,20 +438,43 @@ export default function PendientesPage() {
   };
 
   const handleDeleteCategory = async (catName: string) => {
-    const isUsed = allItems.some((item) => item.categoria?.toLowerCase() === catName.toLowerCase());
-    if (isUsed) {
-      showToast(`No puedes eliminar "${catName}" porque contiene pendientes`, "error");
-      return;
+    const affectedItems = allItems.filter(
+      (item) => item.categoria?.toLowerCase() === catName.toLowerCase()
+    );
+
+    if (affectedItems.length > 0) {
+      const confirmMsg = `La carpeta "${catName}" tiene ${affectedItems.length} pendiente(s) asociado(s).\n¿Deseas eliminarla de todas formas? Los pendientes quedarán sin rubro.`;
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+    } else {
+      if (!confirm(`¿Eliminar la carpeta "${catName}"?`)) {
+        return;
+      }
     }
+
     const updated = customCategories.filter((c) => c.toLowerCase() !== catName.toLowerCase());
     setCustomCategories(updated);
+
     if (filterCategoria.toLowerCase() === catName.toLowerCase()) {
       setFilterCategoria("todas");
     }
+
     if (db) {
       try {
         const docRef = doc(db, "pendientes_config", "categorias");
         await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
+
+        // Unlink any items that had this category so it doesn't reappear
+        if (affectedItems.length > 0) {
+          const updatePromises = affectedItems.map((item) =>
+            updateDoc(doc(db, "pendientes", item.id), {
+              categoria: ""
+            })
+          );
+          await Promise.all(updatePromises);
+        }
+
         showToast(`Carpeta "${catName}" eliminada`, "info");
       } catch (err) {
         console.error("Error deleting category:", err);
@@ -2055,16 +2077,14 @@ export default function PendientesPage() {
                             <span className="text-[10px] font-bold text-gray-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
                               {count} {count === 1 ? "pendiente" : "pendientes"}
                             </span>
-                            {count === 0 && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCategory(cat)}
-                                className="p-1 rounded-lg hover:bg-rose-500/10 text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
-                                title="Eliminar carpeta vacía"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat)}
+                              className="p-1.5 rounded-lg hover:bg-rose-500/15 text-gray-400 hover:text-rose-400 transition-colors cursor-pointer"
+                              title={`Eliminar carpeta "${cat}"`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       );
