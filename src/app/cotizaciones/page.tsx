@@ -16,7 +16,8 @@ import {
   orderBy,
   arrayUnion,
   arrayRemove,
-  setDoc
+  setDoc,
+  getDoc
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -748,6 +749,41 @@ export default function CotizacionesPage() {
     setActiveTab("editor");
     showToast(`Cotización "${quote.name}" cargada`);
   };
+
+  // Deep-link effect: If opened with ?id=... or ?quoteId=..., load and open the quote directly in editor
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const targetId = params.get("id") || params.get("quoteId");
+    if (!targetId || currentQuoteId === targetId) return;
+
+    // 1. If already in savedQuotations, load it immediately
+    const found = savedQuotations.find((q) => q.id === targetId);
+    if (found) {
+      setTimeout(() => {
+        handleSelectQuote(found);
+      }, 0);
+      return;
+    }
+
+    // 2. Fetch directly from Firestore by ID so it doesn't wait for list listener
+    const db = getFirebaseDb();
+    if (db) {
+      getDoc(doc(db, "cotizaciones", targetId))
+        .then((docSnap) => {
+          if (docSnap.exists()) {
+            const loaded = { id: docSnap.id, ...docSnap.data() } as SavedQuotation;
+            setTimeout(() => {
+              handleSelectQuote(loaded);
+            }, 0);
+          }
+        })
+        .catch((err) => {
+          console.error("Error loading cotizacion from deep link:", err);
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedQuotations, dbActive, currentQuoteId]);
 
   // Delete saved quote from list
   const handleDeleteSavedQuote = async (id: string, e: React.MouseEvent) => {

@@ -1896,11 +1896,13 @@ export default function PendientesPage() {
                       return (
                         <div
                           key={cId}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-[#0e1424] border border-white/10 hover:border-emerald-500/30 transition-all gap-2"
+                          onClick={() => window.open(`/cotizaciones?id=${cId}`, "_blank")}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-[#0e1424] border border-white/10 hover:border-emerald-500/40 hover:bg-[#121a30] transition-all gap-2 cursor-pointer group/quote"
+                          title="Abrir cotización en el editor"
                         >
                           <div className="min-w-0 flex-1 space-y-0.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-semibold text-white truncate max-w-[170px]" title={cotiz?.name || cId}>
+                              <span className="text-xs font-semibold text-white group-hover/quote:text-emerald-300 transition-colors truncate max-w-[170px]" title={cotiz?.name || cId}>
                                 {cotiz?.name || "Cotización " + cId.substring(0, 6)}
                               </span>
                               {cotiz?.status && (
@@ -1927,6 +1929,7 @@ export default function PendientesPage() {
                               href={`/cotizaciones?id=${cId}`}
                               target="_blank"
                               rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
                               className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 transition-colors"
                               title="Abrir en Cotizaciones"
                             >
@@ -1934,7 +1937,10 @@ export default function PendientesPage() {
                             </a>
                             <button
                               type="button"
-                              onClick={() => handleUnlinkCotizacion(selectedItem.id, cId)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnlinkCotizacion(selectedItem.id, cId);
+                              }}
                               className="p-1.5 rounded-lg hover:bg-rose-500/15 text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
                               title="Desvincular cotización"
                             >
