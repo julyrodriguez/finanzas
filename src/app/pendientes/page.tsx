@@ -36,7 +36,11 @@ import {
   AlertTriangle,
   RefreshCw,
   Edit2,
-  Flag
+  Flag,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Folders
 } from "lucide-react";
 
 const generateUniqueId = () => {
@@ -58,6 +62,7 @@ interface Pendiente {
   titulo: string;
   descripcion: string;
   prioridad: "alta" | "media" | "baja";
+  categoria?: string;
   completado: boolean;
   creadoPor: string;
   createdAt: Timestamp | null;
@@ -99,12 +104,24 @@ export default function PendientesPage() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterEstado, setFilterEstado] = useState<"todos" | "pendientes" | "completados">("pendientes");
   const [filterPrioridad, setFilterPrioridad] = useState<"todas" | "alta" | "media" | "baja">("todas");
+  const [filterCategoria, setFilterCategoria] = useState<string>("todas");
+
+  // Category management modal & state
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
+  const [newCategoryModalInput, setNewCategoryModalInput] = useState<string>("");
+
+  // Editor category state
+  const [editorCategoria, setEditorCategoria] = useState<string>("");
 
   // New Item Modal
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [newTitle, setNewTitle] = useState<string>("");
   const [newDescription, setNewDescription] = useState<string>("");
   const [newPriority, setNewPriority] = useState<"alta" | "media" | "baja">("media");
+  const [newCategoria, setNewCategoria] = useState<string>("");
+  const [showInlineNewCatModal, setShowInlineNewCatModal] = useState<boolean>(false);
+  const [inlineNewCatName, setInlineNewCatName] = useState<string>("");
   const [newFechaLimite, setNewFechaLimite] = useState<string>("");
   const [isAdding, setIsAdding] = useState<boolean>(false);
 
@@ -179,6 +196,49 @@ export default function PendientesPage() {
     return sorted;
   }, [pendingItems, completedItems, completedItemsAll, filterEstado, isSearching]);
 
+  // Distinct categories (defaults + stored custom categories + categories in items)
+  const allCategories = useMemo(() => {
+    const catsSet = new Set<string>();
+    ["Administración", "Finanzas", "Operaciones", "Compras"].forEach((c) => catsSet.add(c));
+    customCategories.forEach((c) => {
+      if (c && c.trim()) catsSet.add(c.trim());
+    });
+    allItems.forEach((item) => {
+      if (item.categoria && item.categoria.trim()) {
+        catsSet.add(item.categoria.trim());
+      }
+    });
+    return Array.from(catsSet).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [customCategories, allItems]);
+
+  // Category counts based on current status filter
+  const getCategoryCount = (catName: string) => {
+    const source =
+      filterEstado === "todos"
+        ? allItems
+        : filterEstado === "pendientes"
+        ? pendingItems
+        : completedItemsAll;
+    return source.filter((p) => p.categoria?.toLowerCase() === catName.toLowerCase()).length;
+  };
+
+  const uncategorizedCount = useMemo(() => {
+    const source =
+      filterEstado === "todos"
+        ? allItems
+        : filterEstado === "pendientes"
+        ? pendingItems
+        : completedItemsAll;
+    return source.filter((p) => !p.categoria || p.categoria.trim() === "").length;
+  }, [allItems, pendingItems, completedItemsAll, filterEstado]);
+
+  const totalFolderCount =
+    filterEstado === "todos"
+      ? allItems.length
+      : filterEstado === "pendientes"
+      ? pendingItems.length
+      : completedItemsAll.length;
+
   // 1. Fetch all items in real time
   useEffect(() => {
     if (!db) {
@@ -202,6 +262,7 @@ export default function PendientesPage() {
             titulo: data.titulo || "",
             descripcion: data.descripcion || "",
             prioridad: data.prioridad || "media",
+            categoria: data.categoria || "",
             completado: Boolean(data.completado),
             creadoPor: data.creadoPor || "Usuario",
             createdAt: data.createdAt || null,
@@ -255,6 +316,31 @@ export default function PendientesPage() {
     fetchGeneralNotepad();
   }, [db]);
 
+  // 2b. Fetch Custom Categories config in real time
+  useEffect(() => {
+    if (!db) return;
+
+    const docRef = doc(db, "pendientes_config", "categorias");
+    const unsubscribe = onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (Array.isArray(data.list)) {
+            setTimeout(() => {
+              setCustomCategories(data.list);
+            }, 0);
+          }
+        }
+      },
+      (err) => {
+        console.warn("Could not read categories config:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [db]);
+
   // Selected item sync: update editor state when selection changes
   const selectedItem = pendientes.find((p) => p.id === selectedId);
 
@@ -264,6 +350,7 @@ export default function PendientesPage() {
         setEditorNotes(selectedItem.notasAdicionales || "");
         setEditorDescription(selectedItem.descripcion || "");
         setEditorFechaLimite(selectedItem.fechaLimite || "");
+        setEditorCategoria(selectedItem.categoria || "");
         setIsEditorDirty(false);
         setEditorLastSaved(
           selectedItem.completedAt && typeof selectedItem.completedAt.toDate === "function"
@@ -274,6 +361,7 @@ export default function PendientesPage() {
         setEditorNotes("");
         setEditorDescription("");
         setEditorFechaLimite("");
+        setEditorCategoria("");
         setIsEditorDirty(false);
       }
     }, 0);
@@ -310,6 +398,7 @@ export default function PendientesPage() {
         notasAdicionales: editorNotes,
         descripcion: editorDescription,
         fechaLimite: editorFechaLimite || null,
+        categoria: editorCategoria || "",
         updatedAt: serverTimestamp()
       });
       setIsEditorDirty(false);
@@ -320,6 +409,68 @@ export default function PendientesPage() {
       showToast("Error al guardar notas de proyecto", "error");
     } finally {
       setSavingEditor(false);
+    }
+  };
+
+  // Category management functions
+  const handleAddCategory = async (catName: string) => {
+    const trimmed = catName.trim();
+    if (!trimmed) {
+      showToast("El nombre de la carpeta no puede estar vacío", "error");
+      return;
+    }
+    const exists = allCategories.some((c) => c.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      showToast(`La carpeta "${trimmed}" ya existe`, "info");
+      return;
+    }
+    const updated = [...customCategories, trimmed];
+    setCustomCategories(updated);
+    if (db) {
+      try {
+        const docRef = doc(db, "pendientes_config", "categorias");
+        await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
+        showToast(`Carpeta "${trimmed}" creada con éxito`, "success");
+      } catch (err) {
+        console.error("Error saving category:", err);
+        showToast("Error al guardar la carpeta", "error");
+      }
+    }
+  };
+
+  const handleDeleteCategory = async (catName: string) => {
+    const isUsed = allItems.some((item) => item.categoria?.toLowerCase() === catName.toLowerCase());
+    if (isUsed) {
+      showToast(`No puedes eliminar "${catName}" porque contiene pendientes`, "error");
+      return;
+    }
+    const updated = customCategories.filter((c) => c.toLowerCase() !== catName.toLowerCase());
+    setCustomCategories(updated);
+    if (filterCategoria.toLowerCase() === catName.toLowerCase()) {
+      setFilterCategoria("todas");
+    }
+    if (db) {
+      try {
+        const docRef = doc(db, "pendientes_config", "categorias");
+        await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
+        showToast(`Carpeta "${catName}" eliminada`, "info");
+      } catch (err) {
+        console.error("Error deleting category:", err);
+        showToast("Error al eliminar la carpeta", "error");
+      }
+    }
+  };
+
+  const handleChangeCategory = async (id: string, newCategory: string) => {
+    if (!db) return;
+    try {
+      const docRef = doc(db, "pendientes", id);
+      await updateDoc(docRef, { categoria: newCategory.trim() });
+      setEditorCategoria(newCategory.trim());
+      showToast(newCategory.trim() ? `Rubro asignado: ${newCategory.trim()}` : "Rubro removido", "info");
+    } catch (err) {
+      console.error("Error changing category:", err);
+      showToast("Error al cambiar rubro", "error");
     }
   };
 
@@ -477,6 +628,7 @@ export default function PendientesPage() {
         titulo: newTitle.trim(),
         descripcion: newDescription.trim(),
         prioridad: newPriority,
+        categoria: newCategoria.trim(),
         completado: false,
         creadoPor: getCleanUsername(),
         createdAt: serverTimestamp(),
@@ -492,6 +644,9 @@ export default function PendientesPage() {
       setNewTitle("");
       setNewDescription("");
       setNewPriority("media");
+      setNewCategoria("");
+      setShowInlineNewCatModal(false);
+      setInlineNewCatName("");
       setNewFechaLimite("");
       setIsModalOpen(false);
 
@@ -564,7 +719,8 @@ export default function PendientesPage() {
   const filteredPendientes = pendientes.filter((p) => {
     const matchSearch =
       p.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
+      p.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.categoria && p.categoria.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchEstado =
       filterEstado === "todos"
@@ -576,7 +732,14 @@ export default function PendientesPage() {
     const matchPrioridad =
       filterPrioridad === "todas" ? true : p.prioridad === filterPrioridad;
 
-    return matchSearch && matchEstado && matchPrioridad;
+    const matchCategoria =
+      filterCategoria === "todas"
+        ? true
+        : filterCategoria === "_sin_categoria_"
+        ? !p.categoria || p.categoria.trim() === ""
+        : p.categoria?.toLowerCase() === filterCategoria.toLowerCase();
+
+    return matchSearch && matchEstado && matchPrioridad && matchCategoria;
   });
 
   const pendingCount = pendientes.filter((p) => !p.completado).length;
@@ -683,6 +846,132 @@ export default function PendientesPage() {
                   >
                     <Plus className="w-4 h-4" />
                     <span>Nuevo Pendiente</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mini Carpetitas por Área / Rubro */}
+              <div className="pt-2 border-t border-slate-800/80 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Folders className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-slate-200">
+                      Carpetas por Área / Rubro
+                    </span>
+                    {filterCategoria !== "todas" && (
+                      <button
+                        onClick={() => setFilterCategoria("todas")}
+                        className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 ml-1 hover:underline cursor-pointer"
+                      >
+                        (Ver todas)
+                      </button>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 transition-all cursor-pointer shadow-sm"
+                    title="Crear o administrar carpetas"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    <span>+ Nueva Carpeta</span>
+                  </button>
+                </div>
+
+                {/* Horizontal scroll of mini folders */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin pt-0.5">
+                  {/* Folder: Todos */}
+                  <button
+                    onClick={() => setFilterCategoria("todas")}
+                    className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                      filterCategoria === "todas"
+                        ? "bg-gradient-to-r from-indigo-950/90 via-[#151d38] to-indigo-900/70 border-indigo-500 text-white shadow-md shadow-indigo-500/20 ring-1 ring-indigo-500/40"
+                        : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                    }`}
+                  >
+                    <Folders className={`w-4 h-4 shrink-0 ${filterCategoria === "todas" ? "text-indigo-300" : "text-indigo-400/80 group-hover:text-indigo-300"}`} />
+                    <span className="font-medium whitespace-nowrap">Todas las áreas</span>
+                    <span
+                      className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                        filterCategoria === "todas"
+                          ? "bg-indigo-500/30 text-indigo-200 border border-indigo-500/40"
+                          : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
+                      }`}
+                    >
+                      {totalFolderCount}
+                    </span>
+                  </button>
+
+                  {/* Folders for each category */}
+                  {allCategories.map((cat) => {
+                    const count = getCategoryCount(cat);
+                    const isActive = filterCategoria.toLowerCase() === cat.toLowerCase();
+
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setFilterCategoria(isActive ? "todas" : cat)}
+                        className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                          isActive
+                            ? "bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-indigo-950/60 border-amber-400 text-white shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40"
+                            : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                        }`}
+                        title={`Filtrar por ${cat}`}
+                      >
+                        {isActive ? (
+                          <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                        ) : (
+                          <Folder className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 shrink-0 transition-colors" />
+                        )}
+                        <span className="font-medium whitespace-nowrap">{cat}</span>
+                        <span
+                          className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                            isActive
+                              ? "bg-amber-400/25 text-amber-200 border border-amber-400/30"
+                              : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {/* Sin Categoría / Rubro (if any exist) */}
+                  {uncategorizedCount > 0 && (
+                    <button
+                      onClick={() =>
+                        setFilterCategoria(filterCategoria === "_sin_categoria_" ? "todas" : "_sin_categoria_")
+                      }
+                      className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                        filterCategoria === "_sin_categoria_"
+                          ? "bg-gradient-to-r from-slate-800/90 to-slate-900 border-slate-400 text-white shadow-md ring-1 ring-slate-400/30"
+                          : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-400 hover:text-slate-200"
+                      }`}
+                      title="Pendientes sin rubro asignado"
+                    >
+                      <Folder className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span className="font-medium whitespace-nowrap">Sin rubro</span>
+                      <span
+                        className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                          filterCategoria === "_sin_categoria_"
+                            ? "bg-slate-700 text-slate-200 border border-slate-600"
+                            : "bg-slate-800 text-slate-500 border border-slate-700/60"
+                        }`}
+                      >
+                        {uncategorizedCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Quick Add folder button */}
+                  <button
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer shrink-0"
+                    title="Crear nueva carpeta"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>+ Nueva Carpeta</span>
                   </button>
                 </div>
               </div>
@@ -794,11 +1083,21 @@ export default function PendientesPage() {
                 <StickyNote className="w-8 h-8 text-gray-600" />
                 <div className="space-y-1">
                   <p className="text-xs text-gray-300 font-semibold">No se encontraron pendientes</p>
-                  <p className="text-[11px] text-gray-500 max-w-[200px] mx-auto">
-                    {filterEstado === "pendientes" 
+                  <p className="text-[11px] text-gray-500 max-w-[220px] mx-auto">
+                    {filterCategoria !== "todas"
+                      ? `No hay pendientes en la carpeta "${filterCategoria === "_sin_categoria_" ? "Sin rubro" : filterCategoria}".`
+                      : filterEstado === "pendientes" 
                       ? "¡Excelente! No tienes tareas sin resolver."
                       : "Crea tu primer pendiente con el botón 'Nuevo'."}
                   </p>
+                  {filterCategoria !== "todas" && (
+                    <button
+                      onClick={() => setFilterCategoria("todas")}
+                      className="mt-2 text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                    >
+                      Ver todas las áreas
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -823,13 +1122,19 @@ export default function PendientesPage() {
                     <div className="pl-1.5 flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0 space-y-1">
                         
-                        {/* Title & Priority Badge */}
-                        <div className="flex flex-wrap items-center gap-2">
+                        {/* Title & Priority Badge & Category Badge */}
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span
                             className={`text-[8.5px] uppercase tracking-wider font-bold px-1.5 py-0 rounded-full border ${style.badge}`}
                           >
                             {item.prioridad}
                           </span>
+                          {item.categoria && (
+                            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1">
+                              <Folder className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                              <span className="truncate max-w-[110px]">{item.categoria}</span>
+                            </span>
+                          )}
                           {item.completado && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                               <Check className="w-2.5 h-2.5" /> Terminado
@@ -1248,10 +1553,16 @@ export default function PendientesPage() {
                 {/* Notepad Header */}
                 <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${priorityStyles[selectedItem.prioridad]?.badge}`}>
                         Prioridad {selectedItem.prioridad}
                       </span>
+                      {selectedItem.categoria && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1">
+                          <Folder className="w-2.5 h-2.5 text-amber-400" />
+                          {selectedItem.categoria}
+                        </span>
+                      )}
                       {selectedItem.completado ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
                           Terminado
@@ -1296,7 +1607,7 @@ export default function PendientesPage() {
                   </div>
 
                   <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2 text-[10px] text-gray-500 shrink-0">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {/* Toggle status directly from header */}
                       <button
                         onClick={() => handleToggleCompletado(selectedItem.id, selectedItem.completado)}
@@ -1319,12 +1630,31 @@ export default function PendientesPage() {
                       <select
                         value={selectedItem.prioridad}
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangePriority(selectedItem.id, e.target.value as "alta" | "media" | "baja")}
-                        className="bg-[#090d16] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50"
+                        className="bg-[#090d16] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
+                        title="Cambiar prioridad"
                       >
                         <option value="alta">Alta</option>
                         <option value="media">Media</option>
                         <option value="baja">Baja</option>
                       </select>
+
+                      {/* Change Category dropdown */}
+                      <div className="flex items-center gap-1.5 bg-[#090d16] border border-white/10 rounded-xl px-2 py-1 text-xs">
+                        <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <select
+                          value={selectedItem.categoria || ""}
+                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangeCategory(selectedItem.id, e.target.value)}
+                          className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer max-w-[110px] truncate"
+                          title="Cambiar rubro / área"
+                        >
+                          <option value="" className="bg-[#0b0f19]">(Sin rubro)</option>
+                          {allCategories.map((cat) => (
+                            <option key={cat} value={cat} className="bg-[#0b0f19]">
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     <span className="mt-1">Creado por {selectedItem.creadoPor}</span>
@@ -1462,6 +1792,83 @@ export default function PendientesPage() {
                   />
                 </div>
 
+                {/* Rubro / Área / Categoría */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                      <Folder className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Rubro / Área</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowInlineNewCatModal(!showInlineNewCatModal);
+                        setInlineNewCatName("");
+                      }}
+                      className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                    >
+                      {showInlineNewCatModal ? "Elegir de la lista" : "+ Crear nuevo rubro"}
+                    </button>
+                  </div>
+
+                  {showInlineNewCatModal ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nombre del nuevo rubro (ej. Legales, Marketing)..."
+                        value={inlineNewCatName}
+                        onChange={(e) => setInlineNewCatName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (inlineNewCatName.trim()) {
+                              handleAddCategory(inlineNewCatName.trim());
+                              setNewCategoria(inlineNewCatName.trim());
+                              setShowInlineNewCatModal(false);
+                            }
+                          }
+                        }}
+                        className="flex-1 bg-[#090d16] border border-emerald-500/40 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (inlineNewCatName.trim()) {
+                            handleAddCategory(inlineNewCatName.trim());
+                            setNewCategoria(inlineNewCatName.trim());
+                            setShowInlineNewCatModal(false);
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-xs font-bold text-white rounded-xl transition-all cursor-pointer"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={newCategoria}
+                      onChange={(e) => {
+                        if (e.target.value === "__NEW__") {
+                          setShowInlineNewCatModal(true);
+                          setInlineNewCatName("");
+                        } else {
+                          setNewCategoria(e.target.value);
+                        }
+                      }}
+                      className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500/50 transition-colors cursor-pointer"
+                    >
+                      <option value="">(Sin rubro asignado / General)</option>
+                      {allCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                      <option value="__NEW__">+ Crear nuevo rubro...</option>
+                    </select>
+                  )}
+                </div>
+
                 {/* Fecha Límite */}
                 <div className="space-y-1.5">
                   <label htmlFor="new-fecha-limite" className="text-xs font-semibold text-gray-300">
@@ -1544,6 +1951,143 @@ export default function PendientesPage() {
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Gestión de Carpetas / Rubros */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-opacity">
+          <div className="glass-card w-full max-w-md border border-white/15 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-250 bg-[#0e1322]">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-white/10 bg-[#0d131f] flex items-center justify-between">
+              <div className="space-y-1">
+                <h3 className="text-white font-bold text-base flex items-center gap-2">
+                  <FolderPlus className="w-5 h-5 text-amber-400" />
+                  Carpetas y Rubros
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Crea y organiza las áreas de tus proyectos pendientes.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setNewCategoryModalInput("");
+                }}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5">
+              
+              {/* Create new category */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newCategoryModalInput.trim()) {
+                    handleAddCategory(newCategoryModalInput.trim());
+                    setNewCategoryModalInput("");
+                  }
+                }}
+                className="space-y-2"
+              >
+                <label className="text-xs font-semibold text-gray-300 block">
+                  Crear nueva carpeta / rubro
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Folder className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400/70" />
+                    <input
+                      type="text"
+                      placeholder="Ej. Legales, Logística, Marketing..."
+                      value={newCategoryModalInput}
+                      onChange={(e) => setNewCategoryModalInput(e.target.value)}
+                      className="w-full bg-[#090d16] border border-white/10 rounded-xl py-2.5 pl-9 pr-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!newCategoryModalInput.trim()}
+                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-white rounded-xl shadow-md transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Agregar</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Existing categories list */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-300 block">
+                  Carpetas existentes ({allCategories.length})
+                </label>
+                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  {allCategories.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-4">
+                      No hay carpetas creadas todavía.
+                    </p>
+                  ) : (
+                    allCategories.map((cat) => {
+                      const count = allItems.filter(
+                        (p) => p.categoria?.toLowerCase() === cat.toLowerCase()
+                      ).length;
+
+                      return (
+                        <div
+                          key={cat}
+                          className="flex items-center justify-between p-2.5 bg-[#090d16]/70 border border-white/5 rounded-xl hover:border-white/10 transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Folder className="w-4 h-4 text-amber-400 shrink-0" />
+                            <span className="text-xs font-medium text-gray-200 truncate">
+                              {cat}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[10px] font-bold text-gray-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                              {count} {count === 1 ? "pendiente" : "pendientes"}
+                            </span>
+                            {count === 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategory(cat)}
+                                className="p-1 rounded-lg hover:bg-rose-500/10 text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
+                                title="Eliminar carpeta vacía"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-[#0d131f]/50 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setNewCategoryModalInput("");
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
 
           </div>
         </div>
