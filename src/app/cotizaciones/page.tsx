@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -13,7 +13,10 @@ import {
   doc, 
   serverTimestamp,
   query,
-  orderBy
+  orderBy,
+  arrayUnion,
+  arrayRemove,
+  setDoc
 } from "firebase/firestore";
 import { 
   Plus, 
@@ -33,7 +36,15 @@ import {
   Scale,
   Layers,
   Share2,
-  X
+  X,
+  Folder,
+  Folders,
+  Link2,
+  ExternalLink,
+  ListTodo,
+  Search,
+  FolderPlus,
+  Unlink
 } from "lucide-react";
 
 // Types definition
@@ -75,6 +86,9 @@ interface SavedQuotation {
   status?: string;
   winningProviderId?: string;
   sentAt?: string;
+  categoria?: string;
+  pendienteId?: string;
+  pendienteTitulo?: string;
 }
 
 const DEFAULT_UNITS = [
@@ -140,6 +154,25 @@ export default function CotizacionesPage() {
   const [savedQuotations, setSavedQuotations] = useState<SavedQuotation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+
+  // Rubro / Categoría & Linking with Pendiente state
+  const [quoteCategoria, setQuoteCategoria] = useState<string>("");
+  const [quotePendienteId, setQuotePendienteId] = useState<string>("");
+  const [quotePendienteTitulo, setQuotePendienteTitulo] = useState<string>("");
+
+  // Categorías & Pendientes reference data from Firestore
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [allPendientes, setAllPendientes] = useState<Array<{ id: string; titulo: string; categoria?: string; cotizacionesIds?: string[] }>>([]);
+
+  // Filters for Historial Tab
+  const [filterCategoria, setFilterCategoria] = useState<string>("todas");
+  const [searchHistory, setSearchHistory] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("todos");
+  const [filterOnlyLinked, setFilterOnlyLinked] = useState<boolean>(false);
+
+  // Category modal state
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
+  const [newCategoryModalInput, setNewCategoryModalInput] = useState<string>("");
 
   // Image Export States
   const [showImgModal, setShowImgModal] = useState<boolean>(false);
@@ -216,6 +249,166 @@ export default function CotizacionesPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbActive]);
+
+  // Real-time listener for categories config
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    const docRef = doc(db, "pendientes_config", "categorias");
+    const unsubscribe = onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (Array.isArray(data.list)) {
+            setTimeout(() => {
+              setCustomCategories(data.list);
+            }, 0);
+          }
+        }
+      },
+      (err) => console.warn("Could not read categories config in cotizaciones:", err)
+    );
+    return () => unsubscribe();
+  }, [dbActive]);
+
+  // Real-time listener for pendientes list (for linking and category sync)
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    const colRef = collection(db, "pendientes");
+    const q = query(colRef, orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            titulo: data.titulo || "Pendiente sin título",
+            categoria: data.categoria || "",
+            cotizacionesIds: Array.isArray(data.cotizacionesIds) ? data.cotizacionesIds : []
+          };
+        });
+        setTimeout(() => {
+          setAllPendientes(list);
+        }, 0);
+      },
+      (err) => console.warn("Could not read pendientes in cotizaciones:", err)
+    );
+    return () => unsubscribe();
+  }, [dbActive]);
+
+  // Distinct categories available across customCategories, quotations, and pendientes
+  const allCategories = useMemo(() => {
+    const catsSet = new Set<string>();
+    customCategories.forEach((c) => {
+      if (c && c.trim()) catsSet.add(c.trim());
+    });
+    savedQuotations.forEach((q) => {
+      if (q.categoria && q.categoria.trim()) catsSet.add(q.categoria.trim());
+    });
+    allPendientes.forEach((p) => {
+      if (p.categoria && p.categoria.trim()) catsSet.add(p.categoria.trim());
+    });
+    return Array.from(catsSet).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [customCategories, savedQuotations, allPendientes]);
+
+  // Link / Unlink Pendiente
+  const handleLinkPendiente = (pendId: string) => {
+    if (!pendId) {
+      setQuotePendienteId("");
+      setQuotePendienteTitulo("");
+      return;
+    }
+    const found = allPendientes.find((p) => p.id === pendId);
+    if (found) {
+      setQuotePendienteId(found.id);
+      setQuotePendienteTitulo(found.titulo);
+      // Auto-assign the category of the pendiente to the quotation
+      if (found.categoria) {
+        setQuoteCategoria(found.categoria);
+      }
+      showToast(`Vinculado a "${found.titulo}" (Rubro: ${found.categoria || "Sin rubro"})`, "info");
+    }
+  };
+
+  // Create new category in Firestore
+  const handleCreateCategory = async (catName: string) => {
+    const trimmed = catName.trim();
+    if (!trimmed) return;
+    if (customCategories.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      showToast("Esa carpeta ya existe", "error");
+      return;
+    }
+    const updated = [...customCategories, trimmed];
+    setCustomCategories(updated);
+    setQuoteCategoria(trimmed);
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        const docRef = doc(db, "pendientes_config", "categorias");
+        await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
+        showToast(`Carpeta "${trimmed}" creada`, "success");
+      } catch (err) {
+        console.error("Error creating category:", err);
+        showToast("Error al guardar carpeta", "error");
+      }
+    }
+  };
+
+  // Filtered quotations for Historial tab
+  const filteredQuotations = useMemo(() => {
+    return savedQuotations.filter((quote) => {
+      // 1. Categoria filter
+      if (filterCategoria !== "todas") {
+        if (filterCategoria === "_sin_categoria_") {
+          if (quote.categoria && quote.categoria.trim() !== "") return false;
+        } else {
+          if (quote.categoria?.toLowerCase() !== filterCategoria.toLowerCase()) return false;
+        }
+      }
+
+      // 2. Status filter
+      if (filterStatus !== "todos") {
+        const qStatus = quote.status || (quote.isFinalized ? "finalizada" : "borrador");
+        if (qStatus !== filterStatus) return false;
+      }
+
+      // 3. Only linked filter
+      if (filterOnlyLinked) {
+        if (!quote.pendienteId) return false;
+      }
+
+      // 4. Search term
+      if (searchHistory.trim()) {
+        const term = searchHistory.toLowerCase();
+        const matchName = quote.name?.toLowerCase().includes(term);
+        const matchNotes = quote.notes?.toLowerCase().includes(term);
+        const matchPendiente = quote.pendienteTitulo?.toLowerCase().includes(term);
+        const matchCategory = quote.categoria?.toLowerCase().includes(term);
+        const matchItem = quote.items?.some((i) => i.name.toLowerCase().includes(term));
+        const matchProv = quote.providers?.some((p) => p.name.toLowerCase().includes(term));
+        if (!matchName && !matchNotes && !matchPendiente && !matchCategory && !matchItem && !matchProv) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [savedQuotations, filterCategoria, filterStatus, filterOnlyLinked, searchHistory]);
+
+  const getCategoryQuoteCount = (catName: string) => {
+    return savedQuotations.filter(
+      (q) => q.categoria?.toLowerCase() === catName.toLowerCase()
+    ).length;
+  };
+
+  const uncategorizedQuoteCount = savedQuotations.filter(
+    (q) => !q.categoria || q.categoria.trim() === ""
+  ).length;
 
   // Calc helper: gets true unit price in base unit and base currency
   const getCalculatedPrices = (quote: QuoteDetail, exchangeRateValue: number, baseCurr: "ARS" | "USD") => {
@@ -430,11 +623,15 @@ export default function CotizacionesPage() {
       status,
       isFinalized: status === "finalizada",
       winningProviderId: status === "finalizada" ? winningProviderId : "",
-      sentAt: status === "enviada" ? sentAt : ""
+      sentAt: status === "enviada" ? sentAt : "",
+      categoria: quoteCategoria.trim(),
+      pendienteId: quotePendienteId.trim(),
+      pendienteTitulo: quotePendienteTitulo.trim()
     };
 
     const db = getFirebaseDb();
     try {
+      let savedId = currentQuoteId;
       if (db) {
         if (currentQuoteId) {
           // Update existing
@@ -450,8 +647,26 @@ export default function CotizacionesPage() {
             ...payload,
             createdAt: serverTimestamp()
           });
+          savedId = docRef.id;
           setCurrentQuoteId(docRef.id);
           showToast(`Cotización "${quoteName}" guardada en la nube`);
+        }
+
+        // Sync with Pendiente
+        if (savedId) {
+          if (quotePendienteId) {
+            await updateDoc(doc(db, "pendientes", quotePendienteId), {
+              cotizacionesIds: arrayUnion(savedId)
+            }).catch(console.error);
+          }
+
+          // If previously linked to another pendiente, unlink from it
+          const oldQuote = savedQuotations.find((q) => q.id === savedId);
+          if (oldQuote?.pendienteId && oldQuote.pendienteId !== quotePendienteId) {
+            await updateDoc(doc(db, "pendientes", oldQuote.pendienteId), {
+              cotizacionesIds: arrayRemove(savedId)
+            }).catch(console.error);
+          }
         }
       } else {
         // Fallback to localStorage
@@ -485,6 +700,9 @@ export default function CotizacionesPage() {
     setStatus("borrador");
     setWinningProviderId("");
     setSentAt("");
+    setQuoteCategoria("");
+    setQuotePendienteId("");
+    setQuotePendienteTitulo("");
     setHasActiveQuote(true);
     setItems([
       { id: "item-1", name: "Insumo nuevo", baseUnit: "U", targetQuantity: 1 }
@@ -523,6 +741,9 @@ export default function CotizacionesPage() {
     setStatus(loadedStatus);
     setWinningProviderId(quote.winningProviderId || "");
     setSentAt(quote.sentAt || "");
+    setQuoteCategoria(quote.categoria || "");
+    setQuotePendienteId(quote.pendienteId || "");
+    setQuotePendienteTitulo(quote.pendienteTitulo || "");
     setHasActiveQuote(true);
     setActiveTab("editor");
     showToast(`Cotización "${quote.name}" cargada`);
@@ -533,10 +754,16 @@ export default function CotizacionesPage() {
     e.stopPropagation();
     if (!confirm("¿Estás seguro de que querés eliminar esta cotización?")) return;
 
+    const targetQuote = savedQuotations.find((q) => q.id === id);
     const db = getFirebaseDb();
     try {
       if (db && !id.startsWith("local-")) {
         await deleteDoc(doc(db, "cotizaciones", id));
+        if (targetQuote?.pendienteId) {
+          await updateDoc(doc(db, "pendientes", targetQuote.pendienteId), {
+            cotizacionesIds: arrayRemove(id)
+          }).catch(console.error);
+        }
         showToast("Cotización eliminada de la nube");
       } else {
         const localData = localStorage.getItem("finanzas-cotizaciones");
@@ -572,6 +799,9 @@ export default function CotizacionesPage() {
     setProviders(quote.providers || []);
     setStatus("borrador");
     setWinningProviderId("");
+    setQuoteCategoria(quote.categoria || "");
+    setQuotePendienteId("");
+    setQuotePendienteTitulo("");
     setHasActiveQuote(true);
     setActiveTab("editor");
     showToast(`Copia creada de "${quote.name}"`);
@@ -1292,6 +1522,94 @@ export default function CotizacionesPage() {
               disabled={isLocked}
               className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px] disabled:opacity-50 disabled:cursor-not-allowed"
             />
+          </div>
+
+          {/* Rubro / Categoría y Vinculación con Pendientes */}
+          <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Rubro / Categoría */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-amber-400" />
+                  Rubro / Categoría
+                </label>
+                {quotePendienteId && quoteCategoria && (
+                  <span className="text-[11px] text-amber-400/90 flex items-center gap-1 font-medium">
+                    <Link2 className="w-3 h-3" /> Heredado de pendiente
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={quoteCategoria}
+                  onChange={(e) => setQuoteCategoria(e.target.value)}
+                  disabled={isLocked}
+                  className="flex-1 bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Sin rubro / Sin categoría</option>
+                  {allCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl border border-white/10 transition-colors cursor-pointer"
+                  title="Crear nueva carpeta/rubro"
+                >
+                  <FolderPlus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Pendiente Vinculado */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <ListTodo className="w-3.5 h-3.5 text-indigo-400" />
+                  Vincular a Pendiente
+                </label>
+                {quotePendienteId && (
+                  <a
+                    href={`/pendientes?id=${quotePendienteId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 hover:underline"
+                    title="Ver este pendiente en una nueva pestaña"
+                  >
+                    Ver pendiente <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={quotePendienteId}
+                  onChange={(e) => handleLinkPendiente(e.target.value)}
+                  disabled={isLocked}
+                  className="flex-1 bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Ningún pendiente vinculado</option>
+                  {allPendientes.map((pend) => (
+                    <option key={pend.id} value={pend.id}>
+                      {pend.titulo} {pend.categoria ? `[${pend.categoria}]` : ""}
+                    </option>
+                  ))}
+                </select>
+                {quotePendienteId && (
+                  <button
+                    type="button"
+                    onClick={() => handleLinkPendiente("")}
+                    disabled={isLocked}
+                    className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-colors cursor-pointer"
+                    title="Desvincular pendiente"
+                  >
+                    <Unlink className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Estado de la Cotización y Proveedor Ganador */}
@@ -2200,9 +2518,175 @@ export default function CotizacionesPage() {
           ==================================================== */}
       {activeTab === "historial" && (
         <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6 animate-fadeIn">
-          <div>
-            <h3 className="font-bold text-white text-base">Historial de Cotizaciones</h3>
-            <p className="text-xs text-gray-400">Recuperá cotizaciones cargadas anteriormente</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-white text-base">Historial de Cotizaciones</h3>
+              <p className="text-xs text-gray-400">Filtrá por carpetas de rubro, estado o pendientes vinculados</p>
+            </div>
+
+            <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>+ Nueva Carpeta</span>
+            </button>
+          </div>
+
+          {/* Mini Carpetitas Horizontales (Rubros / Categorías) */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin pt-0.5">
+              {/* Todas las áreas */}
+              <button
+                onClick={() => setFilterCategoria("todas")}
+                className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                  filterCategoria === "todas"
+                    ? "bg-gradient-to-r from-indigo-950/90 via-[#151d38] to-indigo-900/70 border-indigo-500 text-white shadow-md shadow-indigo-500/20 ring-1 ring-indigo-500/40"
+                    : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                }`}
+              >
+                <Folders className={`w-4 h-4 shrink-0 ${filterCategoria === "todas" ? "text-indigo-300" : "text-indigo-400/80 group-hover:text-indigo-300"}`} />
+                <span className="font-medium whitespace-nowrap">Todas las áreas</span>
+                <span
+                  className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                    filterCategoria === "todas"
+                      ? "bg-indigo-500/30 text-indigo-200 border border-indigo-500/40"
+                      : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
+                  }`}
+                >
+                  {savedQuotations.length}
+                </span>
+              </button>
+
+              {/* Carpetas por cada rubro */}
+              {allCategories.map((cat) => {
+                const count = getCategoryQuoteCount(cat);
+                const isActive = filterCategoria.toLowerCase() === cat.toLowerCase();
+
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setFilterCategoria(isActive ? "todas" : cat)}
+                    className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                      isActive
+                        ? "bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-indigo-950/60 border-amber-400 text-white shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40"
+                        : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                    }`}
+                    title={`Filtrar por ${cat}`}
+                  >
+                    {isActive ? (
+                      <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                    ) : (
+                      <Folder className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 shrink-0 transition-colors" />
+                    )}
+                    <span className="font-medium whitespace-nowrap">{cat}</span>
+                    <span
+                      className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                        isActive
+                          ? "bg-amber-400/25 text-amber-200 border border-amber-400/30"
+                          : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Sin Rubro */}
+              {uncategorizedQuoteCount > 0 && (
+                <button
+                  onClick={() =>
+                    setFilterCategoria(filterCategoria === "_sin_categoria_" ? "todas" : "_sin_categoria_")
+                  }
+                  className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                    filterCategoria === "_sin_categoria_"
+                      ? "bg-gradient-to-r from-slate-800/90 to-slate-900 border-slate-400 text-white shadow-md ring-1 ring-slate-400/30"
+                      : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Cotizaciones sin rubro asignado"
+                >
+                  <Folder className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span className="font-medium whitespace-nowrap">Sin rubro</span>
+                  <span
+                    className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                      filterCategoria === "_sin_categoria_"
+                        ? "bg-slate-700 text-slate-200 border border-slate-600"
+                        : "bg-slate-800 text-slate-500 border border-slate-700/60"
+                    }`}
+                  >
+                    {uncategorizedQuoteCount}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Barra de Búsqueda y Subfiltros */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[#080c16]/70 border border-white/5">
+            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+              {/* Buscador */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchHistory}
+                  onChange={(e) => setSearchHistory(e.target.value)}
+                  placeholder="Buscar por nombre, nota, rubro o ítem..."
+                  className="w-full bg-[#111827]/80 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                {searchHistory && (
+                  <button
+                    onClick={() => setSearchHistory("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtro por estado */}
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-[#111827]/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="borrador">Borrador</option>
+                <option value="enviada">Enviada</option>
+                <option value="finalizada">Finalizada</option>
+                <option value="cancelada">Cancelada</option>
+              </select>
+
+              {/* Solo vinculadas toggle */}
+              <button
+                type="button"
+                onClick={() => setFilterOnlyLinked(!filterOnlyLinked)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                  filterOnlyLinked
+                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm shadow-indigo-500/10"
+                    : "bg-[#111827]/60 border-white/10 text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                <Link2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Solo vinculadas</span>
+              </button>
+            </div>
+
+            {/* Botón limpiar filtros */}
+            {(filterCategoria !== "todas" || filterStatus !== "todos" || filterOnlyLinked || searchHistory.trim()) && (
+              <button
+                onClick={() => {
+                  setFilterCategoria("todas");
+                  setFilterStatus("todos");
+                  setFilterOnlyLinked(false);
+                  setSearchHistory("");
+                }}
+                className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 shrink-0 cursor-pointer"
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
 
           {loadingHistory ? (
@@ -2229,7 +2713,7 @@ export default function CotizacionesPage() {
                 </div>
               </div>
 
-              {savedQuotations.length > 0 && savedQuotations.map((quote) => {
+              {filteredQuotations.length > 0 && filteredQuotations.map((quote) => {
                 const date = (quote.createdAt && typeof quote.createdAt === "object" && "seconds" in quote.createdAt)
                   ? new Date((quote.createdAt as { seconds: number }).seconds * 1000).toLocaleString("es-AR")
                   : (quote.createdAt && typeof quote.createdAt === "string"
@@ -2256,11 +2740,20 @@ export default function CotizacionesPage() {
                               : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
                     }`}
                   >
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors truncate pr-4">
-                          {quote.name}
-                        </h4>
+                        <div className="min-w-0 pr-2 space-y-1">
+                          <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
+                            {quote.name}
+                          </h4>
+                          {quote.categoria && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] font-semibold border border-amber-500/20">
+                              <Folder className="w-3 h-3 text-amber-400" />
+                              {quote.categoria}
+                            </span>
+                          )}
+                        </div>
+
                         <div className="flex flex-col gap-1 items-end shrink-0 select-none">
                           {isCurrent && (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20 whitespace-nowrap">
@@ -2289,6 +2782,26 @@ export default function CotizacionesPage() {
                         <p className="text-xs text-gray-400 line-clamp-2 italic">
                           &quot;{quote.notes}&quot;
                         </p>
+                      )}
+
+                      {/* Pendiente Vinculado Badge */}
+                      {quote.pendienteId && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/pendientes?id=${quote.pendienteId}`, "_blank");
+                          }}
+                          className="flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-xs text-indigo-300 transition-colors group/pend"
+                          title="Abrir pendiente en nueva pestaña"
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Link2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span className="truncate text-[11px] font-medium">
+                              {quote.pendienteTitulo || "Pendiente vinculado"}
+                            </span>
+                          </div>
+                          <ExternalLink className="w-3 h-3 text-indigo-400 opacity-60 group-hover/pend:opacity-100 shrink-0" />
+                        </div>
                       )}
 
                       <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-500 pt-2 border-t border-white/5">
@@ -2331,7 +2844,7 @@ export default function CotizacionesPage() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={(e) => handleDuplicateQuote(quote, e)}
-                          className="p-1.5 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                          className="p-1.5 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
                           title="Duplicar cotización"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -2340,7 +2853,7 @@ export default function CotizacionesPage() {
                           onClick={(e) => {
                             if (quote.id) handleDeleteSavedQuote(quote.id, e);
                           }}
-                          className="p-1.5 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          className="p-1.5 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                           title="Eliminar de historial"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2350,6 +2863,25 @@ export default function CotizacionesPage() {
                   </div>
                 );
               })}
+
+              {/* Empty state when filters match nothing */}
+              {filteredQuotations.length === 0 && savedQuotations.length > 0 && (
+                <div className="col-span-full py-12 text-center text-gray-400 space-y-3">
+                  <FolderOpen className="w-10 h-10 text-gray-600 mx-auto" />
+                  <p className="text-sm">No se encontraron cotizaciones con los filtros seleccionados.</p>
+                  <button
+                    onClick={() => {
+                      setFilterCategoria("todas");
+                      setFilterStatus("todos");
+                      setFilterOnlyLinked(false);
+                      setSearchHistory("");
+                    }}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-500/20 transition-colors cursor-pointer"
+                  >
+                    Restablecer filtros
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2424,6 +2956,80 @@ export default function CotizacionesPage() {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Crear Nueva Carpeta / Rubro */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="glass-card rounded-3xl p-6 max-w-md w-full border border-white/10 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  <FolderPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Nueva Carpeta de Rubro</h3>
+                  <p className="text-xs text-gray-400">Compartida con la sección de Pendientes</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setNewCategoryModalInput("");
+                }}
+                className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newCategoryModalInput.trim()) {
+                  handleCreateCategory(newCategoryModalInput.trim());
+                  setIsCategoryModalOpen(false);
+                  setNewCategoryModalInput("");
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
+                  Nombre del Rubro o Área
+                </label>
+                <input
+                  type="text"
+                  value={newCategoryModalInput}
+                  onChange={(e) => setNewCategoryModalInput(e.target.value)}
+                  placeholder="Ej. Insumos, Mantenimiento, Sistemas..."
+                  autoFocus
+                  className="w-full bg-[#111827]/80 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCategoryModalOpen(false);
+                    setNewCategoryModalInput("");
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newCategoryModalInput.trim()}
+                  className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  Crear Carpeta
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -40,7 +40,11 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
-  Folders
+  Folders,
+  Calculator,
+  Link2,
+  ExternalLink,
+  Unlink
 } from "lucide-react";
 
 const generateUniqueId = () => {
@@ -57,6 +61,20 @@ interface Etapa {
   createdAt?: string | null;
 }
 
+export interface CotizacionSummary {
+  id: string;
+  name: string;
+  notes?: string;
+  baseCurrency?: "ARS" | "USD";
+  status?: string;
+  createdAt?: { seconds: number; nanoseconds: number } | string | null;
+  itemsCount?: number;
+  providersCount?: number;
+  categoria?: string;
+  pendienteId?: string;
+  pendienteTitulo?: string;
+}
+
 interface Pendiente {
   id: string;
   titulo: string;
@@ -70,6 +88,7 @@ interface Pendiente {
   notasAdicionales: string;
   etapas?: Etapa[];
   fechaLimite?: string | null;
+  cotizacionesIds?: string[];
 }
 
 export default function PendientesPage() {
@@ -81,6 +100,11 @@ export default function PendientesPage() {
   const [completedLimit, setCompletedLimit] = useState<number>(10);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Cotizaciones linking state
+  const [allCotizaciones, setAllCotizaciones] = useState<CotizacionSummary[]>([]);
+  const [isLinkCotizacionModalOpen, setIsLinkCotizacionModalOpen] = useState<boolean>(false);
+  const [searchCotizacionTerm, setSearchCotizacionTerm] = useState<string>("");
 
   // General Notepad (for when no project is selected)
   const [generalNotes, setGeneralNotes] = useState<string>("");
@@ -268,7 +292,8 @@ export default function PendientesPage() {
             completedAt: data.completedAt || null,
             notasAdicionales: data.notasAdicionales || "",
             etapas: data.etapas || [],
-            fechaLimite: data.fechaLimite || null
+            fechaLimite: data.fechaLimite || null,
+            cotizacionesIds: Array.isArray(data.cotizacionesIds) ? data.cotizacionesIds : []
           };
         });
 
@@ -289,6 +314,53 @@ export default function PendientesPage() {
 
     return () => unsubscribe();
   }, [db]);
+
+  // 1b. Fetch Cotizaciones list in real time
+  useEffect(() => {
+    if (!db) return;
+    const colRef = collection(db, "cotizaciones");
+    const q = query(colRef, orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list: CotizacionSummary[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            name: data.name || "Cotización sin nombre",
+            notes: data.notes || "",
+            baseCurrency: data.baseCurrency || "ARS",
+            status: data.status || (data.isFinalized ? "finalizada" : "borrador"),
+            createdAt: data.createdAt || null,
+            itemsCount: Array.isArray(data.items) ? data.items.length : 0,
+            providersCount: Array.isArray(data.providers) ? data.providers.length : 0,
+            categoria: data.categoria || "",
+            pendienteId: data.pendienteId || "",
+            pendienteTitulo: data.pendienteTitulo || ""
+          };
+        });
+        setTimeout(() => {
+          setAllCotizaciones(list);
+        }, 0);
+      },
+      (err) => {
+        console.warn("Could not load cotizaciones:", err);
+      }
+    );
+    return () => unsubscribe();
+  }, [db]);
+
+  // 1c. Deep-link: select pendiente from URL param ?id=...
+  useEffect(() => {
+    if (typeof window === "undefined" || allItems.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetId = params.get("id");
+    if (targetId && allItems.some((item) => item.id === targetId)) {
+      setTimeout(() => {
+        setSelectedId(targetId);
+      }, 0);
+    }
+  }, [allItems]);
 
   // 2. Fetch General Notepad contents once
   useEffect(() => {
@@ -489,12 +561,97 @@ export default function PendientesPage() {
       const docRef = doc(db, "pendientes", id);
       await updateDoc(docRef, { categoria: newCategory.trim() });
       setEditorCategoria(newCategory.trim());
+
+      // Sync category with any linked cotizaciones
+      const targetItem = allItems.find((p) => p.id === id);
+      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
+        const updatePromises = targetItem.cotizacionesIds.map((cId) =>
+          updateDoc(doc(db, "cotizaciones", cId), {
+            categoria: newCategory.trim()
+          }).catch(console.error)
+        );
+        await Promise.all(updatePromises);
+      }
+
       showToast(newCategory.trim() ? `Rubro asignado: ${newCategory.trim()}` : "Rubro removido", "info");
     } catch (err) {
       console.error("Error changing category:", err);
       showToast("Error al cambiar rubro", "error");
     }
   };
+
+  const handleLinkCotizacion = async (pendienteId: string, cotizacionId: string) => {
+    if (!db) return;
+    try {
+      const targetPendiente = allItems.find((p) => p.id === pendienteId);
+      const targetCotizacion = allCotizaciones.find((c) => c.id === cotizacionId);
+      if (!targetPendiente || !targetCotizacion) return;
+
+      const currentIds = targetPendiente.cotizacionesIds || [];
+      if (currentIds.includes(cotizacionId)) {
+        showToast("La cotización ya está vinculada a este pendiente", "info");
+        return;
+      }
+
+      const updatedIds = [...currentIds, cotizacionId];
+
+      // 1. Update pendiente doc
+      await updateDoc(doc(db, "pendientes", pendienteId), {
+        cotizacionesIds: updatedIds
+      });
+
+      // 2. Update cotizacion doc with the same rubro/categoria as the pendiente
+      await updateDoc(doc(db, "cotizaciones", cotizacionId), {
+        pendienteId: targetPendiente.id,
+        pendienteTitulo: targetPendiente.titulo,
+        categoria: targetPendiente.categoria || ""
+      });
+
+      showToast(`Cotización vinculada con el rubro "${targetPendiente.categoria || "Sin rubro"}"`, "success");
+    } catch (err) {
+      console.error("Error linking cotizacion:", err);
+      showToast("Error al vincular cotización", "error");
+    }
+  };
+
+  const handleUnlinkCotizacion = async (pendienteId: string, cotizacionId: string) => {
+    if (!db) return;
+    try {
+      const targetPendiente = allItems.find((p) => p.id === pendienteId);
+      if (!targetPendiente) return;
+
+      const currentIds = targetPendiente.cotizacionesIds || [];
+      const updatedIds = currentIds.filter((id) => id !== cotizacionId);
+
+      // 1. Update pendiente doc
+      await updateDoc(doc(db, "pendientes", pendienteId), {
+        cotizacionesIds: updatedIds
+      });
+
+      // 2. Update cotizacion doc: remove pendiente link
+      await updateDoc(doc(db, "cotizaciones", cotizacionId), {
+        pendienteId: "",
+        pendienteTitulo: ""
+      });
+
+      showToast("Cotización desvinculada", "info");
+    } catch (err) {
+      console.error("Error unlinking cotizacion:", err);
+      showToast("Error al desvincular cotización", "error");
+    }
+  };
+
+  const filteredCotizacionesForModal = useMemo(() => {
+    if (!searchCotizacionTerm.trim()) return allCotizaciones;
+    const term = searchCotizacionTerm.toLowerCase();
+    return allCotizaciones.filter(
+      (c) =>
+        c.name.toLowerCase().includes(term) ||
+        (c.notes && c.notes.toLowerCase().includes(term)) ||
+        (c.status && c.status.toLowerCase().includes(term)) ||
+        (c.categoria && c.categoria.toLowerCase().includes(term))
+    );
+  }, [allCotizaciones, searchCotizacionTerm]);
 
   const handleInsertEtapa = async (index: number) => {
     if (!db || !selectedId || !newStepTitle.trim()) return;
@@ -1157,6 +1314,12 @@ export default function PendientesPage() {
                               <span className="truncate max-w-[110px]">{item.categoria}</span>
                             </span>
                           )}
+                          {item.cotizacionesIds && item.cotizacionesIds.length > 0 && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
+                              <Calculator className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                              <span>{item.cotizacionesIds.length} {item.cotizacionesIds.length === 1 ? "cotiz." : "cotiz."}</span>
+                            </span>
+                          )}
                           {item.completado && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                               <Check className="w-2.5 h-2.5" /> Terminado
@@ -1683,6 +1846,108 @@ export default function PendientesPage() {
                 </div>
               </div>
 
+              {/* Cotizaciones Vinculadas */}
+              <div className="mx-5 mt-4 p-3.5 bg-[#090d16]/70 border border-white/10 rounded-2xl flex flex-col gap-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-gray-200">
+                      Cotizaciones Vinculadas
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                      {selectedItem.cotizacionesIds?.length || 0}
+                    </span>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLinkCotizacionModalOpen(true);
+                      setSearchCotizacionTerm("");
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Vincular Cotización</span>
+                  </button>
+                </div>
+
+                {/* List of linked cotizaciones */}
+                {(!selectedItem.cotizacionesIds || selectedItem.cotizacionesIds.length === 0) ? (
+                  <div className="text-center py-3 bg-[#080c16]/50 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-1">
+                    <p className="text-[11px] text-gray-500">
+                      No hay cotizaciones vinculadas a este pendiente.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsLinkCotizacionModalOpen(true);
+                        setSearchCotizacionTerm("");
+                      }}
+                      className="text-[11px] font-semibold text-emerald-400 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Buscar y vincular cotización existente
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedItem.cotizacionesIds.map((cId) => {
+                      const cotiz = allCotizaciones.find((c) => c.id === cId);
+                      return (
+                        <div
+                          key={cId}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-[#0e1424] border border-white/10 hover:border-emerald-500/30 transition-all gap-2"
+                        >
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-semibold text-white truncate max-w-[170px]" title={cotiz?.name || cId}>
+                                {cotiz?.name || "Cotización " + cId.substring(0, 6)}
+                              </span>
+                              {cotiz?.status && (
+                                <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
+                                  cotiz.status === "finalizada"
+                                    ? "bg-blue-500/10 text-blue-300 border border-blue-500/20"
+                                    : cotiz.status === "enviada"
+                                    ? "bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                                    : "bg-slate-700/50 text-slate-300 border border-slate-600/30"
+                                }`}>
+                                  {cotiz.status}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-gray-400 flex items-center gap-2">
+                              <span>{cotiz?.itemsCount || 0} ítems</span>
+                              <span>•</span>
+                              <span>{cotiz?.providersCount || 0} provs</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={`/cotizaciones?id=${cId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 transition-colors"
+                              title="Abrir en Cotizaciones"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleUnlinkCotizacion(selectedItem.id, cId)}
+                              className="p-1.5 rounded-lg hover:bg-rose-500/15 text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
+                              title="Desvincular cotización"
+                            >
+                              <Unlink className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Textarea Workspace */}
                 <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30 relative">
                   <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
@@ -2106,6 +2371,137 @@ export default function PendientesPage() {
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
               >
                 Cerrar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Buscar y Vincular Cotización */}
+      {isLinkCotizacionModalOpen && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="glass-card w-full max-w-lg border border-white/15 rounded-3xl overflow-hidden shadow-2xl bg-[#0e1322] flex flex-col max-h-[85vh]">
+            
+            {/* Header */}
+            <div className="px-6 py-4.5 border-b border-white/10 bg-[#0d131f] flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h3 className="text-white font-bold text-base flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-emerald-400" />
+                  Vincular Cotización
+                </h3>
+                <p className="text-xs text-gray-400 truncate max-w-sm">
+                  Pendiente: <span className="text-white font-semibold">{selectedItem.titulo}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setIsLinkCotizacionModalOpen(false)}
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="p-4 border-b border-white/5 bg-[#090d16]/60">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar cotización por nombre o notas..."
+                  value={searchCotizacionTerm}
+                  onChange={(e) => setSearchCotizacionTerm(e.target.value)}
+                  className="w-full bg-[#080c16] border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Results List */}
+            <div className="p-4 overflow-y-auto space-y-2 flex-1 scrollbar-thin">
+              {filteredCotizacionesForModal.length === 0 ? (
+                <div className="py-8 text-center text-xs text-gray-500 space-y-2">
+                  <Calculator className="w-8 h-8 mx-auto text-gray-600" />
+                  <p>No se encontraron cotizaciones coincidentes.</p>
+                </div>
+              ) : (
+                filteredCotizacionesForModal.map((cotiz) => {
+                  const isAlreadyLinked = selectedItem.cotizacionesIds?.includes(cotiz.id);
+                  const isLinkedToOther = cotiz.pendienteId && cotiz.pendienteId !== selectedItem.id;
+
+                  return (
+                    <div
+                      key={cotiz.id}
+                      className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
+                        isAlreadyLinked
+                          ? "bg-emerald-950/20 border-emerald-500/30 ring-1 ring-emerald-500/20"
+                          : "bg-[#090d16] border-white/5 hover:border-white/15"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-white truncate">
+                            {cotiz.name}
+                          </h4>
+                          {cotiz.status && (
+                            <span className="text-[8.5px] font-bold px-1.5 py-0.2 rounded-full uppercase bg-white/5 text-gray-300 border border-white/10">
+                              {cotiz.status}
+                            </span>
+                          )}
+                          {cotiz.categoria && (
+                            <span className="text-[8.5px] font-semibold px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-0.5">
+                              <Folder className="w-2 h-2" />
+                              {cotiz.categoria}
+                            </span>
+                          )}
+                        </div>
+                        {isLinkedToOther && (
+                          <p className="text-[10px] text-amber-400/80">
+                            Vinculada actualmente a: &quot;{cotiz.pendienteTitulo}&quot;
+                          </p>
+                        )}
+                        <div className="text-[10px] text-gray-400 flex items-center gap-2">
+                          <span>{cotiz.itemsCount} ítems</span>
+                          <span>•</span>
+                          <span>{cotiz.providersCount} provs</span>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {isAlreadyLinked ? (
+                          <button
+                            type="button"
+                            onClick={() => handleUnlinkCotizacion(selectedItem.id, cotiz.id)}
+                            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Unlink className="w-3.5 h-3.5" />
+                            <span>Desvincular</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleLinkCotizacion(selectedItem.id, cotiz.id)}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 shadow-md transition-all cursor-pointer"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            <span>Vincular</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 bg-[#0d131f]/60 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsLinkCotizacionModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                Listo
               </button>
             </div>
 
