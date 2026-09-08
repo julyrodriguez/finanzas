@@ -745,37 +745,46 @@ export default function EstadisticasPage() {
             </div>
           </div>
 
-          {/* ACTIONS & CACHE STATUS */}
-          <div className="flex flex-wrap items-center gap-3">
-            {formattedLastSync && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-white/10 text-xs text-slate-300">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Última sincronización: <strong className="text-white font-medium">{formattedLastSync}</strong></span>
-              </div>
-            )}
+          {/* ACTIONS & CACHE PANEL */}
+          <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
+            {/* Última sincronización badge */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-white/10 text-xs text-slate-300">
+              <span className={`w-2 h-2 rounded-full ${formattedLastSync ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+              <Clock className="w-3.5 h-3.5 text-emerald-400" />
+              <span>
+                Última sincronización:{" "}
+                <strong className="text-white font-medium font-mono">
+                  {formattedLastSync || "Sin sincronizar"}
+                </strong>
+              </span>
+            </div>
 
-            <button
-              onClick={handleActualizarDatos}
-              disabled={loading}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 shadow-lg ${
-                loading
-                  ? "bg-indigo-600/50 text-indigo-200 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/25 active:scale-95"
-              }`}
-              title="Descarga todas las órdenes desde Firebase y actualiza la caché local"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-white" : ""}`} />
-              <span>{loading ? "Sincronizando..." : "Actualizar datos"}</span>
-            </button>
+            {/* Botones de acción colocados directamente abajo */}
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <button
+                onClick={handleActualizarDatos}
+                disabled={loading}
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium text-xs sm:text-sm transition-all duration-200 shadow-lg cursor-pointer ${
+                  loading
+                    ? "bg-indigo-600/50 text-indigo-200 cursor-not-allowed"
+                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/25 active:scale-95"
+                }`}
+                title="Descarga todas las órdenes desde Firebase y actualiza la caché local"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-white" : ""}`} />
+                <span>{loading ? "Sincronizando..." : "Actualizar datos"}</span>
+              </button>
 
-            <button
-              onClick={handleExportarExcel}
-              disabled={displayedProviders.length === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-emerald-600/80 hover:bg-emerald-600 text-white transition-all shadow-lg shadow-emerald-600/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Exportar Excel</span>
-            </button>
+              <button
+                onClick={handleExportarExcel}
+                disabled={displayedProviders.length === 0}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium text-xs sm:text-sm bg-emerald-600/80 hover:bg-emerald-600 text-white transition-all shadow-lg shadow-emerald-600/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                title="Exportar análisis de proveedores a archivo Excel"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Exportar Excel</span>
+              </button>
+            </div>
           </div>
         </div>
 
