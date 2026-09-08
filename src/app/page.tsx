@@ -51,7 +51,7 @@ import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
-import { syncOrderToMongo, deleteOrderFromMongo } from "@/lib/serverSync";
+import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo } from "@/lib/serverSync";
 
 const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -1049,20 +1049,48 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   };
 
   const handleLoadAllFromDb = async () => {
-    const db = getFirebaseDb();
-    if (!db) return;
     setLoadingAllDb(true);
     try {
-      const colRef = collection(db, "ordenes_compra");
-      const q = query(colRef, orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const allDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
+      // Consulta directamente a nuestro servidor local (MongoDB) sin consumir lecturas de Firebase
+      const res = await fetchOrdersFromMongo({ limit: 0 });
+      if (!res || !res.success || !Array.isArray(res.ordenes)) {
+        throw new Error("Respuesta inválida del servidor");
+      }
+
+      const allDocs: OrdenCompra[] = res.ordenes.map((docItem: any) => {
+        let createdAtObj: any = null;
+        if (docItem.fechaOC) {
+          const d = new Date(docItem.fechaOC);
+          createdAtObj = {
+            seconds: Math.floor(d.getTime() / 1000),
+            nanoseconds: 0,
+          };
+        } else if (docItem.createdAtFirebase) {
+          const d = new Date(docItem.createdAtFirebase);
+          createdAtObj = {
+            seconds: Math.floor(d.getTime() / 1000),
+            nanoseconds: 0,
+          };
+        } else if (docItem.createdAt) {
+          const d = new Date(docItem.createdAt);
+          createdAtObj = {
+            seconds: Math.floor(d.getTime() / 1000),
+            nanoseconds: 0,
+          };
+        }
+
+        return parseOrdenDoc(docItem.firebaseId || docItem._id, {
+          ...docItem,
+          createdAt: createdAtObj,
+        });
+      });
+
       setOrdenes(allDocs);
       setHasLoadedAllFromDb(true);
-      showToast(`¡Se cargaron ${allDocs.length} órdenes de la base de datos!`);
+      showToast(`¡Se cargaron ${allDocs.length} órdenes desde el servidor local!`);
     } catch (err) {
-      console.error("Error al cargar todas las órdenes:", err);
-      showToast("Error al cargar toda la base de datos.");
+      console.error("Error al cargar todas las órdenes desde el servidor:", err);
+      showToast("Error al cargar las órdenes desde el servidor.");
     } finally {
       setLoadingAllDb(false);
     }

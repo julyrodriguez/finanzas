@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/AppLayout";
-import { getFirebaseDb } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
 import { exportToExcel } from "@/lib/exportToExcel";
-import { bulkSyncOrdersToMongo } from "@/lib/serverSync";
+import { fetchOrdersFromMongo } from "@/lib/serverSync";
 import { 
   TrendingUp, 
   BarChart3, 
@@ -243,69 +241,55 @@ export default function EstadisticasPage() {
   }, []);
 
   // ==========================================
-  // FETCH FROM FIRESTORE (ONLY WHEN USER CLICKS)
+  // FETCH FROM LOCAL SERVER (MONGODB)
   // ==========================================
   const handleActualizarDatos = async () => {
     setLoading(true);
     try {
-      const db = getFirebaseDb();
-      if (!db) {
-        showToast("❌ Error al conectar con Firebase");
-        setLoading(false);
-        return;
+      // Consulta directamente a nuestro servidor local (MongoDB)
+      const res = await fetchOrdersFromMongo({ limit: 0 });
+      if (!res || !res.success || !Array.isArray(res.ordenes)) {
+        throw new Error("Respuesta inválida del servidor");
       }
 
-      const colRef = collection(db, "ordenes_compra");
-      const snap = await getDocs(colRef);
+      const loadedOrders: SerializableOrder[] = res.ordenes.map((docItem: any) => {
+        const rawMonto = parseMonto(docItem.monto);
+        const rawRazon = (docItem.razonSocial || "Sin Proveedor").toString().trim();
 
-      const loadedOrders: SerializableOrder[] = [];
-
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const rawMonto = parseMonto(data.monto);
-        const rawRazon = (data.razonSocial || "Sin Proveedor").toString().trim();
-
-        // Parse date / timestamp
         let timestamp = 0;
-        let year: number | null = null;
-        let month: number | null = null;
+        let year: number | null = docItem.anio ? Number(docItem.anio) : null;
+        let month: number | null = docItem.mes !== undefined && docItem.mes !== null ? Number(docItem.mes) : null;
         let dateStr = "-";
 
-        if (data.createdAt) {
-          let dateObj: Date | null = null;
-          if (typeof data.createdAt === "object" && "seconds" in data.createdAt) {
-            dateObj = new Date(data.createdAt.seconds * 1000);
-          } else if (typeof data.createdAt === "string" || typeof data.createdAt === "number") {
-            const parsed = new Date(data.createdAt);
-            if (!isNaN(parsed.getTime())) dateObj = parsed;
-          }
-
-          if (dateObj) {
-            timestamp = dateObj.getTime();
-            year = dateObj.getFullYear();
-            month = dateObj.getMonth();
-            dateStr = dateObj.toLocaleDateString("es-AR");
+        const rawDate = docItem.fechaOC || docItem.createdAtFirebase || docItem.createdAt;
+        if (rawDate) {
+          const d = new Date(rawDate);
+          if (!isNaN(d.getTime())) {
+            timestamp = d.getTime();
+            if (!year) year = d.getFullYear();
+            if (month === null) month = d.getMonth();
+            dateStr = d.toLocaleDateString("es-AR");
           }
         }
 
-        loadedOrders.push({
-          id: docSnap.id,
-          empresa: data.empresa === "Hoyts" ? "Hoyts" : "CMK",
-          numSolicitud: data.numSolicitud ? String(data.numSolicitud) : "",
-          numOC: data.numOC ? String(data.numOC) : "",
+        return {
+          id: docItem.firebaseId || docItem._id,
+          empresa: docItem.empresa === "Hoyts" ? "Hoyts" : "CMK",
+          numSolicitud: docItem.numSolicitud ? String(docItem.numSolicitud) : "",
+          numOC: docItem.numOC ? String(docItem.numOC) : "",
           razonSocial: rawRazon,
           monto: rawMonto,
-          motivo: data.motivo ? String(data.motivo) : "",
-          formaPago: data.formaPago ? String(data.formaPago) : "30DFF",
-          liberada: Boolean(data.liberada),
-          mandada: Boolean(data.mandada),
-          entregada: Boolean(data.entregada),
-          cancelada: Boolean(data.cancelada),
+          motivo: docItem.motivo ? String(docItem.motivo) : "",
+          formaPago: docItem.formaPago ? String(docItem.formaPago) : "30DFF",
+          liberada: Boolean(docItem.liberada),
+          mandada: Boolean(docItem.mandada),
+          entregada: Boolean(docItem.entregada),
+          cancelada: Boolean(docItem.cancelada),
           timestamp,
           year,
           month,
           dateStr,
-        });
+        };
       });
 
       const nowIso = new Date().toISOString();
@@ -323,11 +307,10 @@ export default function EstadisticasPage() {
 
       setOrders(loadedOrders);
       setLastSync(nowIso);
-      bulkSyncOrdersToMongo(loadedOrders);
-      showToast(`✅ ¡Datos sincronizados! Se analizaron ${loadedOrders.length} órdenes.`);
+      showToast(`✅ ¡Datos sincronizados desde el servidor! Se analizaron ${loadedOrders.length} órdenes.`);
     } catch (err) {
-      console.error("Error al actualizar órdenes:", err);
-      showToast("❌ Hubo un error al actualizar los datos desde Firebase.");
+      console.error("Error al actualizar órdenes desde el servidor:", err);
+      showToast("❌ Hubo un error al actualizar los datos desde el servidor local.");
     } finally {
       setLoading(false);
     }
