@@ -2768,7 +2768,7 @@ export default function CotizacionesPage() {
                       isCurrent 
                         ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60" 
                         : quote.status === "finalizada" || quote.isFinalized
-                          ? "bg-blue-950/20 border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-950/30"
+                          ? "bg-emerald-950/20 border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-950/30"
                           : quote.status === "enviada"
                             ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-950/30"
                             : quote.status === "cancelada"
@@ -2802,7 +2802,7 @@ export default function CotizacionesPage() {
                             </span>
                           )}
                           {(quote.status === "finalizada" || quote.isFinalized) && (
-                            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-extrabold uppercase border border-blue-500/20 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20 whitespace-nowrap">
                               Finalizada
                             </span>
                           )}
@@ -2856,8 +2856,8 @@ export default function CotizacionesPage() {
                       </div>
 
                       {(quote.status === "finalizada" || quote.isFinalized) && (
-                        <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-blue-400">
-                          <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                        <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-emerald-400">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                           <span className="truncate">
                             Ganador: <strong className="text-white">{winningProvider ? winningProvider.name : "No seleccionado"}</strong>
                           </span>
