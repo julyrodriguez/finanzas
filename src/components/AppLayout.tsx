@@ -22,7 +22,8 @@ import {
   Calendar, 
   Calculator, 
   ClipboardList,
-  Scale
+  Scale,
+  BarChart3
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -132,6 +133,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       name: "Calculadora",
       href: "/calculadora",
       icon: Calculator,
+      exact: false,
+      hideForOrders: true,
+    },
+    {
+      name: "Estadísticas",
+      href: "/estadisticas",
+      icon: BarChart3,
       exact: false,
       hideForOrders: true,
     },
