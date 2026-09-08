@@ -208,7 +208,7 @@ export default function EstadisticasPage() {
   const [orders, setOrders] = useState<SerializableOrder[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [selectedYear, setSelectedYear] = useState<string>("Todos");
+  const [selectedYear, setSelectedYear] = useState<string>(() => new Date().getFullYear().toString());
   const [selectedEmpresa, setSelectedEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortBy, setSortBy] = useState<"monto" | "count" | "promedio" | "nombre">("monto");
