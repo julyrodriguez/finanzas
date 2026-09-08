@@ -377,8 +377,8 @@ export default function TemporalPage() {
         const chunk = readyRows.slice(start, end);
 
         // Prepare normalized payload for MongoDB
-        const payload = chunk.map((r, chunkIdx) => ({
-          firebaseId: `import_oc_${r.numOC}_${Date.now()}_${start + chunkIdx}`,
+        const payload = chunk.map((r) => ({
+          firebaseId: `import_oc_${r.numOC}`,
           numOC: r.numOC,
           numSolicitud: "",
           razonSocial: r.razonSocial,
@@ -396,6 +396,7 @@ export default function TemporalPage() {
           anio: r.anio,
           mes: r.mes,
           notas: [],
+          preserveExisting: true,
         }));
 
         const res = await fetch(`${API_BASE_URL}/bulk`, {
@@ -421,7 +422,7 @@ export default function TemporalPage() {
         insertedCount: successfullyInserted,
       });
 
-      showToast(`🎉 ¡Importación completada! Se guardaron ${successfullyInserted} órdenes en MongoDB.`);
+      showToast(`🎉 ¡Importación completada! Se procesaron ${successfullyInserted} órdenes en MongoDB.`);
       
       // Clear file and reload pending list
       setParsedRows([]);
@@ -811,7 +812,7 @@ export default function TemporalPage() {
             </div>
             {filteredPending.length > 50 && (
               <div className="p-2.5 bg-slate-800/60 border-t border-white/5 text-center text-xs text-slate-400 font-mono">
-                Mostrando 50 de {filteredPending.length} órdenes sin compañía.
+                Mostrando las primeras 50 de {filteredPending.length.toLocaleString("es-AR")} órdenes sin compañía registradas en MongoDB. Usa el buscador para filtrar cualquiera.
               </div>
             )}
           </div>
