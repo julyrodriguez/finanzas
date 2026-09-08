@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { exportToExcel } from "@/lib/exportToExcel";
+import { bulkSyncOrdersToMongo } from "@/lib/serverSync";
 import { 
   TrendingUp, 
   BarChart3, 
@@ -322,6 +323,7 @@ export default function EstadisticasPage() {
 
       setOrders(loadedOrders);
       setLastSync(nowIso);
+      bulkSyncOrdersToMongo(loadedOrders);
       showToast(`✅ ¡Datos sincronizados! Se analizaron ${loadedOrders.length} órdenes.`);
     } catch (err) {
       console.error("Error al actualizar órdenes:", err);

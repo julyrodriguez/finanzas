@@ -51,6 +51,7 @@ import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
+import { syncOrderToMongo, deleteOrderFromMongo } from "@/lib/serverSync";
 
 const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -737,6 +738,7 @@ export default function OrdenesDeComprasPage() {
           await updateDoc(docRef, dataToSave);
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), editingOrden.numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
+          syncOrderToMongo({ id: editingOrden.id, ...editingOrden, ...dataToSave });
           showToast("¡Orden de compra actualizada!");
         } catch (err) {
           console.error("Error al actualizar orden:", err);
@@ -753,9 +755,10 @@ export default function OrdenesDeComprasPage() {
       const tempId = generateUniqueId();
       if (db) {
         try {
-          await addDoc(collection(db, "ordenes_compra"), newOrden);
+          const docRef = await addDoc(collection(db, "ordenes_compra"), newOrden);
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), numOC.trim(), relatedOC.trim(), "");
+          syncOrderToMongo({ id: docRef.id, ...newOrden });
           showToast("¡Orden de compra agregada!");
         } catch (err) {
           console.error("Error al agregar orden:", err);
@@ -816,6 +819,7 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", activeNotesOrden.id);
         await updateDoc(docRef, { notas: updatedNotas });
+        syncOrderToMongo({ id: activeNotesOrden.id, ...activeNotesOrden, notas: updatedNotas });
         showToast("Nota agregada");
       } catch (err) {
         console.error("Error al agregar nota:", err);
@@ -831,6 +835,7 @@ export default function OrdenesDeComprasPage() {
     setOrdenes((prev) =>
       prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
     );
+    syncOrderToMongo({ id: ordenId, ...updatedFields });
   };
 
   // Toggle Liberada Status
@@ -855,6 +860,7 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
         console.error("Error al actualizar liberada:", err);
       }
@@ -883,6 +889,7 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
         console.error("Error al actualizar mandada:", err);
       }
@@ -911,6 +918,7 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
         console.error("Error al actualizar entregada:", err);
       }
@@ -928,6 +936,7 @@ export default function OrdenesDeComprasPage() {
     if (db) {
       try {
         await deleteDoc(doc(db, "ordenes_compra", id));
+        deleteOrderFromMongo(id);
         showToast("Orden eliminada");
       } catch (err) {
         console.error("Error al eliminar orden:", err);
@@ -987,6 +996,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         try {
           const docRef = doc(db, "ordenes_compra", orden.id);
           await updateDoc(docRef, { linkSharepoint: url });
+          syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: url });
           
           setOrdenes((prev) =>
             prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: url } : item))
@@ -1016,6 +1026,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         try {
           const docRef = doc(db, "ordenes_compra", orden.id);
           await updateDoc(docRef, { linkSharepoint: cleanUrl });
+          syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: cleanUrl });
           
           setOrdenes((prev) =>
             prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: cleanUrl } : item))

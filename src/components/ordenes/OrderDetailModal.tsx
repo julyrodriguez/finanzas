@@ -29,6 +29,7 @@ import type { OrdenCompra, Nota } from "@/types/ordenes";
 import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber } from "@/lib/approvalConfig";
 import { getFirebaseDb } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
+import { syncOrderToMongo } from "@/lib/serverSync";
 
 interface OrderDetailModalProps {
   orden: OrdenCompra | null;
@@ -236,6 +237,7 @@ export function OrderDetailModal({
     if (db) {
       try {
         await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
         console.error("Error updating firma 1:", err);
       }
@@ -266,6 +268,7 @@ export function OrderDetailModal({
     if (db) {
       try {
         await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
         console.error("Error removing firma 1:", err);
       }
@@ -297,6 +300,7 @@ export function OrderDetailModal({
     if (db) {
       try {
         await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
         console.error("Error updating firma 2:", err);
       }
@@ -327,6 +331,7 @@ export function OrderDetailModal({
     if (db) {
       try {
         await updateDoc(doc(db, "ordenes_compra", orden.id), updates);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
         console.error("Error removing firma 2:", err);
       }

@@ -16,6 +16,7 @@ import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { getStoredApprovalConfig, parseMontoToNumber } from "@/lib/approvalConfig";
+import { syncOrderToMongo } from "@/lib/serverSync";
 
 export type OrderStatusKey = "pendiente" | "mandada" | "liberada" | "entregada" | "cancelada";
 
@@ -248,6 +249,7 @@ export function OrderStatusMenu({
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
         if (showToast) {
           showToast(`Estado de OC ${orden.numOC || ""} actualizado a ${STATUS_CONFIG[targetStatus].label}`);
         }
