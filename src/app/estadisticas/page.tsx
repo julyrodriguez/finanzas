@@ -1214,34 +1214,39 @@ export default function EstadisticasPage() {
                     <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400">
                       <Calendar className="w-4 h-4" />
                     </div>
-                    <h3 className="font-semibold text-white text-sm">
-                      Evolución Mensual {selectedYear !== "Todos" ? `(${selectedYear})` : ""}
-                    </h3>
+                    <div>
+                      <h3 className="font-semibold text-white text-sm">
+                        Evolución Mensual {selectedYear !== "Todos" ? `(${selectedYear})` : ""}
+                      </h3>
+                      <p className="text-[10px] text-slate-400">Órdenes de compra creadas por mes</p>
+                    </div>
                   </div>
-                  <span className="text-[11px] text-slate-400">12 meses</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium">
+                    Por OCs Creadas
+                  </span>
                 </div>
 
                 {/* 12 Months Mini-bars */}
                 <div className="h-32 flex items-end justify-between gap-1 pt-4 pb-2 px-1">
                   {monthlyStats.months.map((m) => {
-                    const heightPercent = monthlyStats.maxMonto > 0 ? (m.monto / monthlyStats.maxMonto) * 100 : 0;
+                    const heightPercent = monthlyStats.maxOrders > 0 ? (m.orders / monthlyStats.maxOrders) * 100 : 0;
                     return (
                       <div key={m.index} className="flex-1 flex flex-col items-center gap-1 group relative">
                         {/* Tooltip on hover */}
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
-                          <p className="font-bold">{m.name}</p>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
+                          <p className="font-bold text-white">{m.name}</p>
+                          <p className="text-indigo-300 font-bold">{m.orders.toLocaleString("es-AR")} OCs creadas</p>
                           <p className="text-emerald-400">{formatCurrency(m.monto)}</p>
-                          <p className="text-slate-400">{m.orders} OCs</p>
                         </div>
 
                         <div className="w-full bg-slate-800 rounded-t h-24 flex items-end overflow-hidden">
                           <div
                             className={`w-full transition-all duration-300 ${
-                              m.monto > 0
+                              m.orders > 0
                                 ? "bg-gradient-to-t from-indigo-600 to-purple-400 group-hover:from-indigo-500 group-hover:to-purple-300"
                                 : "bg-transparent"
                             }`}
-                            style={{ height: `${Math.max(heightPercent, m.monto > 0 ? 8 : 0)}%` }}
+                            style={{ height: `${Math.max(heightPercent, m.orders > 0 ? 8 : 0)}%` }}
                           />
                         </div>
                         <span className="text-[10px] text-slate-400 group-hover:text-white transition-colors">
