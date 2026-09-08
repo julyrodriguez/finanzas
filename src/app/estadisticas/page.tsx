@@ -79,6 +79,41 @@ const MONTH_NAMES = [
 // ==========================================
 
 /**
+ * Known manual provider synonym mappings for trade names that differ significantly
+ */
+const MANUAL_PROVIDER_SYNONYMS: Record<string, string> = {
+  "ping": "ping solutions",
+  "ping solution": "ping solutions",
+  "ping solutions": "ping solutions",
+  "ping solutions argentina": "ping solutions",
+};
+
+/**
+ * Generic corporate, industry, and activity descriptor words commonly appended or omitted in trade names.
+ */
+const GENERIC_DESCRIPTORS = new Set([
+  "solution", "solutions", "soluciones",
+  "servicio", "servicios", "service", "services",
+  "sistema", "sistemas", "system", "systems",
+  "tecnologia", "tecnologias", "tech", "technology", "technologies",
+  "digital", "digitales",
+  "grupo", "group",
+  "logistica", "logistics",
+  "distribuidora", "distribucion",
+  "consultora", "consultoria", "consulting",
+  "comunicaciones", "comunicacion", "communications",
+  "producciones", "produccion", "productions", "production",
+  "medios", "media",
+  "seguridad", "security",
+  "comercial", "comercializadora",
+  "internacional", "international",
+  "red", "redes",
+  "publicidad", "marketing",
+  "mantenimiento", "limpieza",
+  "argentina", "arg", "sur", "latam",
+]);
+
+/**
  * Strips legal suffixes, accents, punctuation, stop words, and excessive spaces.
  */
 function cleanProviderName(raw: string): string {
@@ -111,6 +146,11 @@ function cleanProviderName(raw: string): string {
   // If over-cleaned, fallback to basic trimmed lowercase without punctuation
   if (s.length < 2) {
     s = raw.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  // Check manual synonym mappings
+  if (MANUAL_PROVIDER_SYNONYMS[s]) {
+    s = MANUAL_PROVIDER_SYNONYMS[s];
   }
 
   return s;
@@ -164,6 +204,36 @@ function areSimilarProviders(norm1: string, norm2: string): boolean {
     if (intersection.length / union.size >= 0.6) return true;
   }
 
+  // Generic descriptor containment check (e.g. "ping" and "ping solutions")
+  const shorterTokens = tokens1.length <= tokens2.length ? tokens1 : tokens2;
+  const longerTokens = tokens1.length > tokens2.length ? tokens1 : tokens2;
+  if (shorterTokens.length >= 1 && shorterTokens.join("").length >= 4) {
+    const matchedLongerIndices = new Set<number>();
+    let allMatched = true;
+    for (const st of shorterTokens) {
+      let foundIdx = -1;
+      for (let i = 0; i < longerTokens.length; i++) {
+        if (!matchedLongerIndices.has(i) && (longerTokens[i] === st || (st.length > 4 && longerTokens[i].startsWith(st)))) {
+          foundIdx = i;
+          break;
+        }
+      }
+      if (foundIdx !== -1) {
+        matchedLongerIndices.add(foundIdx);
+      } else {
+        allMatched = false;
+        break;
+      }
+    }
+
+    if (allMatched) {
+      const remaining = longerTokens.filter((_, idx) => !matchedLongerIndices.has(idx));
+      if (remaining.length > 0 && remaining.every((t) => GENERIC_DESCRIPTORS.has(t))) {
+        return true;
+      }
+    }
+  }
+
   // Levenshtein distance check with length-adjusted tolerances
   const maxLen = longer.length;
   const dist = levenshteinDistance(norm1, norm2);
@@ -172,8 +242,15 @@ function areSimilarProviders(norm1: string, norm2: string): boolean {
   if (maxLen > 10 && dist <= 3) return true;
 
   // Prefix match (e.g., "distribuidora norte" and "distribuidora norte sa")
-  if (shorter.length >= 6 && longer.startsWith(shorter) && longer.length - shorter.length <= 4) {
-    return true;
+  if (shorter.length >= 4 && longer.startsWith(shorter)) {
+    const rem = longer.slice(shorter.length).trim();
+    const remTokens = rem.split(" ").filter(Boolean);
+    if (remTokens.length > 0 && remTokens.every((t) => GENERIC_DESCRIPTORS.has(t))) {
+      return true;
+    }
+    if (shorter.length >= 6 && rem.length <= 4) {
+      return true;
+    }
   }
 
   return false;
