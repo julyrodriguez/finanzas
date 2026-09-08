@@ -23,7 +23,8 @@ import {
   Calculator, 
   ClipboardList,
   Scale,
-  BarChart3
+  BarChart3,
+  FileUp
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -140,6 +141,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       name: "Estadísticas",
       href: "/estadisticas",
       icon: BarChart3,
+      exact: false,
+      hideForOrders: true,
+    },
+    {
+      name: "Temporal",
+      href: "/temporal",
+      icon: FileUp,
       exact: false,
       hideForOrders: true,
     },
