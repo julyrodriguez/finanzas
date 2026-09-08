@@ -1898,7 +1898,7 @@ export default function PendientesPage() {
                               {cotiz?.status && (
                                 <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
                                   cotiz.status === "finalizada"
-                                    ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                                    ? "bg-emerald-500 text-slate-950 font-black border border-emerald-400 shadow-sm"
                                     : cotiz.status === "enviada"
                                     ? "bg-amber-500/10 text-amber-300 border border-amber-500/20"
                                     : "bg-slate-700/50 text-slate-300 border border-slate-600/30"

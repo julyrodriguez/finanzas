@@ -2759,6 +2759,7 @@ export default function CotizacionesPage() {
                 const isCurrent = currentQuoteId === quote.id;
 
                 const winningProvider = quote.providers?.find(p => p.id === quote.winningProviderId);
+                const isFinalizada = quote.status === "finalizada" || quote.isFinalized;
 
                 return (
                   <div
@@ -2766,9 +2767,9 @@ export default function CotizacionesPage() {
                     onClick={() => handleSelectQuote(quote)}
                     className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-4 group ${
                       isCurrent 
-                        ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60" 
-                        : quote.status === "finalizada" || quote.isFinalized
-                          ? "bg-emerald-950/20 border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-950/30"
+                        ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60 ring-1 ring-emerald-500/20" 
+                        : isFinalizada
+                          ? "bg-emerald-950/35 border-emerald-500/60 border-l-4 border-l-emerald-400 hover:border-emerald-400 hover:bg-emerald-950/50 shadow-lg shadow-emerald-950/50"
                           : quote.status === "enviada"
                             ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-950/30"
                             : quote.status === "cancelada"
@@ -2779,8 +2780,9 @@ export default function CotizacionesPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 pr-2 space-y-1">
-                          <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors truncate">
-                            {quote.name}
+                          <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors truncate flex items-center gap-1.5">
+                            {isFinalizada && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 inline" />}
+                            <span>{quote.name}</span>
                           </h4>
                           {quote.categoria && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] font-semibold border border-amber-500/20">
@@ -2801,8 +2803,9 @@ export default function CotizacionesPage() {
                               Enviada
                             </span>
                           )}
-                          {(quote.status === "finalizada" || quote.isFinalized) && (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20 whitespace-nowrap">
+                          {isFinalizada && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-black uppercase shadow-md shadow-emerald-500/30 border border-emerald-400 whitespace-nowrap tracking-wider">
+                              <CheckCircle2 className="w-3 h-3 text-slate-950 stroke-[2.5]" />
                               Finalizada
                             </span>
                           )}
@@ -2855,11 +2858,16 @@ export default function CotizacionesPage() {
                         </div>
                       </div>
 
-                      {(quote.status === "finalizada" || quote.isFinalized) && (
-                        <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-emerald-400">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span className="truncate">
-                            Ganador: <strong className="text-white">{winningProvider ? winningProvider.name : "No seleccionado"}</strong>
+                      {isFinalizada && (
+                        <div className="pt-2 border-t border-emerald-500/30 flex items-center justify-between gap-1.5 text-xs text-emerald-300 bg-emerald-950/40 -mx-5 -mb-5 px-5 py-2.5 rounded-b-2xl">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span className="truncate">
+                              Ganador: <strong className="text-white font-bold">{winningProvider ? winningProvider.name : "No seleccionado"}</strong>
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30 shrink-0">
+                            Adjudicada
                           </span>
                         </div>
                       )}
