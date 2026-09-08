@@ -1134,9 +1134,6 @@ export default function EstadisticasPage() {
                 >
                   <Building2 className="w-4 h-4 text-indigo-300" />
                   <span>Proveedores & Facturación</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/30 font-mono font-bold text-slate-300">
-                    {displayedProviders.length}
-                  </span>
                 </button>
 
                 <button
