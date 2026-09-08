@@ -431,11 +431,80 @@ export default function OrdenesDeComprasPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Helper to suggest next OC number based on the latest orders
+  const getNextSuggestedOC = (ordersList: OrdenCompra[]): string => {
+    if (!ordersList || ordersList.length === 0) return "";
+
+    // Sort by createdAt descending to find the most recent
+    const sorted = [...ordersList].sort((a, b) => {
+      const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+      const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+      return timeB - timeA;
+    });
+
+    // Find the latest order that has a non-empty numOC
+    const latestWithOC = sorted.find((o) => (o.numOC || "").trim() !== "");
+    if (!latestWithOC) return "";
+
+    const raw = latestWithOC.numOC.trim();
+    const match = raw.match(/^(.*?)(\d+)(\D*)$/);
+    if (!match) return "";
+
+    const prefix = match[1];
+    const numStr = match[2];
+    const suffix = match[3];
+
+    let baseNum = parseInt(numStr, 10);
+    let baseNumLen = numStr.length;
+
+    // Check if there is a higher number among the recent orders (e.g. top 25)
+    for (const o of sorted.slice(0, 25)) {
+      const oRaw = (o.numOC || "").trim();
+      const oMatch = oRaw.match(/^(.*?)(\d+)(\D*)$/);
+      if (oMatch && oMatch[1] === prefix && oMatch[3] === suffix) {
+        const val = parseInt(oMatch[2], 10);
+        if (val > baseNum && val - baseNum <= 100) {
+          baseNum = val;
+          baseNumLen = oMatch[2].length;
+        }
+      }
+    }
+
+    const nextNum = (baseNum + 1).toString();
+    const padded = nextNum.padStart(baseNumLen, "0");
+    return `${prefix}${padded}${suffix}`;
+  };
+
   // Open Modal for Add
-  const handleOpenAddModal = () => {
+  const handleOpenAddModal = async () => {
     setEditingOrden(null);
     resetForm();
+
+    const immediateNext = getNextSuggestedOC(ordenes);
+    const initialSuggested = immediateNext;
+    if (immediateNext) {
+      setNumOC(immediateNext);
+    }
+
     setIsModalOpen(true);
+
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        const colRef = collection(db, "ordenes_compra");
+        const q = query(colRef, orderBy("createdAt", "desc"), limit(10));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const recentDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
+          const trueNext = getNextSuggestedOC(recentDocs);
+          if (trueNext) {
+            setNumOC((current) => (current === "" || current === initialSuggested ? trueNext : current));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query latest order for OC suggestion:", err);
+      }
+    }
   };
 
   // Open Modal for Edit
