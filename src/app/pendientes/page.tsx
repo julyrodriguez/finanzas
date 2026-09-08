@@ -1142,16 +1142,6 @@ export default function PendientesPage() {
                       </span>
                     </button>
                   )}
-
-                  {/* Quick Add folder button */}
-                  <button
-                    onClick={() => setIsCategoryModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer shrink-0"
-                    title="Crear nueva carpeta"
-                  >
-                    <FolderPlus className="w-4 h-4" />
-                    <span>+ Nueva Carpeta</span>
-                  </button>
                 </div>
               </div>
 
