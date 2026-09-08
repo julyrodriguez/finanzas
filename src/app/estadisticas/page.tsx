@@ -25,7 +25,15 @@ import {
   ShoppingBag,
   ArrowUpDown,
   ChevronRight,
-  Building
+  ChevronLeft,
+  Building,
+  HardHat,
+  FolderKanban,
+  Tag,
+  ArrowDown,
+  ArrowUp,
+  SlidersHorizontal,
+  Briefcase
 } from "lucide-react";
 
 // ==========================================
@@ -49,6 +57,7 @@ export interface SerializableOrder {
   year: number | null;
   month: number | null; // 0-11
   dateStr: string;
+  creadoPor?: string;
 }
 
 export interface GroupedProvider {
@@ -281,6 +290,26 @@ function parseMonto(val: unknown): number {
   return 0;
 }
 
+/**
+ * Detects if an order belongs to CAPEX or PCT investments.
+ * Checks for "CAPEX" or "PCT" (case-insensitive) in the order's description / motivo.
+ */
+export function isCapexOrder(order?: { motivo?: string } | null): boolean {
+  if (!order || !order.motivo) return false;
+  const m = order.motivo.toLowerCase();
+  return /\b(capex|pct)\b/i.test(m) || m.includes("capex") || /\bpct[-0-9 ]/i.test(m);
+}
+
+/**
+ * Returns whether an order is tagged primarily as PCT or CAPEX.
+ */
+export function getCapexTag(motivo?: string): "PCT" | "CAPEX" {
+  if (!motivo) return "CAPEX";
+  const m = motivo.toLowerCase();
+  if (/\b(pct)\b/i.test(m) || /\bpct[-0-9 ]/i.test(m)) return "PCT";
+  return "CAPEX";
+}
+
 export default function EstadisticasPage() {
   const [orders, setOrders] = useState<SerializableOrder[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -292,6 +321,14 @@ export default function EstadisticasPage() {
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [activeProviderModal, setActiveProviderModal] = useState<GroupedProvider | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Tab switching & CAPEX dashboard states
+  const [activeTab, setActiveTab] = useState<"general" | "capex">("general");
+  const [capexSearchQuery, setCapexSearchQuery] = useState<string>("");
+  const [capexTypeFilter, setCapexTypeFilter] = useState<"Todos" | "CAPEX" | "PCT">("Todos");
+  const [capexSortBy, setCapexSortBy] = useState<"monto" | "fecha" | "numOC" | "proveedor">("monto");
+  const [capexSortOrder, setCapexSortOrder] = useState<"desc" | "asc">("desc");
+  const [capexPage, setCapexPage] = useState<number>(1);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -366,6 +403,7 @@ export default function EstadisticasPage() {
           year,
           month,
           dateStr,
+          creadoPor: docItem.creadoPor ? String(docItem.creadoPor) : "",
         };
       });
 
@@ -700,6 +738,213 @@ export default function EstadisticasPage() {
   }, [groupedProviders, searchQuery, sortBy, sortOrder]);
 
   // ==========================================
+  // CAPEX & PCT COMPUTED METRICS
+  // ==========================================
+  const allCapexOrders = useMemo(() => {
+    return orders.filter((o) => isCapexOrder(o));
+  }, [orders]);
+
+  const filteredCapexOrders = useMemo(() => {
+    return filteredOrders.filter((o) => isCapexOrder(o));
+  }, [filteredOrders]);
+
+  const capexStats = useMemo(() => {
+    let totalMonto = 0;
+    let hoytsMonto = 0;
+    let hoytsOrders = 0;
+    let cmkMonto = 0;
+    let cmkOrders = 0;
+    let sinEmpresaMonto = 0;
+    let sinEmpresaOrders = 0;
+    let pctCount = 0;
+    let pctMonto = 0;
+    let capexTagCount = 0;
+    let capexTagMonto = 0;
+
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      index: i,
+      name: MONTH_NAMES[i],
+      monto: 0,
+      orders: 0,
+    }));
+
+    const yearsMap: Record<number, { year: number; monto: number; orders: number }> = {};
+
+    filteredCapexOrders.forEach((o) => {
+      totalMonto += o.monto;
+
+      if (o.empresa === "Hoyts") {
+        hoytsMonto += o.monto;
+        hoytsOrders++;
+      } else if (o.empresa === "CMK") {
+        cmkMonto += o.monto;
+        cmkOrders++;
+      } else {
+        sinEmpresaMonto += o.monto;
+        sinEmpresaOrders++;
+      }
+
+      const tag = getCapexTag(o.motivo);
+      if (tag === "PCT") {
+        pctCount++;
+        pctMonto += o.monto;
+      } else {
+        capexTagCount++;
+        capexTagMonto += o.monto;
+      }
+
+      if (o.month !== null && o.month >= 0 && o.month < 12) {
+        months[o.month].monto += o.monto;
+        months[o.month].orders += 1;
+      }
+
+      if (o.year) {
+        if (!yearsMap[o.year]) {
+          yearsMap[o.year] = { year: o.year, monto: 0, orders: 0 };
+        }
+        yearsMap[o.year].monto += o.monto;
+        yearsMap[o.year].orders += 1;
+      }
+    });
+
+    const totalOrders = filteredCapexOrders.length;
+    const avgTicket = totalOrders > 0 ? totalMonto / totalOrders : 0;
+    const percentOfGeneralMonto = totalFacturadoGeneral > 0 ? (totalMonto / totalFacturadoGeneral) * 100 : 0;
+    const percentOfGeneralOrders = totalOrdenesValidas > 0 ? (totalOrders / totalOrdenesValidas) * 100 : 0;
+
+    const maxMonthOrders = Math.max(...months.map((m) => m.orders), 1);
+    const maxMonthMonto = Math.max(...months.map((m) => m.monto), 1);
+
+    const sortedYears = Object.values(yearsMap).sort((a, b) => b.year - a.year);
+    const maxYearOrders = Math.max(...sortedYears.map((y) => y.orders), 1);
+    const maxYearMonto = Math.max(...sortedYears.map((y) => y.monto), 1);
+
+    const providerCapexMap: Record<string, { name: string; monto: number; count: number }> = {};
+    filteredCapexOrders.forEach((o) => {
+      const raw = o.razonSocial || "Sin Proveedor";
+      const cleaned = cleanProviderName(raw);
+      const key = cleaned || raw;
+      if (!providerCapexMap[key]) {
+        providerCapexMap[key] = { name: raw, monto: 0, count: 0 };
+      }
+      providerCapexMap[key].monto += o.monto;
+      providerCapexMap[key].count += 1;
+    });
+
+    const topCapexProviders = Object.values(providerCapexMap)
+      .sort((a, b) => b.monto - a.monto)
+      .slice(0, 8)
+      .map((p) => ({
+        ...p,
+        percent: totalMonto > 0 ? (p.monto / totalMonto) * 100 : 0,
+      }));
+
+    return {
+      totalMonto,
+      totalOrders,
+      avgTicket,
+      percentOfGeneralMonto,
+      percentOfGeneralOrders,
+      hoytsMonto,
+      hoytsOrders,
+      cmkMonto,
+      cmkOrders,
+      sinEmpresaMonto,
+      sinEmpresaOrders,
+      pctCount,
+      pctMonto,
+      capexTagCount,
+      capexTagMonto,
+      months,
+      maxMonthOrders,
+      maxMonthMonto,
+      sortedYears,
+      maxYearOrders,
+      maxYearMonto,
+      topCapexProviders,
+    };
+  }, [filteredCapexOrders, totalFacturadoGeneral, totalOrdenesValidas]);
+
+  const displayedCapexOrders = useMemo(() => {
+    let list = filteredCapexOrders.filter((o) => {
+      const tag = getCapexTag(o.motivo);
+      if (capexTypeFilter !== "Todos" && tag !== capexTypeFilter) {
+        return false;
+      }
+      if (!capexSearchQuery.trim()) return true;
+      const q = capexSearchQuery.toLowerCase().trim();
+      return (
+        (o.numOC && o.numOC.toLowerCase().includes(q)) ||
+        (o.razonSocial && o.razonSocial.toLowerCase().includes(q)) ||
+        (o.motivo && o.motivo.toLowerCase().includes(q)) ||
+        (o.creadoPor && o.creadoPor.toLowerCase().includes(q))
+      );
+    });
+
+    list.sort((a, b) => {
+      if (capexSortBy === "monto") {
+        return capexSortOrder === "asc" ? a.monto - b.monto : b.monto - a.monto;
+      }
+      if (capexSortBy === "fecha") {
+        const timeA = a.timestamp || 0;
+        const timeB = b.timestamp || 0;
+        return capexSortOrder === "asc" ? timeA - timeB : timeB - timeA;
+      }
+      if (capexSortBy === "numOC") {
+        const numA = parseInt(a.numOC, 10) || 0;
+        const numB = parseInt(b.numOC, 10) || 0;
+        return capexSortOrder === "asc" ? numA - numB : numB - numA;
+      }
+      if (capexSortBy === "proveedor") {
+        const pA = (a.razonSocial || "").toLowerCase();
+        const pB = (b.razonSocial || "").toLowerCase();
+        return capexSortOrder === "asc" ? pA.localeCompare(pB) : pB.localeCompare(pA);
+      }
+      return 0;
+    });
+
+    return list;
+  }, [filteredCapexOrders, capexTypeFilter, capexSearchQuery, capexSortBy, capexSortOrder]);
+
+  const CAPEX_PAGE_SIZE = 50;
+  const totalCapexPages = Math.max(1, Math.ceil(displayedCapexOrders.length / CAPEX_PAGE_SIZE));
+  const paginatedCapexOrders = useMemo(() => {
+    const start = (capexPage - 1) * CAPEX_PAGE_SIZE;
+    return displayedCapexOrders.slice(start, start + CAPEX_PAGE_SIZE);
+  }, [displayedCapexOrders, capexPage]);
+
+  // Reset page when search or filters change
+  useEffect(() => {
+    setCapexPage(1);
+  }, [capexSearchQuery, capexTypeFilter, capexSortBy, capexSortOrder, selectedYear, selectedEmpresa]);
+
+  const handleExportarCapexExcel = () => {
+    if (displayedCapexOrders.length === 0) {
+      showToast("⚠️ No hay órdenes CAPEX para exportar con los filtros actuales");
+      return;
+    }
+
+    const dataToExport = displayedCapexOrders.map((o, idx) => ({
+      "N°": idx + 1,
+      "N° OC": o.numOC,
+      "Tipo": getCapexTag(o.motivo),
+      "Proveedor": o.razonSocial,
+      "Monto ($)": o.monto,
+      "Fecha": o.dateStr,
+      "Año": o.year || "-",
+      "Empresa": o.empresa || "Sin Asignar",
+      "Motivo / Proyecto": o.motivo,
+      "Usuario": o.creadoPor || "-",
+      "Forma de Pago": o.formaPago || "-",
+      "Estado": o.entregada ? "Entregada" : o.liberada ? "Liberada" : o.mandada ? "Mandada" : "Pendiente",
+    }));
+
+    const filename = `Reporte_CAPEX_PCT_${selectedYear !== "Todos" ? selectedYear : "Historico"}_${new Date().toISOString().split("T")[0]}`;
+    exportToExcel(dataToExport, filename, "Órdenes CAPEX");
+    showToast("📊 Listado CAPEX exportado a Excel con éxito");
+  };
+
+  // ==========================================
   // EXPORT TO EXCEL
   // ==========================================
   const handleExportarExcel = () => {
@@ -838,13 +1083,13 @@ export default function EstadisticasPage() {
               </button>
 
               <button
-                onClick={handleExportarExcel}
-                disabled={displayedProviders.length === 0}
+                onClick={activeTab === "general" ? handleExportarExcel : handleExportarCapexExcel}
+                disabled={activeTab === "general" ? displayedProviders.length === 0 : displayedCapexOrders.length === 0}
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium text-xs sm:text-sm bg-emerald-600/80 hover:bg-emerald-600 text-white transition-all shadow-lg shadow-emerald-600/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                title="Exportar análisis de proveedores a archivo Excel"
+                title={activeTab === "general" ? "Exportar análisis de proveedores a archivo Excel" : "Exportar listado de órdenes CAPEX & PCT a archivo Excel"}
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>Exportar Excel</span>
+                <span>{activeTab === "general" ? "Exportar Excel" : "Exportar CAPEX"}</span>
               </button>
             </div>
           </div>
@@ -876,6 +1121,59 @@ export default function EstadisticasPage() {
         {/* MAIN DASHBOARD (WHEN ORDERS ARE LOADED) */}
         {orders.length > 0 && (
           <>
+            {/* TOP NAVIGATION TABS: Proveedores vs CAPEX */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab("general")}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeTab === "general"
+                      ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-white/20"
+                      : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-white/10"
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 text-indigo-300" />
+                  <span>Proveedores & Facturación</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/30 font-mono font-bold text-slate-300">
+                    {displayedProviders.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("capex")}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeTab === "capex"
+                      ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-600/30 ring-1 ring-white/20"
+                      : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-white/10"
+                  }`}
+                >
+                  <HardHat className="w-4 h-4 text-amber-400" />
+                  <span>Dashboard CAPEX & PCT</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                      activeTab === "capex"
+                        ? "bg-black/40 text-white"
+                        : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                    }`}
+                  >
+                    {filteredCapexOrders.length} OCs
+                  </span>
+                </button>
+              </div>
+
+              {/* Quick info indicator */}
+              <div className="text-xs text-slate-400 flex items-center gap-1.5">
+                {activeTab === "general" ? (
+                  <span>Analizando compras generales, operativas y ranking de proveedores unificados.</span>
+                ) : (
+                  <span className="text-amber-400/90 flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5" />
+                    Filtrado por órdenes con descripción <strong>CAPEX</strong> o código <strong>PCT</strong>.
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* FILTERS BAR */}
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -932,29 +1230,78 @@ export default function EstadisticasPage() {
                 </div>
               </div>
 
-              {/* Search provider input */}
-              <div className="relative w-full sm:w-72">
+              {/* Search input (adapted to active tab) */}
+              <div className="relative w-full sm:w-80">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar proveedor o alias..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500/50 transition-colors"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                {activeTab === "general" ? (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Buscar proveedor o alias..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Buscar en CAPEX (OC, proveedor, obra)..."
+                      value={capexSearchQuery}
+                      onChange={(e) => setCapexSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-800/80 border border-white/10 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-500/50 transition-colors"
+                    />
+                    {capexSearchQuery && (
+                      <button
+                        onClick={() => setCapexSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
 
-            {/* KPI SUMMARY CARDS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {activeTab === "general" ? (
+              <>
+                {/* CAPEX DISCOVERY BANNER */}
+                {filteredCapexOrders.length > 0 && (
+                  <div
+                    onClick={() => setActiveTab("capex")}
+                    className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-500/20 flex items-center justify-between gap-4 cursor-pointer hover:border-amber-500/40 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 group-hover:scale-105 transition-transform">
+                        <HardHat className="w-4 h-4" />
+                      </div>
+                      <div className="text-xs">
+                        <span className="font-bold text-white">Inversiones de Capital detectadas:</span>{" "}
+                        <span className="text-slate-300">
+                          Hay <strong className="text-amber-300">{filteredCapexOrders.length} órdenes de CAPEX & PCT</strong> por{" "}
+                          <strong className="text-emerald-400 font-mono">{formatCurrency(capexStats.totalMonto)}</strong> en este período.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-semibold text-amber-400 group-hover:translate-x-1 transition-transform shrink-0">
+                      <span>Ver Dashboard CAPEX</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                )}
+
+                {/* KPI SUMMARY CARDS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               {/* Total Facturado */}
               <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-emerald-500/20 backdrop-blur-sm relative overflow-hidden group">
                 <div className="absolute -right-3 -bottom-3 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 transition-all" />
@@ -1552,7 +1899,447 @@ export default function EstadisticasPage() {
               </div>
             </div>
           </>
+        ) : (
+          /* CAPEX & PCT DASHBOARD */
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Banner with brief info */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <HardHat className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    Control de Inversiones de Capital (CAPEX & Proyectos PCT)
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
+                      {filteredCapexOrders.length} Órdenes
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Órdenes de compra detectadas automáticamente por contener el término <strong>CAPEX</strong> o el código de obra/proyecto <strong>PCT</strong> en su descripción.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleExportarCapexExcel}
+                disabled={displayedCapexOrders.length === 0}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all self-start sm:self-auto cursor-pointer"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Exportar Excel ({displayedCapexOrders.length})</span>
+              </button>
+            </div>
+
+            {/* KPI CARDS CAPEX */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {/* Total Invertido */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-amber-500/20 backdrop-blur-sm relative overflow-hidden group">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span>Inversión Total CAPEX</span>
+                  <Coins className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-xl font-bold text-white tracking-tight truncate font-mono">
+                  {formatCurrency(capexStats.totalMonto)}
+                </div>
+                <div className="text-[11px] text-amber-400/90 mt-1 flex items-center gap-1 font-medium">
+                  <TrendingUp className="w-3 h-3" />
+                  <span>{capexStats.percentOfGeneralMonto.toFixed(1)}% del gasto total analizado</span>
+                </div>
+              </div>
+
+              {/* Cantidad de OCs */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-white/10 backdrop-blur-sm">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span>Total Órdenes CAPEX</span>
+                  <ShoppingBag className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div className="text-xl font-bold text-white tracking-tight font-mono">
+                  {capexStats.totalOrders}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  {capexStats.percentOfGeneralOrders.toFixed(1)}% de todas las OCs del período
+                </div>
+              </div>
+
+              {/* Ticket Promedio */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-white/10 backdrop-blur-sm">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span>Ticket Promedio CAPEX</span>
+                  <DollarSign className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-xl font-bold text-white tracking-tight truncate font-mono">
+                  {formatCurrency(capexStats.avgTicket)}
+                </div>
+                <div className="text-[11px] text-purple-300/80 mt-1">
+                  Por cada orden de inversión
+                </div>
+              </div>
+
+              {/* Hoyts vs Cinemark */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-white/10 backdrop-blur-sm">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span>Desglose por Empresa</span>
+                  <Building2 className="w-4 h-4 text-cyan-400" />
+                </div>
+                <div className="space-y-1 mt-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-cyan-300 font-medium">Hoyts:</span>
+                    <span className="font-mono font-bold text-white">{formatCurrency(capexStats.hoytsMonto)}</span>
+                    <span className="text-[10px] text-slate-400">({capexStats.hoytsOrders} OCs)</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-rose-300 font-medium">CMK:</span>
+                    <span className="font-mono font-bold text-white">{formatCurrency(capexStats.cmkMonto)}</span>
+                    <span className="text-[10px] text-slate-400">({capexStats.cmkOrders} OCs)</span>
+                  </div>
+                  {capexStats.sinEmpresaOrders > 0 && (
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Sin asignar:</span>
+                      <span className="font-mono">{formatCurrency(capexStats.sinEmpresaMonto)}</span>
+                      <span className="text-[10px]">({capexStats.sinEmpresaOrders})</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tipos de Proyecto (CAPEX vs PCT) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-white/10 backdrop-blur-sm">
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span>Etiquetas de Proyecto</span>
+                  <Tag className="w-4 h-4 text-orange-400" />
+                </div>
+                <div className="space-y-1.5 mt-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      CAPEX
+                    </span>
+                    <span className="font-mono font-bold text-white">{capexStats.capexTagCount} OCs</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{formatCurrency(capexStats.capexTagMonto)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      PCT
+                    </span>
+                    <span className="font-mono font-bold text-white">{capexStats.pctCount} OCs</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{formatCurrency(capexStats.pctMonto)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* VISUAL CHARTS: Evolución Temporal & Top Proveedores de CAPEX */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Evolución de Inversión CAPEX */}
+              <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white text-sm">
+                        {selectedYear === "Todos"
+                          ? "Evolución Interanual de Inversiones CAPEX (2015-2026)"
+                          : `Evolución Mensual CAPEX (${selectedYear})`}
+                      </h3>
+                      <p className="text-[10px] text-slate-400">
+                        {selectedYear === "Todos"
+                          ? "Distribución histórica de OCs y montos por año"
+                          : "Cantidad de órdenes CAPEX creadas por mes"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium">
+                    {selectedYear === "Todos" ? "Por Años" : "12 Meses"}
+                  </span>
+                </div>
+
+                {/* Chart Bars */}
+                {selectedYear === "Todos" ? (
+                  <div className="h-40 flex items-end justify-between gap-1 pt-4 pb-2 px-1">
+                    {capexStats.sortedYears.map((y) => {
+                      const heightPercent = capexStats.maxYearOrders > 0 ? (y.orders / capexStats.maxYearOrders) * 100 : 0;
+                      return (
+                        <div key={y.year} className="flex-1 flex flex-col items-center gap-1 group relative">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
+                            <p className="font-bold text-white">Año {y.year}</p>
+                            <p className="text-amber-400 font-bold">{y.orders} OCs CAPEX</p>
+                            <p className="text-emerald-400 font-mono">{formatCurrency(y.monto)}</p>
+                          </div>
+
+                          <div className="w-full bg-slate-800 rounded-t h-28 flex items-end overflow-hidden">
+                            <div
+                              className={`w-full transition-all duration-300 ${
+                                y.orders > 0
+                                  ? "bg-gradient-to-t from-amber-600 to-orange-400 group-hover:from-amber-500 group-hover:to-orange-300"
+                                  : "bg-transparent"
+                              }`}
+                              style={{ height: `${Math.max(heightPercent, y.orders > 0 ? 8 : 0)}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-400 group-hover:text-white font-mono transition-colors">
+                            {String(y.year).slice(2)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="h-40 flex items-end justify-between gap-1 pt-4 pb-2 px-1">
+                    {capexStats.months.map((m) => {
+                      const heightPercent = capexStats.maxMonthOrders > 0 ? (m.orders / capexStats.maxMonthOrders) * 100 : 0;
+                      return (
+                        <div key={m.index} className="flex-1 flex flex-col items-center gap-1 group relative">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
+                            <p className="font-bold text-white">{m.name}</p>
+                            <p className="text-amber-400 font-bold">{m.orders} OCs CAPEX</p>
+                            <p className="text-emerald-400 font-mono">{formatCurrency(m.monto)}</p>
+                          </div>
+
+                          <div className="w-full bg-slate-800 rounded-t h-28 flex items-end overflow-hidden">
+                            <div
+                              className={`w-full transition-all duration-300 ${
+                                m.orders > 0
+                                  ? "bg-gradient-to-t from-amber-600 to-orange-400 group-hover:from-amber-500 group-hover:to-orange-300"
+                                  : "bg-transparent"
+                              }`}
+                              style={{ height: `${Math.max(heightPercent, m.orders > 0 ? 8 : 0)}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-400 group-hover:text-white transition-colors">
+                            {m.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Top Proveedores en CAPEX & PCT */}
+              <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+                      <Award className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white text-sm">
+                        Principales Proveedores de CAPEX & PCT
+                      </h3>
+                      <p className="text-[10px] text-slate-400">
+                        Mayores adjudicatarios en obras, equipamiento y reformas
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                    Top 8
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {capexStats.topCapexProviders.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-400">
+                      No hay proveedores CAPEX en este período.
+                    </div>
+                  ) : (
+                    capexStats.topCapexProviders.map((p, idx) => (
+                      <div key={p.name} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2 truncate max-w-[240px]">
+                            <span className="font-mono text-slate-500 text-[10px] w-4">{idx + 1}.</span>
+                            <span className="font-semibold text-slate-200 truncate" title={p.name}>
+                              {p.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 font-mono text-xs">
+                            <span className="text-slate-400 text-[11px]">{p.count} OCs</span>
+                            <span className="font-bold text-white">{formatCurrency(p.monto)}</span>
+                            <span className="text-[10px] text-amber-400 font-bold w-10 text-right">
+                              {p.percent.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full"
+                            style={{ width: `${Math.min(p.percent, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* TABLA EXPLORADORA DE ÓRDENES CAPEX & PCT */}
+            <div className="rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md overflow-hidden space-y-4">
+              <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/10">
+                <div>
+                  <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                    <span>Listado Detallado de Órdenes CAPEX & PCT</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-amber-500/30 font-mono font-bold">
+                      {displayedCapexOrders.length} {displayedCapexOrders.length === 1 ? "Orden" : "Órdenes"}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Explorador y auditoría de todas las compras asociadas a obras y activos fijos.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Filter Tag Pills */}
+                  <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-white/10 text-xs">
+                    {(["Todos", "CAPEX", "PCT"] as const).map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => setCapexTypeFilter(tag)}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                          capexTypeFilter === tag
+                            ? "bg-amber-600 text-white shadow-sm"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Sort dropdown */}
+                  <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-white/10 text-xs">
+                    <select
+                      value={capexSortBy}
+                      onChange={(e) => setCapexSortBy(e.target.value as any)}
+                      className="bg-transparent text-slate-300 text-xs focus:outline-none px-2 py-0.5 cursor-pointer"
+                    >
+                      <option value="monto" className="bg-slate-800 text-white">Por Monto</option>
+                      <option value="fecha" className="bg-slate-800 text-white">Por Fecha</option>
+                      <option value="numOC" className="bg-slate-800 text-white">Por N° OC</option>
+                      <option value="proveedor" className="bg-slate-800 text-white">Por Proveedor</option>
+                    </select>
+                    <button
+                      onClick={() => setCapexSortOrder(capexSortOrder === "asc" ? "desc" : "asc")}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white"
+                      title="Cambiar orden ascendente/descendente"
+                    >
+                      {capexSortOrder === "asc" ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Orders Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead className="bg-slate-800/60 text-slate-400 font-semibold border-b border-white/5 uppercase text-[10px] tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4 w-16 text-center">N° OC</th>
+                      <th className="py-3 px-4 w-20 text-center">Tipo</th>
+                      <th className="py-3 px-4">Proveedor</th>
+                      <th className="py-3 px-4">Motivo / Proyecto</th>
+                      <th className="py-3 px-4 text-center">Fecha</th>
+                      <th className="py-3 px-4 text-center">Empresa</th>
+                      <th className="py-3 px-4 text-right">Monto</th>
+                      <th className="py-3 px-4 text-center">Usuario</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 font-sans">
+                    {paginatedCapexOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400 text-sm">
+                          No se encontraron órdenes CAPEX & PCT que coincidan con la búsqueda.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedCapexOrders.map((o) => {
+                        const tag = getCapexTag(o.motivo);
+                        return (
+                          <tr key={o.id} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-3 px-4 text-center font-mono font-bold text-white">
+                              {o.numOC}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  tag === "PCT"
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                    : "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                                }`}
+                              >
+                                {tag}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-semibold text-slate-200">
+                              {o.razonSocial}
+                            </td>
+                            <td className="py-3 px-4 text-slate-300 max-w-[320px] truncate" title={o.motivo}>
+                              {o.motivo || "-"}
+                            </td>
+                            <td className="py-3 px-4 text-center text-xs font-mono text-slate-400 whitespace-nowrap">
+                              {o.dateStr}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {o.empresa === "Hoyts" ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                  Hoyts
+                                </span>
+                              ) : o.empresa === "CMK" ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                  CMK
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-white/5">
+                                  Sin Asignar
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
+                              {formatCurrency(o.monto)}
+                            </td>
+                            <td className="py-3 px-4 text-center text-xs text-slate-400">
+                              {o.creadoPor}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Footer */}
+              {totalCapexPages > 1 && (
+                <div className="p-4 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+                  <div>
+                    Mostrando {((capexPage - 1) * CAPEX_PAGE_SIZE) + 1} a {Math.min(capexPage * CAPEX_PAGE_SIZE, displayedCapexOrders.length)} de {displayedCapexOrders.length} órdenes
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCapexPage((p) => Math.max(1, p - 1))}
+                      disabled={capexPage === 1}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Anterior
+                    </button>
+                    <span className="font-mono text-white px-2">
+                      {capexPage} / {totalCapexPages}
+                    </span>
+                    <button
+                      onClick={() => setCapexPage((p) => Math.min(totalCapexPages, p + 1))}
+                      disabled={capexPage === totalCapexPages}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
+      </>
+    )}
 
         {/* PROVIDER DETAIL MODAL */}
         {activeProviderModal && (
