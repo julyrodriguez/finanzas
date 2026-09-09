@@ -45,8 +45,14 @@ import {
   ListTodo,
   Search,
   FolderPlus,
-  Unlink
+  Unlink,
+  Upload,
+  Clipboard,
+  Download,
+  FileUp,
+  Check
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // Types definition
 interface Item {
@@ -187,6 +193,20 @@ export default function CotizacionesPage() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  // Excel / Grid Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importMode, setImportMode] = useState<"file" | "paste">("file");
+  const [pastedText, setPastedText] = useState<string>("");
+  const [importReplaceExisting, setImportReplaceExisting] = useState<boolean>(true);
+  const [importFileName, setImportFileName] = useState<string>("");
+  const [importParsedPreview, setImportParsedPreview] = useState<{
+    items: Item[];
+    providers: Provider[];
+    rawHeaders: string[];
+    sampleRows: { itemName: string; prices: number[] }[];
+  } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // Firebase Db Activation & Sync
   useEffect(() => {
@@ -844,6 +864,233 @@ export default function CotizacionesPage() {
   };
 
   // -----------------------------------------------------
+  // EXCEL / MATRIX IMPORT LOGIC
+  // -----------------------------------------------------
+
+  const parsePriceValue = (val: any): number => {
+    if (val === null || val === undefined || val === "") return 0;
+    if (typeof val === "number") return isNaN(val) ? 0 : Math.max(0, val);
+    let str = String(val).trim().replace(/[^0-9.,-]/g, "");
+    if (!str) return 0;
+    const isNegative = str.startsWith("-");
+    str = str.replace(/-/g, "");
+
+    if (str.includes(",") && str.includes(".")) {
+      if (str.lastIndexOf(",") > str.lastIndexOf(".")) {
+        str = str.replace(/\./g, "").replace(",", ".");
+      } else {
+        str = str.replace(/,/g, "");
+      }
+    } else if (str.includes(",")) {
+      const parts = str.split(",");
+      if (parts.length === 2 && parts[1].length <= 2) {
+        str = parts[0] + "." + parts[1];
+      } else {
+        str = str.replace(/,/g, "");
+      }
+    }
+    const parsed = parseFloat(str);
+    if (isNaN(parsed)) return 0;
+    return isNegative ? -parsed : parsed;
+  };
+
+  const parseMatrixToQuote = (rawMatrix: any[][]) => {
+    setImportError(null);
+    if (!rawMatrix || rawMatrix.length === 0) {
+      setImportParsedPreview(null);
+      return;
+    }
+
+    // Determine header row (where provider names are)
+    // Row 0 has providers in B1, C1, D1... (col 1..N).
+    // If row 0 has no provider names beyond col 0, check row 1.
+    let headerRowIdx = 0;
+    const row0Providers = (rawMatrix[0] || []).slice(1).filter(c => String(c ?? "").trim().length > 0);
+    if (row0Providers.length === 0 && rawMatrix.length > 1) {
+      const row1Providers = (rawMatrix[1] || []).slice(1).filter(c => String(c ?? "").trim().length > 0);
+      if (row1Providers.length > 0) {
+        headerRowIdx = 1;
+      }
+    }
+
+    const headerRow = rawMatrix[headerRowIdx] || [];
+    const detectedProviders: { colIdx: number; name: string }[] = [];
+    for (let col = 1; col < headerRow.length; col++) {
+      const pName = String(headerRow[col] ?? "").trim();
+      if (pName) {
+        detectedProviders.push({ colIdx: col, name: pName });
+      }
+    }
+
+    if (detectedProviders.length === 0) {
+      setImportError("No se encontraron nombres de empresas o proveedores en las columnas de cabecera (B1, C1, D1...).");
+      setImportParsedPreview(null);
+      return;
+    }
+
+    const newItems: Item[] = [];
+    const sampleRows: { itemName: string; prices: number[] }[] = [];
+    const ts = Date.now();
+
+    const newProviders: Provider[] = detectedProviders.map((dp, idx) => ({
+      id: `prov-import-${ts}-${idx}`,
+      name: dp.name,
+      quotes: {}
+    }));
+
+    let itemCounter = 1;
+    for (let r = headerRowIdx + 1; r < rawMatrix.length; r++) {
+      const row = rawMatrix[r];
+      if (!row || row.length === 0) continue;
+
+      const hasAnyContent = row.some((cell: any) => String(cell ?? "").trim().length > 0);
+      if (!hasAnyContent) continue;
+
+      const itemNameRaw = String(row[0] ?? "").trim();
+      const itemName = itemNameRaw || `Ítem ${itemCounter}`;
+      const itemId = `item-import-${ts}-${itemCounter}`;
+      itemCounter++;
+
+      newItems.push({
+        id: itemId,
+        name: itemName,
+        baseUnit: "U",
+        targetQuantity: 1
+      });
+
+      const rowPrices: number[] = [];
+      detectedProviders.forEach((dp, pIdx) => {
+        const rawCell = row[dp.colIdx];
+        const price = parsePriceValue(rawCell);
+        rowPrices.push(price);
+
+        newProviders[pIdx].quotes[itemId] = {
+          currency: baseCurrency,
+          presentationType: "base",
+          presentationName: "",
+          unitsPerPresentation: 1,
+          price,
+          discount: 0
+        };
+      });
+
+      sampleRows.push({
+        itemName,
+        prices: rowPrices
+      });
+    }
+
+    if (newItems.length === 0) {
+      setImportError("No se encontraron ítems en las filas (A2, A3, etc.). Asegurate de que la columna A contenga los nombres de los ítems.");
+      setImportParsedPreview(null);
+      return;
+    }
+
+    setImportParsedPreview({
+      items: newItems,
+      providers: newProviders,
+      rawHeaders: detectedProviders.map(p => p.name),
+      sampleRows
+    });
+  };
+
+  const handleFileImportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const buffer = evt.target?.result;
+        const wb = XLSX.read(buffer, { type: "array" });
+        const firstSheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[firstSheetName];
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[][];
+        parseMatrixToQuote(raw);
+      } catch (err) {
+        console.error(err);
+        setImportError("No se pudo leer el archivo. Asegurate de que sea un archivo Excel válido (.xlsx, .xls o .csv).");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handlePasteTextChange = (text: string) => {
+    setPastedText(text);
+    if (!text.trim()) {
+      setImportParsedPreview(null);
+      setImportError(null);
+      return;
+    }
+    const lines = text.trim().split(/\r?\n/).filter(l => l.length > 0);
+    if (lines.length === 0) return;
+    const firstLine = lines[0];
+    let delimiter = "\t";
+    if (!firstLine.includes("\t")) {
+      if (firstLine.includes(";")) delimiter = ";";
+      else if (firstLine.includes(",")) delimiter = ",";
+    }
+    const raw = lines.map(l => l.split(delimiter).map(c => c.trim()));
+    parseMatrixToQuote(raw);
+  };
+
+  const handleApplyImport = () => {
+    if (!importParsedPreview) return;
+
+    if (importReplaceExisting) {
+      setItems(importParsedPreview.items);
+      setProviders(importParsedPreview.providers);
+    } else {
+      // Append mode: merge providers and items
+      const mergedProviders = [...providers];
+      const providerMap = new Map<string, Provider>();
+      mergedProviders.forEach(p => providerMap.set(p.name.trim().toLowerCase(), p));
+
+      importParsedPreview.providers.forEach(p => {
+        const key = p.name.trim().toLowerCase();
+        if (providerMap.has(key)) {
+          const existing = providerMap.get(key)!;
+          existing.quotes = { ...existing.quotes, ...p.quotes };
+        } else {
+          mergedProviders.push(p);
+        }
+      });
+
+      setItems(prev => [...prev, ...importParsedPreview.items]);
+      setProviders(mergedProviders);
+    }
+
+    if (importFileName && (quoteName.startsWith("Nueva Cotización") || quoteName.startsWith("Cotización de Insumos") || !quoteName.trim())) {
+      const cleanName = importFileName.replace(/\.[^/.]+$/, "");
+      setQuoteName(cleanName);
+    }
+
+    setHasActiveQuote(true);
+    setActiveTab("editor");
+    setIsImportModalOpen(false);
+    setPastedText("");
+    setImportFileName("");
+    setImportParsedPreview(null);
+    setImportError(null);
+    showToast(`Se importaron ${importParsedPreview.items.length} ítems y ${importParsedPreview.providers.length} empresas`, "success");
+  };
+
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      ["", "Empresa A", "Empresa B", "Empresa C"],
+      ["Resma A4 75g", 6500, 6200, 6800],
+      ["Café en Grano 1kg", 25000, 24500, 26000],
+      ["Azúcar 1kg", 1200, 1150, 1300],
+      ["Toner Láser Negro", 45000, 43000, 48500]
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cotizaciones");
+    XLSX.writeFile(wb, "Plantilla_Cotizaciones.xlsx");
+    showToast("Plantilla descargada: Plantilla_Cotizaciones.xlsx", "info");
+  };
+
+  // -----------------------------------------------------
   // COMPARISON AND SCORING CALCULATIONS
   // -----------------------------------------------------
 
@@ -1444,9 +1691,23 @@ export default function CotizacionesPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleNewQuotation}
-            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 hover:text-white rounded-xl text-sm font-semibold transition-colors"
+            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 hover:text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
           >
             Nueva Cotización
+          </button>
+
+          <button
+            onClick={() => {
+              if (!hasActiveQuote) {
+                handleNewQuotation();
+              }
+              setIsImportModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+            title="Importar matriz desde archivo Excel o celdas copiadas"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Importar Excel / Copiar
           </button>
           
           {hasActiveQuote && (
@@ -1736,14 +1997,25 @@ export default function CotizacionesPage() {
                 </div>
               </div>
               
-              <button
-                onClick={handleAddItem}
-                disabled={isLocked}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Añadir Ítem
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  disabled={isLocked}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  title="Importar ítems, proveedores y precios desde Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  Importar Excel / Copiar
+                </button>
+                <button
+                  onClick={handleAddItem}
+                  disabled={isLocked}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Añadir Ítem
+                </button>
+              </div>
             </div>
 
             {/* Desktop View Table */}
@@ -2749,6 +3021,27 @@ export default function CotizacionesPage() {
                 </div>
               </div>
 
+              {/* Card de Importar Cotización desde Excel */}
+              <div
+                onClick={() => {
+                  handleNewQuotation();
+                  setIsImportModalOpen(true);
+                }}
+                className="p-5 rounded-2xl border border-dashed border-emerald-500/20 hover:border-emerald-500/50 bg-[#111827]/10 hover:bg-emerald-950/10 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
+              >
+                <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors text-sm">
+                    Importar desde Excel
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Carga rápida por archivo .xlsx o pegando celdas
+                  </p>
+                </div>
+              </div>
+
               {filteredQuotations.length > 0 && filteredQuotations.map((quote) => {
                 const date = (quote.createdAt && typeof quote.createdAt === "object" && "seconds" in quote.createdAt)
                   ? new Date((quote.createdAt as { seconds: number }).seconds * 1000).toLocaleString("es-AR")
@@ -3074,6 +3367,268 @@ export default function CotizacionesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          MODAL: IMPORTAR COTIZACIÓN DESDE EXCEL / TABLA
+          ==================================================== */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+          <div className="glass-card rounded-3xl p-6 max-w-2xl w-full border border-white/10 flex flex-col gap-5 my-8 max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <FileSpreadsheet className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-lg">Importar Matriz de Cotizaciones</h3>
+                  <p className="text-xs text-gray-400">Carga automática de empresas, ítems y precios</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setImportParsedPreview(null);
+                  setImportError(null);
+                  setPastedText("");
+                  setImportFileName("");
+                }}
+                className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Explanation Guide / Layout Visualizer */}
+            <div className="p-4 rounded-2xl bg-[#0e1626]/80 border border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                  <Info className="w-4 h-4" />
+                  Estructura Requerida de la Tabla
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold transition-colors cursor-pointer"
+                  title="Descargar una plantilla Excel lista para completar"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Descargar Plantilla Excel
+                </button>
+              </div>
+
+              {/* Visual Grid Map */}
+              <div className="overflow-x-auto rounded-xl border border-white/10 text-[11px] font-mono">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-emerald-950/40 text-emerald-300 border-b border-white/10">
+                      <th className="p-2.5 bg-black/30 text-gray-500 font-bold border-r border-white/10 text-center w-28">A1: [Vacío]</th>
+                      <th className="p-2.5 font-bold border-r border-white/10">B1: Empresa A</th>
+                      <th className="p-2.5 font-bold border-r border-white/10">C1: Empresa B</th>
+                      <th className="p-2.5 font-bold">D1: Empresa C...</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-gray-300">
+                    <tr className="hover:bg-white/[0.02]">
+                      <td className="p-2 bg-emerald-500/5 font-semibold text-emerald-300 border-r border-white/10">A2: Nombre Ítem 1</td>
+                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 1A</td>
+                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 1B</td>
+                      <td className="p-2 text-gray-400">$ Precio 1C</td>
+                    </tr>
+                    <tr className="hover:bg-white/[0.02]">
+                      <td className="p-2 bg-emerald-500/5 font-semibold text-emerald-300 border-r border-white/10">A3: Nombre Ítem 2</td>
+                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 2A</td>
+                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 2B</td>
+                      <td className="p-2 text-gray-400">$ Precio 2C</td>
+                    </tr>
+                    <tr className="hover:bg-white/[0.02]">
+                      <td className="p-2 bg-emerald-500/5 font-semibold text-emerald-300 border-r border-white/10">A4: Nombre Ítem 3</td>
+                      <td className="p-2 border-r border-white/10 text-gray-400">...</td>
+                      <td className="p-2 border-r border-white/10 text-gray-400">...</td>
+                      <td className="p-2 text-gray-400">...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-gray-400">
+                <div className="flex items-start gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                  <span><strong>Celda A1:</strong> Vacía (o encabezado opcional).</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                  <span><strong>Fila 1 (B1, C1...):</strong> Nombres de las empresas.</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                  <span><strong>Columna A (A2, A3...):</strong> Nombres de los ítems.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl border border-white/5">
+              <button
+                type="button"
+                onClick={() => setImportMode("file")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  importMode === "file"
+                    ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Upload className="w-4 h-4" />
+                Opción 1: Subir Archivo (.xlsx / .csv)
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode("paste")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  importMode === "paste"
+                    ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Clipboard className="w-4 h-4" />
+                Opción 2: Pegar Celdas (Ctrl+V)
+              </button>
+            </div>
+
+            {/* Input Options Body */}
+            {importMode === "file" ? (
+              <div className="space-y-3">
+                <label className="border-2 border-dashed border-white/10 hover:border-emerald-500/40 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors bg-white/[0.01] hover:bg-emerald-950/5">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <FileUp className="w-6 h-6" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-white">
+                      {importFileName ? importFileName : "Hacé clic para seleccionar o arrastrá tu archivo Excel acá"}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Formatos compatibles: .xlsx, .xls, .csv
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleFileImportChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-gray-400 flex items-center justify-between">
+                  <span>Pegar celdas copiadas directamente de Excel o Google Sheets</span>
+                  <span className="text-gray-500 text-[11px]">Soporta tabulaciones (Ctrl+C / Ctrl+V)</span>
+                </label>
+                <textarea
+                  value={pastedText}
+                  onChange={(e) => handlePasteTextChange(e.target.value)}
+                  placeholder={"[A1 vacio]\tEmpresa A\tEmpresa B\tEmpresa C\nResma A4\t6500\t6200\t6800\nCafé 1kg\t25000\t24500\t26000\nAzúcar 1kg\t1200\t1150\t1300"}
+                  rows={6}
+                  className="w-full bg-[#111827]/80 border border-white/10 rounded-2xl p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+            )}
+
+            {/* Error banner */}
+            {importError && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs animate-fadeIn">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {/* Preview Section */}
+            {importParsedPreview && (
+              <div className="space-y-3 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>
+                      Vista Previa: {importParsedPreview.items.length} ítems y {importParsedPreview.providers.length} empresas detectadas
+                    </span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-48 border border-white/10 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#111827] text-gray-400 sticky top-0 border-b border-white/10">
+                      <tr>
+                        <th className="p-2.5 font-bold">Ítem</th>
+                        {importParsedPreview.rawHeaders.map((prov, i) => (
+                          <th key={i} className="p-2.5 font-bold border-l border-white/10">{prov}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-gray-300">
+                      {importParsedPreview.sampleRows.slice(0, 5).map((row, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-white/[0.02]">
+                          <td className="p-2 font-medium text-white">{row.itemName}</td>
+                          {row.prices.map((p, cIdx) => (
+                            <td key={cIdx} className="p-2 border-l border-white/5 font-mono text-emerald-300">
+                              {p > 0 ? `$${p.toLocaleString("es-AR")}` : "-"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {importParsedPreview.sampleRows.length > 5 && (
+                  <p className="text-[11px] text-gray-500 italic text-center">
+                    ... y {importParsedPreview.sampleRows.length - 5} ítems más
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Options & Action buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300 select-none">
+                <input
+                  type="checkbox"
+                  checked={importReplaceExisting}
+                  onChange={(e) => setImportReplaceExisting(e.target.checked)}
+                  className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+                />
+                <span>Reemplazar ítems y empresas existentes</span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsImportModalOpen(false);
+                    setImportParsedPreview(null);
+                    setImportError(null);
+                    setPastedText("");
+                    setImportFileName("");
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyImport}
+                  disabled={!importParsedPreview || importParsedPreview.items.length === 0}
+                  className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  Aplicar a Cotización
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
