@@ -875,20 +875,66 @@ export default function CotizacionesPage() {
     const isNegative = str.startsWith("-");
     str = str.replace(/-/g, "");
 
-    if (str.includes(",") && str.includes(".")) {
-      if (str.lastIndexOf(",") > str.lastIndexOf(".")) {
-        str = str.replace(/\./g, "").replace(",", ".");
+    const hasComma = str.includes(",");
+    const hasDot = str.includes(".");
+
+    if (hasComma && hasDot) {
+      const lastComma = str.lastIndexOf(",");
+      const lastDot = str.lastIndexOf(".");
+
+      if (lastComma > lastDot) {
+        // e.g. 128.300.400,50 or 128.300,00 -> comma is decimal if < 3 digits
+        const decimals = str.slice(lastComma + 1);
+        const integerPart = str.slice(0, lastComma).replace(/[.,]/g, "");
+        if (decimals.length < 3) {
+          str = `${integerPart}.${decimals}`;
+        } else {
+          str = `${integerPart}${decimals}`;
+        }
       } else {
-        str = str.replace(/,/g, "");
+        // e.g. 128,300,400.50 -> dot is decimal if < 3 digits
+        const decimals = str.slice(lastDot + 1);
+        const integerPart = str.slice(0, lastDot).replace(/[.,]/g, "");
+        if (decimals.length < 3) {
+          str = `${integerPart}.${decimals}`;
+        } else {
+          str = `${integerPart}${decimals}`;
+        }
       }
-    } else if (str.includes(",")) {
-      const parts = str.split(",");
-      if (parts.length === 2 && parts[1].length <= 2) {
-        str = parts[0] + "." + parts[1];
-      } else {
+    } else if (hasComma) {
+      const commasCount = (str.match(/,/g) || []).length;
+      if (commasCount > 1) {
+        // Multiple commas: e.g. 128,300,400 -> all are thousands separators
         str = str.replace(/,/g, "");
+      } else {
+        // Exactly one comma: if < 3 digits after comma (e.g. 128,5 or 128,50), it is decimal.
+        // If 3 or more (e.g. 128,300), it is thousands separator.
+        const parts = str.split(",");
+        const decimals = parts[1] || "";
+        if (decimals.length < 3) {
+          str = `${parts[0]}.${decimals}`;
+        } else {
+          str = parts[0] + decimals;
+        }
+      }
+    } else if (hasDot) {
+      const dotsCount = (str.match(/\./g) || []).length;
+      if (dotsCount > 1) {
+        // Multiple dots: e.g. 128.300.400 -> all are thousands separators
+        str = str.replace(/\./g, "");
+      } else {
+        // Exactly one dot: if < 3 digits after dot (e.g. 128.5 or 128.50), it is decimal.
+        // If 3 or more (e.g. 128.300), it is thousands separator.
+        const parts = str.split(".");
+        const decimals = parts[1] || "";
+        if (decimals.length < 3) {
+          str = `${parts[0]}.${decimals}`;
+        } else {
+          str = parts[0] + decimals;
+        }
       }
     }
+
     const parsed = parseFloat(str);
     if (isNaN(parsed)) return 0;
     return isNegative ? -parsed : parsed;
