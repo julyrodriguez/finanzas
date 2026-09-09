@@ -174,7 +174,7 @@ export default function CotizacionesPage() {
   // Filters for Historial Tab
   const [filterCategoria, setFilterCategoria] = useState<string>("todas");
   const [searchHistory, setSearchHistory] = useState<string>("");
-  const [filterStatus, setFilterStatus] = useState<string>("todos");
+  const [filterStatus, setFilterStatus] = useState<string>("pendientes");
   const [filterOnlyLinked, setFilterOnlyLinked] = useState<boolean>(false);
 
   // Category modal state
@@ -381,6 +381,29 @@ export default function CotizacionesPage() {
   };
 
   // Filtered quotations for Historial tab
+  // Status Counts for Top Filter Tabs
+  const statusCounts = useMemo(() => {
+    let todos = savedQuotations.length;
+    let pendientes = 0;
+    let enviados = 0;
+    let finalizados = 0;
+
+    savedQuotations.forEach((q) => {
+      const isFin = q.status === "finalizada" || q.isFinalized;
+      const raw = q.status || (isFin ? "finalizada" : "borrador");
+      if (isFin || raw === "finalizada" || raw === "finalizados") {
+        finalizados++;
+      } else if (raw === "enviada" || raw === "enviados") {
+        enviados++;
+      } else if (raw !== "cancelada") {
+        pendientes++;
+      }
+    });
+
+    return { todos, pendientes, enviados, finalizados };
+  }, [savedQuotations]);
+
+  // Filtered quotations for Historial tab
   const filteredQuotations = useMemo(() => {
     return savedQuotations.filter((quote) => {
       // 1. Categoria filter
@@ -394,8 +417,18 @@ export default function CotizacionesPage() {
 
       // 2. Status filter
       if (filterStatus !== "todos") {
-        const qStatus = quote.status || (quote.isFinalized ? "finalizada" : "borrador");
-        if (qStatus !== filterStatus) return false;
+        const isFin = quote.status === "finalizada" || quote.isFinalized;
+        const rawStatus = quote.status || (isFin ? "finalizada" : "borrador");
+
+        if (filterStatus === "pendientes" || filterStatus === "borrador") {
+          if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
+        } else if (filterStatus === "enviados" || filterStatus === "enviada") {
+          if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
+        } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
+          if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
+        } else if (rawStatus !== filterStatus) {
+          return false;
+        }
       }
 
       // 3. Only linked filter
@@ -422,14 +455,38 @@ export default function CotizacionesPage() {
   }, [savedQuotations, filterCategoria, filterStatus, filterOnlyLinked, searchHistory]);
 
   const getCategoryQuoteCount = (catName: string) => {
-    return savedQuotations.filter(
-      (q) => q.categoria?.toLowerCase() === catName.toLowerCase()
-    ).length;
+    return savedQuotations.filter((q) => {
+      if (q.categoria?.toLowerCase() !== catName.toLowerCase()) return false;
+      if (filterStatus !== "todos") {
+        const isFin = q.status === "finalizada" || q.isFinalized;
+        const rawStatus = q.status || (isFin ? "finalizada" : "borrador");
+        if (filterStatus === "pendientes" || filterStatus === "borrador") {
+          if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
+        } else if (filterStatus === "enviados" || filterStatus === "enviada") {
+          if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
+        } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
+          if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
+        }
+      }
+      return true;
+    }).length;
   };
 
-  const uncategorizedQuoteCount = savedQuotations.filter(
-    (q) => !q.categoria || q.categoria.trim() === ""
-  ).length;
+  const uncategorizedQuoteCount = savedQuotations.filter((q) => {
+    if (q.categoria && q.categoria.trim() !== "") return false;
+    if (filterStatus !== "todos") {
+      const isFin = q.status === "finalizada" || q.isFinalized;
+      const rawStatus = q.status || (isFin ? "finalizada" : "borrador");
+      if (filterStatus === "pendientes" || filterStatus === "borrador") {
+        if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
+      } else if (filterStatus === "enviados" || filterStatus === "enviada") {
+        if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
+      } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
+        if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
+      }
+    }
+    return true;
+  }).length;
 
   // Calc helper: gets true unit price in base unit and base currency
   const getCalculatedPrices = (quote: QuoteDetail, exchangeRateValue: number, baseCurr: "ARS" | "USD") => {
@@ -2887,6 +2944,46 @@ export default function CotizacionesPage() {
             </button>
           </div>
 
+          {/* Filtros de Estado: Todos - Pendientes - Enviados - Finalizados */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
+            {[
+              { id: "todos", label: "Todos", count: statusCounts.todos },
+              { id: "pendientes", label: "Pendientes", count: statusCounts.pendientes },
+              { id: "enviados", label: "Enviados", count: statusCounts.enviados },
+              { id: "finalizados", label: "Finalizados", count: statusCounts.finalizados },
+            ].map((tab) => {
+              const isSelected = filterStatus === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setFilterStatus(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    isSelected
+                      ? tab.id === "pendientes"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/15 ring-1 ring-amber-500/30"
+                        : tab.id === "enviados"
+                          ? "bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-md shadow-blue-500/15 ring-1 ring-blue-500/30"
+                          : tab.id === "finalizados"
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/15 ring-1 ring-emerald-500/30"
+                            : "bg-white/15 text-white border-white/30 shadow-md ring-1 ring-white/20"
+                      : "bg-[#080c16] text-gray-400 hover:text-gray-200 hover:bg-white/5 border-white/5"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-white/5 text-gray-400"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Mini Carpetitas Horizontales (Rubros / Categorías) */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin pt-0.5">
@@ -2908,7 +3005,9 @@ export default function CotizacionesPage() {
                       : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
                   }`}
                 >
-                  {savedQuotations.length}
+                  {filterStatus === "todos"
+                    ? savedQuotations.length
+                    : (statusCounts[filterStatus as keyof typeof statusCounts] ?? savedQuotations.length)}
                 </span>
               </button>
 
@@ -3006,10 +3105,9 @@ export default function CotizacionesPage() {
                 className="bg-[#111827]/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
               >
                 <option value="todos">Todos los estados</option>
-                <option value="borrador">Borrador</option>
-                <option value="enviada">Enviada</option>
-                <option value="finalizada">Finalizada</option>
-                <option value="cancelada">Cancelada</option>
+                <option value="pendientes">Pendientes</option>
+                <option value="enviados">Enviados</option>
+                <option value="finalizados">Finalizados</option>
               </select>
 
               {/* Solo vinculadas toggle */}
@@ -3028,11 +3126,11 @@ export default function CotizacionesPage() {
             </div>
 
             {/* Botón limpiar filtros */}
-            {(filterCategoria !== "todas" || filterStatus !== "todos" || filterOnlyLinked || searchHistory.trim()) && (
+            {(filterCategoria !== "todas" || filterStatus !== "pendientes" || filterOnlyLinked || searchHistory.trim()) && (
               <button
                 onClick={() => {
                   setFilterCategoria("todas");
-                  setFilterStatus("todos");
+                  setFilterStatus("pendientes");
                   setFilterOnlyLinked(false);
                   setSearchHistory("");
                 }}
