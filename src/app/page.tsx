@@ -52,7 +52,7 @@ import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo } from "@/lib/serverSync";
-import { registerNewProvider, getProvidersRegistry } from "@/lib/providersRegistry";
+import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
 
 const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -960,7 +960,8 @@ export default function OrdenesDeComprasPage() {
   // Helper to generate the text format for a single order
   const getOrderCopyText = (orden: OrdenCompra, estado: string) => {
     if (estado === "Liberadas") {
-      return `OC 0${orden.numOC} - ${orden.razonSocial}`;
+      const cleanRazon = cleanLegalSuffixDots(orden.razonSocial);
+      return `OC 0${orden.numOC} - ${cleanRazon}`;
     }
 
     const formattedMonto = typeof orden.monto === "number"

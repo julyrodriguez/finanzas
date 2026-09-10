@@ -99,6 +99,20 @@ export function cleanProviderName(raw: string): string {
 }
 
 /**
+ * Quita los puntos de siglas societarias como S.A. o S.R.L. dejándolas como SA o SRL
+ * para el formato de copiado de órdenes liberadas.
+ */
+export function cleanLegalSuffixDots(name: string): string {
+  if (!name) return "";
+  return name
+    .replace(/\bS\s*\.\s*R\s*\.\s*L\s*\.?(\b|\s|$)/gi, "SRL$1")
+    .replace(/\bS\s*\.\s*A\s*\.\s*S\s*\.?(\b|\s|$)/gi, "SAS$1")
+    .replace(/\bS\s*\.\s*A\s*\.?(\b|\s|$)/gi, "SA$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * Distancia de Levenshtein básica
  */
 export function levenshteinDistance(a: string, b: string): number {
