@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { fetchOrdersFromMongo } from "@/lib/serverSync";
@@ -26,6 +26,7 @@ import {
   ArrowUpDown,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Building,
   HardHat,
   FolderKanban,
@@ -329,6 +330,31 @@ export default function EstadisticasPage() {
   const [capexSortBy, setCapexSortBy] = useState<"monto" | "fecha" | "numOC" | "proveedor">("monto");
   const [capexSortOrder, setCapexSortOrder] = useState<"desc" | "asc">("desc");
   const [capexPage, setCapexPage] = useState<number>(1);
+
+  // Responsive year pills auto-scroll container
+  const yearContainerRef = useRef<HTMLDivElement | null>(null);
+  const activeYearRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (yearContainerRef.current && activeYearRef.current) {
+      const container = yearContainerRef.current;
+      const element = activeYearRef.current;
+      const elementLeft = element.offsetLeft;
+      const elementWidth = element.offsetWidth;
+      const containerWidth = container.clientWidth;
+      const containerScrollLeft = container.scrollLeft;
+
+      if (
+        elementLeft < containerScrollLeft ||
+        elementLeft + elementWidth > containerScrollLeft + containerWidth
+      ) {
+        container.scrollTo({
+          left: Math.max(0, elementLeft - containerWidth / 2 + elementWidth / 2),
+          behavior: "smooth",
+        });
+      }
+    }
+  }, [selectedYear]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -1173,40 +1199,74 @@ export default function EstadisticasPage() {
 
             {/* FILTERS BAR */}
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Year filter pills */}
-                <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-white/10">
-                  <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400">
+              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto min-w-0 max-w-full">
+                {/* Year filter: responsive con scroll táctil suave y selector rápido para listas largas de años */}
+                <div className="w-full sm:w-auto max-w-full flex items-center bg-slate-800/80 p-1 rounded-xl border border-white/10 min-w-0">
+                  <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400 shrink-0 select-none">
                     <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                     <span>Año:</span>
                   </div>
-                  <button
-                    onClick={() => setSelectedYear("Todos")}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                      selectedYear === "Todos"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    Todos
-                  </button>
-                  {availableYears.map((yr) => (
+
+                  {/* Acceso rápido desplegable para cuando hay muchos años */}
+                  <div className="relative shrink-0 flex items-center pr-1 border-r border-white/10">
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      aria-label="Seleccionar año de la lista completa"
+                      title="Seleccionar año"
+                      className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                    >
+                      <option value="Todos" className="bg-slate-900 text-white">Todos los años</option>
+                      {availableYears.map((yr) => (
+                        <option key={yr} value={yr} className="bg-slate-900 text-white">
+                          Año {yr}
+                        </option>
+                      ))}
+                    </select>
                     <button
-                      key={yr}
-                      onClick={() => setSelectedYear(yr)}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                        selectedYear === yr
+                      type="button"
+                      title="Ver todos los años en lista desplegable"
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center cursor-pointer"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Pills con scroll horizontal táctil que no desbordan en móvil */}
+                  <div
+                    ref={yearContainerRef}
+                    className="flex items-center gap-1.5 overflow-x-auto max-w-full py-0.5 px-1 scrollbar-thin scroll-smooth touch-pan-x flex-1 min-w-0"
+                  >
+                    <button
+                      ref={selectedYear === "Todos" ? activeYearRef : undefined}
+                      onClick={() => setSelectedYear("Todos")}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                        selectedYear === "Todos"
                           ? "bg-indigo-600 text-white shadow-sm"
                           : "text-slate-400 hover:text-white"
                       }`}
                     >
-                      {yr}
+                      Todos
                     </button>
-                  ))}
+                    {availableYears.map((yr) => (
+                      <button
+                        key={yr}
+                        ref={selectedYear === yr ? activeYearRef : undefined}
+                        onClick={() => setSelectedYear(yr)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                          selectedYear === yr
+                            ? "bg-indigo-600 text-white shadow-sm"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {yr}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Company filter */}
-                <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-white/10">
+                <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-white/10 shrink-0">
                   <div className="flex items-center gap-1.5 px-2 text-xs text-slate-400">
                     <Building2 className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Empresa:</span>
