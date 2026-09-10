@@ -333,10 +333,10 @@ export function OrderFormModal({
                           type="button"
                           onMouseEnter={() => setHighlightedIndex(idx)}
                           onClick={() => handleSelectProvider(item.provider.name)}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                          className={`w-full text-left px-3 py-2 rounded-xl border transition-colors duration-100 flex items-center justify-between gap-3 cursor-pointer ${
                             isHighlighted
-                              ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30"
-                              : "hover:bg-white/5 text-white"
+                              ? "bg-emerald-500/15 text-emerald-200 border-emerald-500/40 shadow-sm"
+                              : "border-transparent hover:bg-white/5 text-slate-200 hover:text-white"
                           }`}
                         >
                           <div className="min-w-0 flex-1">
@@ -373,10 +373,10 @@ export function OrderFormModal({
                         setIsProviderDropdownOpen(false);
                         setHighlightedIndex(-1);
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                      className={`w-full text-left px-3 py-2 rounded-xl border transition-colors duration-100 flex items-center gap-2 cursor-pointer ${
                         highlightedIndex === searchResults.length
-                          ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
-                          : "hover:bg-white/5 text-amber-300/90"
+                          ? "bg-amber-500/15 text-amber-200 border-amber-500/40 shadow-sm"
+                          : "border-transparent hover:bg-white/5 text-amber-300/90"
                       }`}
                     >
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
