@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { fetchOrdersFromMongo } from "@/lib/serverSync";
+import { extractProvidersFromOrders } from "@/lib/providersRegistry";
 import { 
   TrendingUp, 
   BarChart3, 
@@ -442,6 +443,8 @@ export default function EstadisticasPage() {
 
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+        const providers = extractProvidersFromOrders(loadedOrders);
+        localStorage.setItem("finanzas_proveedores_registry_v1", JSON.stringify(providers));
       } catch (storageErr) {
         console.warn("No se pudo guardar en localStorage (cuota excedida):", storageErr);
       }

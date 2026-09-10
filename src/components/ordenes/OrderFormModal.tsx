@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { Edit3, Plus, X, Clock, ChevronDown, AlertCircle, Trash2, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Edit3, Plus, X, Clock, ChevronDown, AlertCircle, Trash2, Loader2, Building2, CheckCircle2, Sparkles } from "lucide-react";
 import type { OrdenCompra } from "@/types/ordenes";
+import { 
+  getProvidersRegistry, 
+  searchProviders, 
+  cleanProviderName, 
+  RegisteredProvider, 
+  ProviderSearchResult 
+} from "@/lib/providersRegistry";
 
 interface OrderFormModalProps {
   isOpen: boolean;
@@ -66,6 +73,108 @@ export function OrderFormModal({
   getFormattedCreatedAt,
 }: OrderFormModalProps) {
   const [isOCListOpen, setIsOCListOpen] = useState(false);
+
+  // Estados para autocompletado de proveedores
+  const [providers, setProviders] = useState<RegisteredProvider[]>([]);
+  const [isProviderDropdownOpen, setIsProviderDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const providerInputContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Cargar registro de proveedores (MongoDB + localStorage) al abrir el modal
+  useEffect(() => {
+    if (isOpen) {
+      getProvidersRegistry().then((list) => {
+        setProviders(list);
+      });
+      setIsProviderDropdownOpen(false);
+      setHighlightedIndex(-1);
+    }
+  }, [isOpen]);
+
+  // Cerrar sugerencias al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        providerInputContainerRef.current &&
+        !providerInputContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsProviderDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Escuchar si se registró un nuevo proveedor en tiempo real
+  useEffect(() => {
+    const handleNewProvider = (e: any) => {
+      if (e.detail) {
+        setProviders((prev) => {
+          const exists = prev.some((p) => p.id === e.detail.id);
+          if (exists) {
+            return prev.map((p) => (p.id === e.detail.id ? e.detail : p));
+          }
+          return [e.detail, ...prev];
+        });
+      }
+    };
+    window.addEventListener("finanzas_provider_registered", handleNewProvider);
+    return () => window.removeEventListener("finanzas_provider_registered", handleNewProvider);
+  }, []);
+
+  // Búsqueda de proveedores sugeridos a partir de 3 caracteres
+  const trimmedRazon = razonSocial.trim();
+  const searchResults: ProviderSearchResult[] = useMemo(() => {
+    if (trimmedRazon.length < 3) return [];
+    return searchProviders(trimmedRazon, providers, 8);
+  }, [trimmedRazon, providers]);
+
+  // Verificar si el texto escrito coincide con un proveedor registrado
+  const matchedRegisteredProvider = useMemo(() => {
+    if (!trimmedRazon) return null;
+    const norm = cleanProviderName(trimmedRazon);
+    return providers.find(
+      (p) =>
+        p.name.toLowerCase() === trimmedRazon.toLowerCase() ||
+        p.norm === norm ||
+        p.aliases.some((a) => a.toLowerCase() === trimmedRazon.toLowerCase())
+    );
+  }, [trimmedRazon, providers]);
+
+  const showDropdown = isProviderDropdownOpen && trimmedRazon.length >= 3;
+  const hasExactMatch = Boolean(matchedRegisteredProvider);
+  const showNewProviderOption = !hasExactMatch && trimmedRazon.length >= 3;
+  const totalDropdownItems = searchResults.length + (showNewProviderOption ? 1 : 0);
+
+  const handleSelectProvider = (name: string) => {
+    setRazonSocial(name);
+    setIsProviderDropdownOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleKeyDownProvider = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || totalDropdownItems === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev + 1) % totalDropdownItems);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev - 1 + totalDropdownItems) % totalDropdownItems);
+    } else if (e.key === "Enter") {
+      if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+        e.preventDefault();
+        handleSelectProvider(searchResults[highlightedIndex].provider.name);
+      } else if (highlightedIndex === searchResults.length && showNewProviderOption) {
+        e.preventDefault();
+        setIsProviderDropdownOpen(false);
+        setHighlightedIndex(-1);
+      }
+    } else if (e.key === "Escape") {
+      setIsProviderDropdownOpen(false);
+      setHighlightedIndex(-1);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -166,19 +275,124 @@ export function OrderFormModal({
             </div>
           </div>
 
-          {/* Razón Social / Proveedor */}
-          <div>
-            <label className="block text-gray-300 font-medium mb-1">
-              Razón Social / Proveedor
-            </label>
-            <input
-              type="text"
-              required
-              value={razonSocial}
-              onChange={(e) => setRazonSocial(e.target.value)}
-              placeholder="ej: Suministros Industriales S.A."
-              className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
-            />
+          {/* Razón Social / Proveedor con Autocompletado desde MongoDB */}
+          <div ref={providerInputContainerRef} className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-gray-300 font-medium">
+                Razón Social / Proveedor
+              </label>
+              {matchedRegisteredProvider ? (
+                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  Registrado ({matchedRegisteredProvider.count} {matchedRegisteredProvider.count === 1 ? "orden" : "órdenes"})
+                </span>
+              ) : trimmedRazon.length >= 3 ? (
+                <span className="text-[11px] text-amber-400 font-medium flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  Nuevo proveedor
+                </span>
+              ) : null}
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                required
+                value={razonSocial}
+                onChange={(e) => {
+                  setRazonSocial(e.target.value);
+                  setIsProviderDropdownOpen(true);
+                  setHighlightedIndex(-1);
+                }}
+                onFocus={() => {
+                  if (trimmedRazon.length >= 3) {
+                    setIsProviderDropdownOpen(true);
+                  }
+                }}
+                onKeyDown={handleKeyDownProvider}
+                placeholder="ej: Suministros Industriales S.A. (escribe 3 letras...)"
+                autoComplete="off"
+                className="w-full pl-3.5 pr-9 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50"
+              />
+              <Building2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
+
+            {/* Menú flotante de sugerencias */}
+            {showDropdown && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-64 overflow-y-auto bg-slate-900/95 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl divide-y divide-white/5 scrollbar-thin">
+                {searchResults.length > 0 ? (
+                  <div className="p-1.5 space-y-1">
+                    <div className="px-2.5 py-1 text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                      Proveedores sugeridos ({searchResults.length})
+                    </div>
+                    {searchResults.map((item, idx) => {
+                      const isHighlighted = highlightedIndex === idx;
+                      return (
+                        <button
+                          key={item.provider.id}
+                          type="button"
+                          onMouseEnter={() => setHighlightedIndex(idx)}
+                          onClick={() => handleSelectProvider(item.provider.name)}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                            isHighlighted
+                              ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30"
+                              : "hover:bg-white/5 text-white"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-xs text-white truncate flex items-center gap-1.5">
+                              <span>{item.provider.name}</span>
+                              {item.matchType === "exact" && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-normal">
+                                  Exacto
+                                </span>
+                              )}
+                            </div>
+                            {item.matchType === "alias" && item.matchedText !== item.provider.name && (
+                              <div className="text-[10px] text-slate-400 truncate">
+                                Alias coincidente: <span className="text-slate-300 font-mono">{item.matchedText}</span>
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-mono shrink-0 px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/10">
+                            {item.provider.count} {item.provider.count === 1 ? "OC" : "OCs"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {/* Opción para registrar como nuevo proveedor si no coincide exactamente */}
+                {showNewProviderOption && (
+                  <div className="p-1.5">
+                    <button
+                      type="button"
+                      onMouseEnter={() => setHighlightedIndex(searchResults.length)}
+                      onClick={() => {
+                        setIsProviderDropdownOpen(false);
+                        setHighlightedIndex(-1);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                        highlightedIndex === searchResults.length
+                          ? "bg-amber-500/20 text-amber-200 border border-amber-500/30"
+                          : "hover:bg-white/5 text-amber-300/90"
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold">
+                          Usar nuevo proveedor: <span className="underline decoration-amber-400/50">"{trimmedRazon}"</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Se agregará al registro automáticamente al guardar la orden
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Monto & Forma de Pago */}

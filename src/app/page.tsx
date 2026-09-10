@@ -52,6 +52,7 @@ import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo } from "@/lib/serverSync";
+import { registerNewProvider, getProvidersRegistry } from "@/lib/providersRegistry";
 
 const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -136,6 +137,9 @@ export default function OrdenesDeComprasPage() {
         setCmdFolderPath(defaultPath);
       }
     }
+
+    // Pre-cargar registro de proveedores desde MongoDB / localStorage para autocompletado instantáneo
+    getProvidersRegistry().catch(() => {});
 
     // 2. Fetch official saved path from Firestore database
     const fetchPathFromDb = async () => {
@@ -772,6 +776,15 @@ export default function OrdenesDeComprasPage() {
     resetForm();
     setIsModalOpen(false);
     setSubmitting(false);
+
+    // Registrar proveedor automáticamente en el registro local para autocompletado inmediato
+    if (dataToSave.razonSocial) {
+      try {
+        registerNewProvider(dataToSave.razonSocial);
+      } catch (e) {
+        console.warn("No se pudo registrar proveedor:", e);
+      }
+    }
   };
 
   const resetForm = () => {
