@@ -213,6 +213,14 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
   return (
     <div className={`flex min-h-screen bg-transparent text-gray-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200 ${theme === "pink" ? "pink-theme" : ""}`}>
+      {/* Accessible Skip Link for Keyboard Navigation */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-xl focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      >
+        Saltar al contenido principal
+      </a>
+
       {/* Mobile Backdrop Overlay */}
       {sidebarOpen && (
         <div
@@ -231,6 +239,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           setIsHovered(false);
           setSidebarOpen(false);
         }}
+        aria-label="Barra lateral de navegación"
         className={`fixed top-0 left-0 h-screen z-50 bg-[#0b0f19] border-r border-white/10 flex flex-col justify-between transition-[width,transform] duration-200 ease-out overflow-hidden ${
           sidebarOpen
             ? "translate-x-0 w-64 shadow-2xl"
@@ -242,7 +251,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         }`}
       >
         {/* Top Header / Branding (shrink-0) */}
-        <div className="p-3 sm:px-4 sm:py-3 border-b border-white/5 shrink-0">
+        <header className="p-3 sm:px-4 sm:py-3 border-b border-white/5 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2.5 min-w-0">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-emerald-400 p-0.5 shadow-md shadow-indigo-500/20 flex-shrink-0">
@@ -267,7 +276,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
               <X className="w-4 h-4" />
             </button>
           </div>
-        </div>
+        </header>
 
         {/* Scrollable Navigation List (flex-1 min-h-0 overflow-y-auto) */}
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-2 py-1.5 space-y-0.5">
@@ -280,7 +289,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           )}
 
           {/* Navigation Items */}
-          <nav className="space-y-0.5">
+          <nav aria-label="Navegación principal" className="space-y-0.5">
             {menuItems.map((item) => {
               const active = isActive(item.href, item.exact);
               const Icon = item.icon;
@@ -333,7 +342,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         </div>
 
         {/* Footer Info, Theme Switcher & Profile (Pinned at bottom, shrink-0) */}
-        <div className="p-2.5 border-t border-white/10 space-y-1.5 shrink-0 bg-[#080c14]">
+        <footer className="p-2.5 border-t border-white/10 space-y-1.5 shrink-0 bg-[#080c14]">
           {/* Theme Switcher Button */}
           <button
             onClick={toggleTheme}
@@ -414,13 +423,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
               )
             )}
           </div>
-        </div>
+        </footer>
       </aside>
 
       {/* Main Content Area (Wide Container) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
         {/* Mobile-Only Bar for Hamburger Menu */}
-        <div className="lg:hidden sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
+        <header role="banner" className="lg:hidden sticky top-0 z-30 bg-[#090d16]/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white focus:outline-none cursor-pointer"
@@ -437,10 +446,10 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             </div>
             <span className="font-bold text-sm text-white">Finanzas</span>
           </div>
-        </div>
+        </header>
 
         {/* Page Content - Full Width Max 1800px */}
-        <main className="flex-1 p-4 sm:p-6 md:p-8 w-full max-w-[1800px] mx-auto">
+        <main role="main" id="main-content" className="flex-1 p-4 sm:p-6 md:p-8 w-full max-w-[1800px] mx-auto">
           {children}
         </main>
       </div>

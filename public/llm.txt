@@ -1,0 +1,30 @@
+# Finanzas - Plataforma Corporativa
+> Sistema de gestión financiera, seguimiento presupuestario y control de órdenes de compra para Cinemark & Hoyts.
+
+## Descripción General
+Finanzas es una plataforma web desarrollada en Next.js (App Router) y React con integración a MongoDB en servidor dedicado (apivacas.jariel.com.ar) y Firebase Authentication. Permite administrar el ciclo de vida completo de órdenes de compra, pagos a proveedores, distribución de gastos corporativos y seguimiento de cotizaciones bancarias oficiales.
+
+## Módulos y Rutas Principales
+- `/`: Órdenes de Compra. Gestión de OCs, filtrado multicriterio, buscador inteligente con autocompletado de proveedores registrados, registro de nuevas órdenes, carga masiva y exportación.
+- `/inicio`: Dashboard ejecutivo con KPIs consolidados, órdenes recientes y cotizaciones en vivo.
+- `/calendario`: Calendario interactivo de fechas de vencimiento y programación de desembolsos.
+- `/proceso-de-liberacion`: Flujo operativo para autorizar, liberar pagos y copiar datos a portapapeles sin puntos en razones sociales (SA, SRL).
+- `/pendientes`: Seguimiento de órdenes no completadas, filtros por estado y notas operativas.
+- `/cotizaciones`: Cotizaciones oficiales del Banco Nación Argentina (Dólar Oficial, Tarjeta, Euro, etc.).
+- `/distribucion`: Cálculo porcentual y montos de asignación entre compañías (Hoyts vs CMK / Cinemark).
+- `/calculadora`: Conversión de divisas, cálculo de IVA (21%, 10.5%), retenciones y montos netos.
+- `/estadisticas`: Análisis financiero profundo por año, mes, ratios de gasto empresarial y top proveedores de CAPEX.
+- `/temporal`: Módulo de procesamiento masivo en Excel, asignación automática de compañía por Columna D y sincronización con MongoDB.
+- `/interbanking`: Automatización y descarga de comprobantes de transferencia y lotes bancarios.
+- `/seguimiento-de-ordenes`: Vista simplificada para perfiles de consulta y seguimiento operativo.
+- `/login`: Acceso autenticado mediante Firebase Auth.
+
+## Entidades de Datos Clave
+- **Orden de Compra (OC)**: Identificador único (`numOC`), número de solicitud, proveedor (`razonSocial`), monto en ARS (`monto`), empresa asignada (`Hoyts` o `CMK`), fecha (`fechaOC`, `anio`, `mes`), motivo/descripción, usuario creador y banderas de estado (`entregada`, `liberada`, `mandada`, `cancelada`).
+- **Empresas**: Hoyts y CMK (Cinemark Argentina).
+- **Proveedores**: Registro centralizado de proveedores en MongoDB con normalización de caracteres.
+
+## Integraciones Técnicas
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS, Lucide Icons.
+- **Backend API**: Node.js / Express en `https://apivacas.jariel.com.ar/api/ordenes` (MongoDB).
+- **Autenticación**: Firebase Auth.
