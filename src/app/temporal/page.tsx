@@ -26,7 +26,8 @@ import {
   Filter,
   Check,
   Briefcase,
-  Tag
+  Tag,
+  MinusCircle
 } from "lucide-react";
 
 interface ParsedRow {
@@ -66,8 +67,10 @@ interface ParsedCapexRow {
   empresa: string;
   razonSocial: string;
   monto: number;
-  status: "will_update" | "already_capex" | "not_in_db";
+  status: "will_update" | "will_remove_capex" | "already_capex" | "not_in_db";
   statusLabel: string;
+  isCapexTarget: boolean;
+  anio?: number;
 }
 
 interface MongoOrder {
@@ -93,6 +96,20 @@ export function checkIsCapexOrPct(text?: string | null): boolean {
   if (!text) return false;
   const m = text.toLowerCase().trim();
   return /\b(capex|pct)\b/i.test(m) || m.includes("capex") || /\bpct[-0-9 ]/i.test(m);
+}
+
+export function removeCapexFromMotivo(motivo?: string | null): string {
+  if (!motivo) return "";
+  let clean = motivo
+    .replace(/\s*-\s*capex\b/gi, "")
+    .replace(/\bcapex\s*-\s*/gi, "")
+    .replace(/\s*\[capex\]\s*/gi, "")
+    .replace(/\s*\(capex\)\s*/gi, "")
+    .replace(/\bcapex\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  clean = clean.replace(/^[-–—/]\s*/, "").replace(/\s*[-–—/]$/, "").trim();
+  return clean;
 }
 
 function normalizeOCKey(val: unknown): string {
@@ -238,9 +255,15 @@ export default function TemporalPage() {
   const [parsedCapexRows, setParsedCapexRows] = useState<ParsedCapexRow[]>([]);
   const [updatingCapex, setUpdatingCapex] = useState<boolean>(false);
   const [capexProgressPercent, setCapexProgressPercent] = useState<number>(0);
+  const [capexTableFilter, setCapexTableFilter] = useState<
+    "all" | "will_update" | "will_remove_capex" | "already_capex" | "not_in_db"
+  >("all");
+  const [capexSearchTerm, setCapexSearchTerm] = useState<string>("");
   const [capexResult, setCapexResult] = useState<{
     totalProcessed: number;
     modifiedCount: number;
+    willAddCount: number;
+    willRemoveCount: number;
     alreadyCount: number;
     totalMonto: number;
   } | null>(null);
@@ -331,9 +354,44 @@ export default function TemporalPage() {
       }
 
       const fileOCsSet = new Set<string>();
+      const excelCapexOCsSet = new Set<string>();
+      const seenExcelCapexOCs = new Set<string>();
       const processedImport: ParsedRow[] = [];
       const processedUpdates: ParsedUpdateRow[] = [];
       const processedCapex: ParsedCapexRow[] = [];
+
+      // Make sure database orders are loaded
+      let currentDbOrders = allOrders;
+      let currentDbMap = existingOrdersMap;
+      if (currentDbOrders.length === 0) {
+        try {
+          const res = await fetch(`${API_BASE_URL}?limit=0`, { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.ordenes)) {
+              currentDbOrders = data.ordenes;
+              const ocsMap = new Map<string, MongoOrder>();
+              const ocsSet = new Set<string>();
+              data.ordenes.forEach((o: any) => {
+                if (o.numOC) {
+                  const raw = String(o.numOC).trim().toLowerCase();
+                  const norm = normalizeOCKey(o.numOC);
+                  ocsSet.add(raw);
+                  ocsSet.add(norm);
+                  ocsMap.set(raw, o);
+                  ocsMap.set(norm, o);
+                }
+              });
+              setAllOrders(data.ordenes);
+              setExistingOCs(ocsSet);
+              setExistingOrdersMap(ocsMap);
+              currentDbMap = ocsMap;
+            }
+          }
+        } catch (e) {
+          console.warn("No se pudieron precargar las OCs en handleFileChange:", e);
+        }
+      }
 
       for (let i = 0; i < rawRows.length; i++) {
         const row = rawRows[i] || [];
@@ -374,55 +432,74 @@ export default function TemporalPage() {
           if (capexOC) {
             const ocKey = capexOC.toLowerCase();
             const normKey = normalizeOCKey(capexOC);
-            const matchedMongo = existingOrdersMap.get(ocKey) || existingOrdersMap.get(normKey);
 
-            let status: ParsedCapexRow["status"] = "will_update";
-            let statusLabel = "";
-            let currentMotivo = "";
-            let newMotivo = "";
-            let empresa = "";
-            let razonSocial = "";
-            let monto = 0;
+            // Registrar OC en el conjunto total del Excel (para la auditoría de 2026)
+            excelCapexOCsSet.add(ocKey);
+            if (normKey) excelCapexOCsSet.add(normKey);
 
-            if (!matchedMongo) {
-              status = "not_in_db";
-              statusLabel = "No existe en MongoDB";
-              currentMotivo = "-";
-              newMotivo = "-";
-              empresa = "-";
-              razonSocial = String(row[1] || "Sin datos");
-              monto = parseMontoNumber(row[5]) || 0;
-            } else {
-              currentMotivo = (matchedMongo.motivo || "").trim();
-              empresa = matchedMongo.empresa || "";
-              razonSocial = matchedMongo.razonSocial || "Sin Proveedor";
-              monto = matchedMongo.monto || 0;
+            // Deduplicar en la lista previa
+            const dedupeKey = normKey || ocKey;
+            if (!seenExcelCapexOCs.has(dedupeKey)) {
+              seenExcelCapexOCs.add(dedupeKey);
 
-              const alreadyCapex = checkIsCapexOrPct(currentMotivo);
+              const matchedMongo = currentDbMap.get(ocKey) || currentDbMap.get(normKey);
 
-              if (alreadyCapex) {
-                status = "already_capex";
-                statusLabel = "Ya tiene CAPEX / PCT";
-                newMotivo = currentMotivo;
+              let status: ParsedCapexRow["status"] = "will_update";
+              let statusLabel = "";
+              let currentMotivo = "";
+              let newMotivo = "";
+              let empresa = "";
+              let razonSocial = "";
+              let monto = 0;
+              let isCapexTarget = true;
+              let anioVal: number | undefined = undefined;
+
+              if (!matchedMongo) {
+                status = "not_in_db";
+                statusLabel = "No existe en MongoDB";
+                currentMotivo = "-";
+                newMotivo = "-";
+                empresa = "-";
+                razonSocial = String(row[1] || "Sin datos");
+                monto = parseMontoNumber(row[5]) || 0;
+                isCapexTarget = false;
               } else {
-                status = "will_update";
-                statusLabel = "Se agregará CAPEX";
-                newMotivo = currentMotivo ? `${currentMotivo} - CAPEX` : "CAPEX";
-              }
-            }
+                currentMotivo = (matchedMongo.motivo || "").trim();
+                empresa = matchedMongo.empresa || "";
+                razonSocial = matchedMongo.razonSocial || "Sin Proveedor";
+                monto = matchedMongo.monto || 0;
+                anioVal = matchedMongo.anio;
 
-            processedCapex.push({
-              numOC: capexOC,
-              colDRaw: rawColD,
-              matchedInDb: Boolean(matchedMongo),
-              currentMotivo,
-              newMotivo,
-              empresa,
-              razonSocial,
-              monto,
-              status,
-              statusLabel,
-            });
+                const alreadyCapex = checkIsCapexOrPct(currentMotivo);
+
+                if (alreadyCapex) {
+                  status = "already_capex";
+                  statusLabel = "Ya tiene CAPEX / PCT (Confirmado)";
+                  newMotivo = currentMotivo;
+                  isCapexTarget = true;
+                } else {
+                  status = "will_update";
+                  statusLabel = "Se agregará CAPEX";
+                  newMotivo = currentMotivo ? `${currentMotivo} - CAPEX` : "CAPEX";
+                  isCapexTarget = true;
+                }
+              }
+
+              processedCapex.push({
+                numOC: capexOC,
+                colDRaw: rawColD,
+                matchedInDb: Boolean(matchedMongo),
+                currentMotivo,
+                newMotivo,
+                empresa,
+                razonSocial,
+                monto,
+                status,
+                statusLabel,
+                isCapexTarget,
+                anio: anioVal,
+              });
+            }
           }
         }
 
@@ -501,6 +578,45 @@ export default function TemporalPage() {
         });
       }
 
+      // ============================================================================
+      // C. AUDITORÍA Y RECONCILIACIÓN CAPEX DE ESTE AÑO (2026):
+      // El Excel cargado es la única fuente de la verdad para CAPEX.
+      // Si una orden del año actual tiene "CAPEX" en motivo o isCapex: true en MongoDB,
+      // pero NO figura en el archivo Excel, se le remueve "CAPEX" del motivo y de isCapex.
+      // ============================================================================
+      const currentYear = new Date().getFullYear();
+      currentDbOrders.forEach((o) => {
+        const orderYear = o.anio || (o.fechaOC ? new Date(o.fechaOC).getFullYear() : null);
+        if (orderYear !== currentYear) return;
+
+        const hasCapexInDb = Boolean(o.isCapex) || /capex/i.test(o.motivo || "");
+        if (!hasCapexInDb) return;
+
+        const oKey = String(o.numOC || "").trim().toLowerCase();
+        const normKey = normalizeOCKey(o.numOC);
+        const inExcel = excelCapexOCsSet.has(oKey) || (normKey ? excelCapexOCsSet.has(normKey) : false);
+
+        if (!inExcel) {
+          const currentMotivo = (o.motivo || "").trim();
+          const cleanedMotivo = removeCapexFromMotivo(currentMotivo);
+
+          processedCapex.push({
+            numOC: o.numOC,
+            colDRaw: "-",
+            matchedInDb: true,
+            currentMotivo,
+            newMotivo: cleanedMotivo || "(Vacío)",
+            empresa: o.empresa || "",
+            razonSocial: o.razonSocial || "Sin Proveedor",
+            monto: o.monto || 0,
+            status: "will_remove_capex",
+            statusLabel: `Quitar CAPEX (No está en Excel ${currentYear})`,
+            isCapexTarget: false,
+            anio: orderYear,
+          });
+        }
+      });
+
       setParsedRows(processedImport);
       setParsedUpdateRows(processedUpdates);
       setParsedCapexRows(processedCapex);
@@ -523,20 +639,45 @@ export default function TemporalPage() {
   // 3. Computed stats for CAPEX Updates (Tab 2)
   const capexStats = useMemo(() => {
     const total = parsedCapexRows.length;
-    const willUpdate = parsedCapexRows.filter((r) => r.status === "will_update");
+    const willAdd = parsedCapexRows.filter((r) => r.status === "will_update");
+    const willRemove = parsedCapexRows.filter((r) => r.status === "will_remove_capex");
     const alreadyCapex = parsedCapexRows.filter((r) => r.status === "already_capex");
     const notInDb = parsedCapexRows.filter((r) => r.status === "not_in_db");
-    const totalMonto = willUpdate.reduce((acc, r) => acc + r.monto, 0);
+
+    const willAddMonto = willAdd.reduce((acc, r) => acc + r.monto, 0);
+    const willRemoveMonto = willRemove.reduce((acc, r) => acc + r.monto, 0);
+    const totalToModify = willAdd.length + willRemove.length;
 
     return {
       total,
-      willUpdateCount: willUpdate.length,
+      willAddCount: willAdd.length,
+      willRemoveCount: willRemove.length,
+      willUpdateCount: totalToModify,
       alreadyCapexCount: alreadyCapex.length,
       notInDbCount: notInDb.length,
-      totalMonto,
-      readyRows: willUpdate,
+      willAddMonto,
+      willRemoveMonto,
+      readyRows: [...willAdd, ...willRemove],
     };
   }, [parsedCapexRows]);
+
+  const filteredCapexRows = useMemo(() => {
+    let list = parsedCapexRows;
+    if (capexTableFilter !== "all") {
+      list = list.filter((r) => r.status === capexTableFilter);
+    }
+    if (capexSearchTerm.trim()) {
+      const q = capexSearchTerm.trim().toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.numOC.toLowerCase().includes(q) ||
+          r.razonSocial.toLowerCase().includes(q) ||
+          r.currentMotivo.toLowerCase().includes(q) ||
+          r.newMotivo.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [parsedCapexRows, capexTableFilter, capexSearchTerm]);
 
   // 4. Computed stats for Company Updates (Tab 1)
   const updateStats = useMemo(() => {
@@ -582,11 +723,17 @@ export default function TemporalPage() {
   // 6. Submit CAPEX Updates to MongoDB via POST /api/ordenes/bulk-update-capex
   const handleConfirmUpdateCapex = async () => {
     if (capexStats.willUpdateCount === 0) {
-      showToast("⚠️ No hay órdenes pendientes de asignación CAPEX.");
+      showToast("⚠️ No hay cambios de estado CAPEX pendientes de sincronizar.");
       return;
     }
 
-    if (!confirm(`¿Estás seguro de agregar 'CAPEX' a la descripción y activar el estado CAPEX de ${capexStats.willUpdateCount} órdenes en MongoDB?`)) {
+    const currentYear = new Date().getFullYear();
+    const confirmPrompt = `¿Confirmar reconciliación CAPEX en MongoDB?
+• Se agregará CAPEX a ${capexStats.willAddCount} órdenes.
+• Se quitará CAPEX de ${capexStats.willRemoveCount} órdenes del año ${currentYear} (no figuran en el archivo Excel).
+Total a sincronizar: ${capexStats.willUpdateCount} órdenes.`;
+
+    if (!confirm(confirmPrompt)) {
       return;
     }
 
@@ -607,7 +754,8 @@ export default function TemporalPage() {
         const payload = {
           updates: chunk.map((r) => ({
             numOC: r.numOC,
-            newMotivo: r.newMotivo,
+            newMotivo: r.newMotivo === "(Vacío)" ? "" : r.newMotivo,
+            isCapex: r.isCapexTarget,
           })),
         };
 
@@ -640,11 +788,13 @@ export default function TemporalPage() {
       setCapexResult({
         totalProcessed: readyRows.length,
         modifiedCount: totalModified,
+        willAddCount: capexStats.willAddCount,
+        willRemoveCount: capexStats.willRemoveCount,
         alreadyCount: capexStats.alreadyCapexCount,
-        totalMonto: capexStats.totalMonto,
+        totalMonto: capexStats.willAddMonto,
       });
 
-      showToast(`🎉 ¡Estado CAPEX asignado con éxito! Se procesaron ${readyRows.length} órdenes.`);
+      showToast(`🎉 ¡Sincronización CAPEX exitosa! +${capexStats.willAddCount} agregadas, -${capexStats.willRemoveCount} removidas.`);
 
       setParsedCapexRows([]);
       setFileName(null);
@@ -652,7 +802,7 @@ export default function TemporalPage() {
       await loadExistingOCs();
     } catch (err: any) {
       console.error("Error durante la actualización masiva de CAPEX:", err);
-      showToast(`❌ Error: ${err.message || "Fallo en la actualización masiva de CAPEX."}`);
+      showToast(`❌ Error: ${err.message || "Fallo en la sincronización de CAPEX."}`);
     } finally {
       setUpdatingCapex(false);
     }
@@ -974,23 +1124,27 @@ export default function TemporalPage() {
           <div className="p-6 rounded-3xl bg-purple-950/40 border border-purple-500/40 backdrop-blur-md animate-in fade-in space-y-3">
             <div className="flex items-center gap-3 text-purple-300 font-bold text-base">
               <CheckCircle2 className="w-6 h-6 text-purple-400" />
-              <span>¡Órdenes CAPEX identificadas y actualizadas con éxito en MongoDB!</span>
+              <span>¡Reconciliación CAPEX completada con éxito en MongoDB!</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 text-xs">
               <div className="p-3 rounded-xl bg-slate-900/60 border border-white/10">
-                <span className="text-slate-400 block mb-1">Total OCs procesadas</span>
+                <span className="text-slate-400 block mb-1">Total Modificadas</span>
                 <span className="text-lg font-bold text-white font-mono">{capexResult.totalProcessed}</span>
               </div>
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-400 block mb-1">Nuevas marcadas como CAPEX</span>
-                <span className="text-lg font-bold text-emerald-300 font-mono">+{capexResult.modifiedCount}</span>
+                <span className="text-emerald-400 block mb-1">Añadidas como CAPEX</span>
+                <span className="text-lg font-bold text-emerald-300 font-mono">+{capexResult.willAddCount}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                <span className="text-rose-400 block mb-1">Removidas (Año Actual)</span>
+                <span className="text-lg font-bold text-rose-300 font-mono">-{capexResult.willRemoveCount}</span>
               </div>
               <div className="p-3 rounded-xl bg-slate-800/60 border border-white/10">
-                <span className="text-slate-400 block mb-1">Ya tenían CAPEX o PCT</span>
+                <span className="text-slate-400 block mb-1">Confirmadas previas</span>
                 <span className="text-lg font-bold text-slate-300 font-mono">{capexResult.alreadyCount}</span>
               </div>
-              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                <span className="text-purple-300 block mb-1">Monto Total Incorporado</span>
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 col-span-2 sm:col-span-1">
+                <span className="text-purple-300 block mb-1">Monto Incorporado</span>
                 <span className="text-lg font-bold text-purple-200 font-mono truncate block">
                   {formatCurrency(capexResult.totalMonto)}
                 </span>
@@ -1118,27 +1272,35 @@ export default function TemporalPage() {
           {activeTab === "update-capex" && parsedCapexRows.length > 0 && (
             <div className="space-y-6 pt-2 animate-in fade-in">
               {/* KPIs */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="p-4 rounded-2xl bg-slate-800/50 border border-white/10">
-                  <span className="text-xs text-slate-400 block mb-1">Total OCs en Columna D</span>
+                  <span className="text-xs text-slate-400 block mb-1">Total Evaluadas</span>
                   <span className="text-xl font-bold text-white font-mono">{capexStats.total}</span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Archivo + BD 2026</span>
                 </div>
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                  <span className="text-xs text-emerald-400 block mb-1">A marcar como CAPEX</span>
-                  <span className="text-xl font-bold text-emerald-300 font-mono">{capexStats.willUpdateCount}</span>
-                  <span className="text-[11px] text-slate-400 block mt-0.5 truncate">
-                    Monto: {formatCurrency(capexStats.totalMonto)}
+                  <span className="text-xs text-emerald-400 block mb-1">Añadir CAPEX (+)</span>
+                  <span className="text-xl font-bold text-emerald-300 font-mono">+{capexStats.willAddCount}</span>
+                  <span className="text-[11px] text-slate-400 block mt-0.5 truncate" title={formatCurrency(capexStats.willAddMonto)}>
+                    Monto: {formatCurrency(capexStats.willAddMonto)}
+                  </span>
+                </div>
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                  <span className="text-xs text-rose-400 block mb-1">Quitar CAPEX (-) 2026</span>
+                  <span className="text-xl font-bold text-rose-300 font-mono">-{capexStats.willRemoveCount}</span>
+                  <span className="text-[11px] text-slate-400 block mt-0.5 truncate" title={formatCurrency(capexStats.willRemoveMonto)}>
+                    Monto: {formatCurrency(capexStats.willRemoveMonto)}
                   </span>
                 </div>
                 <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20">
-                  <span className="text-xs text-purple-300 block mb-1">Ya tenían CAPEX o PCT</span>
+                  <span className="text-xs text-purple-300 block mb-1">Confirmadas (=)</span>
                   <span className="text-xl font-bold text-purple-200 font-mono">{capexStats.alreadyCapexCount}</span>
                   <span className="text-[11px] text-slate-400 block mt-0.5">Se mantienen intactas</span>
                 </div>
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
-                  <span className="text-xs text-amber-400 block mb-1">No encontradas en BD</span>
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 col-span-2 sm:col-span-1">
+                  <span className="text-xs text-amber-400 block mb-1">No en MongoDB</span>
                   <span className="text-xl font-bold text-amber-300 font-mono">{capexStats.notInDbCount}</span>
-                  <span className="text-[11px] text-slate-400 block mt-0.5">Se omiten sin error</span>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">Omitidas sin error</span>
                 </div>
               </div>
 
@@ -1148,13 +1310,13 @@ export default function TemporalPage() {
                   <div className="flex items-center justify-between text-xs text-slate-300 font-medium">
                     <span className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                      Asignando estado CAPEX en MongoDB en lotes de 500...
+                      Sincronizando estado CAPEX en MongoDB en lotes de 500...
                     </span>
                     <span className="font-mono font-bold text-purple-400">{capexProgressPercent}%</span>
                   </div>
                   <div className="h-3 w-full rounded-full bg-slate-900 overflow-hidden border border-white/5">
                     <div
-                      className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-300 rounded-full"
+                      className="h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-emerald-500 transition-all duration-300 rounded-full"
                       style={{ width: `${capexProgressPercent}%` }}
                     />
                   </div>
@@ -1163,8 +1325,19 @@ export default function TemporalPage() {
 
               {/* Action Banner */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-slate-800/40 border border-white/10">
-                <div className="text-xs text-slate-400">
-                  Se actualizarán <strong className="text-white font-semibold">{capexStats.willUpdateCount}</strong> órdenes en MongoDB agregando <code className="text-purple-300 bg-purple-950/50 px-1 py-0.5 rounded">- CAPEX</code> a su descripción y activando su estado CAPEX.
+                <div className="text-xs text-slate-400 space-y-0.5">
+                  <div>
+                    Se sincronizarán <strong className="text-white font-semibold">{capexStats.willUpdateCount}</strong> órdenes en MongoDB:
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <span className="text-emerald-300 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> +{capexStats.willAddCount} se marcarán como CAPEX
+                    </span>
+                    <span>·</span>
+                    <span className="text-rose-300 font-semibold flex items-center gap-1">
+                      <MinusCircle className="w-3.5 h-3.5" /> -{capexStats.willRemoveCount} del año 2026 se desmarcarán
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                   <button
@@ -1190,12 +1363,12 @@ export default function TemporalPage() {
                     {updatingCapex ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Actualizando ({capexProgressPercent}%)...</span>
+                        <span>Sincronizando ({capexProgressPercent}%)...</span>
                       </>
                     ) : (
                       <>
                         <Briefcase className="w-4 h-4" />
-                        <span>Confirmar y Asignar CAPEX a {capexStats.willUpdateCount} OCs</span>
+                        <span>Confirmar Reconciliación ({capexStats.willUpdateCount} OCs)</span>
                       </>
                     )}
                   </button>
@@ -1203,31 +1376,112 @@ export default function TemporalPage() {
               </div>
 
               {/* Table Preview */}
-              <div className="rounded-2xl border border-white/10 overflow-hidden">
-                <div className="p-3 bg-slate-800/60 border-b border-white/5 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-white">Vista previa de las primeras 25 órdenes detectadas en Columna D</span>
-                  <span className="text-slate-400 font-mono">Mostrando {Math.min(parsedCapexRows.length, 25)} de {parsedCapexRows.length}</span>
+              <div className="rounded-2xl border border-white/10 overflow-hidden bg-slate-900/40">
+                {/* Table Filters Toolbar */}
+                <div className="p-3 bg-slate-800/70 border-b border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => setCapexTableFilter("all")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexTableFilter === "all"
+                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/20"
+                          : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      }`}
+                    >
+                      Todas ({parsedCapexRows.length})
+                    </button>
+                    <button
+                      onClick={() => setCapexTableFilter("will_update")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexTableFilter === "will_update"
+                          ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
+                          : "bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300"
+                      }`}
+                    >
+                      + Añadir CAPEX ({capexStats.willAddCount})
+                    </button>
+                    <button
+                      onClick={() => setCapexTableFilter("will_remove_capex")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexTableFilter === "will_remove_capex"
+                          ? "bg-rose-600 text-white shadow-md shadow-rose-600/20"
+                          : "bg-rose-500/15 hover:bg-rose-500/25 text-rose-300"
+                      }`}
+                    >
+                      - Quitar CAPEX ({capexStats.willRemoveCount})
+                    </button>
+                    <button
+                      onClick={() => setCapexTableFilter("already_capex")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexTableFilter === "already_capex"
+                          ? "bg-purple-600 text-white"
+                          : "bg-purple-500/15 hover:bg-purple-500/25 text-purple-300"
+                      }`}
+                    >
+                      = Ya CAPEX ({capexStats.alreadyCapexCount})
+                    </button>
+                    <button
+                      onClick={() => setCapexTableFilter("not_in_db")}
+                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexTableFilter === "not_in_db"
+                          ? "bg-amber-600 text-white"
+                          : "bg-amber-500/15 hover:bg-amber-500/25 text-amber-300"
+                      }`}
+                    >
+                      No en BD ({capexStats.notInDbCount})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por OC, Proveedor, Descripción..."
+                        value={capexSearchTerm}
+                        onChange={(e) => setCapexSearchTerm(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-900 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                      />
+                      {capexSearchTerm && (
+                        <button
+                          onClick={() => setCapexSearchTerm("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-slate-400 font-mono whitespace-nowrap text-[11px]">
+                      Mostrando {Math.min(filteredCapexRows.length, 100)} de {filteredCapexRows.length}
+                    </span>
+                  </div>
                 </div>
-                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+
+                {/* Table Body */}
+                <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-800/80 text-slate-400 font-semibold border-b border-white/5 uppercase text-[10px] tracking-wider sticky top-0">
+                    <thead className="bg-slate-800/90 text-slate-400 font-semibold border-b border-white/5 uppercase text-[10px] tracking-wider sticky top-0 z-10 backdrop-blur-md">
                       <tr>
                         <th className="py-2.5 px-3 w-12 text-center">#</th>
-                        <th className="py-2.5 px-3">N° OC (Col D)</th>
+                        <th className="py-2.5 px-3">N° OC</th>
+                        <th className="py-2.5 px-3 text-center">Año</th>
                         <th className="py-2.5 px-3">Proveedor</th>
                         <th className="py-2.5 px-3 text-right">Monto</th>
                         <th className="py-2.5 px-3 text-center">Empresa</th>
                         <th className="py-2.5 px-3">Descripción Actual</th>
-                        <th className="py-2.5 px-3">Nueva Descripción (con CAPEX)</th>
+                        <th className="py-2.5 px-3">Nueva Descripción</th>
                         <th className="py-2.5 px-3 text-center">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {parsedCapexRows.slice(0, 25).map((r, idx) => (
+                      {filteredCapexRows.slice(0, 100).map((r, idx) => (
                         <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
                           <td className="py-2 px-3 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
                           <td className="py-2 px-3 font-mono font-bold text-white">{r.numOC}</td>
-                          <td className="py-2 px-3 font-medium text-slate-200 truncate max-w-[180px]" title={r.razonSocial}>
+                          <td className="py-2 px-3 text-center font-mono text-slate-400 text-[11px]">
+                            {r.anio || "-"}
+                          </td>
+                          <td className="py-2 px-3 font-medium text-slate-200 truncate max-w-[160px]" title={r.razonSocial}>
                             {r.razonSocial}
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-semibold text-emerald-400 whitespace-nowrap">
@@ -1246,22 +1500,31 @@ export default function TemporalPage() {
                               <span className="text-slate-500 text-[10px]">{r.empresa || "-"}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 text-slate-400 truncate max-w-[200px]" title={r.currentMotivo}>
+                          <td className="py-2 px-3 text-slate-400 truncate max-w-[180px]" title={r.currentMotivo}>
                             {r.currentMotivo || "-"}
                           </td>
-                          <td className="py-2 px-3 truncate max-w-[220px]" title={r.newMotivo}>
+                          <td className="py-2 px-3 truncate max-w-[200px]" title={r.newMotivo}>
                             {r.status === "will_update" ? (
-                              <span className="text-purple-300 font-semibold flex items-center gap-1">
+                              <span className="text-emerald-300 font-semibold flex items-center gap-1">
+                                <span className="truncate">{r.newMotivo}</span>
+                              </span>
+                            ) : r.status === "will_remove_capex" ? (
+                              <span className="text-rose-300 font-medium flex items-center gap-1">
                                 <span className="truncate">{r.newMotivo}</span>
                               </span>
                             ) : (
                               <span className="text-slate-400">{r.newMotivo || "-"}</span>
                             )}
                           </td>
-                          <td className="py-2 px-3 text-center">
+                          <td className="py-2 px-3 text-center whitespace-nowrap">
                             {r.status === "will_update" ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                                 <CheckCircle2 className="w-3 h-3" />
+                                {r.statusLabel}
+                              </span>
+                            ) : r.status === "will_remove_capex" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                <MinusCircle className="w-3 h-3" />
                                 {r.statusLabel}
                               </span>
                             ) : r.status === "already_capex" ? (
