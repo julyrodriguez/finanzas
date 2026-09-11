@@ -2282,34 +2282,6 @@ export default function EstadisticasPage() {
         ) : (
           /* CAPEX & PCT DASHBOARD */
           <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Banner with brief info */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  <HardHat className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    Control de Inversiones de Capital (CAPEX & Proyectos PCT)
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
-                      {filteredCapexOrders.length} Órdenes
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Órdenes de compra detectadas automáticamente por contener el término <strong>CAPEX</strong> o el código de obra/proyecto <strong>PCT</strong> en su descripción.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleExportarCapexExcel}
-                disabled={displayedCapexOrders.length === 0}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-all self-start sm:self-auto cursor-pointer"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Exportar Excel ({displayedCapexOrders.length})</span>
-              </button>
-            </div>
-
             {/* ============================================================================ */}
             {/* PANEL DE PRESUPUESTO ANUAL CAPEX & CONTROL DE EJECUCIÓN                     */}
             {/* ============================================================================ */}
@@ -2566,128 +2538,10 @@ export default function EstadisticasPage() {
                   )}
                 </div>
               </div>
-
-              {/* Collapsible Section: Gastos sin Orden de Compra */}
-              <div className="rounded-2xl border border-white/10 bg-slate-800/40 overflow-hidden">
-                <div className="p-3.5 bg-slate-800/70 flex items-center justify-between text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setShowGastosList(!showGastosList)}
-                    className="flex items-center gap-2 font-semibold text-white hover:text-amber-400 transition-colors cursor-pointer"
-                  >
-                    <Receipt className="w-4 h-4 text-amber-400" />
-                    <span>Gastos sin Orden de Compra del Año {currentCapexYear}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
-                      {activeCapexGastosDirectos.length} gastos ({formatCurrency(capexBudgetStats.totalGastosDirectosMonto)})
-                    </span>
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleOpenGastoModal}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-colors cursor-pointer text-xs"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Agregar Gasto</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowGastosList(!showGastosList)}
-                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
-                      title={showGastosList ? "Ocultar lista" : "Mostrar lista"}
-                    >
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${
-                          showGastosList ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {showGastosList && (
-                  <div className="border-t border-white/5">
-                    {activeCapexGastosDirectos.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-400 space-y-2">
-                        <p>No hay gastos directos sin OC registrados para el año {currentCapexYear}.</p>
-                        <button
-                          type="button"
-                          onClick={handleOpenGastoModal}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold border border-amber-500/30 text-xs transition-colors cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Registrar primer gasto sin OC</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead className="bg-slate-800/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-white/5 sticky top-0">
-                            <tr>
-                              <th className="py-2.5 px-3 w-10 text-center">#</th>
-                              <th className="py-2.5 px-3">Fecha</th>
-                              <th className="py-2.5 px-3 text-center">Compañía</th>
-                              <th className="py-2.5 px-3">Concepto / Motivo</th>
-                              <th className="py-2.5 px-3">Proveedor / Beneficiario</th>
-                              <th className="py-2.5 px-3">Comprobante</th>
-                              <th className="py-2.5 px-3 text-right">Monto</th>
-                              <th className="py-2.5 px-3 text-center">Acción</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {activeCapexGastosDirectos.map((g, idx) => (
-                              <tr key={g._id} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="py-2 px-3 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
-                                <td className="py-2 px-3 text-slate-300 font-mono whitespace-nowrap">
-                                  {g.fecha ? new Date(g.fecha).toLocaleDateString("es-AR") : "-"}
-                                </td>
-                                <td className="py-2 px-3 text-center">
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      g.empresa === "Hoyts"
-                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                        : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                                    }`}
-                                  >
-                                    {g.empresa}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-3 font-medium text-white max-w-[240px] truncate" title={g.concepto}>
-                                  {g.concepto}
-                                </td>
-                                <td className="py-2 px-3 text-slate-300 max-w-[180px] truncate" title={g.proveedor}>
-                                  {g.proveedor || "-"}
-                                </td>
-                                <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">
-                                  {g.comprobante || "-"}
-                                </td>
-                                <td className="py-2 px-3 text-right font-mono font-bold text-amber-300 whitespace-nowrap">
-                                  {formatCurrency(g.monto)}
-                                </td>
-                                <td className="py-2 px-3 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteGastoDirecto(g._id, g.concepto)}
-                                    title="Eliminar gasto sin OC"
-                                    className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* KPI CARDS CAPEX */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Total Invertido */}
               <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-amber-500/20 backdrop-blur-sm relative overflow-hidden group">
                 <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
@@ -2714,20 +2568,6 @@ export default function EstadisticasPage() {
                 </div>
                 <div className="text-[11px] text-slate-400 mt-1">
                   {capexStats.percentOfGeneralOrders.toFixed(1)}% de todas las OCs del período
-                </div>
-              </div>
-
-              {/* Ticket Promedio */}
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-900/50 border border-white/10 backdrop-blur-sm">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                  <span>Ticket Promedio CAPEX</span>
-                  <DollarSign className="w-4 h-4 text-purple-400" />
-                </div>
-                <div className="text-xl font-bold text-white tracking-tight truncate font-mono">
-                  {formatCurrency(capexStats.avgTicket)}
-                </div>
-                <div className="text-[11px] text-purple-300/80 mt-1">
-                  Por cada orden de inversión
                 </div>
               </div>
 
@@ -2927,6 +2767,129 @@ export default function EstadisticasPage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* GASTOS SIN ORDEN DE COMPRA (Por Año) */}
+            <div className="rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md overflow-hidden">
+              <div className="p-4 sm:p-5 flex items-center justify-between border-b border-white/10 flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                      <span>Gastos sin Orden de Compra</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/30">
+                        Año {currentCapexYear}: {activeCapexGastosDirectos.length} {activeCapexGastosDirectos.length === 1 ? "gasto" : "gastos"} ({formatCurrency(capexBudgetStats.totalGastosDirectosMonto)})
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Gastos directos e inversiones de capital imputados sin N° de OC para cada complejo / compañía.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenGastoModal}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold transition-all shadow-md shadow-amber-600/20 cursor-pointer text-xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Agregar Gasto</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGastosList(!showGastosList)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title={showGastosList ? "Ocultar lista" : "Mostrar lista"}
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-200 ${
+                        showGastosList ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {showGastosList && (
+                <div>
+                  {activeCapexGastosDirectos.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-slate-400 space-y-3">
+                      <p>No hay gastos directos sin OC registrados para el año {currentCapexYear}.</p>
+                      <button
+                        type="button"
+                        onClick={handleOpenGastoModal}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold border border-amber-500/30 text-xs transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Registrar primer gasto sin OC</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-800/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-white/5 sticky top-0 backdrop-blur-sm">
+                          <tr>
+                            <th className="py-2.5 px-3 w-10 text-center">#</th>
+                            <th className="py-2.5 px-3">Fecha</th>
+                            <th className="py-2.5 px-3 text-center">Compañía</th>
+                            <th className="py-2.5 px-3">Concepto / Motivo</th>
+                            <th className="py-2.5 px-3">Proveedor / Beneficiario</th>
+                            <th className="py-2.5 px-3">Comprobante</th>
+                            <th className="py-2.5 px-3 text-right">Monto</th>
+                            <th className="py-2.5 px-3 text-center">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {activeCapexGastosDirectos.map((g, idx) => (
+                            <tr key={g._id} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
+                              <td className="py-2.5 px-3 text-slate-300 font-mono whitespace-nowrap">
+                                {g.fecha ? new Date(g.fecha).toLocaleDateString("es-AR") : "-"}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    g.empresa === "Hoyts"
+                                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                                      : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  }`}
+                                >
+                                  {g.empresa}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 font-medium text-white max-w-[240px] truncate" title={g.concepto}>
+                                {g.concepto}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-300 max-w-[180px] truncate" title={g.proveedor}>
+                                {g.proveedor || "-"}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                                {g.comprobante || "-"}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-300 whitespace-nowrap">
+                                {formatCurrency(g.monto)}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteGastoDirecto(g._id, g.concepto)}
+                                  title="Eliminar gasto sin OC"
+                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* TABLA EXPLORADORA DE ÓRDENES CAPEX & PCT */}
