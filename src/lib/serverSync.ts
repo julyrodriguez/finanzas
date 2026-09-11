@@ -124,3 +124,124 @@ export async function fetchOrdersFromMongo(params: MongoQueryParams = {}) {
     throw err;
   }
 }
+
+export interface CapexBudget {
+  _id?: string;
+  anio: number;
+  hoytsBudget: number;
+  cmkBudget: number;
+  observaciones?: string;
+  updatedAt?: string;
+}
+
+export interface CapexGastoDirecto {
+  _id: string;
+  anio: number;
+  fecha: string;
+  empresa: "Hoyts" | "CMK";
+  monto: number;
+  concepto: string;
+  proveedor?: string;
+  comprobante?: string;
+  observaciones?: string;
+  creadoPor?: string;
+  createdAt?: string;
+}
+
+/**
+ * Consulta los presupuestos CAPEX anuales por compañía.
+ */
+export async function fetchCapexBudgets(anio?: number | string): Promise<CapexBudget[]> {
+  try {
+    const q = anio && anio !== "Todos" ? `?anio=${anio}` : "";
+    const res = await fetch(`${API_BASE_URL}/capex-budget${q}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.success && Array.isArray(data.budgets) ? data.budgets : [];
+  } catch (err) {
+    console.warn("Error consultando presupuestos CAPEX:", err);
+    return [];
+  }
+}
+
+/**
+ * Guarda o actualiza el presupuesto anual CAPEX de Hoyts y CMK para un año específico.
+ */
+export async function saveCapexBudget(payload: {
+  anio: number;
+  hoytsBudget: number;
+  cmkBudget: number;
+  observaciones?: string;
+}): Promise<CapexBudget | null> {
+  const res = await fetch(`${API_BASE_URL}/capex-budget`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.budget || null;
+}
+
+/**
+ * Consulta los gastos directos CAPEX sin orden de compra.
+ */
+export async function fetchCapexGastosDirectos(params: { anio?: number | string; empresa?: string } = {}): Promise<CapexGastoDirecto[]> {
+  try {
+    const searchParams = new URLSearchParams();
+    if (params.anio && params.anio !== "Todos") searchParams.set("anio", String(params.anio));
+    if (params.empresa && params.empresa !== "Todas") searchParams.set("empresa", params.empresa);
+    const q = searchParams.toString() ? `?${searchParams.toString()}` : "";
+    const res = await fetch(`${API_BASE_URL}/capex-gastos-directos${q}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.success && Array.isArray(data.gastos) ? data.gastos : [];
+  } catch (err) {
+    console.warn("Error consultando gastos CAPEX directos:", err);
+    return [];
+  }
+}
+
+/**
+ * Registra un nuevo gasto CAPEX sin orden de compra.
+ */
+export async function createCapexGastoDirecto(payload: {
+  anio: number;
+  fecha?: string | Date;
+  empresa: "Hoyts" | "CMK";
+  monto: number;
+  concepto: string;
+  proveedor?: string;
+  comprobante?: string;
+  observaciones?: string;
+  creadoPor?: string;
+}): Promise<CapexGastoDirecto> {
+  const res = await fetch(`${API_BASE_URL}/capex-gastos-directos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.gasto;
+}
+
+/**
+ * Elimina un gasto CAPEX sin orden de compra por su ID.
+ */
+export async function deleteCapexGastoDirecto(id: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE_URL}/capex-gastos-directos/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return true;
+}

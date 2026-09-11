@@ -3,7 +3,16 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { exportToExcel } from "@/lib/exportToExcel";
-import { fetchOrdersFromMongo } from "@/lib/serverSync";
+import { 
+  fetchOrdersFromMongo,
+  fetchCapexBudgets,
+  saveCapexBudget,
+  fetchCapexGastosDirectos,
+  createCapexGastoDirecto,
+  deleteCapexGastoDirecto,
+  CapexBudget,
+  CapexGastoDirecto
+} from "@/lib/serverSync";
 import { extractProvidersFromOrders } from "@/lib/providersRegistry";
 import { 
   TrendingUp, 
@@ -35,7 +44,14 @@ import {
   ArrowDown,
   ArrowUp,
   SlidersHorizontal,
-  Briefcase
+  Briefcase,
+  Plus,
+  Trash2,
+  Settings2,
+  Wallet,
+  AlertCircle,
+  CheckCircle2,
+  Receipt
 } from "lucide-react";
 
 // ==========================================
@@ -79,6 +95,8 @@ export interface GroupedProvider {
 }
 
 const CACHE_KEY = "finanzas_estadisticas_cache_v1";
+const LOCAL_BUDGETS_KEY = "finanzas_capex_budgets_v1";
+const LOCAL_GASTOS_KEY = "finanzas_capex_gastos_v1";
 
 const MONTH_NAMES = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun", 
@@ -334,6 +352,34 @@ export default function EstadisticasPage() {
   const [capexSortOrder, setCapexSortOrder] = useState<"desc" | "asc">("desc");
   const [capexPage, setCapexPage] = useState<number>(1);
 
+  // CAPEX Budget & Gastos Directos State
+  const [capexBudgets, setCapexBudgets] = useState<Record<number, CapexBudget>>({});
+  const [capexGastosDirectos, setCapexGastosDirectos] = useState<CapexGastoDirecto[]>([]);
+  const [loadingCapexMeta, setLoadingCapexMeta] = useState<boolean>(false);
+
+  // Modals state
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState<boolean>(false);
+  const [isGastoModalOpen, setIsGastoModalOpen] = useState<boolean>(false);
+  const [savingBudget, setSavingBudget] = useState<boolean>(false);
+  const [savingGasto, setSavingGasto] = useState<boolean>(false);
+
+  // Budget modal form
+  const [budgetHoytsInput, setBudgetHoytsInput] = useState<string>("");
+  const [budgetCmkInput, setBudgetCmkInput] = useState<string>("");
+  const [budgetObsInput, setBudgetObsInput] = useState<string>("");
+
+  // Gasto directo modal form
+  const [gastoEmpresaInput, setGastoEmpresaInput] = useState<"Hoyts" | "CMK">("Hoyts");
+  const [gastoMontoInput, setGastoMontoInput] = useState<string>("");
+  const [gastoConceptoInput, setGastoConceptoInput] = useState<string>("");
+  const [gastoProveedorInput, setGastoProveedorInput] = useState<string>("");
+  const [gastoFechaInput, setGastoFechaInput] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [gastoComprobanteInput, setGastoComprobanteInput] = useState<string>("");
+  const [gastoObsInput, setGastoObsInput] = useState<string>("");
+
+  // Direct expenses list visibility toggle
+  const [showGastosList, setShowGastosList] = useState<boolean>(true);
+
   // Responsive year pills auto-scroll container
   const yearContainerRef = useRef<HTMLDivElement | null>(null);
   const activeYearRef = useRef<HTMLButtonElement | null>(null);
@@ -364,6 +410,35 @@ export default function EstadisticasPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Cargar metadatos CAPEX (Presupuestos y Gastos sin OC) desde el servidor MongoDB
+  const loadCapexMetadata = async () => {
+    try {
+      setLoadingCapexMeta(true);
+      const [budgetsRes, gastosRes] = await Promise.all([
+        fetchCapexBudgets(),
+        fetchCapexGastosDirectos(),
+      ]);
+
+      const bMap: Record<number, CapexBudget> = {};
+      budgetsRes.forEach((b) => {
+        bMap[b.anio] = b;
+      });
+      setCapexBudgets(bMap);
+      setCapexGastosDirectos(gastosRes);
+
+      try {
+        localStorage.setItem(LOCAL_BUDGETS_KEY, JSON.stringify(bMap));
+        localStorage.setItem(LOCAL_GASTOS_KEY, JSON.stringify(gastosRes));
+      } catch (err) {
+        console.warn("Error guardando en localStorage:", err);
+      }
+    } catch (err) {
+      console.warn("Error sincronizando metadata CAPEX desde MongoDB:", err);
+    } finally {
+      setLoadingCapexMeta(false);
+    }
+  };
+
   // ==========================================
   // LOCAL STORAGE INITIAL LOAD (0 FIRESTORE READS)
   // ==========================================
@@ -378,10 +453,146 @@ export default function EstadisticasPage() {
           setLastSync(parsed.lastSync || null);
         }
       }
+      const cachedB = localStorage.getItem(LOCAL_BUDGETS_KEY);
+      if (cachedB) {
+        setCapexBudgets(JSON.parse(cachedB));
+      }
+      const cachedG = localStorage.getItem(LOCAL_GASTOS_KEY);
+      if (cachedG) {
+        setCapexGastosDirectos(JSON.parse(cachedG));
+      }
     } catch (e) {
       console.error("Error cargando caché de estadísticas:", e);
     }
+
+    // Cargar metadatos de CAPEX en segundo plano
+    loadCapexMetadata();
   }, []);
+
+  // Handlers para Presupuesto Anual CAPEX
+  const handleOpenBudgetModal = () => {
+    const yearNum = selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
+    const existing = capexBudgets[yearNum];
+    setBudgetHoytsInput(existing?.hoytsBudget ? existing.hoytsBudget.toString() : "");
+    setBudgetCmkInput(existing?.cmkBudget ? existing.cmkBudget.toString() : "");
+    setBudgetObsInput(existing?.observaciones || "");
+    setIsBudgetModalOpen(true);
+  };
+
+  const handleSaveBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingBudget(true);
+    const targetYear = selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
+    try {
+      const hoytsVal = parseFloat(budgetHoytsInput.replace(/[^0-9.-]+/g, "")) || 0;
+      const cmkVal = parseFloat(budgetCmkInput.replace(/[^0-9.-]+/g, "")) || 0;
+
+      const updated = await saveCapexBudget({
+        anio: targetYear,
+        hoytsBudget: Math.max(0, hoytsVal),
+        cmkBudget: Math.max(0, cmkVal),
+        observaciones: budgetObsInput.trim(),
+      });
+
+      if (updated) {
+        const nextBudgets = {
+          ...capexBudgets,
+          [targetYear]: updated,
+        };
+        setCapexBudgets(nextBudgets);
+        try {
+          localStorage.setItem(LOCAL_BUDGETS_KEY, JSON.stringify(nextBudgets));
+        } catch (e) {}
+      }
+
+      setIsBudgetModalOpen(false);
+      showToast(`🎯 Presupuesto CAPEX ${targetYear} configurado correctamente.`);
+    } catch (err: any) {
+      console.error("Error guardando presupuesto:", err);
+      showToast(`❌ Error al guardar presupuesto: ${err.message || "Error de conexión"}`);
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  // Handlers para Gastos sin Orden de Compra
+  const handleOpenGastoModal = () => {
+    const targetYear = selectedYear !== "Todos" ? selectedYear : new Date().getFullYear().toString();
+    const defaultDate = `${targetYear}-01-15`;
+    setGastoFechaInput(defaultDate);
+    setGastoEmpresaInput("Hoyts");
+    setGastoMontoInput("");
+    setGastoConceptoInput("");
+    setGastoProveedorInput("");
+    setGastoComprobanteInput("");
+    setGastoObsInput("");
+    setIsGastoModalOpen(true);
+  };
+
+  const handleSaveGastoDirecto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingGasto(true);
+    try {
+      const montoVal = parseFloat(gastoMontoInput.replace(/[^0-9.-]+/g, "")) || 0;
+      if (montoVal <= 0) {
+        showToast("⚠️ El monto del gasto debe ser mayor a 0.");
+        setSavingGasto(false);
+        return;
+      }
+      if (!gastoConceptoInput.trim()) {
+        showToast("⚠️ Debes ingresar un concepto o descripción del gasto.");
+        setSavingGasto(false);
+        return;
+      }
+
+      const dateObj = new Date(gastoFechaInput);
+      const fallbackYear = selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
+      const targetYear = !isNaN(dateObj.getFullYear()) ? dateObj.getFullYear() : fallbackYear;
+
+      const nuevoGasto = await createCapexGastoDirecto({
+        anio: targetYear,
+        fecha: gastoFechaInput,
+        empresa: gastoEmpresaInput,
+        monto: montoVal,
+        concepto: gastoConceptoInput.trim(),
+        proveedor: gastoProveedorInput.trim(),
+        comprobante: gastoComprobanteInput.trim(),
+        observaciones: gastoObsInput.trim(),
+      });
+
+      if (nuevoGasto) {
+        const nextGastos = [nuevoGasto, ...capexGastosDirectos];
+        setCapexGastosDirectos(nextGastos);
+        try {
+          localStorage.setItem(LOCAL_GASTOS_KEY, JSON.stringify(nextGastos));
+        } catch (e) {}
+      }
+
+      setIsGastoModalOpen(false);
+      showToast(`✅ Gasto sin OC registrado para ${gastoEmpresaInput} (${targetYear}).`);
+    } catch (err: any) {
+      console.error("Error guardando gasto directo:", err);
+      showToast(`❌ Error al registrar gasto: ${err.message || "Error de conexión"}`);
+    } finally {
+      setSavingGasto(false);
+    }
+  };
+
+  const handleDeleteGastoDirecto = async (id: string, concepto: string) => {
+    if (!confirm(`¿Eliminar el gasto sin OC "${concepto}"?`)) return;
+    try {
+      await deleteCapexGastoDirecto(id);
+      const nextGastos = capexGastosDirectos.filter((g) => g._id !== id);
+      setCapexGastosDirectos(nextGastos);
+      try {
+        localStorage.setItem(LOCAL_GASTOS_KEY, JSON.stringify(nextGastos));
+      } catch (e) {}
+      showToast("🗑️ Gasto sin OC eliminado correctamente.");
+    } catch (err: any) {
+      console.error("Error eliminando gasto:", err);
+      showToast(`❌ Error al eliminar gasto: ${err.message || "Error de conexión"}`);
+    }
+  };
 
   // ==========================================
   // FETCH FROM LOCAL SERVER (MONGODB)
@@ -390,7 +601,10 @@ export default function EstadisticasPage() {
     setLoading(true);
     try {
       // Consulta directamente a nuestro servidor local (MongoDB)
-      const res = await fetchOrdersFromMongo({ limit: 0 });
+      const [res] = await Promise.all([
+        fetchOrdersFromMongo({ limit: 0 }),
+        loadCapexMetadata()
+      ]);
       if (!res || !res.success || !Array.isArray(res.ordenes)) {
         throw new Error("Respuesta inválida del servidor");
       }
@@ -903,6 +1117,92 @@ export default function EstadisticasPage() {
       topCapexProviders,
     };
   }, [filteredCapexOrders, totalFacturadoGeneral, totalOrdenesValidas]);
+
+  // Año activo para presupuestos y gastos CAPEX
+  const currentCapexYear = useMemo(() => {
+    return selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
+  }, [selectedYear]);
+
+  // Gastos directos sin OC filtrados según el año y empresa seleccionados
+  const activeCapexGastosDirectos = useMemo(() => {
+    return capexGastosDirectos.filter((g) => {
+      if (selectedYear !== "Todos" && g.anio !== Number(selectedYear)) {
+        return false;
+      }
+      if (selectedEmpresa !== "Todas" && g.empresa !== selectedEmpresa) {
+        return false;
+      }
+      return true;
+    });
+  }, [capexGastosDirectos, selectedYear, selectedEmpresa]);
+
+  // Métricas de Presupuesto Anual vs Gastos Reales (OCs + Sin OC)
+  const capexBudgetStats = useMemo(() => {
+    const budgetForYear = capexBudgets[currentCapexYear] || {
+      anio: currentCapexYear,
+      hoytsBudget: 0,
+      cmkBudget: 0,
+      observaciones: "",
+    };
+
+    const hoytsBudget = budgetForYear.hoytsBudget || 0;
+    const cmkBudget = budgetForYear.cmkBudget || 0;
+    const totalBudget = hoytsBudget + cmkBudget;
+
+    // Gastos directos sumados para el año en curso
+    const hoytsGastosDirectos = activeCapexGastosDirectos.filter((g) => g.empresa === "Hoyts");
+    const cmkGastosDirectos = activeCapexGastosDirectos.filter((g) => g.empresa === "CMK");
+
+    const hoytsGastosDirectosMonto = hoytsGastosDirectos.reduce((acc, g) => acc + g.monto, 0);
+    const cmkGastosDirectosMonto = cmkGastosDirectos.reduce((acc, g) => acc + g.monto, 0);
+    const totalGastosDirectosMonto = hoytsGastosDirectosMonto + cmkGastosDirectosMonto;
+
+    // OCs CAPEX
+    const hoytsOcMonto = capexStats.hoytsMonto;
+    const cmkOcMonto = capexStats.cmkMonto;
+    const totalOcMonto = capexStats.totalMonto;
+
+    // Total consumido / gastado por compañía y ambas
+    const hoytsTotalGastado = hoytsOcMonto + hoytsGastosDirectosMonto;
+    const cmkTotalGastado = cmkOcMonto + cmkGastosDirectosMonto;
+    const totalGastadoAmbas = hoytsTotalGastado + cmkTotalGastado;
+
+    // Saldos disponibles / restantes
+    const hoytsRestante = hoytsBudget - hoytsTotalGastado;
+    const cmkRestante = cmkBudget - cmkTotalGastado;
+    const totalRestante = totalBudget - totalGastadoAmbas;
+
+    // Porcentajes de ejecución
+    const hoytsPercent = hoytsBudget > 0 ? (hoytsTotalGastado / hoytsBudget) * 100 : 0;
+    const cmkPercent = cmkBudget > 0 ? (cmkTotalGastado / cmkBudget) * 100 : 0;
+    const totalPercent = totalBudget > 0 ? (totalGastadoAmbas / totalBudget) * 100 : 0;
+
+    return {
+      year: currentCapexYear,
+      budgetForYear,
+      hoytsBudget,
+      cmkBudget,
+      totalBudget,
+      hoytsOcMonto,
+      cmkOcMonto,
+      totalOcMonto,
+      hoytsGastosDirectosMonto,
+      cmkGastosDirectosMonto,
+      totalGastosDirectosMonto,
+      hoytsTotalGastado,
+      cmkTotalGastado,
+      totalGastadoAmbas,
+      hoytsRestante,
+      cmkRestante,
+      totalRestante,
+      hoytsPercent,
+      cmkPercent,
+      totalPercent,
+      hoytsGastosCount: hoytsGastosDirectos.length,
+      cmkGastosCount: cmkGastosDirectos.length,
+      totalGastosCount: activeCapexGastosDirectos.length,
+    };
+  }, [currentCapexYear, capexBudgets, activeCapexGastosDirectos, capexStats]);
 
   const displayedCapexOrders = useMemo(() => {
     let list = filteredCapexOrders.filter((o) => {
@@ -2010,6 +2310,382 @@ export default function EstadisticasPage() {
               </button>
             </div>
 
+            {/* ============================================================================ */}
+            {/* PANEL DE PRESUPUESTO ANUAL CAPEX & CONTROL DE EJECUCIÓN                     */}
+            {/* ============================================================================ */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-slate-900/95 via-slate-900/80 to-amber-950/20 border border-amber-500/30 backdrop-blur-md space-y-6 shadow-2xl relative overflow-hidden">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0">
+                    <Wallet className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                        Presupuesto Anual CAPEX & Control de Ejecución
+                      </h3>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/30">
+                        Año {currentCapexYear}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                      Límite presupuestario asignado por compañía para el año {currentCapexYear}. Monitorea el consumo real
+                      sumando las <strong>Órdenes de Compra</strong> y los <strong>Gastos directos sin OC</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-auto">
+                  <button
+                    onClick={handleOpenBudgetModal}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-white/10 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Settings2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Configurar Presupuesto</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenGastoModal}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-amber-600/30 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Agregar Gasto sin OC</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 3 Executive Comparative Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. TOTAL AMBAS COMPAÑÍAS */}
+                <div className="p-4 rounded-2xl bg-slate-800/60 border border-white/10 space-y-3 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-purple-400" />
+                      Total Ambas Compañías
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono font-bold">
+                      Consolidado {currentCapexYear}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">Presupuesto Anual Combinado</span>
+                    <span className="text-xl font-bold font-mono text-white">
+                      {capexBudgetStats.totalBudget > 0 ? formatCurrency(capexBudgetStats.totalBudget) : "Sin definir"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 pt-1 border-t border-white/5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Total Gastado:</span>
+                      <span className="font-mono font-bold text-amber-300">
+                        {formatCurrency(capexBudgetStats.totalGastadoAmbas)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                      <span>OCs: {formatCurrency(capexBudgetStats.totalOcMonto)}</span>
+                      <span>·</span>
+                      <span>Sin OC: {formatCurrency(capexBudgetStats.totalGastosDirectosMonto)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 font-semibold">
+                      <span className="text-slate-400">Saldo Disponible:</span>
+                      <span
+                        className={`font-mono ${
+                          capexBudgetStats.totalRestante >= 0 ? "text-emerald-400" : "text-rose-400 font-bold"
+                        }`}
+                      >
+                        {capexBudgetStats.totalBudget > 0
+                          ? formatCurrency(capexBudgetStats.totalRestante)
+                          : "-"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  {capexBudgetStats.totalBudget > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                        <span>Ejecución presupuestaria</span>
+                        <span className="font-mono font-bold text-purple-300">
+                          {capexBudgetStats.totalPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden border border-white/5">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            capexBudgetStats.totalPercent > 100
+                              ? "bg-rose-500"
+                              : capexBudgetStats.totalPercent > 80
+                              ? "bg-amber-500"
+                              : "bg-gradient-to-r from-purple-500 to-indigo-500"
+                          }`}
+                          style={{ width: `${Math.min(capexBudgetStats.totalPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. HOYTS */}
+                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                      <Building className="w-4 h-4 text-amber-400" />
+                      Hoyts
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
+                      {currentCapexYear}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">Presupuesto Asignado</span>
+                    <span className="text-xl font-bold font-mono text-white">
+                      {capexBudgetStats.hoytsBudget > 0 ? formatCurrency(capexBudgetStats.hoytsBudget) : "Sin definir"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 pt-1 border-t border-white/5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Total Gastado:</span>
+                      <span className="font-mono font-bold text-amber-300">
+                        {formatCurrency(capexBudgetStats.hoytsTotalGastado)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                      <span>OCs: {formatCurrency(capexBudgetStats.hoytsOcMonto)}</span>
+                      <span>·</span>
+                      <span>Sin OC: {formatCurrency(capexBudgetStats.hoytsGastosDirectosMonto)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 font-semibold">
+                      <span className="text-slate-400">Saldo Restante:</span>
+                      <span
+                        className={`font-mono ${
+                          capexBudgetStats.hoytsRestante >= 0 ? "text-emerald-400" : "text-rose-400 font-bold"
+                        }`}
+                      >
+                        {capexBudgetStats.hoytsBudget > 0
+                          ? formatCurrency(capexBudgetStats.hoytsRestante)
+                          : "-"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  {capexBudgetStats.hoytsBudget > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                        <span>Consumido</span>
+                        <span className="font-mono font-bold text-amber-300">
+                          {capexBudgetStats.hoytsPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden border border-white/5">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            capexBudgetStats.hoytsPercent > 100
+                              ? "bg-rose-500"
+                              : capexBudgetStats.hoytsPercent > 80
+                              ? "bg-amber-500"
+                              : "bg-amber-500"
+                          }`}
+                          style={{ width: `${Math.min(capexBudgetStats.hoytsPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. CINEMARK (CMK) */}
+                <div className="p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20 space-y-3 relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-rose-300 flex items-center gap-1.5">
+                      <Building className="w-4 h-4 text-rose-400" />
+                      CMK (Cinemark)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-mono font-bold">
+                      {currentCapexYear}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] text-slate-400 block">Presupuesto Asignado</span>
+                    <span className="text-xl font-bold font-mono text-white">
+                      {capexBudgetStats.cmkBudget > 0 ? formatCurrency(capexBudgetStats.cmkBudget) : "Sin definir"}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 pt-1 border-t border-white/5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Total Gastado:</span>
+                      <span className="font-mono font-bold text-rose-300">
+                        {formatCurrency(capexBudgetStats.cmkTotalGastado)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                      <span>OCs: {formatCurrency(capexBudgetStats.cmkOcMonto)}</span>
+                      <span>·</span>
+                      <span>Sin OC: {formatCurrency(capexBudgetStats.cmkGastosDirectosMonto)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 font-semibold">
+                      <span className="text-slate-400">Saldo Restante:</span>
+                      <span
+                        className={`font-mono ${
+                          capexBudgetStats.cmkRestante >= 0 ? "text-emerald-400" : "text-rose-400 font-bold"
+                        }`}
+                      >
+                        {capexBudgetStats.cmkBudget > 0
+                          ? formatCurrency(capexBudgetStats.cmkRestante)
+                          : "-"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  {capexBudgetStats.cmkBudget > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                        <span>Consumido</span>
+                        <span className="font-mono font-bold text-rose-300">
+                          {capexBudgetStats.cmkPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden border border-white/5">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            capexBudgetStats.cmkPercent > 100
+                              ? "bg-rose-500"
+                              : capexBudgetStats.cmkPercent > 80
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                          }`}
+                          style={{ width: `${Math.min(capexBudgetStats.cmkPercent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Collapsible Section: Gastos sin Orden de Compra */}
+              <div className="rounded-2xl border border-white/10 bg-slate-800/40 overflow-hidden">
+                <div className="p-3.5 bg-slate-800/70 flex items-center justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setShowGastosList(!showGastosList)}
+                    className="flex items-center gap-2 font-semibold text-white hover:text-amber-400 transition-colors cursor-pointer"
+                  >
+                    <Receipt className="w-4 h-4 text-amber-400" />
+                    <span>Gastos sin Orden de Compra del Año {currentCapexYear}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
+                      {activeCapexGastosDirectos.length} gastos ({formatCurrency(capexBudgetStats.totalGastosDirectosMonto)})
+                    </span>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenGastoModal}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold transition-colors cursor-pointer text-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Agregar Gasto</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowGastosList(!showGastosList)}
+                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                      title={showGastosList ? "Ocultar lista" : "Mostrar lista"}
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          showGastosList ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {showGastosList && (
+                  <div className="border-t border-white/5">
+                    {activeCapexGastosDirectos.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400 space-y-2">
+                        <p>No hay gastos directos sin OC registrados para el año {currentCapexYear}.</p>
+                        <button
+                          type="button"
+                          onClick={handleOpenGastoModal}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold border border-amber-500/30 text-xs transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Registrar primer gasto sin OC</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-800/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-white/5 sticky top-0">
+                            <tr>
+                              <th className="py-2.5 px-3 w-10 text-center">#</th>
+                              <th className="py-2.5 px-3">Fecha</th>
+                              <th className="py-2.5 px-3 text-center">Compañía</th>
+                              <th className="py-2.5 px-3">Concepto / Motivo</th>
+                              <th className="py-2.5 px-3">Proveedor / Beneficiario</th>
+                              <th className="py-2.5 px-3">Comprobante</th>
+                              <th className="py-2.5 px-3 text-right">Monto</th>
+                              <th className="py-2.5 px-3 text-center">Acción</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {activeCapexGastosDirectos.map((g, idx) => (
+                              <tr key={g._id} className="hover:bg-slate-800/30 transition-colors">
+                                <td className="py-2 px-3 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
+                                <td className="py-2 px-3 text-slate-300 font-mono whitespace-nowrap">
+                                  {g.fecha ? new Date(g.fecha).toLocaleDateString("es-AR") : "-"}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      g.empresa === "Hoyts"
+                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                        : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                    }`}
+                                  >
+                                    {g.empresa}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 font-medium text-white max-w-[240px] truncate" title={g.concepto}>
+                                  {g.concepto}
+                                </td>
+                                <td className="py-2 px-3 text-slate-300 max-w-[180px] truncate" title={g.proveedor}>
+                                  {g.proveedor || "-"}
+                                </td>
+                                <td className="py-2 px-3 text-slate-400 font-mono text-[11px]">
+                                  {g.comprobante || "-"}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-amber-300 whitespace-nowrap">
+                                  {formatCurrency(g.monto)}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteGastoDirecto(g._id, g.concepto)}
+                                    title="Eliminar gasto sin OC"
+                                    className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* KPI CARDS CAPEX */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
               {/* Total Invertido */}
@@ -2592,6 +3268,301 @@ export default function EstadisticasPage() {
                   Cerrar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Configurar Presupuesto CAPEX por Año */}
+        {isBudgetModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-slate-900 to-transparent">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <Settings2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Presupuesto Anual CAPEX</h3>
+                    <p className="text-xs text-slate-400">Año fiscal {currentCapexYear}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsBudgetModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSaveBudget} className="p-5 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-cyan-300 mb-1.5 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" /> Presupuesto Anual Hoyts ($ ARS)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={budgetHoytsInput}
+                      onChange={(e) => setBudgetHoytsInput(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-7 pr-3 py-2.5 text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Límite de gasto anual asignado a Hoyts para el año {currentCapexYear}.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-rose-300 mb-1.5 flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5" /> Presupuesto Anual Cinemark (CMK) ($ ARS)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={budgetCmkInput}
+                      onChange={(e) => setBudgetCmkInput(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-7 pr-3 py-2.5 text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Límite de gasto anual asignado a Cinemark para el año {currentCapexYear}.
+                  </p>
+                </div>
+
+                {/* Total Combinado Preview */}
+                <div className="p-3 rounded-xl bg-slate-800/50 border border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-medium">Total Ambas Compañías:</span>
+                  <span className="text-sm font-bold font-mono text-emerald-400">
+                    {formatCurrency((parseFloat(budgetHoytsInput) || 0) + (parseFloat(budgetCmkInput) || 0))}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Observaciones / Notas (Opcional)
+                  </label>
+                  <textarea
+                    value={budgetObsInput}
+                    onChange={(e) => setBudgetObsInput(e.target.value)}
+                    rows={2}
+                    placeholder="Detalles sobre la aprobación o distribución..."
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors resize-none"
+                  />
+                </div>
+
+                {/* Footer buttons */}
+                <div className="pt-3 border-t border-white/10 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBudgetModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingBudget}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {savingBudget ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Guardar Presupuesto
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Registrar Gasto Directo sin Orden de Compra */}
+        {isGastoModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 via-slate-900 to-transparent">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <Receipt className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Registrar Gasto Sin Orden de Compra</h3>
+                    <p className="text-xs text-slate-400">Gasto CAPEX directo imputado al año de la fecha</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsGastoModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSaveGastoDirecto} className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Empresa *
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setGastoEmpresaInput("Hoyts")}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                          gastoEmpresaInput === "Hoyts"
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-md shadow-cyan-500/10"
+                            : "bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-800"
+                        }`}
+                      >
+                        Hoyts
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGastoEmpresaInput("CMK")}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                          gastoEmpresaInput === "CMK"
+                            ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-md shadow-rose-500/10"
+                            : "bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-800"
+                        }`}
+                      >
+                        CMK
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Fecha del Gasto *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={gastoFechaInput}
+                      onChange={(e) => setGastoFechaInput(e.target.value)}
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Año de imputación: {gastoFechaInput ? new Date(gastoFechaInput).getFullYear() : currentCapexYear}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Monto ($ ARS) *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        required
+                        value={gastoMontoInput}
+                        onChange={(e) => setGastoMontoInput(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-7 pr-3 py-2 text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      N° Factura / Comprobante
+                    </label>
+                    <input
+                      type="text"
+                      value={gastoComprobanteInput}
+                      onChange={(e) => setGastoComprobanteInput(e.target.value)}
+                      placeholder="FC-A-0001-00012345"
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Concepto / Detalle del Gasto *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={gastoConceptoInput}
+                    onChange={(e) => setGastoConceptoInput(e.target.value)}
+                    placeholder="Ej. Renovación de lámparas proyectores, obra civil..."
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Proveedor (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={gastoProveedorInput}
+                    onChange={(e) => setGastoProveedorInput(e.target.value)}
+                    placeholder="Ej. Christie Digital, Barco, Proveedor Local..."
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Observaciones (Opcional)
+                  </label>
+                  <textarea
+                    value={gastoObsInput}
+                    onChange={(e) => setGastoObsInput(e.target.value)}
+                    rows={2}
+                    placeholder="Detalles complementarios..."
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+                  />
+                </div>
+
+                {/* Footer buttons */}
+                <div className="pt-3 border-t border-white/10 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsGastoModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingGasto}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {savingGasto ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Registrar Gasto
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
