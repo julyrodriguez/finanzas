@@ -475,9 +475,9 @@ export default function EstadisticasPage() {
   }, [orders]);
 
   // ==========================================
-  // FILTERED ORDERS
+  // SCOPED ORDERS (YEAR & EMPRESA FILTER)
   // ==========================================
-  const filteredOrders = useMemo(() => {
+  const ordersInScope = useMemo(() => {
     return orders.filter((o) => {
       if (selectedYear !== "Todos" && o.year !== Number(selectedYear)) {
         return false;
@@ -488,6 +488,14 @@ export default function EstadisticasPage() {
       return true;
     });
   }, [orders, selectedYear, selectedEmpresa]);
+
+  // ==========================================
+  // FILTERED ORDERS (EXCLUDES CANCELLED ORDERS)
+  // Non-cancelled orders used for all financial metrics, sums & rankings
+  // ==========================================
+  const filteredOrders = useMemo(() => {
+    return ordersInScope.filter((o) => !o.cancelada);
+  }, [ordersInScope]);
 
   // ==========================================
   // INTELLIGENT PROVIDER GROUPING / FUZZY CLUSTERING
@@ -718,7 +726,7 @@ export default function EstadisticasPage() {
     let pendientes = 0;
     let canceladas = 0;
 
-    filteredOrders.forEach((o) => {
+    ordersInScope.forEach((o) => {
       if (o.cancelada) canceladas++;
       else if (o.entregada) entregadas++;
       else if (o.liberada) liberadas++;
@@ -727,7 +735,7 @@ export default function EstadisticasPage() {
     });
 
     return { entregadas, liberadas, mandadas, pendientes, canceladas };
-  }, [filteredOrders]);
+  }, [ordersInScope]);
 
   // ==========================================
   // TABLE FILTERING & SORTING
@@ -772,7 +780,7 @@ export default function EstadisticasPage() {
   // CAPEX & PCT COMPUTED METRICS
   // ==========================================
   const allCapexOrders = useMemo(() => {
-    return orders.filter((o) => isCapexOrder(o));
+    return orders.filter((o) => !o.cancelada && isCapexOrder(o));
   }, [orders]);
 
   const filteredCapexOrders = useMemo(() => {
@@ -1757,7 +1765,7 @@ export default function EstadisticasPage() {
 
                 <div className="space-y-3 text-xs">
                   {/* Status Pills */}
-                  <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-white/5">
+                  <div className={`grid ${orderStatuses.canceladas > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"} gap-2 text-center pb-2 border-b border-white/5`}>
                     <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <div className="text-[10px] text-emerald-400">Liberadas / Entregadas</div>
                       <div className="font-bold text-white text-sm">
@@ -1776,6 +1784,16 @@ export default function EstadisticasPage() {
                         {orderStatuses.pendientes}
                       </div>
                     </div>
+                    {orderStatuses.canceladas > 0 && (
+                      <div className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20" title="Órdenes canceladas (no sumadas a la facturación ni estadísticas)">
+                        <div className="text-[10px] text-rose-400 flex items-center justify-center gap-1">
+                          <span>Canceladas</span>
+                        </div>
+                        <div className="font-bold text-rose-300 text-sm">
+                          {orderStatuses.canceladas}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Top Payment Methods */}
