@@ -51,7 +51,9 @@ import {
   Wallet,
   AlertCircle,
   CheckCircle2,
-  Receipt
+  Receipt,
+  ArrowRightLeft,
+  ArrowRight
 } from "lucide-react";
 
 // ==========================================
@@ -351,6 +353,7 @@ export default function EstadisticasPage() {
   const [capexSortBy, setCapexSortBy] = useState<"monto" | "fecha" | "numOC" | "proveedor">("monto");
   const [capexSortOrder, setCapexSortOrder] = useState<"desc" | "asc">("desc");
   const [capexPage, setCapexPage] = useState<number>(1);
+  const [capexMonthlySort, setCapexMonthlySort] = useState<"ranking" | "cronologico">("ranking");
 
   // CAPEX Budget & Gastos Directos State
   const [capexBudgets, setCapexBudgets] = useState<Record<number, CapexBudget>>({});
@@ -360,8 +363,13 @@ export default function EstadisticasPage() {
   // Modals state
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState<boolean>(false);
   const [isGastoModalOpen, setIsGastoModalOpen] = useState<boolean>(false);
+  const [isReasignacionModalOpen, setIsReasignacionModalOpen] = useState<boolean>(false);
+  const [isExtraCapexModalOpen, setIsExtraCapexModalOpen] = useState<boolean>(false);
+
   const [savingBudget, setSavingBudget] = useState<boolean>(false);
   const [savingGasto, setSavingGasto] = useState<boolean>(false);
+  const [savingReasignacion, setSavingReasignacion] = useState<boolean>(false);
+  const [savingExtraCapex, setSavingExtraCapex] = useState<boolean>(false);
 
   // Budget modal form
   const [budgetHoytsInput, setBudgetHoytsInput] = useState<string>("");
@@ -377,7 +385,24 @@ export default function EstadisticasPage() {
   const [gastoComprobanteInput, setGastoComprobanteInput] = useState<string>("");
   const [gastoObsInput, setGastoObsInput] = useState<string>("");
 
-  // Direct expenses list visibility toggle
+  // Reasignacion modal form
+  const [reasigOrigenInput, setReasigOrigenInput] = useState<"Hoyts" | "CMK">("Hoyts");
+  const [reasigDestinoInput, setReasigDestinoInput] = useState<"Hoyts" | "CMK">("CMK");
+  const [reasigMontoInput, setReasigMontoInput] = useState<string>("");
+  const [reasigConceptoInput, setReasigConceptoInput] = useState<string>("");
+  const [reasigFechaInput, setReasigFechaInput] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [reasigComprobanteInput, setReasigComprobanteInput] = useState<string>("");
+  const [reasigObsInput, setReasigObsInput] = useState<string>("");
+
+  // Extra CAPEX modal form
+  const [extraEmpresaInput, setExtraEmpresaInput] = useState<"Hoyts" | "CMK">("Hoyts");
+  const [extraMontoInput, setExtraMontoInput] = useState<string>("");
+  const [extraConceptoInput, setExtraConceptoInput] = useState<string>("");
+  const [extraFechaInput, setExtraFechaInput] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [extraComprobanteInput, setExtraComprobanteInput] = useState<string>("");
+  const [extraObsInput, setExtraObsInput] = useState<string>("");
+
+  // Movimientos corporativos list visibility toggle
   const [showGastosList, setShowGastosList] = useState<boolean>(true);
 
   // Responsive year pills auto-scroll container
@@ -578,8 +603,129 @@ export default function EstadisticasPage() {
     }
   };
 
+  // Handlers para Reasignación entre Compañías
+  const handleOpenReasignacionModal = () => {
+    const targetYear = selectedYear !== "Todos" ? selectedYear : new Date().getFullYear().toString();
+    const defaultDate = `${targetYear}-01-15`;
+    setReasigFechaInput(defaultDate);
+    setReasigOrigenInput("Hoyts");
+    setReasigDestinoInput("CMK");
+    setReasigMontoInput("");
+    setReasigConceptoInput("Reasignación de fondos CAPEX");
+    setReasigComprobanteInput("");
+    setReasigObsInput("");
+    setIsReasignacionModalOpen(true);
+  };
+
+  const handleSaveReasignacion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingReasignacion(true);
+    try {
+      const montoVal = parseFloat(reasigMontoInput.replace(/[^0-9.-]+/g, "")) || 0;
+      if (montoVal <= 0) {
+        showToast("⚠️ El monto a reasignar debe ser mayor a 0.");
+        setSavingReasignacion(false);
+        return;
+      }
+      if (reasigOrigenInput === reasigDestinoInput) {
+        showToast("⚠️ La empresa origen y destino no pueden ser iguales.");
+        setSavingReasignacion(false);
+        return;
+      }
+
+      const dateObj = new Date(reasigFechaInput);
+      const fallbackYear = selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
+      const targetYear = !isNaN(dateObj.getFullYear()) ? dateObj.getFullYear() : fallbackYear;
+
+      const nuevoMovimiento = await createCapexGastoDirecto({
+        anio: targetYear,
+        fecha: reasigFechaInput,
+        empresa: reasigOrigenInput,
+        empresaDestino: reasigDestinoInput,
+        tipo: "REASIGNACION",
+        monto: montoVal,
+        concepto: reasigConceptoInput.trim() || `Reasignación de ${reasigOrigenInput} a ${reasigDestinoInput}`,
+        comprobante: reasigComprobanteInput.trim(),
+        observaciones: reasigObsInput.trim(),
+      });
+
+      if (nuevoMovimiento) {
+        const nextGastos = [nuevoMovimiento, ...capexGastosDirectos];
+        setCapexGastosDirectos(nextGastos);
+        try {
+          localStorage.setItem(LOCAL_GASTOS_KEY, JSON.stringify(nextGastos));
+        } catch (e) {}
+      }
+
+      setIsReasignacionModalOpen(false);
+      showToast(`✅ Reasignación de ${reasigOrigenInput} ➔ ${reasigDestinoInput} (${targetYear}) guardada.`);
+    } catch (err: any) {
+      console.error("Error guardando reasignación:", err);
+      showToast(`❌ Error al reasignar fondos: ${err.message || "Error de conexión"}`);
+    } finally {
+      setSavingReasignacion(false);
+    }
+  };
+
+  // Handlers para Agregar Extra CAPEX
+  const handleOpenExtraCapexModal = () => {
+    const targetYear = selectedYear !== "Todos" ? selectedYear : new Date().getFullYear().toString();
+    const defaultDate = `${targetYear}-01-15`;
+    setExtraFechaInput(defaultDate);
+    setExtraEmpresaInput("Hoyts");
+    setExtraMontoInput("");
+    setExtraConceptoInput("Ampliación presupuestaria CAPEX");
+    setExtraComprobanteInput("");
+    setExtraObsInput("");
+    setIsExtraCapexModalOpen(true);
+  };
+
+  const handleSaveExtraCapex = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingExtraCapex(true);
+    try {
+      const montoVal = parseFloat(extraMontoInput.replace(/[^0-9.-]+/g, "")) || 0;
+      if (montoVal <= 0) {
+        showToast("⚠️ El monto de Extra CAPEX debe ser mayor a 0.");
+        setSavingExtraCapex(false);
+        return;
+      }
+
+      const dateObj = new Date(extraFechaInput);
+      const fallbackYear = selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
+      const targetYear = !isNaN(dateObj.getFullYear()) ? dateObj.getFullYear() : fallbackYear;
+
+      const nuevoMovimiento = await createCapexGastoDirecto({
+        anio: targetYear,
+        fecha: extraFechaInput,
+        empresa: extraEmpresaInput,
+        tipo: "EXTRA_CAPEX",
+        monto: montoVal,
+        concepto: extraConceptoInput.trim() || `Extra CAPEX para ${extraEmpresaInput}`,
+        comprobante: extraComprobanteInput.trim(),
+        observaciones: extraObsInput.trim(),
+      });
+
+      if (nuevoMovimiento) {
+        const nextGastos = [nuevoMovimiento, ...capexGastosDirectos];
+        setCapexGastosDirectos(nextGastos);
+        try {
+          localStorage.setItem(LOCAL_GASTOS_KEY, JSON.stringify(nextGastos));
+        } catch (e) {}
+      }
+
+      setIsExtraCapexModalOpen(false);
+      showToast(`✅ Extra CAPEX para ${extraEmpresaInput} (${targetYear}) registrado.`);
+    } catch (err: any) {
+      console.error("Error guardando extra CAPEX:", err);
+      showToast(`❌ Error al agregar Extra CAPEX: ${err.message || "Error de conexión"}`);
+    } finally {
+      setSavingExtraCapex(false);
+    }
+  };
+
   const handleDeleteGastoDirecto = async (id: string, concepto: string) => {
-    if (!confirm(`¿Eliminar el gasto sin OC "${concepto}"?`)) return;
+    if (!confirm(`¿Eliminar el movimiento corporativo "${concepto}"?`)) return;
     try {
       await deleteCapexGastoDirecto(id);
       const nextGastos = capexGastosDirectos.filter((g) => g._id !== id);
@@ -587,10 +733,10 @@ export default function EstadisticasPage() {
       try {
         localStorage.setItem(LOCAL_GASTOS_KEY, JSON.stringify(nextGastos));
       } catch (e) {}
-      showToast("🗑️ Gasto sin OC eliminado correctamente.");
+      showToast("🗑️ Movimiento corporativo eliminado correctamente.");
     } catch (err: any) {
-      console.error("Error eliminando gasto:", err);
-      showToast(`❌ Error al eliminar gasto: ${err.message || "Error de conexión"}`);
+      console.error("Error eliminando movimiento:", err);
+      showToast(`❌ Error al eliminar movimiento: ${err.message || "Error de conexión"}`);
     }
   };
 
@@ -1123,20 +1269,26 @@ export default function EstadisticasPage() {
     return selectedYear !== "Todos" ? Number(selectedYear) : new Date().getFullYear();
   }, [selectedYear]);
 
-  // Gastos directos sin OC filtrados según el año y empresa seleccionados
+  // Movimientos corporativos sin OC filtrados según el año y empresa seleccionados
   const activeCapexGastosDirectos = useMemo(() => {
     return capexGastosDirectos.filter((g) => {
       if (selectedYear !== "Todos" && g.anio !== Number(selectedYear)) {
         return false;
       }
-      if (selectedEmpresa !== "Todas" && g.empresa !== selectedEmpresa) {
-        return false;
+      if (selectedEmpresa !== "Todas") {
+        if (g.tipo === "REASIGNACION") {
+          if (g.empresa !== selectedEmpresa && g.empresaDestino !== selectedEmpresa) {
+            return false;
+          }
+        } else if (g.empresa !== selectedEmpresa) {
+          return false;
+        }
       }
       return true;
     });
   }, [capexGastosDirectos, selectedYear, selectedEmpresa]);
 
-  // Métricas de Presupuesto Anual vs Gastos Reales (OCs + Sin OC)
+  // Métricas de Presupuesto Anual vs Gastos Reales (OCs + Movimientos corporativos sin OC)
   const capexBudgetStats = useMemo(() => {
     const budgetForYear = capexBudgets[currentCapexYear] || {
       anio: currentCapexYear,
@@ -1145,17 +1297,49 @@ export default function EstadisticasPage() {
       observaciones: "",
     };
 
-    const hoytsBudget = budgetForYear.hoytsBudget || 0;
-    const cmkBudget = budgetForYear.cmkBudget || 0;
-    const totalBudget = hoytsBudget + cmkBudget;
+    const baseHoytsBudget = budgetForYear.hoytsBudget || 0;
+    const baseCmkBudget = budgetForYear.cmkBudget || 0;
 
-    // Gastos directos sumados para el año en curso
-    const hoytsGastosDirectos = activeCapexGastosDirectos.filter((g) => g.empresa === "Hoyts");
-    const cmkGastosDirectos = activeCapexGastosDirectos.filter((g) => g.empresa === "CMK");
+    // Movimientos del año en curso
+    const yearMovements = capexGastosDirectos.filter((g) => g.anio === currentCapexYear);
 
-    const hoytsGastosDirectosMonto = hoytsGastosDirectos.reduce((acc, g) => acc + g.monto, 0);
-    const cmkGastosDirectosMonto = cmkGastosDirectos.reduce((acc, g) => acc + g.monto, 0);
+    let hoytsGastosDirectosMonto = 0;
+    let cmkGastosDirectosMonto = 0;
+
+    let extraHoytsMonto = 0;
+    let extraCmkMonto = 0;
+
+    let reasignacionHoytsMonto = 0; // positivo si recibe fondos, negativo si cede fondos
+    let reasignacionCmkMonto = 0; // positivo si recibe fondos, negativo si cede fondos
+
+    yearMovements.forEach((m) => {
+      const monto = m.monto || 0;
+      if (m.tipo === "EXTRA_CAPEX") {
+        if (m.empresa === "Hoyts") extraHoytsMonto += monto;
+        else if (m.empresa === "CMK") extraCmkMonto += monto;
+      } else if (m.tipo === "REASIGNACION") {
+        // m.empresa es la que cede (origen), m.empresaDestino es la que recibe (destino)
+        if (m.empresa === "Hoyts") {
+          reasignacionHoytsMonto -= monto;
+          reasignacionCmkMonto += monto;
+        } else if (m.empresa === "CMK") {
+          reasignacionCmkMonto -= monto;
+          reasignacionHoytsMonto += monto;
+        }
+      } else {
+        // Gasto directo regular sin OC
+        if (m.empresa === "Hoyts") hoytsGastosDirectosMonto += monto;
+        else if (m.empresa === "CMK") cmkGastosDirectosMonto += monto;
+      }
+    });
+
     const totalGastosDirectosMonto = hoytsGastosDirectosMonto + cmkGastosDirectosMonto;
+
+    // Presupuestos Efectivos disponibles para gastar en el año:
+    // Base + Extra CAPEX asignado + Ajuste por Reasignación
+    const hoytsBudget = Math.max(0, baseHoytsBudget + extraHoytsMonto + reasignacionHoytsMonto);
+    const cmkBudget = Math.max(0, baseCmkBudget + extraCmkMonto + reasignacionCmkMonto);
+    const totalBudget = hoytsBudget + cmkBudget;
 
     // OCs CAPEX
     const hoytsOcMonto = capexStats.hoytsMonto;
@@ -1180,6 +1364,12 @@ export default function EstadisticasPage() {
     return {
       year: currentCapexYear,
       budgetForYear,
+      baseHoytsBudget,
+      baseCmkBudget,
+      extraHoytsMonto,
+      extraCmkMonto,
+      reasignacionHoytsMonto,
+      reasignacionCmkMonto,
       hoytsBudget,
       cmkBudget,
       totalBudget,
@@ -1198,11 +1388,9 @@ export default function EstadisticasPage() {
       hoytsPercent,
       cmkPercent,
       totalPercent,
-      hoytsGastosCount: hoytsGastosDirectos.length,
-      cmkGastosCount: cmkGastosDirectos.length,
-      totalGastosCount: activeCapexGastosDirectos.length,
+      totalMovimientosCount: activeCapexGastosDirectos.length,
     };
-  }, [currentCapexYear, capexBudgets, activeCapexGastosDirectos, capexStats]);
+  }, [currentCapexYear, capexBudgets, capexGastosDirectos, activeCapexGastosDirectos, capexStats]);
 
   const displayedCapexOrders = useMemo(() => {
     let list = filteredCapexOrders.filter((o) => {
@@ -2307,10 +2495,10 @@ export default function EstadisticasPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-auto">
+                <div className="flex items-center gap-2 flex-wrap self-start lg:self-auto">
                   <button
                     onClick={handleOpenBudgetModal}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-white/10 shadow-sm transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold border border-white/10 shadow-sm transition-all cursor-pointer"
                   >
                     <Settings2 className="w-3.5 h-3.5 text-amber-400" />
                     <span>Configurar Presupuesto</span>
@@ -2318,10 +2506,26 @@ export default function EstadisticasPage() {
 
                   <button
                     onClick={handleOpenGastoModal}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-amber-600/30 transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>+ Agregar Gasto sin OC</span>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Gasto sin OC</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenReasignacionModal}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 hover:text-white text-xs font-bold border border-purple-500/30 shadow-sm transition-all cursor-pointer"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Reasignación</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenExtraCapexModal}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-xs font-bold border border-emerald-500/30 shadow-sm transition-all cursor-pointer"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Extra CAPEX</span>
                   </button>
                 </div>
               </div>
@@ -2345,6 +2549,14 @@ export default function EstadisticasPage() {
                     <span className="text-xl font-bold font-mono text-white">
                       {capexBudgetStats.totalBudget > 0 ? formatCurrency(capexBudgetStats.totalBudget) : "Sin definir"}
                     </span>
+                    {(capexBudgetStats.extraHoytsMonto + capexBudgetStats.extraCmkMonto) > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-slate-400 font-mono mt-0.5">
+                        <span>Base: {formatCurrency(capexBudgetStats.baseHoytsBudget + capexBudgetStats.baseCmkBudget)}</span>
+                        <span className="text-emerald-400 font-semibold">
+                          +{formatCurrency(capexBudgetStats.extraHoytsMonto + capexBudgetStats.extraCmkMonto)} Extra CAPEX
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1 pt-1 border-t border-white/5 text-xs">
@@ -2411,10 +2623,25 @@ export default function EstadisticasPage() {
                   </div>
 
                   <div>
-                    <span className="text-[11px] text-slate-400 block">Presupuesto Asignado</span>
+                    <span className="text-[11px] text-slate-400 block">Presupuesto Vigente</span>
                     <span className="text-xl font-bold font-mono text-white">
                       {capexBudgetStats.hoytsBudget > 0 ? formatCurrency(capexBudgetStats.hoytsBudget) : "Sin definir"}
                     </span>
+                    {(capexBudgetStats.extraHoytsMonto > 0 || capexBudgetStats.reasignacionHoytsMonto !== 0) && (
+                      <div className="flex items-center gap-1 flex-wrap text-[10px] text-slate-400 font-mono mt-0.5">
+                        <span>Base: {formatCurrency(capexBudgetStats.baseHoytsBudget)}</span>
+                        {capexBudgetStats.extraHoytsMonto > 0 && (
+                          <span className="text-emerald-400 font-semibold">
+                            +{formatCurrency(capexBudgetStats.extraHoytsMonto)} Extra
+                          </span>
+                        )}
+                        {capexBudgetStats.reasignacionHoytsMonto !== 0 && (
+                          <span className={capexBudgetStats.reasignacionHoytsMonto > 0 ? "text-purple-300 font-semibold" : "text-amber-400 font-semibold"}>
+                            {capexBudgetStats.reasignacionHoytsMonto > 0 ? "+" : ""}{formatCurrency(capexBudgetStats.reasignacionHoytsMonto)} Reasig.
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1 pt-1 border-t border-white/5 text-xs">
@@ -2481,10 +2708,25 @@ export default function EstadisticasPage() {
                   </div>
 
                   <div>
-                    <span className="text-[11px] text-slate-400 block">Presupuesto Asignado</span>
+                    <span className="text-[11px] text-slate-400 block">Presupuesto Vigente</span>
                     <span className="text-xl font-bold font-mono text-white">
                       {capexBudgetStats.cmkBudget > 0 ? formatCurrency(capexBudgetStats.cmkBudget) : "Sin definir"}
                     </span>
+                    {(capexBudgetStats.extraCmkMonto > 0 || capexBudgetStats.reasignacionCmkMonto !== 0) && (
+                      <div className="flex items-center gap-1 flex-wrap text-[10px] text-slate-400 font-mono mt-0.5">
+                        <span>Base: {formatCurrency(capexBudgetStats.baseCmkBudget)}</span>
+                        {capexBudgetStats.extraCmkMonto > 0 && (
+                          <span className="text-emerald-400 font-semibold">
+                            +{formatCurrency(capexBudgetStats.extraCmkMonto)} Extra
+                          </span>
+                        )}
+                        {capexBudgetStats.reasignacionCmkMonto !== 0 && (
+                          <span className={capexBudgetStats.reasignacionCmkMonto > 0 ? "text-purple-300 font-semibold" : "text-amber-400 font-semibold"}>
+                            {capexBudgetStats.reasignacionCmkMonto > 0 ? "+" : ""}{formatCurrency(capexBudgetStats.reasignacionCmkMonto)} Reasig.
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-1 pt-1 border-t border-white/5 text-xs">
@@ -2627,7 +2869,7 @@ export default function EstadisticasPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Evolución de Inversión CAPEX */}
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
                       <Calendar className="w-4 h-4" />
@@ -2635,81 +2877,155 @@ export default function EstadisticasPage() {
                     <div>
                       <h3 className="font-semibold text-white text-sm">
                         {selectedYear === "Todos"
-                          ? "Evolución Interanual de Inversiones CAPEX (2015-2026)"
+                          ? "Evolución Interanual CAPEX (2015-2026)"
                           : `Evolución Mensual CAPEX (${selectedYear})`}
                       </h3>
                       <p className="text-[10px] text-slate-400">
-                        {selectedYear === "Todos"
-                          ? "Distribución histórica de OCs y montos por año"
-                          : "Cantidad de órdenes CAPEX creadas por mes"}
+                        Arriba: por orden de OC · Abajo: por montos
                       </p>
                     </div>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium">
-                    {selectedYear === "Todos" ? "Por Años" : "12 Meses"}
-                  </span>
+
+                  {/* Toggle: Mayor a Menor vs Cronológico */}
+                  <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-white/10 text-[10px] self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCapexMonthlySort("ranking")}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexMonthlySort === "ranking"
+                          ? "bg-amber-500 text-slate-950 shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Mayor a Menor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCapexMonthlySort("cronologico")}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        capexMonthlySort === "cronologico"
+                          ? "bg-amber-500 text-slate-950 shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {selectedYear === "Todos" ? "Por Años" : "Ene - Dic"}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Chart Bars */}
-                {selectedYear === "Todos" ? (
-                  <div className="h-40 flex items-end justify-between gap-1 pt-4 pb-2 px-1">
-                    {capexStats.sortedYears.map((y) => {
-                      const heightPercent = capexStats.maxYearOrders > 0 ? (y.orders / capexStats.maxYearOrders) * 100 : 0;
-                      return (
-                        <div key={y.year} className="flex-1 flex flex-col items-center gap-1 group relative">
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
-                            <p className="font-bold text-white">Año {y.year}</p>
-                            <p className="text-amber-400 font-bold">{y.orders} OCs CAPEX</p>
-                            <p className="text-emerald-400 font-mono">{formatCurrency(y.monto)}</p>
-                          </div>
+                {/* Double Bar Charts: Arriba (OCs) & Abajo (Montos) */}
+                {(() => {
+                  const isAllYears = selectedYear === "Todos";
+                  const itemsBase = isAllYears ? capexStats.sortedYears : capexStats.months;
+                  const maxOrders = isAllYears ? capexStats.maxYearOrders : capexStats.maxMonthOrders;
+                  const maxMonto = isAllYears ? capexStats.maxYearMonto : capexStats.maxMonthMonto;
 
-                          <div className="w-full bg-slate-800 rounded-t h-28 flex items-end overflow-hidden">
-                            <div
-                              className={`w-full transition-all duration-300 ${
-                                y.orders > 0
-                                  ? "bg-gradient-to-t from-amber-600 to-orange-400 group-hover:from-amber-500 group-hover:to-orange-300"
-                                  : "bg-transparent"
-                              }`}
-                              style={{ height: `${Math.max(heightPercent, y.orders > 0 ? 8 : 0)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-400 group-hover:text-white font-mono transition-colors">
-                            {String(y.year).slice(2)}
+                  const itemsForOrders = capexMonthlySort === "ranking"
+                    ? [...itemsBase].sort((a: any, b: any) => b.orders - a.orders)
+                    : itemsBase;
+
+                  const itemsForMonto = capexMonthlySort === "ranking"
+                    ? [...itemsBase].sort((a: any, b: any) => b.monto - a.monto)
+                    : itemsBase;
+
+                  return (
+                    <div className="space-y-4 pt-1">
+                      {/* 1. SECCIÓN ARRIBA: BARRAS POR ÓRDENES DE COMPRA (OC) */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-amber-300 flex items-center gap-1.5 text-[11px]">
+                            <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
+                            <span>
+                              {capexMonthlySort === "ranking" ? "Barras ordenadas por Cantidad de OCs" : "Cantidad de Órdenes de Compra (OCs)"}
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-amber-400/90 font-mono font-bold">
+                            Total: {capexStats.totalOrders} OCs
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="h-40 flex items-end justify-between gap-1 pt-4 pb-2 px-1">
-                    {capexStats.months.map((m) => {
-                      const heightPercent = capexStats.maxMonthOrders > 0 ? (m.orders / capexStats.maxMonthOrders) * 100 : 0;
-                      return (
-                        <div key={m.index} className="flex-1 flex flex-col items-center gap-1 group relative">
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
-                            <p className="font-bold text-white">{m.name}</p>
-                            <p className="text-amber-400 font-bold">{m.orders} OCs CAPEX</p>
-                            <p className="text-emerald-400 font-mono">{formatCurrency(m.monto)}</p>
-                          </div>
 
-                          <div className="w-full bg-slate-800 rounded-t h-28 flex items-end overflow-hidden">
-                            <div
-                              className={`w-full transition-all duration-300 ${
-                                m.orders > 0
-                                  ? "bg-gradient-to-t from-amber-600 to-orange-400 group-hover:from-amber-500 group-hover:to-orange-300"
-                                  : "bg-transparent"
-                              }`}
-                              style={{ height: `${Math.max(heightPercent, m.orders > 0 ? 8 : 0)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-400 group-hover:text-white transition-colors">
-                            {m.name}
+                        <div className="h-28 flex items-end justify-between gap-1 pt-3 pb-1 px-0.5">
+                          {itemsForOrders.map((item: any) => {
+                            const label = isAllYears ? String(item.year).slice(2) : item.name;
+                            const fullLabel = isAllYears ? `Año ${item.year}` : item.name;
+                            const heightPercent = maxOrders > 0 ? (item.orders / maxOrders) * 100 : 0;
+                            return (
+                              <div key={`orders-${isAllYears ? item.year : item.index}`} className="flex-1 flex flex-col items-center gap-1 group relative">
+                                {/* Tooltip */}
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
+                                  <p className="font-bold text-white">{fullLabel}</p>
+                                  <p className="text-amber-400 font-bold">{item.orders} OCs CAPEX</p>
+                                  <p className="text-emerald-400 font-mono">{formatCurrency(item.monto)}</p>
+                                </div>
+
+                                <div className="w-full bg-slate-800/80 rounded-t h-20 flex items-end overflow-hidden">
+                                  <div
+                                    className={`w-full transition-all duration-300 ${
+                                      item.orders > 0
+                                        ? "bg-gradient-to-t from-amber-600 to-orange-400 group-hover:from-amber-500 group-hover:to-orange-300"
+                                        : "bg-transparent"
+                                    }`}
+                                    style={{ height: `${Math.max(heightPercent, item.orders > 0 ? 8 : 0)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-slate-400 group-hover:text-amber-300 font-mono transition-colors">
+                                  {label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 2. SECCIÓN ABAJO: BARRAS POR MONTOS ($ ARS) */}
+                      <div className="space-y-1.5 pt-3 border-t border-white/5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-emerald-300 flex items-center gap-1.5 text-[11px]">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>
+                              {capexMonthlySort === "ranking" ? "Barras ordenadas por Montos ($ ARS)" : "Inversión por Montos ($ ARS)"}
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                            Total: {formatCurrency(capexStats.totalMonto)}
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+
+                        <div className="h-28 flex items-end justify-between gap-1 pt-3 pb-1 px-0.5">
+                          {itemsForMonto.map((item: any) => {
+                            const label = isAllYears ? String(item.year).slice(2) : item.name;
+                            const fullLabel = isAllYears ? `Año ${item.year}` : item.name;
+                            const heightPercent = maxMonto > 0 ? (item.monto / maxMonto) * 100 : 0;
+                            return (
+                              <div key={`monto-${isAllYears ? item.year : item.index}`} className="flex-1 flex flex-col items-center gap-1 group relative">
+                                {/* Tooltip */}
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg border border-white/20 whitespace-nowrap z-20 pointer-events-none shadow-xl">
+                                  <p className="font-bold text-white">{fullLabel}</p>
+                                  <p className="text-emerald-400 font-bold font-mono">{formatCurrency(item.monto)}</p>
+                                  <p className="text-slate-400">{item.orders} OCs CAPEX</p>
+                                </div>
+
+                                <div className="w-full bg-slate-800/80 rounded-t h-20 flex items-end overflow-hidden">
+                                  <div
+                                    className={`w-full transition-all duration-300 ${
+                                      item.monto > 0
+                                        ? "bg-gradient-to-t from-emerald-600 to-teal-400 group-hover:from-emerald-500 group-hover:to-teal-300"
+                                        : "bg-transparent"
+                                    }`}
+                                    style={{ height: `${Math.max(heightPercent, item.monto > 0 ? 8 : 0)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-slate-400 group-hover:text-emerald-300 font-mono transition-colors">
+                                  {label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Top Proveedores en CAPEX & PCT */}
@@ -2769,7 +3085,7 @@ export default function EstadisticasPage() {
               </div>
             </div>
 
-            {/* GASTOS SIN ORDEN DE COMPRA (Por Año) */}
+            {/* MOVIMIENTOS CORPORATIVOS SIN OC (Por Año) */}
             <div className="rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md overflow-hidden">
               <div className="p-4 sm:p-5 flex items-center justify-between border-b border-white/10 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
@@ -2778,30 +3094,49 @@ export default function EstadisticasPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                      <span>Gastos sin Orden de Compra</span>
+                      <span>Movimientos corporativos sin OC</span>
                       <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/30">
-                        Año {currentCapexYear}: {activeCapexGastosDirectos.length} {activeCapexGastosDirectos.length === 1 ? "gasto" : "gastos"} ({formatCurrency(capexBudgetStats.totalGastosDirectosMonto)})
+                        Año {currentCapexYear}: {activeCapexGastosDirectos.length} {activeCapexGastosDirectos.length === 1 ? "movimiento" : "movimientos"}
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Gastos directos e inversiones de capital imputados sin N° de OC para cada complejo / compañía.
+                      Gastos directos, reasignaciones de fondos entre compañías y ampliaciones Extra CAPEX del año {currentCapexYear}.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={handleOpenGastoModal}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold transition-all shadow-md shadow-amber-600/20 cursor-pointer text-xs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/30 transition-all cursor-pointer text-xs"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Agregar Gasto</span>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Gasto Directo</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenReasignacionModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-semibold border border-purple-500/30 transition-all cursor-pointer text-xs"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Reasignación</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenExtraCapexModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-semibold border border-emerald-500/30 transition-all cursor-pointer text-xs"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Extra CAPEX</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setShowGastosList(!showGastosList)}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer ml-1"
                     title={showGastosList ? "Ocultar lista" : "Mostrar lista"}
                   >
                     <ChevronDown
@@ -2817,15 +3152,33 @@ export default function EstadisticasPage() {
                 <div>
                   {activeCapexGastosDirectos.length === 0 ? (
                     <div className="p-8 text-center text-xs text-slate-400 space-y-3">
-                      <p>No hay gastos directos sin OC registrados para el año {currentCapexYear}.</p>
-                      <button
-                        type="button"
-                        onClick={handleOpenGastoModal}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold border border-amber-500/30 text-xs transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Registrar primer gasto sin OC</span>
-                      </button>
+                      <p>No hay movimientos corporativos sin OC registrados para el año {currentCapexYear}.</p>
+                      <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+                        <button
+                          type="button"
+                          onClick={handleOpenGastoModal}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-semibold border border-amber-500/30 text-xs transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Registrar Gasto Directo</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleOpenReasignacionModal}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 font-semibold border border-purple-500/30 text-xs transition-colors cursor-pointer"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          <span>Reasignar Fondos</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleOpenExtraCapexModal}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 font-semibold border border-emerald-500/30 text-xs transition-colors cursor-pointer"
+                        >
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          <span>Agregar Extra CAPEX</span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="overflow-x-auto max-h-80 overflow-y-auto">
@@ -2834,56 +3187,96 @@ export default function EstadisticasPage() {
                           <tr>
                             <th className="py-2.5 px-3 w-10 text-center">#</th>
                             <th className="py-2.5 px-3">Fecha</th>
-                            <th className="py-2.5 px-3 text-center">Compañía</th>
+                            <th className="py-2.5 px-3 text-center">Tipo</th>
+                            <th className="py-2.5 px-3 text-center">Compañía / Flujo</th>
                             <th className="py-2.5 px-3">Concepto / Motivo</th>
-                            <th className="py-2.5 px-3">Proveedor / Beneficiario</th>
+                            <th className="py-2.5 px-3">Proveedor / Ref</th>
                             <th className="py-2.5 px-3">Comprobante</th>
                             <th className="py-2.5 px-3 text-right">Monto</th>
                             <th className="py-2.5 px-3 text-center">Acción</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {activeCapexGastosDirectos.map((g, idx) => (
-                            <tr key={g._id} className="hover:bg-slate-800/40 transition-colors">
-                              <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
-                              <td className="py-2.5 px-3 text-slate-300 font-mono whitespace-nowrap">
-                                {g.fecha ? new Date(g.fecha).toLocaleDateString("es-AR") : "-"}
-                              </td>
-                              <td className="py-2.5 px-3 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    g.empresa === "Hoyts"
-                                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                                      : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                                  }`}
-                                >
-                                  {g.empresa}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 font-medium text-white max-w-[240px] truncate" title={g.concepto}>
-                                {g.concepto}
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-300 max-w-[180px] truncate" title={g.proveedor}>
-                                {g.proveedor || "-"}
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
-                                {g.comprobante || "-"}
-                              </td>
-                              <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-300 whitespace-nowrap">
-                                {formatCurrency(g.monto)}
-                              </td>
-                              <td className="py-2.5 px-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteGastoDirecto(g._id, g.concepto)}
-                                  title="Eliminar gasto sin OC"
-                                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                          {activeCapexGastosDirectos.map((g, idx) => {
+                            const isReasig = g.tipo === "REASIGNACION";
+                            const isExtra = g.tipo === "EXTRA_CAPEX";
+                            const destino = g.empresaDestino || (g.empresa === "Hoyts" ? "CMK" : "Hoyts");
+
+                            return (
+                              <tr key={g._id} className="hover:bg-slate-800/40 transition-colors">
+                                <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px]">{idx + 1}</td>
+                                <td className="py-2.5 px-3 text-slate-300 font-mono whitespace-nowrap">
+                                  {g.fecha ? new Date(g.fecha).toLocaleDateString("es-AR") : "-"}
+                                </td>
+                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                  {isReasig ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                      Reasignación
+                                    </span>
+                                  ) : isExtra ? (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                      Extra CAPEX
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                      Gasto Directo
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                  {isReasig ? (
+                                    <div className="inline-flex items-center gap-1 font-mono text-xs font-bold">
+                                      <span className={g.empresa === "Hoyts" ? "text-amber-300" : "text-rose-300"}>
+                                        {g.empresa}
+                                      </span>
+                                      <ArrowRight className="w-3 h-3 text-purple-400" />
+                                      <span className={destino === "Hoyts" ? "text-amber-300" : "text-rose-300"}>
+                                        {destino}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                        g.empresa === "Hoyts"
+                                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                          : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                      }`}
+                                    >
+                                      {isExtra ? `+ ${g.empresa}` : g.empresa}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-medium text-white max-w-[240px] truncate" title={g.concepto}>
+                                  {g.concepto}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-300 max-w-[160px] truncate" title={g.proveedor}>
+                                  {g.proveedor || "-"}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                                  {g.comprobante || "-"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap">
+                                  {isReasig ? (
+                                    <span className="text-purple-300 font-mono">⇄ {formatCurrency(g.monto)}</span>
+                                  ) : isExtra ? (
+                                    <span className="text-emerald-400 font-mono font-bold">+{formatCurrency(g.monto)}</span>
+                                  ) : (
+                                    <span className="text-amber-300 font-mono">{formatCurrency(g.monto)}</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteGastoDirecto(g._id, g.concepto)}
+                                    title="Eliminar movimiento corporativo"
+                                    className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -3529,7 +3922,351 @@ export default function EstadisticasPage() {
             </div>
           </div>
         )}
-      </div>
-    </AppLayout>
+
+      {/* Modal: Reasignación entre Compañías */}
+      {isReasignacionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-purple-500/10 via-slate-900 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Reasignación de Fondos CAPEX</h3>
+                  <p className="text-xs text-slate-400">Transfiere presupuesto entre compañías (Año {currentCapexYear})</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsReasignacionModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveReasignacion} className="p-5 space-y-4">
+              {/* Transfer Direction Flow */}
+              <div className="p-3.5 rounded-xl bg-slate-800/60 border border-white/5 space-y-2">
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  Sentido de la Transferencia
+                </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <label className="text-[10px] text-slate-400 block mb-1">Cede fondos (Origen)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newOrigen = reasigOrigenInput === "Hoyts" ? "CMK" : "Hoyts";
+                        setReasigOrigenInput(newOrigen);
+                        setReasigDestinoInput(newOrigen === "Hoyts" ? "CMK" : "Hoyts");
+                      }}
+                      className={`w-full py-2 px-3 rounded-xl font-bold text-xs border transition-all text-center ${
+                        reasigOrigenInput === "Hoyts"
+                          ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                          : "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                      }`}
+                    >
+                      {reasigOrigenInput}
+                    </button>
+                  </div>
+
+                  <div className="pt-4 text-purple-400">
+                    <ArrowRight className="w-5 h-5" />
+                  </div>
+
+                  <div className="flex-1">
+                    <label className="text-[10px] text-slate-400 block mb-1">Recibe fondos (Destino)</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newDestino = reasigDestinoInput === "Hoyts" ? "CMK" : "Hoyts";
+                        setReasigDestinoInput(newDestino);
+                        setReasigOrigenInput(newDestino === "Hoyts" ? "CMK" : "Hoyts");
+                      }}
+                      className={`w-full py-2 px-3 rounded-xl font-bold text-xs border transition-all text-center ${
+                        reasigDestinoInput === "Hoyts"
+                          ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                          : "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                      }`}
+                    >
+                      {reasigDestinoInput}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500 text-center">
+                  Se restarán fondos de <strong>{reasigOrigenInput}</strong> y se incrementará el límite de <strong>{reasigDestinoInput}</strong>.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Monto a Transferir ($ ARS) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.01"
+                      required
+                      value={reasigMontoInput}
+                      onChange={(e) => setReasigMontoInput(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-7 pr-3 py-2 text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Fecha *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={reasigFechaInput}
+                    onChange={(e) => setReasigFechaInput(e.target.value)}
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Concepto / Motivo de la Reasignación *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reasigConceptoInput}
+                  onChange={(e) => setReasigConceptoInput(e.target.value)}
+                  placeholder="Ej. Compensación por atraso obra complejos..."
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  N° Comprobante / Ref. Interna (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={reasigComprobanteInput}
+                  onChange={(e) => setReasigComprobanteInput(e.target.value)}
+                  placeholder="Ej. MEMO-FIN-2026-004"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Observaciones (Opcional)
+                </label>
+                <textarea
+                  value={reasigObsInput}
+                  onChange={(e) => setReasigObsInput(e.target.value)}
+                  rows={2}
+                  placeholder="Notas complementarias..."
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Footer buttons */}
+              <div className="pt-3 border-t border-white/10 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsReasignacionModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingReasignacion}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingReasignacion ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar Reasignación
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Agregar Extra CAPEX */}
+      {isExtraCapexModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 via-slate-900 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Agregar Extra CAPEX</h3>
+                  <p className="text-xs text-slate-400">Incrementa el presupuesto asignado para el año {currentCapexYear}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsExtraCapexModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveExtraCapex} className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Compañía Beneficiaria *
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExtraEmpresaInput("Hoyts")}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        extraEmpresaInput === "Hoyts"
+                          ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-md shadow-cyan-500/10"
+                          : "bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-800"
+                      }`}
+                    >
+                      Hoyts
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExtraEmpresaInput("CMK")}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        extraEmpresaInput === "CMK"
+                          ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-md shadow-rose-500/10"
+                          : "bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-800"
+                      }`}
+                    >
+                      CMK
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Fecha de Asignación *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={extraFechaInput}
+                    onChange={(e) => setExtraFechaInput(e.target.value)}
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Monto Adicional Extra ($ ARS) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.01"
+                    required
+                    value={extraMontoInput}
+                    onChange={(e) => setExtraMontoInput(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-7 pr-3 py-2 text-white font-mono text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Aumenta el total para gastar de <strong>{extraEmpresaInput}</strong> en este año fiscal.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Concepto / Aprobación *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={extraConceptoInput}
+                  onChange={(e) => setExtraConceptoInput(e.target.value)}
+                  placeholder="Ej. Aprobación adicional Directorio Q2..."
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  N° Acta / Resolución / Comprobante (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={extraComprobanteInput}
+                  onChange={(e) => setExtraComprobanteInput(e.target.value)}
+                  placeholder="Ej. RES-DIR-2026-08"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Observaciones (Opcional)
+                </label>
+                <textarea
+                  value={extraObsInput}
+                  onChange={(e) => setExtraObsInput(e.target.value)}
+                  rows={2}
+                  placeholder="Detalles sobre el origen del fondo o condiciones..."
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Footer buttons */}
+              <div className="pt-3 border-t border-white/10 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExtraCapexModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingExtraCapex}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingExtraCapex ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Agregar Extra CAPEX
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  </AppLayout>
   );
 }

@@ -139,6 +139,8 @@ export interface CapexGastoDirecto {
   anio: number;
   fecha: string;
   empresa: "Hoyts" | "CMK";
+  empresaDestino?: "Hoyts" | "CMK" | "";
+  tipo?: "GASTO" | "REASIGNACION" | "EXTRA_CAPEX";
   monto: number;
   concepto: string;
   proveedor?: string;
@@ -165,14 +167,14 @@ export async function fetchCapexBudgets(anio?: number | string): Promise<CapexBu
 }
 
 /**
- * Guarda o actualiza el presupuesto anual CAPEX de Hoyts y CMK para un año específico.
+ * Guarda o actualiza el presupuesto anual de una compañía en MongoDB.
  */
 export async function saveCapexBudget(payload: {
   anio: number;
-  hoytsBudget: number;
-  cmkBudget: number;
+  hoytsBudget?: number;
+  cmkBudget?: number;
   observaciones?: string;
-}): Promise<CapexBudget | null> {
+}): Promise<CapexBudget> {
   const res = await fetch(`${API_BASE_URL}/capex-budget`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -183,11 +185,11 @@ export async function saveCapexBudget(payload: {
     throw new Error(err.error || `HTTP ${res.status}`);
   }
   const data = await res.json();
-  return data.budget || null;
+  return data.budget;
 }
 
 /**
- * Consulta los gastos directos CAPEX sin orden de compra.
+ * Consulta los gastos CAPEX directos sin orden de compra.
  */
 export async function fetchCapexGastosDirectos(params: { anio?: number | string; empresa?: string } = {}): Promise<CapexGastoDirecto[]> {
   try {
@@ -206,12 +208,14 @@ export async function fetchCapexGastosDirectos(params: { anio?: number | string;
 }
 
 /**
- * Registra un nuevo gasto CAPEX sin orden de compra.
+ * Registra un nuevo gasto CAPEX sin orden de compra o movimiento corporativo.
  */
 export async function createCapexGastoDirecto(payload: {
   anio: number;
   fecha?: string | Date;
   empresa: "Hoyts" | "CMK";
+  empresaDestino?: "Hoyts" | "CMK" | "";
+  tipo?: "GASTO" | "REASIGNACION" | "EXTRA_CAPEX";
   monto: number;
   concepto: string;
   proveedor?: string;
