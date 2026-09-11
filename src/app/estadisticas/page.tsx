@@ -353,7 +353,6 @@ export default function EstadisticasPage() {
   const [capexSortBy, setCapexSortBy] = useState<"monto" | "fecha" | "numOC" | "proveedor">("monto");
   const [capexSortOrder, setCapexSortOrder] = useState<"desc" | "asc">("desc");
   const [capexPage, setCapexPage] = useState<number>(1);
-  const [capexMonthlySort, setCapexMonthlySort] = useState<"ranking" | "cronologico">("ranking");
 
   // CAPEX Budget & Gastos Directos State
   const [capexBudgets, setCapexBudgets] = useState<Record<number, CapexBudget>>({});
@@ -2503,30 +2502,6 @@ export default function EstadisticasPage() {
                     <Settings2 className="w-3.5 h-3.5 text-amber-400" />
                     <span>Configurar Presupuesto</span>
                   </button>
-
-                  <button
-                    onClick={handleOpenGastoModal}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Gasto sin OC</span>
-                  </button>
-
-                  <button
-                    onClick={handleOpenReasignacionModal}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 hover:text-white text-xs font-bold border border-purple-500/30 shadow-sm transition-all cursor-pointer"
-                  >
-                    <ArrowRightLeft className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Reasignación</span>
-                  </button>
-
-                  <button
-                    onClick={handleOpenExtraCapexModal}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 hover:text-white text-xs font-bold border border-emerald-500/30 shadow-sm transition-all cursor-pointer"
-                  >
-                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Extra CAPEX</span>
-                  </button>
                 </div>
               </div>
 
@@ -2881,52 +2856,18 @@ export default function EstadisticasPage() {
                           : `Evolución Mensual CAPEX (${selectedYear})`}
                       </h3>
                       <p className="text-[10px] text-slate-400">
-                        Arriba: por orden de OC · Abajo: por montos
+                        Enero a Diciembre · Arriba: por orden de OC · Abajo: por montos
                       </p>
                     </div>
-                  </div>
-
-                  {/* Toggle: Mayor a Menor vs Cronológico */}
-                  <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-white/10 text-[10px] self-start sm:self-auto">
-                    <button
-                      type="button"
-                      onClick={() => setCapexMonthlySort("ranking")}
-                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                        capexMonthlySort === "ranking"
-                          ? "bg-amber-500 text-slate-950 shadow-sm"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      Mayor a Menor
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCapexMonthlySort("cronologico")}
-                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                        capexMonthlySort === "cronologico"
-                          ? "bg-amber-500 text-slate-950 shadow-sm"
-                          : "text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      {selectedYear === "Todos" ? "Por Años" : "Ene - Dic"}
-                    </button>
                   </div>
                 </div>
 
                 {/* Double Bar Charts: Arriba (OCs) & Abajo (Montos) */}
                 {(() => {
                   const isAllYears = selectedYear === "Todos";
-                  const itemsBase = isAllYears ? capexStats.sortedYears : capexStats.months;
+                  const items = isAllYears ? capexStats.sortedYears : capexStats.months;
                   const maxOrders = isAllYears ? capexStats.maxYearOrders : capexStats.maxMonthOrders;
                   const maxMonto = isAllYears ? capexStats.maxYearMonto : capexStats.maxMonthMonto;
-
-                  const itemsForOrders = capexMonthlySort === "ranking"
-                    ? [...itemsBase].sort((a: any, b: any) => b.orders - a.orders)
-                    : itemsBase;
-
-                  const itemsForMonto = capexMonthlySort === "ranking"
-                    ? [...itemsBase].sort((a: any, b: any) => b.monto - a.monto)
-                    : itemsBase;
 
                   return (
                     <div className="space-y-4 pt-1">
@@ -2935,9 +2876,7 @@ export default function EstadisticasPage() {
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-amber-300 flex items-center gap-1.5 text-[11px]">
                             <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
-                            <span>
-                              {capexMonthlySort === "ranking" ? "Barras ordenadas por Cantidad de OCs" : "Cantidad de Órdenes de Compra (OCs)"}
-                            </span>
+                            <span>Cantidad de Órdenes de Compra (OCs)</span>
                           </span>
                           <span className="text-[10px] text-amber-400/90 font-mono font-bold">
                             Total: {capexStats.totalOrders} OCs
@@ -2945,7 +2884,7 @@ export default function EstadisticasPage() {
                         </div>
 
                         <div className="h-28 flex items-end justify-between gap-1 pt-3 pb-1 px-0.5">
-                          {itemsForOrders.map((item: any) => {
+                          {items.map((item: any) => {
                             const label = isAllYears ? String(item.year).slice(2) : item.name;
                             const fullLabel = isAllYears ? `Año ${item.year}` : item.name;
                             const heightPercent = maxOrders > 0 ? (item.orders / maxOrders) * 100 : 0;
@@ -2982,9 +2921,7 @@ export default function EstadisticasPage() {
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-emerald-300 flex items-center gap-1.5 text-[11px]">
                             <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>
-                              {capexMonthlySort === "ranking" ? "Barras ordenadas por Montos ($ ARS)" : "Inversión por Montos ($ ARS)"}
-                            </span>
+                            <span>Inversión por Montos ($ ARS)</span>
                           </span>
                           <span className="text-[10px] text-emerald-400 font-mono font-bold">
                             Total: {formatCurrency(capexStats.totalMonto)}
@@ -2992,7 +2929,7 @@ export default function EstadisticasPage() {
                         </div>
 
                         <div className="h-28 flex items-end justify-between gap-1 pt-3 pb-1 px-0.5">
-                          {itemsForMonto.map((item: any) => {
+                          {items.map((item: any) => {
                             const label = isAllYears ? String(item.year).slice(2) : item.name;
                             const fullLabel = isAllYears ? `Año ${item.year}` : item.name;
                             const heightPercent = maxMonto > 0 ? (item.monto / maxMonto) * 100 : 0;
