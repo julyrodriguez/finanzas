@@ -296,8 +296,10 @@ function parseMonto(val: unknown): number {
  * Detects if an order belongs to CAPEX or PCT investments.
  * Checks for "CAPEX" or "PCT" (case-insensitive) in the order's description / motivo.
  */
-export function isCapexOrder(order?: { motivo?: string } | null): boolean {
-  if (!order || !order.motivo) return false;
+export function isCapexOrder(order?: { motivo?: string; isCapex?: boolean } | null): boolean {
+  if (!order) return false;
+  if (order.isCapex) return true;
+  if (!order.motivo) return false;
   const m = order.motivo.toLowerCase();
   return /\b(capex|pct)\b/i.test(m) || m.includes("capex") || /\bpct[-0-9 ]/i.test(m);
 }
