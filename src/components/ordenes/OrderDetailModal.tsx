@@ -366,8 +366,8 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
     }
     if (orden.entregada) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 font-bold text-xs">
-          <span className="w-2 h-2 rounded-full bg-purple-400" />
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-bold text-xs">
+          <span className="w-2 h-2 rounded-full bg-blue-400" />
           Entregada
         </span>
       );

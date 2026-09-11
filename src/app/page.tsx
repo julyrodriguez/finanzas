@@ -1402,7 +1402,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   { id: "Pendientes", label: "Pendientes", dot: "bg-slate-400" },
                   { id: "Mandadas", label: "Mandadas", dot: "bg-amber-400" },
                   { id: "Liberadas", label: "Liberadas", dot: "bg-emerald-400" },
-                  { id: "Entregadas", label: "Entregadas", dot: "bg-indigo-400" },
+                  { id: "Entregadas", label: "Entregadas", dot: "bg-blue-400" },
                 ] as const
               ).map((est) => {
                 const isSelected = filterEstado === est.id;
@@ -1454,8 +1454,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               <span>Liberada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-indigo-500/10 text-indigo-300 px-2.5 py-1 rounded-xl border border-indigo-500/30 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            <span className="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-xl border border-blue-500/30 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
               <span>Entregada</span>
             </span>
             <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/30 font-medium">

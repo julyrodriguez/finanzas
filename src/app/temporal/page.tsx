@@ -1760,7 +1760,7 @@ Total a sincronizar: ${capexStats.willUpdateCount} órdenes.`;
 
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-slate-800/40 border border-white/10">
                 <div className="text-xs text-slate-400">
-                  Se importarán <strong className="text-white font-semibold">{importStats.readyCount}</strong> órdenes nuevas con estado <strong className="text-emerald-400">Entregada / Finalizada</strong>.
+                  Se importarán <strong className="text-white font-semibold">{importStats.readyCount}</strong> órdenes nuevas con estado <strong className="text-blue-400">Entregada / Finalizada</strong>.
                 </div>
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                   <button
@@ -1953,7 +1953,7 @@ Total a sincronizar: ${capexStats.willUpdateCount} órdenes.`;
                           </td>
                           <td className="py-2 px-3 text-slate-300 text-[11px]">{o.creadoPor}</td>
                           <td className="py-2 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
                               Entregada
                             </span>
                           </td>

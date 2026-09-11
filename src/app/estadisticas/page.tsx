@@ -3480,7 +3480,7 @@ export default function EstadisticasPage() {
                   <tbody className="divide-y divide-white/5">
                     {activeProviderModal.orders.map((o) => {
                       let estadoBadge = (
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-500/15 text-slate-300 border border-slate-500/30">
                           Pendiente
                         </span>
                       );
@@ -3492,19 +3492,19 @@ export default function EstadisticasPage() {
                         );
                       } else if (o.entregada) {
                         estadoBadge = (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-300 border border-blue-500/30">
                             Entregada
                           </span>
                         );
                       } else if (o.liberada) {
                         estadoBadge = (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                             Liberada
                           </span>
                         );
                       } else if (o.mandada) {
                         estadoBadge = (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30">
                             Mandada
                           </span>
                         );

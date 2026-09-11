@@ -69,8 +69,8 @@ export const STATUS_CONFIG: Record<
   entregada: {
     label: "Entregada",
     description: "Pago / comprobante entregado",
-    badgeClass: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:border-emerald-400/50",
-    dotClass: "bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+    badgeClass: "bg-blue-500/10 text-blue-400 border-blue-500/30 hover:border-blue-400/50",
+    dotClass: "bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]",
     icon: PackageCheck,
   },
   cancelada: {

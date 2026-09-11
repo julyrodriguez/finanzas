@@ -758,12 +758,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-teal-500/10 border border-teal-500/20 space-y-1 shadow-sm">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-teal-300 flex items-center gap-1.5">
-                <PackageCheck className="w-3.5 h-3.5 text-teal-400" />
+            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-1 shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+                <PackageCheck className="w-3.5 h-3.5 text-blue-400" />
                 📦 Entregadas
               </span>
-              <div className="text-2xl font-black text-teal-400 font-mono">
+              <div className="text-2xl font-black text-blue-400 font-mono">
                 {stats.countEntregadas}
               </div>
               <p className="text-[10.5px] text-slate-400">
@@ -1085,14 +1085,14 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         {/* Estado Entrega / Pago */}
                         <div className={`p-3 rounded-xl border flex items-center gap-3 ${
                           orden.entregada 
-                            ? "bg-teal-950/50 border-teal-500/70 text-teal-300 shadow-sm"
+                            ? "bg-blue-950/50 border-blue-500/70 text-blue-300 shadow-sm"
                             : orden.liberada
                             ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
                             : "bg-[#0d1322] border-slate-700 text-slate-400"
                         }`}>
                           <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-black ${
                             orden.entregada 
-                              ? "bg-teal-400 text-black shadow-[0_0_10px_rgba(45,212,191,0.5)]" 
+                              ? "bg-blue-400 text-black shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
                               : orden.liberada
                               ? "bg-emerald-500 text-black"
                               : "bg-slate-700 text-slate-300"
@@ -1105,7 +1105,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                                 Entrega / Pago
                               </span>
                               {orden.entregada ? (
-                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-teal-500/25 text-teal-300 border border-teal-500/40">
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-blue-500/25 text-blue-300 border border-blue-500/40">
                                   ENTREGADA
                                 </span>
                               ) : orden.liberada ? (
