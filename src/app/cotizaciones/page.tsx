@@ -1381,8 +1381,9 @@ export default function CotizacionesPage() {
     const qtyColWidth = 110;
     const tableWidth = itemColWidth + qtyColWidth + providers.length * (colWidth * 2);
     
+    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
     const width = Math.max(1000, tableWidth + padding * 2);
-    const contentHeight = 60 + (items.length * itemRowHeight) + 75; // Headers + rows + totals (increased height to 75)
+    const contentHeight = 60 + (activeItems.length * itemRowHeight) + 75; // Headers + rows + totals (increased height to 75)
     
     const height = headerHeight + contentHeight + padding * 2;
     canvas.width = width;
@@ -1530,7 +1531,7 @@ export default function CotizacionesPage() {
     ctx.strokeRect(padding, startY, tableWidth, contentHeight);
 
     // Draw zebra background rows & cell content
-    items.forEach((item, idx) => {
+    activeItems.forEach((item, idx) => {
       const rowY = startY + 60 + idx * itemRowHeight;
 
       // Draw horizontal line separator
@@ -1701,18 +1702,18 @@ export default function CotizacionesPage() {
       });
       html += `</tr>`;
 
-      // Item Rows
-      items.forEach((item, idx) => {
-        const isExcluded = excludedItemIds.includes(item.id);
-        const bgRow = isExcluded ? "#f1f5f9" : (idx % 2 === 0 ? "#ffffff" : "#f8fafc");
+      // Active Item Rows (Excluded items are completely omitted from Excel output)
+      const activeItems = items.filter(item => !excludedItemIds.includes(item.id));
+      activeItems.forEach((item, idx) => {
+        const bgRow = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
         const row = [
-          (item.name || "Ítem sin nombre") + (isExcluded ? " [EXCLUIDO]" : ""),
+          item.name || "Ítem sin nombre",
           `${item.targetQuantity} ${item.baseUnit}`
         ];
 
-        html += `<tr style="background-color: ${bgRow}; border-bottom: 1px solid #e2e8f0; ${isExcluded ? 'color: #94a3b8; opacity: 0.6;' : ''}">`;
-        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-weight: bold; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#0f172a'};">${item.name || "Ítem sin nombre"}${isExcluded ? ' <span style="font-size: 8pt; color: #94a3b8; font-weight: normal;">(Excluido)</span>' : ''}</td>`;
-        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#475569'};">${item.targetQuantity} ${item.baseUnit}</td>`;
+        html += `<tr style="background-color: ${bgRow}; border-bottom: 1px solid #e2e8f0;">`;
+        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-weight: bold; color: #0f172a;">${item.name || "Ítem sin nombre"}</td>`;
+        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #475569;">${item.targetQuantity} ${item.baseUnit}</td>`;
 
         providers.forEach(prov => {
           const quote = prov.quotes[item.id];
@@ -1747,7 +1748,7 @@ export default function CotizacionesPage() {
             }
 
             // Formatted Total for HTML
-            let totalHtmlText = `<span style="font-weight: bold; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#0f172a'};">${formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>`;
+            let totalHtmlText = `<span style="font-weight: bold; color: #0f172a;">${formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>`;
             if (quote.presentationType === "package") {
               totalHtmlText += `<br/><span style="font-size: 8pt; color: #64748b;">${quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x${presentationsCount.toFixed(useRealLots ? 0 : 1)})</span>`;
             }
@@ -1758,11 +1759,11 @@ export default function CotizacionesPage() {
               totalHtmlText += `<br/><span style="font-size: 8pt; color: #4b5563; font-style: italic; background-color: #f3f4f6; padding: 2px 4px; border-radius: 4px; display: inline-block; margin-top: 4px;">${quote.specification}</span>`;
             }
 
-            const isItemWinner = !isExcluded && highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-            const isStrongPointWinner = !isExcluded && highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+            const isItemWinner = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+            const isStrongPointWinner = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
             const isCellHighlighted = isItemWinner || isStrongPointWinner;
 
-            const itemBg = isExcluded ? "#f1f5f9" : (isCellHighlighted ? "#c6efce" : "#fcfcfc");
+            const itemBg = isCellHighlighted ? "#c6efce" : "#fcfcfc";
             const itemHighlightTag = isItemWinner 
               ? `<br/><span style="font-size: 7.5pt; color: #006100; font-weight: bold; background-color: #a7f3d0; padding: 1px 4px; border-radius: 3px;">★ Mejor precio</span>` 
               : isStrongPointWinner 
@@ -1770,12 +1771,12 @@ export default function CotizacionesPage() {
                 : "";
 
             row.push(unitTextText, totalTextText);
-            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#334155'};">${unitHtmlText}</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; color: #334155;">${unitHtmlText}</td>`;
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; background-color: ${itemBg};">${totalHtmlText}${itemHighlightTag}</td>`;
           } else {
             row.push("-", "-");
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle;">-</td>`;
-            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle; background-color: ${isExcluded ? '#f1f5f9' : '#fcfcfc'};">-</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle; background-color: #fcfcfc;">-</td>`;
           }
         });
 
