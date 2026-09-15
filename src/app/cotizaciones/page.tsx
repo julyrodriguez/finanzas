@@ -50,7 +50,10 @@ import {
   Clipboard,
   Download,
   FileUp,
-  Check
+  Check,
+  Paintbrush,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -185,6 +188,8 @@ export default function CotizacionesPage() {
   const [showImgModal, setShowImgModal] = useState<boolean>(false);
   const [generatedImgUrl, setGeneratedImgUrl] = useState<string | null>(null);
   const [convertCurrencies, setConvertCurrencies] = useState<boolean>(false);
+  // Highlight cheapest option in Comparative Matrix: "none" | "company" | "item"
+  const [highlightMode, setHighlightMode] = useState<"none" | "company" | "item">("none");
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -1233,12 +1238,81 @@ export default function CotizacionesPage() {
       allQuoted: itemsQuotedCount === items.length
     };
   });
+  // Calculate cheapest provider overall (for highlightMode === "company")
+  const providerCostComparisons = useMemo(() => {
+    return providers.map(prov => {
+      let totalBC = 0;
+      let itemsQuoted = 0;
+      items.forEach(item => {
+        const quote = prov.quotes[item.id];
+        if (quote && quote.price > 0) {
+          const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+          totalBC += totalBaseCurrency;
+          itemsQuoted++;
+        }
+      });
+      return {
+        providerId: prov.id,
+        totalBC,
+        itemsQuoted
+      };
+    });
+  }, [providers, items, exchangeRate, baseCurrency, useRealLots]);
+
+  const cheapestProviderId = useMemo(() => {
+    if (providers.length <= 1) return null;
+    const valid = providerCostComparisons.filter(p => p.itemsQuoted > 0 && p.totalBC > 0);
+    if (valid.length === 0) return null;
+    const maxQuoted = Math.max(...valid.map(p => p.itemsQuoted));
+    const candidates = valid.filter(p => p.itemsQuoted === maxQuoted);
+    candidates.sort((a, b) => a.totalBC - b.totalBC);
+    return candidates[0]?.providerId || null;
+  }, [providers.length, providerCostComparisons]);
+
+  // Map of item.id -> array of providerIds that offer the lowest cost for that item
+  const cheapestProvidersPerItem = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    if (providers.length <= 1) return map;
+
+    items.forEach(item => {
+      let minCost = Infinity;
+      const providerCosts: { provId: string; cost: number }[] = [];
+
+      providers.forEach(prov => {
+        const quote = prov.quotes[item.id];
+        if (quote && quote.price > 0) {
+          const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
+          providerCosts.push({ provId: prov.id, cost: totalBaseCurrency });
+          if (totalBaseCurrency < minCost) {
+            minCost = totalBaseCurrency;
+          }
+        }
+      });
+
+      if (minCost < Infinity && providerCosts.length > 0) {
+        map[item.id] = providerCosts
+          .filter(p => Math.abs(p.cost - minCost) < 0.001)
+          .map(p => p.provId);
+      }
+    });
+
+    return map;
+  }, [items, providers, exchangeRate, baseCurrency, useRealLots]);
 
 
 
-
-
-
+  // Move items order in comparative matrix and export
+  const moveItem = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+    setItems(prev => {
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+  };
 
   // Helper formatting values
   const formatCurrencyValue = (val: number, curr: "ARS" | "USD" = baseCurrency) => {
@@ -1642,9 +1716,13 @@ export default function CotizacionesPage() {
               totalHtmlText += `<br/><span style="font-size: 8pt; color: #4b5563; font-style: italic; background-color: #f3f4f6; padding: 2px 4px; border-radius: 4px; display: inline-block; margin-top: 4px;">${quote.specification}</span>`;
             }
 
+            const isItemWinner = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+            const itemBg = isItemWinner ? "#c6efce" : "#fcfcfc";
+            const itemHighlightTag = isItemWinner ? `<br/><span style="font-size: 7.5pt; color: #006100; font-weight: bold; background-color: #a7f3d0; padding: 1px 4px; border-radius: 3px;">★ Mejor precio</span>` : "";
+
             row.push(unitTextText, totalTextText);
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle;">${unitHtmlText}</td>`;
-            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; background-color: #fcfcfc;">${totalHtmlText}</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; background-color: ${itemBg};">${totalHtmlText}${itemHighlightTag}</td>`;
           } else {
             row.push("-", "-");
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle;">-</td>`;
@@ -1680,10 +1758,13 @@ export default function CotizacionesPage() {
             cellHtml += `<div style="font-weight: bold; color: #15803d;">${formatCurrencyValue(totalData.totalUSD, "USD")}</div>`;
           }
 
+          const isCompanyWinner = highlightMode === "company" && prov.id === cheapestProviderId;
+          const totalCellBg = isCompanyWinner ? "#c6efce" : "#e2e8f0";
+          const companyBadge = isCompanyWinner ? `<div style="font-size: 8pt; color: #006100; font-weight: 800; margin-top: 3px;">★ Más Conveniente</div>` : "";
 
           totalRow.push("-", totalText);
           html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; color: #64748b; vertical-align: middle;">-</td>`;
-          html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; vertical-align: middle; background-color: #e2e8f0;">${cellHtml}</td>`;
+          html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; vertical-align: middle; background-color: ${totalCellBg};">${cellHtml}${companyBadge}</td>`;
         } else {
           totalRow.push("-", "-");
           html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; color: #94a3b8; vertical-align: middle;">-</td>`;
@@ -2567,6 +2648,24 @@ export default function CotizacionesPage() {
                   >
                     Lotes: {useRealLots ? "Enteros" : "Fracción"}
                   </button>
+                  <button
+                    onClick={() => {
+                      setHighlightMode(prev => {
+                        if (prev === "none") return "company";
+                        if (prev === "company") return "item";
+                        return "none";
+                      });
+                    }}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border text-center ${
+                      highlightMode !== "none"
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
+                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
+                    }`}
+                    title="Alternar resaltado: Ninguno / Por Empresa / Por Ítem"
+                  >
+                    <Paintbrush className="w-3.5 h-3.5" />
+                    Pintar: {highlightMode === "none" ? "Ninguno" : highlightMode === "company" ? "Por Empresa" : "Por Ítem"}
+                  </button>
                 </div>
                 <div className="flex items-center justify-center sm:justify-start gap-3 text-xs text-gray-400 font-medium py-1 sm:py-0">
                   <span>TC: 1 USD = ${exchangeRate} ARS</span>
@@ -2603,11 +2702,35 @@ export default function CotizacionesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {items.map((item) => (
+                  {items.map((item, idx) => (
                     <tr key={item.id} className="group hover:bg-white/[0.01] transition-colors align-middle border-b border-white/5">
-                      {/* Item column (truncated if very long, hover title) */}
-                      <td className="p-4 max-w-[250px] truncate left-0 sticky bg-[#0c121e] group-hover:bg-[#141b2a] transition-colors z-10 border-r border-white/10" title={item.name}>
-                        <span className="font-bold text-white text-sm">{item.name || "Ítem sin nombre"}</span>
+                      {/* Item column with reorder buttons */}
+                      <td className="p-3 max-w-[280px] left-0 sticky bg-[#0c121e] group-hover:bg-[#141b2a] transition-colors z-10 border-r border-white/10">
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => moveItem(idx, -1)}
+                              className="p-0.5 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors"
+                              title="Mover ítem arriba"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === items.length - 1}
+                              onClick={() => moveItem(idx, 1)}
+                              className="p-0.5 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors"
+                              title="Mover ítem abajo"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <span className="font-bold text-white text-sm truncate" title={item.name}>
+                            {item.name || "Ítem sin nombre"}
+                          </span>
+                        </div>
                       </td>
                       {/* Quantity column */}
                       <td className="p-4 text-center font-mono text-xs text-gray-300 whitespace-nowrap">
@@ -2638,6 +2761,8 @@ export default function CotizacionesPage() {
                         const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
                         const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
 
+                        const isCheapestItem = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+
                         return (
                           <Fragment key={prov.id}>
                             {/* Price Unit */}
@@ -2653,9 +2778,20 @@ export default function CotizacionesPage() {
                               </div>
                             </td>
                             {/* Price Total */}
-                            <td className="p-4 border-l border-white/5 text-center align-middle font-mono text-xs text-gray-200 bg-white/[0.01]">
+                            <td className={`p-4 border-l text-center align-middle font-mono text-xs transition-colors ${
+                              isCheapestItem
+                                ? "border-emerald-500/30 bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/30 text-emerald-300"
+                                : "border-white/5 text-gray-200 bg-white/[0.01]"
+                            }`}>
                               <div className="space-y-0.5">
-                                <span className="font-bold text-white">{formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>
+                                <span className={`font-bold ${isCheapestItem ? "text-emerald-400 font-extrabold" : "text-white"}`}>
+                                  {formatCurrencyValue(displayTotalCost, displayTotalCurrency)}
+                                </span>
+                                {isCheapestItem && (
+                                  <span className="inline-block text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded mt-0.5">
+                                    Mejor precio
+                                  </span>
+                                )}
                                 {quote.presentationType === "package" && (
                                   <span className="text-[9px] text-gray-400 block font-normal leading-tight">
                                     {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
@@ -2694,16 +2830,26 @@ export default function CotizacionesPage() {
 
                       const hasARS = totalData.totalARS > 0;
                       const hasUSD = totalData.totalUSD > 0;
+                      const isCompanyWinner = highlightMode === "company" && prov.id === cheapestProviderId;
 
                       return (
                         <Fragment key={prov.id}>
                           {/* Unit price total (empty column) */}
                           <td className="p-4 text-center border-l border-white/10 text-gray-500 font-normal">-</td>
                           {/* Total price sum */}
-                          <td className="p-4 text-center border-l border-white/5 bg-[#101725]/80 text-white font-mono text-xs font-semibold">
+                          <td className={`p-4 text-center border-l font-mono text-xs font-semibold transition-colors ${
+                            isCompanyWinner
+                              ? "border-emerald-500/40 bg-emerald-950/40 ring-1 ring-inset ring-emerald-500/40 text-emerald-300"
+                              : "border-white/5 bg-[#101725]/80 text-white"
+                          }`}>
                             <div className="space-y-1">
+                              {isCompanyWinner && (
+                                <span className="inline-block px-1.5 py-0.5 mb-1 text-[8px] font-black uppercase tracking-wider bg-emerald-500 text-black rounded">
+                                  Mejor Opción
+                                </span>
+                              )}
                               {(hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) && (
-                                <p className="font-bold text-white whitespace-nowrap">
+                                <p className={`font-bold whitespace-nowrap ${isCompanyWinner ? "text-emerald-300" : "text-white"}`}>
                                   {formatCurrencyValue(totalData.totalARS, "ARS")}
                                 </p>
                               )}
@@ -2730,33 +2876,16 @@ export default function CotizacionesPage() {
                 {providerTotals.map(totalData => {
                   const hasARS = totalData.totalARS > 0;
                   const hasUSD = totalData.totalUSD > 0;
-                  
-                  const getProviderTotalInBaseCurrency = (provId: string) => {
-                    const pt = providerTotals.find(t => t.providerId === provId);
-                    if (!pt) return 0;
-                    let sum = 0;
-                    items.forEach(item => {
-                      const p = providers.find(pr => pr.id === provId);
-                      const quote = p?.quotes[item.id];
-                      if (quote && quote.price > 0) {
-                        const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
-                        sum += totalBaseCurrency;
-                      }
-                    });
-                    return sum;
-                  };
-
-                  const currentTotalBC = getProviderTotalInBaseCurrency(totalData.providerId);
-                  const allTotalsBC = providers.map(p => getProviderTotalInBaseCurrency(p.id)).filter(t => t > 0);
-                  const minTotalBC = Math.min(...allTotalsBC);
-                  const isCheapest = currentTotalBC > 0 && currentTotalBC === minTotalBC && providers.length > 1;
+                  const isCheapest = highlightMode === "company" 
+                    ? (totalData.providerId === cheapestProviderId)
+                    : false;
 
                   return (
                     <div 
                       key={totalData.providerId} 
                       className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
                         isCheapest 
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-white font-semibold" 
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-white font-semibold ring-1 ring-emerald-500/30" 
                           : "bg-[#111827]/40 border-white/5 text-gray-300"
                       }`}
                     >
@@ -2775,7 +2904,7 @@ export default function CotizacionesPage() {
                       </div>
                       <div className="text-right font-mono font-bold text-xs shrink-0">
                         {hasARS && (
-                          <p className="text-white">
+                          <p className={isCheapest ? "text-emerald-300" : "text-white"}>
                             {formatCurrencyValue(totalData.totalARS, "ARS")}
                           </p>
                         )}
@@ -2793,7 +2922,7 @@ export default function CotizacionesPage() {
 
             {/* Mobile View: Detailed Matrix Cards */}
             <div className="block md:hidden space-y-4">
-              {items.map((item) => {
+              {items.map((item, idx) => {
                 const itemComparisons = providers.map(prov => {
                   const quote = prov.quotes[item.id];
                   const hasQuote = quote && quote.price > 0;
@@ -2833,31 +2962,54 @@ export default function CotizacionesPage() {
                     presentationsCount
                   };
                 });
-
-                const quotedComparisons = itemComparisons.filter(c => c.hasQuote);
-                const minUnitCost = Math.min(...quotedComparisons.map(c => c.trueUnitRateBaseCurrency));
                 
                 return (
                   <div key={item.id} className="p-4 bg-[#111827]/40 border border-white/5 rounded-2xl space-y-3">
                     <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                      <span className="font-bold text-white text-xs truncate max-w-[200px]" title={item.name}>
-                        {item.name || "Ítem sin nombre"}
-                      </span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveItem(idx, -1)}
+                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors"
+                            title="Mover ítem arriba"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === items.length - 1}
+                            onClick={() => moveItem(idx, 1)}
+                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors"
+                            title="Mover ítem abajo"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <span className="font-bold text-white text-xs truncate max-w-[180px]" title={item.name}>
+                          {item.name || "Ítem sin nombre"}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-emerald-300 font-mono font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 whitespace-nowrap">
                         {item.targetQuantity} {item.baseUnit}
                       </span>
                     </div>
 
                     <div className="space-y-2">
-                      {itemComparisons.map(({ prov, hasQuote, quote, trueUnitRateBaseCurrency, displayUnitCost, displayUnitCurrency, displayTotalCost, displayTotalCurrency, presentationsCount }) => {
-                        const isCheapest = hasQuote && trueUnitRateBaseCurrency === minUnitCost && quotedComparisons.length > 1;
+                      {itemComparisons.map(({ prov, hasQuote, quote, displayUnitCost, displayUnitCurrency, displayTotalCost, displayTotalCurrency, presentationsCount }) => {
+                        const isCheapest = highlightMode === "item"
+                          ? (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false)
+                          : highlightMode === "company"
+                            ? (prov.id === cheapestProviderId)
+                            : false;
                         
                         return (
                           <div 
                             key={prov.id}
                             className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
                               isCheapest 
-                                ? "bg-emerald-500/5 border-emerald-500/25" 
+                                ? "bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/30" 
                                 : "bg-black/25 border-white/5"
                             }`}
                           >
@@ -2865,8 +3017,8 @@ export default function CotizacionesPage() {
                               <span className="font-semibold text-white flex items-center gap-1.5">
                                 {prov.name}
                                 {isCheapest && (
-                                  <span className="text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 rounded uppercase tracking-wider font-bold">
-                                    Mejor Precio
+                                  <span className="text-[8px] bg-emerald-500 text-black px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">
+                                    {highlightMode === "company" ? "Mejor Opción" : "Mejor Precio"}
                                   </span>
                                 )}
                               </span>
