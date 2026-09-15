@@ -188,8 +188,8 @@ export default function CotizacionesPage() {
   const [showImgModal, setShowImgModal] = useState<boolean>(false);
   const [generatedImgUrl, setGeneratedImgUrl] = useState<string | null>(null);
   const [convertCurrencies, setConvertCurrencies] = useState<boolean>(false);
-  // Highlight cheapest option in Comparative Matrix: "none" | "company" | "item"
-  const [highlightMode, setHighlightMode] = useState<"none" | "company" | "item">("none");
+  // Highlight cheapest option in Comparative Matrix: "none" | "company" | "item" | "strongpoint"
+  const [highlightMode, setHighlightMode] = useState<"none" | "company" | "item" | "strongpoint">("none");
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -1299,6 +1299,34 @@ export default function CotizacionesPage() {
     return map;
   }, [items, providers, exchangeRate, baseCurrency, useRealLots]);
 
+  // Map of provider.id -> array of itemIds where that provider has its lowest unit cost (Punto Fuerte)
+  const strongestItemPerProvider = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    providers.forEach(prov => {
+      let minUnitCost = Infinity;
+      const itemsQuoted: { itemId: string; unitCost: number }[] = [];
+
+      items.forEach(item => {
+        const quote = prov.quotes[item.id];
+        if (quote && quote.price > 0) {
+          const { trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+          itemsQuoted.push({ itemId: item.id, unitCost: trueUnitRateBaseCurrency });
+          if (trueUnitRateBaseCurrency < minUnitCost) {
+            minUnitCost = trueUnitRateBaseCurrency;
+          }
+        }
+      });
+
+      if (minUnitCost < Infinity && itemsQuoted.length > 0) {
+        map[prov.id] = itemsQuoted
+          .filter(it => Math.abs(it.unitCost - minUnitCost) < 0.001)
+          .map(it => it.itemId);
+      }
+    });
+
+    return map;
+  }, [providers, items, exchangeRate, baseCurrency]);
+
 
 
   // Move items order in comparative matrix and export
@@ -1717,8 +1745,15 @@ export default function CotizacionesPage() {
             }
 
             const isItemWinner = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-            const itemBg = isItemWinner ? "#c6efce" : "#fcfcfc";
-            const itemHighlightTag = isItemWinner ? `<br/><span style="font-size: 7.5pt; color: #006100; font-weight: bold; background-color: #a7f3d0; padding: 1px 4px; border-radius: 3px;">★ Mejor precio</span>` : "";
+            const isStrongPointWinner = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+            const isCellHighlighted = isItemWinner || isStrongPointWinner;
+
+            const itemBg = isCellHighlighted ? "#c6efce" : "#fcfcfc";
+            const itemHighlightTag = isItemWinner 
+              ? `<br/><span style="font-size: 7.5pt; color: #006100; font-weight: bold; background-color: #a7f3d0; padding: 1px 4px; border-radius: 3px;">★ Mejor precio</span>` 
+              : isStrongPointWinner 
+                ? `<br/><span style="font-size: 7.5pt; color: #006100; font-weight: bold; background-color: #a7f3d0; padding: 1px 4px; border-radius: 3px;">★ Punto Fuerte</span>`
+                : "";
 
             row.push(unitTextText, totalTextText);
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle;">${unitHtmlText}</td>`;
@@ -2653,6 +2688,7 @@ export default function CotizacionesPage() {
                       setHighlightMode(prev => {
                         if (prev === "none") return "company";
                         if (prev === "company") return "item";
+                        if (prev === "item") return "strongpoint";
                         return "none";
                       });
                     }}
@@ -2661,10 +2697,17 @@ export default function CotizacionesPage() {
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
                         : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
                     }`}
-                    title="Alternar resaltado: Ninguno / Por Empresa / Por Ítem"
+                    title="Alternar resaltado: Ninguno / Por Empresa / Por Ítem / Punto Fuerte (Ítem más barato de cada empresa)"
                   >
                     <Paintbrush className="w-3.5 h-3.5" />
-                    Pintar: {highlightMode === "none" ? "Ninguno" : highlightMode === "company" ? "Por Empresa" : "Por Ítem"}
+                    Pintar:{" "}
+                    {highlightMode === "none"
+                      ? "Ninguno"
+                      : highlightMode === "company"
+                        ? "Por Empresa"
+                        : highlightMode === "item"
+                          ? "Por Ítem"
+                          : "Punto Fuerte"}
                   </button>
                 </div>
                 <div className="flex items-center justify-center sm:justify-start gap-3 text-xs text-gray-400 font-medium py-1 sm:py-0">
@@ -2762,6 +2805,8 @@ export default function CotizacionesPage() {
                         const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
 
                         const isCheapestItem = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+                        const isStrongPoint = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+                        const isCellHighlighted = isCheapestItem || isStrongPoint;
 
                         return (
                           <Fragment key={prov.id}>
@@ -2779,17 +2824,22 @@ export default function CotizacionesPage() {
                             </td>
                             {/* Price Total */}
                             <td className={`p-4 border-l text-center align-middle font-mono text-xs transition-colors ${
-                              isCheapestItem
+                              isCellHighlighted
                                 ? "border-emerald-500/30 bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/30 text-emerald-300"
                                 : "border-white/5 text-gray-200 bg-white/[0.01]"
                             }`}>
                               <div className="space-y-0.5">
-                                <span className={`font-bold ${isCheapestItem ? "text-emerald-400 font-extrabold" : "text-white"}`}>
+                                <span className={`font-bold ${isCellHighlighted ? "text-emerald-400 font-extrabold" : "text-white"}`}>
                                   {formatCurrencyValue(displayTotalCost, displayTotalCurrency)}
                                 </span>
                                 {isCheapestItem && (
                                   <span className="inline-block text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded mt-0.5">
                                     Mejor precio
+                                  </span>
+                                )}
+                                {isStrongPoint && (
+                                  <span className="inline-block text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded mt-0.5">
+                                    Punto Fuerte
                                   </span>
                                 )}
                                 {quote.presentationType === "package" && (
@@ -2998,11 +3048,10 @@ export default function CotizacionesPage() {
 
                     <div className="space-y-2">
                       {itemComparisons.map(({ prov, hasQuote, quote, displayUnitCost, displayUnitCurrency, displayTotalCost, displayTotalCurrency, presentationsCount }) => {
-                        const isCheapest = highlightMode === "item"
-                          ? (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false)
-                          : highlightMode === "company"
-                            ? (prov.id === cheapestProviderId)
-                            : false;
+                        const isCheapestItem = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+                        const isStrongPoint = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+                        const isCompanyWinner = highlightMode === "company" && (prov.id === cheapestProviderId);
+                        const isCheapest = isCheapestItem || isStrongPoint || isCompanyWinner;
                         
                         return (
                           <div 
@@ -3018,7 +3067,7 @@ export default function CotizacionesPage() {
                                 {prov.name}
                                 {isCheapest && (
                                   <span className="text-[8px] bg-emerald-500 text-black px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">
-                                    {highlightMode === "company" ? "Mejor Opción" : "Mejor Precio"}
+                                    {isCompanyWinner ? "Mejor Opción" : isStrongPoint ? "Punto Fuerte" : "Mejor Precio"}
                                   </span>
                                 )}
                               </span>
