@@ -190,6 +190,8 @@ export default function CotizacionesPage() {
   const [convertCurrencies, setConvertCurrencies] = useState<boolean>(false);
   // Highlight cheapest option in Comparative Matrix: "none" | "company" | "item" | "strongpoint"
   const [highlightMode, setHighlightMode] = useState<"none" | "company" | "item" | "strongpoint">("none");
+  // Excluded items from comparison / calculations in matrix
+  const [excludedItemIds, setExcludedItemIds] = useState<string[]>([]);
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -1202,13 +1204,21 @@ export default function CotizacionesPage() {
   // COMPARISON AND SCORING CALCULATIONS
   // -----------------------------------------------------
 
+  // Toggle item inclusion in matrix calculations
+  const toggleItemInclusion = (itemId: string) => {
+    setExcludedItemIds(prev => 
+      prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
+    );
+  };
+
   // Totals per Provider (for full quote)
   const providerTotals = providers.map(prov => {
     let sumARS = 0;
     let sumUSD = 0;
     let itemsQuotedCount = 0;
+    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
     
-    items.forEach(item => {
+    activeItems.forEach(item => {
       const quote = prov.quotes[item.id];
       if (quote && quote.price > 0) {
         const { totalBaseCurrency, totalRawCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
@@ -1235,15 +1245,16 @@ export default function CotizacionesPage() {
       totalARS: sumARS,
       totalUSD: sumUSD,
       itemsQuotedCount,
-      allQuoted: itemsQuotedCount === items.length
+      allQuoted: itemsQuotedCount === activeItems.length && activeItems.length > 0
     };
   });
   // Calculate cheapest provider overall (for highlightMode === "company")
   const providerCostComparisons = useMemo(() => {
+    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
     return providers.map(prov => {
       let totalBC = 0;
       let itemsQuoted = 0;
-      items.forEach(item => {
+      activeItems.forEach(item => {
         const quote = prov.quotes[item.id];
         if (quote && quote.price > 0) {
           const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
@@ -1257,7 +1268,7 @@ export default function CotizacionesPage() {
         itemsQuoted
       };
     });
-  }, [providers, items, exchangeRate, baseCurrency, useRealLots]);
+  }, [providers, items, excludedItemIds, exchangeRate, baseCurrency, useRealLots]);
 
   const cheapestProviderId = useMemo(() => {
     if (providers.length <= 1) return null;
@@ -1273,8 +1284,9 @@ export default function CotizacionesPage() {
   const cheapestProvidersPerItem = useMemo(() => {
     const map: Record<string, string[]> = {};
     if (providers.length <= 1) return map;
+    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
 
-    items.forEach(item => {
+    activeItems.forEach(item => {
       let minCost = Infinity;
       const providerCosts: { provId: string; cost: number }[] = [];
 
@@ -1297,16 +1309,17 @@ export default function CotizacionesPage() {
     });
 
     return map;
-  }, [items, providers, exchangeRate, baseCurrency, useRealLots]);
+  }, [items, providers, excludedItemIds, exchangeRate, baseCurrency, useRealLots]);
 
   // Map of provider.id -> array of itemIds where that provider has its lowest unit cost (Punto Fuerte)
   const strongestItemPerProvider = useMemo(() => {
     const map: Record<string, string[]> = {};
+    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
     providers.forEach(prov => {
       let minUnitCost = Infinity;
       const itemsQuoted: { itemId: string; unitCost: number }[] = [];
 
-      items.forEach(item => {
+      activeItems.forEach(item => {
         const quote = prov.quotes[item.id];
         if (quote && quote.price > 0) {
           const { trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
@@ -1325,7 +1338,7 @@ export default function CotizacionesPage() {
     });
 
     return map;
-  }, [providers, items, exchangeRate, baseCurrency]);
+  }, [providers, items, excludedItemIds, exchangeRate, baseCurrency]);
 
 
 
@@ -1690,15 +1703,16 @@ export default function CotizacionesPage() {
 
       // Item Rows
       items.forEach((item, idx) => {
-        const bgRow = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+        const isExcluded = excludedItemIds.includes(item.id);
+        const bgRow = isExcluded ? "#f1f5f9" : (idx % 2 === 0 ? "#ffffff" : "#f8fafc");
         const row = [
-          item.name || "Ítem sin nombre",
+          (item.name || "Ítem sin nombre") + (isExcluded ? " [EXCLUIDO]" : ""),
           `${item.targetQuantity} ${item.baseUnit}`
         ];
 
-        html += `<tr style="background-color: ${bgRow}; border-bottom: 1px solid #e2e8f0;">`;
-        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-weight: bold; color: #0f172a;">${item.name || "Ítem sin nombre"}</td>`;
-        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #475569;">${item.targetQuantity} ${item.baseUnit}</td>`;
+        html += `<tr style="background-color: ${bgRow}; border-bottom: 1px solid #e2e8f0; ${isExcluded ? 'color: #94a3b8; opacity: 0.6;' : ''}">`;
+        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-weight: bold; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#0f172a'};">${item.name || "Ítem sin nombre"}${isExcluded ? ' <span style="font-size: 8pt; color: #94a3b8; font-weight: normal;">(Excluido)</span>' : ''}</td>`;
+        html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#475569'};">${item.targetQuantity} ${item.baseUnit}</td>`;
 
         providers.forEach(prov => {
           const quote = prov.quotes[item.id];
@@ -1733,7 +1747,7 @@ export default function CotizacionesPage() {
             }
 
             // Formatted Total for HTML
-            let totalHtmlText = `<span style="font-weight: bold; color: #0f172a;">${formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>`;
+            let totalHtmlText = `<span style="font-weight: bold; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#0f172a'};">${formatCurrencyValue(displayTotalCost, displayTotalCurrency)}</span>`;
             if (quote.presentationType === "package") {
               totalHtmlText += `<br/><span style="font-size: 8pt; color: #64748b;">${quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x${presentationsCount.toFixed(useRealLots ? 0 : 1)})</span>`;
             }
@@ -1744,11 +1758,11 @@ export default function CotizacionesPage() {
               totalHtmlText += `<br/><span style="font-size: 8pt; color: #4b5563; font-style: italic; background-color: #f3f4f6; padding: 2px 4px; border-radius: 4px; display: inline-block; margin-top: 4px;">${quote.specification}</span>`;
             }
 
-            const isItemWinner = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-            const isStrongPointWinner = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+            const isItemWinner = !isExcluded && highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+            const isStrongPointWinner = !isExcluded && highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
             const isCellHighlighted = isItemWinner || isStrongPointWinner;
 
-            const itemBg = isCellHighlighted ? "#c6efce" : "#fcfcfc";
+            const itemBg = isExcluded ? "#f1f5f9" : (isCellHighlighted ? "#c6efce" : "#fcfcfc");
             const itemHighlightTag = isItemWinner 
               ? `<br/><span style="font-size: 7.5pt; color: #006100; font-weight: bold; background-color: #a7f3d0; padding: 1px 4px; border-radius: 3px;">★ Mejor precio</span>` 
               : isStrongPointWinner 
@@ -1756,12 +1770,12 @@ export default function CotizacionesPage() {
                 : "";
 
             row.push(unitTextText, totalTextText);
-            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle;">${unitHtmlText}</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; color: ${isExcluded ? '#94a3b8; text-decoration: line-through;' : '#334155'};">${unitHtmlText}</td>`;
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; vertical-align: middle; background-color: ${itemBg};">${totalHtmlText}${itemHighlightTag}</td>`;
           } else {
             row.push("-", "-");
             html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle;">-</td>`;
-            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle; background-color: #fcfcfc;">-</td>`;
+            html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #94a3b8; vertical-align: middle; background-color: ${isExcluded ? '#f1f5f9' : '#fcfcfc'};">-</td>`;
           }
         });
 
@@ -2745,11 +2759,24 @@ export default function CotizacionesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {items.map((item, idx) => (
-                    <tr key={item.id} className="group hover:bg-white/[0.01] transition-colors align-middle border-b border-white/5">
-                      {/* Item column with reorder buttons */}
+                  {items.map((item, idx) => {
+                    const isExcluded = excludedItemIds.includes(item.id);
+                    return (
+                    <tr key={item.id} className={`group transition-all align-middle border-b border-white/5 ${
+                      isExcluded 
+                        ? "opacity-35 grayscale bg-white/[0.002]" 
+                        : "hover:bg-white/[0.01]"
+                    }`}>
+                      {/* Item column with checkbox and reorder buttons */}
                       <td className="p-3 max-w-[280px] left-0 sticky bg-[#0c121e] group-hover:bg-[#141b2a] transition-colors z-10 border-r border-white/10">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={!isExcluded}
+                            onChange={() => toggleItemInclusion(item.id)}
+                            className="w-4 h-4 rounded border-gray-600 bg-[#101725] text-emerald-500 focus:ring-emerald-500/20 cursor-pointer accent-emerald-500 shrink-0"
+                            title={isExcluded ? "Clic para incluir ítem en el cálculo" : "Clic para excluir ítem del cálculo"}
+                          />
                           <div className="flex flex-col gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
                             <button
                               type="button"
@@ -2770,13 +2797,13 @@ export default function CotizacionesPage() {
                               <ChevronDown className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <span className="font-bold text-white text-sm truncate" title={item.name}>
+                          <span className={`font-bold text-sm truncate ${isExcluded ? "line-through text-gray-500" : "text-white"}`} title={item.name}>
                             {item.name || "Ítem sin nombre"}
                           </span>
                         </div>
                       </td>
                       {/* Quantity column */}
-                      <td className="p-4 text-center font-mono text-xs text-gray-300 whitespace-nowrap">
+                      <td className={`p-4 text-center font-mono text-xs whitespace-nowrap ${isExcluded ? "line-through text-gray-600" : "text-gray-300"}`}>
                         {item.targetQuantity} {item.baseUnit}
                       </td>
 
@@ -2804,14 +2831,14 @@ export default function CotizacionesPage() {
                         const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
                         const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
 
-                        const isCheapestItem = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-                        const isStrongPoint = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+                        const isCheapestItem = !isExcluded && highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+                        const isStrongPoint = !isExcluded && highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
                         const isCellHighlighted = isCheapestItem || isStrongPoint;
 
                         return (
                           <Fragment key={prov.id}>
                             {/* Price Unit */}
-                            <td className="p-4 border-l border-white/10 text-center align-middle font-mono text-xs text-gray-200">
+                            <td className={`p-4 border-l border-white/10 text-center align-middle font-mono text-xs ${isExcluded ? "line-through text-gray-600" : "text-gray-200"}`}>
                               <div className="space-y-0.5">
                                 <span>{formatCurrencyValue(displayUnitCost, displayUnitCurrency)}</span>
                                 {convertCurrencies && quote.currency !== baseCurrency && (
@@ -2826,10 +2853,12 @@ export default function CotizacionesPage() {
                             <td className={`p-4 border-l text-center align-middle font-mono text-xs transition-colors ${
                               isCellHighlighted
                                 ? "border-emerald-500/30 bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/30 text-emerald-300"
-                                : "border-white/5 text-gray-200 bg-white/[0.01]"
+                                : isExcluded 
+                                  ? "border-white/5 text-gray-600 bg-transparent line-through" 
+                                  : "border-white/5 text-gray-200 bg-white/[0.01]"
                             }`}>
                               <div className="space-y-0.5">
-                                <span className={`font-bold ${isCellHighlighted ? "text-emerald-400 font-extrabold" : "text-white"}`}>
+                                <span className={`font-bold ${isCellHighlighted ? "text-emerald-400 font-extrabold" : isExcluded ? "text-gray-600" : "text-white"}`}>
                                   {formatCurrencyValue(displayTotalCost, displayTotalCurrency)}
                                 </span>
                                 {isCheapestItem && (
@@ -2863,7 +2892,8 @@ export default function CotizacionesPage() {
                         );
                       })}
                     </tr>
-                  ))}
+                    );
+                  })}
 
                   {/* SUMMARY TOTAL ROW */}
                   <tr className="bg-[#101725]/60 font-bold border-t-2 border-white/10">
@@ -3013,10 +3043,21 @@ export default function CotizacionesPage() {
                   };
                 });
                 
+                const isExcluded = excludedItemIds.includes(item.id);
+                
                 return (
-                  <div key={item.id} className="p-4 bg-[#111827]/40 border border-white/5 rounded-2xl space-y-3">
+                  <div key={item.id} className={`p-4 bg-[#111827]/40 border rounded-2xl space-y-3 transition-all ${
+                    isExcluded ? "opacity-40 grayscale border-dashed border-white/10" : "border-white/5"
+                  }`}>
                     <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={!isExcluded}
+                          onChange={() => toggleItemInclusion(item.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-[#101725] text-emerald-500 focus:ring-emerald-500/20 cursor-pointer accent-emerald-500 shrink-0"
+                          title={isExcluded ? "Incluir ítem en el cálculo" : "Excluir ítem del cálculo"}
+                        />
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
@@ -3037,20 +3078,24 @@ export default function CotizacionesPage() {
                             <ChevronDown className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <span className="font-bold text-white text-xs truncate max-w-[180px]" title={item.name}>
+                        <span className={`font-bold text-xs truncate max-w-[170px] ${isExcluded ? "line-through text-gray-500" : "text-white"}`} title={item.name}>
                           {item.name || "Ítem sin nombre"}
                         </span>
                       </div>
-                      <span className="text-[10px] text-emerald-300 font-mono font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 whitespace-nowrap">
+                      <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg border whitespace-nowrap ${
+                        isExcluded 
+                          ? "bg-white/5 text-gray-500 border-white/5 line-through" 
+                          : "text-emerald-300 bg-emerald-500/10 border-emerald-500/20"
+                      }`}>
                         {item.targetQuantity} {item.baseUnit}
                       </span>
                     </div>
 
                     <div className="space-y-2">
                       {itemComparisons.map(({ prov, hasQuote, quote, displayUnitCost, displayUnitCurrency, displayTotalCost, displayTotalCurrency, presentationsCount }) => {
-                        const isCheapestItem = highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-                        const isStrongPoint = highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
-                        const isCompanyWinner = highlightMode === "company" && (prov.id === cheapestProviderId);
+                        const isCheapestItem = !isExcluded && highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+                        const isStrongPoint = !isExcluded && highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+                        const isCompanyWinner = !isExcluded && highlightMode === "company" && (prov.id === cheapestProviderId);
                         const isCheapest = isCheapestItem || isStrongPoint || isCompanyWinner;
                         
                         return (
