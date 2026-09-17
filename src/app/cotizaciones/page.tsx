@@ -53,9 +53,15 @@ import {
   Check,
   Paintbrush,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Bot,
+  Sparkles,
+  Paperclip,
+  Mail,
+  FileText
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
 
 // Types definition
 interface Item {
@@ -99,6 +105,7 @@ interface SavedQuotation {
   categoria?: string;
   pendienteId?: string;
   pendienteTitulo?: string;
+  attachments?: QuoteAttachment[];
 }
 
 const DEFAULT_UNITS = [
@@ -130,6 +137,8 @@ export default function CotizacionesPage() {
   const [sentAt, setSentAt] = useState<string>("");
   const [hasActiveQuote, setHasActiveQuote] = useState<boolean>(false);
   const isLocked = status !== "borrador";
+  const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
+  const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
 
   // Items State
   const [items, setItems] = useState<Item[]>([
@@ -711,7 +720,8 @@ export default function CotizacionesPage() {
       sentAt: status === "enviada" ? sentAt : "",
       categoria: quoteCategoria.trim(),
       pendienteId: quotePendienteId.trim(),
-      pendienteTitulo: quotePendienteTitulo.trim()
+      pendienteTitulo: quotePendienteTitulo.trim(),
+      attachments: attachments || []
     };
 
     const db = getFirebaseDb();
@@ -788,6 +798,7 @@ export default function CotizacionesPage() {
     setQuoteCategoria("");
     setQuotePendienteId("");
     setQuotePendienteTitulo("");
+    setAttachments([]);
     setHasActiveQuote(true);
     setItems([
       { id: "item-1", name: "Insumo nuevo", baseUnit: "U", targetQuantity: 1 }
@@ -817,6 +828,7 @@ export default function CotizacionesPage() {
     setUseRealLots(quote.useRealLots || false);
     setItems(quote.items || []);
     setProviders(quote.providers || []);
+    setAttachments(quote.attachments || []);
     let loadedStatus: "borrador" | "enviada" | "finalizada" | "cancelada" = "borrador";
     if (quote.status) {
       loadedStatus = quote.status as "borrador" | "enviada" | "finalizada" | "cancelada";
@@ -925,6 +937,82 @@ export default function CotizacionesPage() {
     setHasActiveQuote(true);
     setActiveTab("editor");
     showToast(`Copia creada de "${quote.name}"`);
+  };
+
+  // -----------------------------------------------------
+  // ATTACHMENTS (PRESUPUESTOS Y MAILS .EML / .PDF)
+  // -----------------------------------------------------
+
+  const handleUploadAttachment = async (file: File, providerId?: string, providerName?: string) => {
+    try {
+      const formData = new FormData();
+      const targetQuoteId = currentQuoteId || "temp_" + Date.now();
+      formData.append("file", file);
+      formData.append("cotizacionId", targetQuoteId);
+      if (providerId) formData.append("providerId", providerId);
+      if (providerName) formData.append("providerName", providerName);
+
+      const apiEndpoint = process.env.NEXT_PUBLIC_COTIZACIONES_UPLOAD || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/upload";
+      const res = await fetch(apiEndpoint, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error en el servidor: ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.attachment) {
+        throw new Error(data.error || "No se pudo procesar el archivo");
+      }
+
+      const newAtt: QuoteAttachment = data.attachment;
+      const updated = [...attachments, newAtt];
+      setAttachments(updated);
+
+      // Auto-guardar en Firestore si la cotización ya existe
+      if (currentQuoteId) {
+        const db = getFirebaseDb();
+        if (db && !currentQuoteId.startsWith("local-")) {
+          await updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+            attachments: updated,
+            updatedAt: serverTimestamp()
+          }).catch(console.error);
+        }
+      }
+
+      showToast(`Archivo "${file.name}" cargado exitosamente`);
+    } catch (err: any) {
+      console.error("Error subiendo archivo:", err);
+      showToast(`Error al subir: ${err.message}`, "error");
+    }
+  };
+
+  const handleDeleteAttachment = async (att: QuoteAttachment) => {
+    try {
+      const targetQuoteId = currentQuoteId || att.cotizacionId || "general";
+      const apiEndpoint = `https://apivacas.jariel.com.ar/api/cotizaciones-ia/files/${targetQuoteId}/${encodeURIComponent(att.filename)}`;
+      await fetch(apiEndpoint, { method: "DELETE" }).catch(console.error);
+
+      const updated = attachments.filter((a) => a.id !== att.id);
+      setAttachments(updated);
+
+      if (currentQuoteId) {
+        const db = getFirebaseDb();
+        if (db && !currentQuoteId.startsWith("local-")) {
+          await updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+            attachments: updated,
+            updatedAt: serverTimestamp()
+          }).catch(console.error);
+        }
+      }
+
+      showToast(`Archivo "${att.originalName}" eliminado`);
+    } catch (err: any) {
+      console.error("Error eliminando archivo:", err);
+      showToast(`Error al eliminar: ${err.message}`, "error");
+    }
   };
 
   // -----------------------------------------------------
@@ -1947,10 +2035,26 @@ export default function CotizacionesPage() {
           {hasActiveQuote && (
             <button
               onClick={handleSaveQuotation}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-bold transition-all animate-fadeIn"
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-bold transition-all animate-fadeIn cursor-pointer"
             >
               <Save className="w-4 h-4" />
               Guardar Cambios
+            </button>
+          )}
+
+          {hasActiveQuote && (
+            <button
+              onClick={() => setIsAiChatOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-sm font-bold transition-all shadow-md shadow-emerald-500/10 cursor-pointer animate-fadeIn"
+              title="Abrir chat con IA para analizar y comparar presupuestos y correos de proveedores"
+            >
+              <Bot className="w-4 h-4 text-emerald-400" />
+              <span>Chat IA</span>
+              {attachments.length > 0 && (
+                <span className="bg-emerald-500/30 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  {attachments.length} {attachments.length === 1 ? "archivo" : "archivos"}
+                </span>
+              )}
             </button>
           )}
 
@@ -2621,6 +2725,79 @@ export default function CotizacionesPage() {
                     <p className="text-[10px] text-right text-gray-500 mt-1">
                       {useRealLots ? "(Cajas enteras)" : "(Fracción exacta)"}
                     </p>
+                  </div>
+
+                  {/* Provider Attachments (.pdf, .eml, etc.) */}
+                  <div className="mt-4 pt-3 border-t border-white/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-400 flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
+                        Presupuestos / Mails ({attachments.filter(a => a.providerId === provider.id).length})
+                      </span>
+                      <label className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 cursor-pointer">
+                        <Upload className="w-3 h-3" />
+                        Subir PDF / EML
+                        <input
+                          type="file"
+                          accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
+                          className="hidden"
+                          disabled={isLocked}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              handleUploadAttachment(f, provider.id, provider.name);
+                              e.target.value = "";
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {attachments.filter(a => a.providerId === provider.id).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {attachments
+                          .filter(a => a.providerId === provider.id)
+                          .map((att) => {
+                            const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
+                            const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
+                            return (
+                              <div
+                                key={att.id}
+                                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#101726] border border-white/10 rounded-lg text-[11px] text-gray-300 group"
+                              >
+                                {isEml ? (
+                                  <Mail className="w-3 h-3 text-blue-400 shrink-0" />
+                                ) : isPdf ? (
+                                  <FileText className="w-3 h-3 text-red-400 shrink-0" />
+                                ) : (
+                                  <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
+                                )}
+                                <span className="truncate max-w-[130px]" title={att.originalName}>
+                                  {att.originalName}
+                                </span>
+                                <a
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-gray-400 hover:text-emerald-400 p-0.5"
+                                  title="Ver/Descargar archivo"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                                {!isLocked && (
+                                  <button
+                                    onClick={() => handleDeleteAttachment(att)}
+                                    className="text-gray-500 hover:text-red-400 p-0.5 ml-0.5"
+                                    title="Eliminar archivo"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -3540,6 +3717,12 @@ export default function CotizacionesPage() {
                         <div>
                           Provs: <span className="text-gray-300 font-semibold">{quote.providers?.length || 0}</span>
                         </div>
+                        {quote.attachments && quote.attachments.length > 0 && (
+                          <div className="text-emerald-400 font-semibold flex items-center gap-1" title={`${quote.attachments.length} archivos adjuntos`}>
+                            <Paperclip className="w-2.5 h-2.5" />
+                            <span>{quote.attachments.length}</span>
+                          </div>
+                        )}
                       </div>
 
                       {isFinalizada && (
@@ -3570,6 +3753,17 @@ export default function CotizacionesPage() {
                       <span>{date}</span>
                       
                       <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectQuote(quote);
+                            setIsAiChatOpen(true);
+                          }}
+                          className="p-1.5 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer text-emerald-400"
+                          title="Abrir Chat con IA para esta cotización"
+                        >
+                          <Bot className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={(e) => handleDuplicateQuote(quote, e)}
                           className="p-1.5 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
@@ -4023,6 +4217,19 @@ export default function CotizacionesPage() {
           </div>
         </div>
       )}
+
+      {/* Cotizaciones AI Chat Modal */}
+      <CotizacionesAiChatModal
+        isOpen={isAiChatOpen}
+        onClose={() => setIsAiChatOpen(false)}
+        cotizacionId={currentQuoteId || "general"}
+        quoteName={quoteName}
+        items={items.map((it) => ({ name: it.name, targetQuantity: it.targetQuantity, baseUnit: it.baseUnit }))}
+        providers={providers.map((p) => ({ id: p.id, name: p.name }))}
+        attachments={attachments}
+        onUploadAttachment={handleUploadAttachment}
+        onDeleteAttachment={handleDeleteAttachment}
+      />
     </AppLayout>
   );
 }
