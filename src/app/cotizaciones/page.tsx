@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
+import { CotizacionesImportAiModal } from "@/components/cotizaciones/CotizacionesImportAiModal";
 
 // Types definition
 interface Item {
@@ -140,6 +141,9 @@ export default function CotizacionesPage() {
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
   const [minimizedProviders, setMinimizedProviders] = useState<Record<string, boolean>>({});
+  const [isImportAiModalOpen, setIsImportAiModalOpen] = useState<boolean>(false);
+  const [importAiTargetProviderId, setImportAiTargetProviderId] = useState<string | undefined>(undefined);
+  const [importAiTargetProviderName, setImportAiTargetProviderName] = useState<string | undefined>(undefined);
 
   const toggleMinimizeProvider = (providerId: string) => {
     setMinimizedProviders((prev) => ({
@@ -1030,6 +1034,178 @@ export default function CotizacionesPage() {
       console.error("Error eliminando archivo:", err);
       showToast(`Error al eliminar: ${err.message}`, "error");
     }
+  };
+
+  // -----------------------------------------------------
+  // IA PRESUPUESTOS / PDF IMPORT LOGIC
+  // -----------------------------------------------------
+
+  const handleConfirmImportAi = async (payload: {
+    providerName: string;
+    currency: "ARS" | "USD";
+    notes?: string;
+    attachment: QuoteAttachment;
+    targetProviderId?: string;
+    selectedItems: Array<{
+      name: string;
+      unit: string;
+      quantity: number;
+      price: number;
+      discount: number;
+      specification: string;
+      presentationName: string;
+      unitsPerPresentation: number;
+      matchedItemId: string | null;
+    }>;
+  }) => {
+    const { providerName, currency, notes: quoteNotes, attachment: newAttachment, targetProviderId, selectedItems } = payload;
+
+    const providerId = targetProviderId || `prov-${Date.now()}`;
+
+    const updatedAttachment: QuoteAttachment = {
+      ...newAttachment,
+      providerId,
+      providerName
+    };
+
+    let currentItems = [...items];
+    const newItemsToCreate: Item[] = [];
+    const itemQuoteAssignments: Record<string, QuoteDetail> = {};
+
+    selectedItems.forEach((si, idx) => {
+      let targetItemId = si.matchedItemId;
+
+      if (!targetItemId) {
+        targetItemId = `item-${Date.now()}-${idx}`;
+        const newItem: Item = {
+          id: targetItemId,
+          name: si.name,
+          baseUnit: si.unit || "U",
+          targetQuantity: si.quantity || 1
+        };
+        newItemsToCreate.push(newItem);
+        currentItems.push(newItem);
+      }
+
+      itemQuoteAssignments[targetItemId] = {
+        currency,
+        presentationType: si.presentationName ? "package" : "base",
+        presentationName: si.presentationName || "",
+        unitsPerPresentation: si.unitsPerPresentation || 1,
+        price: si.price,
+        discount: si.discount || 0,
+        specification: si.specification || ""
+      };
+    });
+
+    if (newItemsToCreate.length > 0) {
+      setItems(currentItems);
+    }
+
+    let updatedProviders = [...providers];
+
+    if (targetProviderId) {
+      updatedProviders = updatedProviders.map((p) => {
+        if (p.id === targetProviderId) {
+          const updatedQuotes = { ...p.quotes };
+          Object.entries(itemQuoteAssignments).forEach(([itemId, quoteDetail]) => {
+            updatedQuotes[itemId] = quoteDetail;
+          });
+          return {
+            ...p,
+            name: providerName || p.name,
+            quotes: updatedQuotes
+          };
+        }
+        if (newItemsToCreate.length > 0) {
+          const emptyQuotes = { ...p.quotes };
+          newItemsToCreate.forEach((ni) => {
+            if (!emptyQuotes[ni.id]) {
+              emptyQuotes[ni.id] = {
+                currency: baseCurrency,
+                presentationType: "base",
+                presentationName: "",
+                unitsPerPresentation: 1,
+                price: 0,
+                discount: 0
+              };
+            }
+          });
+          return { ...p, quotes: emptyQuotes };
+        }
+        return p;
+      });
+    } else {
+      if (newItemsToCreate.length > 0) {
+        updatedProviders = updatedProviders.map((p) => {
+          const emptyQuotes = { ...p.quotes };
+          newItemsToCreate.forEach((ni) => {
+            if (!emptyQuotes[ni.id]) {
+              emptyQuotes[ni.id] = {
+                currency: baseCurrency,
+                presentationType: "base",
+                presentationName: "",
+                unitsPerPresentation: 1,
+                price: 0,
+                discount: 0
+              };
+            }
+          });
+          return { ...p, quotes: emptyQuotes };
+        });
+      }
+
+      const newProviderQuotes: Record<string, QuoteDetail> = {};
+      currentItems.forEach((it) => {
+        if (itemQuoteAssignments[it.id]) {
+          newProviderQuotes[it.id] = itemQuoteAssignments[it.id];
+        } else {
+          newProviderQuotes[it.id] = {
+            currency,
+            presentationType: "base",
+            presentationName: "",
+            unitsPerPresentation: 1,
+            price: 0,
+            discount: 0
+          };
+        }
+      });
+
+      const newProvider: Provider = {
+        id: providerId,
+        name: providerName,
+        quotes: newProviderQuotes
+      };
+
+      updatedProviders.push(newProvider);
+    }
+
+    setProviders(updatedProviders);
+
+    const updatedAttachments = [...attachments, updatedAttachment];
+    setAttachments(updatedAttachments);
+
+    if (quoteNotes && !notes.trim()) {
+      setNotes(quoteNotes);
+    }
+
+    if (currentQuoteId) {
+      const db = getFirebaseDb();
+      if (db && !currentQuoteId.startsWith("local-")) {
+        await updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+          items: currentItems,
+          providers: updatedProviders,
+          attachments: updatedAttachments,
+          updatedAt: serverTimestamp()
+        }).catch(console.error);
+      }
+    }
+
+    showToast(
+      targetProviderId
+        ? `Precios cargados con éxito para "${providerName}" (${selectedItems.length} ítems)`
+        : `Proveedor "${providerName}" creado con éxito (${selectedItems.length} ítems)`
+    );
   };
 
   // -----------------------------------------------------
@@ -2515,7 +2691,7 @@ export default function CotizacionesPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleMinimizeAllProviders}
@@ -2527,12 +2703,28 @@ export default function CotizacionesPage() {
                 </button>
 
                 <button
+                  type="button"
+                  onClick={() => {
+                    setImportAiTargetProviderId(undefined);
+                    setImportAiTargetProviderName(undefined);
+                    setIsImportAiModalOpen(true);
+                  }}
+                  disabled={isLocked}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  title="Subir un presupuesto en PDF o correo EML para que la IA extraiga los productos y precios automáticamente"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                  <span>Nuevo Proveedor desde PDF (IA)</span>
+                </button>
+
+                <button
                   onClick={handleAddProvider}
                   disabled={isLocked}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-gray-200 rounded-xl text-xs font-bold transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  title="Añadir proveedor vacío de forma manual"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Añadir Proveedor
+                  <span>Añadir Manual</span>
                 </button>
               </div>
             </div>
@@ -2566,9 +2758,25 @@ export default function CotizacionesPage() {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Botón rápido para autocompletar con IA */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImportAiTargetProviderId(provider.id);
+                              setImportAiTargetProviderName(provider.name);
+                              setIsImportAiModalOpen(true);
+                            }}
+                            disabled={isLocked}
+                            className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
+                            title="Subir PDF o presupuesto para autocompletar precios con IA en este proveedor"
+                          >
+                            <Sparkles className="w-3 h-3 text-yellow-300" />
+                            <span className="hidden sm:inline">Cargar con IA</span>
+                          </button>
+
                           {/* Botón rápido para adjuntar PDF/EML */}
                           <label
-                            className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
+                            className="flex items-center gap-1 px-2.5 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg text-xs font-semibold transition-all border border-white/10 cursor-pointer"
                             title="Adjuntar PDF o correo EML a este proveedor"
                           >
                             <Upload className="w-3 h-3" />
@@ -2683,9 +2891,25 @@ export default function CotizacionesPage() {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
+                          {/* Botón para autocompletar con IA */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImportAiTargetProviderId(provider.id);
+                              setImportAiTargetProviderName(provider.name);
+                              setIsImportAiModalOpen(true);
+                            }}
+                            disabled={isLocked}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-xl text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
+                            title="Subir PDF o presupuesto para autocompletar precios con IA en este proveedor"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                            <span>Cargar con IA</span>
+                          </button>
+
                           {/* Botón para adjuntar PDF / EML al lado del nombre */}
                           <label
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-xl text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-semibold transition-all border border-white/10 cursor-pointer"
                             title="Adjuntar PDF o correo EML a este proveedor"
                           >
                             <Upload className="w-3.5 h-3.5" />
@@ -4439,6 +4663,17 @@ export default function CotizacionesPage() {
         attachments={attachments}
         onUploadAttachment={handleUploadAttachment}
         onDeleteAttachment={handleDeleteAttachment}
+      />
+
+      {/* Cotizaciones AI Import Modal (PDF / EML / Presupuestos) */}
+      <CotizacionesImportAiModal
+        isOpen={isImportAiModalOpen}
+        onClose={() => setIsImportAiModalOpen(false)}
+        cotizacionId={currentQuoteId || "general"}
+        existingItems={items.map((it) => ({ id: it.id, name: it.name, baseUnit: it.baseUnit, targetQuantity: it.targetQuantity }))}
+        targetProviderId={importAiTargetProviderId}
+        targetProviderName={importAiTargetProviderName}
+        onConfirmImport={handleConfirmImportAi}
       />
     </AppLayout>
   );
