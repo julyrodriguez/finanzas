@@ -139,6 +139,23 @@ export default function CotizacionesPage() {
   const isLocked = status !== "borrador";
   const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
   const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
+  const [minimizedProviders, setMinimizedProviders] = useState<Record<string, boolean>>({});
+
+  const toggleMinimizeProvider = (providerId: string) => {
+    setMinimizedProviders((prev) => ({
+      ...prev,
+      [providerId]: !prev[providerId]
+    }));
+  };
+
+  const toggleMinimizeAllProviders = () => {
+    const allMinimized = providers.length > 0 && providers.every((p) => minimizedProviders[p.id]);
+    const newState: Record<string, boolean> = {};
+    providers.forEach((p) => {
+      newState[p.id] = !allMinimized;
+    });
+    setMinimizedProviders(newState);
+  };
 
   // Items State
   const [items, setItems] = useState<Item[]>([
@@ -2498,45 +2515,219 @@ export default function CotizacionesPage() {
                 </div>
               </div>
               
-              <button
-                onClick={handleAddProvider}
-                disabled={isLocked}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Añadir Proveedor
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleMinimizeAllProviders}
+                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-semibold transition-colors border border-white/10 cursor-pointer"
+                >
+                  {providers.length > 0 && providers.every((p) => minimizedProviders[p.id])
+                    ? "Expandir todas"
+                    : "Minimizar todas"}
+                </button>
+
+                <button
+                  onClick={handleAddProvider}
+                  disabled={isLocked}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Añadir Proveedor
+                </button>
+              </div>
             </div>
 
             {/* Responsive grid of Provider quote cards */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              {providers.map((provider) => (
-                <div key={provider.id} className="glass-card rounded-3xl p-6 border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
-                  <div>
-                    {/* Provider Card Header */}
-                    <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/5">
-                      <input
-                        type="text"
-                        value={provider.name}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          setProviders(providers.map(p => p.id === provider.id ? { ...p, name } : p));
-                        }}
-                        disabled={isLocked}
-                        className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none font-bold text-white text-base py-1 px-2 rounded -ml-2 transition-all w-2/3 disabled:opacity-50"
-                        placeholder="Nombre del Proveedor"
-                      />
-                      
-                      <button
-                        onClick={() => handleDeleteProvider(provider.id)}
-                        disabled={isLocked}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Eliminar este proveedor"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Eliminar
-                      </button>
+              {providers.map((provider) => {
+                const isMinimized = Boolean(minimizedProviders[provider.id]);
+                const totalData = providerTotals.find((t) => t.providerId === provider.id);
+                const providerAtts = attachments.filter((a) => a.providerId === provider.id);
+
+                if (isMinimized) {
+                  return (
+                    <div
+                      key={provider.id}
+                      className="glass-card rounded-2xl p-4 border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between gap-3 bg-[#0d1422]/80 shadow-md"
+                    >
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/5">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleMinimizeProvider(provider.id)}
+                            className="p-1 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                            title="Expandir tarjeta"
+                          >
+                            <ChevronDown className="w-4 h-4 text-emerald-400" />
+                          </button>
+                          <span className="font-bold text-white text-base truncate" title={provider.name}>
+                            {provider.name}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Botón rápido para adjuntar PDF/EML */}
+                          <label
+                            className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
+                            title="Adjuntar PDF o correo EML a este proveedor"
+                          >
+                            <Upload className="w-3 h-3" />
+                            <span className="hidden sm:inline">Adjuntar PDF/EML</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
+                              className="hidden"
+                              disabled={isLocked}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  handleUploadAttachment(f, provider.id, provider.name);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleMinimizeProvider(provider.id)}
+                            className="px-2.5 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 cursor-pointer"
+                            title="Expandir para ver y editar detalles"
+                          >
+                            Ver detalle
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProvider(provider.id)}
+                            disabled={isLocked}
+                            className="p-1 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Eliminar este proveedor"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Resumen: Archivos adjuntos y Total */}
+                      <div className="flex items-center justify-between gap-4 pt-1">
+                        {/* Archivos adjuntos del proveedor */}
+                        <div className="min-w-0 flex-1">
+                          {providerAtts.length === 0 ? (
+                            <span className="text-xs text-gray-500 italic">Sin archivos adjuntos</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {providerAtts.map((att) => {
+                                const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
+                                const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
+                                return (
+                                  <a
+                                    key={att.id}
+                                    href={att.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#121927] hover:bg-[#182337] border border-white/10 rounded-lg text-xs text-gray-200 hover:text-emerald-300 transition-colors truncate max-w-[200px]"
+                                    title={`Abrir archivo: ${att.originalName}`}
+                                  >
+                                    {isEml ? (
+                                      <Mail className="w-3 h-3 text-blue-400 shrink-0" />
+                                    ) : isPdf ? (
+                                      <FileText className="w-3 h-3 text-red-400 shrink-0" />
+                                    ) : (
+                                      <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
+                                    )}
+                                    <span className="truncate">{att.originalName}</span>
+                                    <ExternalLink className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Total estimado */}
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] text-gray-400 font-bold block uppercase">TOTAL ESTIMADO</span>
+                          {totalData ? (
+                            <span className="text-base font-black font-mono text-white">
+                              {totalData.totalUSD > 0
+                                ? formatCurrencyValue(totalData.totalUSD, "USD")
+                                : formatCurrencyValue(totalData.totalARS, "ARS")}
+                            </span>
+                          ) : (
+                            <span className="text-base font-black font-mono text-white">$0</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                  );
+                }
+
+                return (
+                  <div key={provider.id} className="glass-card rounded-3xl p-6 border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
+                    <div>
+                      {/* Provider Card Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-white/5">
+                        <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+                          <input
+                            type="text"
+                            value={provider.name}
+                            onChange={(e) => {
+                              const name = e.target.value;
+                              setProviders(providers.map(p => p.id === provider.id ? { ...p, name } : p));
+                            }}
+                            disabled={isLocked}
+                            className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none font-bold text-white text-base py-1 px-2 rounded -ml-2 transition-all w-full disabled:opacity-50"
+                            placeholder="Nombre del Proveedor"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Botón para adjuntar PDF / EML al lado del nombre */}
+                          <label
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-xl text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
+                            title="Adjuntar PDF o correo EML a este proveedor"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Adjuntar PDF / EML</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
+                              className="hidden"
+                              disabled={isLocked}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  handleUploadAttachment(f, provider.id, provider.name);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                          </label>
+
+                          {/* Botón Minimizar */}
+                          <button
+                            type="button"
+                            onClick={() => toggleMinimizeProvider(provider.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-colors border border-white/10 cursor-pointer"
+                            title="Minimizar esta tarjeta"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                            <span>Minimizar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProvider(provider.id)}
+                            disabled={isLocked}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors border border-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            title="Eliminar este proveedor"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar</span>
+                          </button>
+                        </div>
+                      </div>
 
                     {/* Quotation entries for each item */}
                     <div className="space-y-6">
@@ -2611,9 +2802,15 @@ export default function CotizacionesPage() {
                                     step="any"
                                     value={quote.unitsPerPresentation || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "unitsPerPresentation", e.target.value)}
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                      }
+                                    }}
                                     placeholder="Ej. 12"
                                     disabled={isLocked}
-                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                 </div>
                               </div>
@@ -2634,9 +2831,15 @@ export default function CotizacionesPage() {
                                     type="number"
                                     value={quote.price || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "price", e.target.value)}
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                      }
+                                    }}
                                     placeholder="0.00"
                                     disabled={isLocked}
-                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                 </div>
                               </div>
@@ -2663,9 +2866,15 @@ export default function CotizacionesPage() {
                                     type="number"
                                     value={quote.discount || ""}
                                     onChange={(e) => handleUpdateQuote(provider.id, item.id, "discount", e.target.value)}
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                      }
+                                    }}
                                     placeholder="0"
                                     disabled={isLocked}
-                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-2.5 pr-6 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-2.5 pr-6 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-[10px] font-semibold">%</span>
                                 </div>
@@ -2800,7 +3009,8 @@ export default function CotizacionesPage() {
                     )}
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
 
             {/* CTA to comparison matrix */}
