@@ -968,12 +968,13 @@ export default function CotizacionesPage() {
     try {
       const formData = new FormData();
       const targetQuoteId = currentQuoteId || "temp_" + Date.now();
-      formData.append("file", file);
       formData.append("cotizacionId", targetQuoteId);
       if (providerId) formData.append("providerId", providerId);
       if (providerName) formData.append("providerName", providerName);
+      formData.append("file", file);
 
-      const apiEndpoint = process.env.NEXT_PUBLIC_COTIZACIONES_UPLOAD || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/upload";
+      const baseUrl = process.env.NEXT_PUBLIC_COTIZACIONES_UPLOAD || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/upload";
+      const apiEndpoint = `${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}`;
       const res = await fetch(apiEndpoint, {
         method: "POST",
         body: formData

@@ -133,7 +133,6 @@ export function CotizacionesImportAiModal({
     try {
       const formData = new FormData();
       const targetQuoteId = cotizacionId || "temp_" + Date.now();
-      formData.append("file", selectedFile);
       formData.append("cotizacionId", targetQuoteId);
       if (targetProviderId) {
         formData.append("providerId", targetProviderId);
@@ -144,8 +143,10 @@ export function CotizacionesImportAiModal({
       if (existingItems.length > 0) {
         formData.append("existingItems", JSON.stringify(existingItems));
       }
+      formData.append("file", selectedFile);
 
-      const apiEndpoint = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
+      const baseUrl = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
+      const apiEndpoint = `${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}`;
       const res = await fetch(apiEndpoint, {
         method: "POST",
         body: formData
