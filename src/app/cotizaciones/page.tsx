@@ -4681,6 +4681,7 @@ export default function CotizacionesPage() {
 
       {/* Cotizaciones AI Chat Modal */}
       <CotizacionesAiChatModal
+        key={currentQuoteId || "general"}
         isOpen={isAiChatOpen}
         onClose={() => setIsAiChatOpen(false)}
         cotizacionId={currentQuoteId || "general"}

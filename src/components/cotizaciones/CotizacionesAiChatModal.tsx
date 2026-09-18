@@ -110,6 +110,7 @@ export function CotizacionesAiChatModal({
   const [activeTab, setActiveTab] = useState<"chat" | "summary">("chat");
   const [summary, setSummary] = useState<string>("");
   const [summaryUpdatedAt, setSummaryUpdatedAt] = useState<string | null>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
   const [usedSummaryInChat, setUsedSummaryInChat] = useState<boolean>(false);
 
@@ -129,25 +130,56 @@ export function CotizacionesAiChatModal({
     }
   }, [isOpen]);
 
-  // Cargar resumen existente si está disponible
+  // Cargar resumen existente si está disponible y resetear al cambiar cotizacionId o cerrar
   useEffect(() => {
-    if (isOpen && cotizacionId) {
-      const fetchSummary = async () => {
-        try {
-          const res = await fetch(`https://apivacas.jariel.com.ar/api/cotizaciones-ia/summary/${encodeURIComponent(cotizacionId)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.summary) {
-              setSummary(data.summary);
-              setSummaryUpdatedAt(data.updatedAt);
-            }
-          }
-        } catch (e) {
-          // No es error si aún no se generó
-        }
-      };
-      fetchSummary();
+    // Resetear inmediatamente datos de la cotización previa
+    setSummary("");
+    setSummaryUpdatedAt(null);
+    setMessages([]);
+    setUsedSummaryInChat(false);
+
+    if (!isOpen || !cotizacionId) {
+      setIsLoadingSummary(false);
+      return;
     }
+
+    let isMounted = true;
+    setIsLoadingSummary(true);
+
+    const fetchSummary = async () => {
+      try {
+        const res = await fetch(`https://apivacas.jariel.com.ar/api/cotizaciones-ia/summary/${encodeURIComponent(cotizacionId)}`);
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.success && data.summary) {
+            setSummary(data.summary);
+            setSummaryUpdatedAt(data.updatedAt);
+            return;
+          }
+        }
+        if (isMounted) {
+          setSummary("");
+          setSummaryUpdatedAt(null);
+        }
+      } catch (e) {
+        if (isMounted) {
+          setSummary("");
+          setSummaryUpdatedAt(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSummary(false);
+        }
+      }
+    };
+
+    fetchSummary();
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen, cotizacionId]);
 
   const handleRefreshSummary = async () => {
@@ -436,13 +468,15 @@ export function CotizacionesAiChatModal({
           <button
             type="button"
             onClick={handleRefreshSummary}
-            disabled={isGeneratingSummary || attachments.length === 0}
+            disabled={isGeneratingSummary || isLoadingSummary || attachments.length === 0}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-gray-300 hover:text-white rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
             title="Generar o actualizar el informe amplio consolidado de todos los presupuestos"
           >
-            <RefreshCw className={`w-3 h-3 text-emerald-400 ${isGeneratingSummary ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">{isGeneratingSummary ? "Generando resumen..." : "Actualizar Resumen"}</span>
-            <span className="sm:hidden">{isGeneratingSummary ? "..." : "Actualizar"}</span>
+            <RefreshCw className={`w-3 h-3 text-emerald-400 ${isGeneratingSummary || isLoadingSummary ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">
+              {isGeneratingSummary ? "Generando resumen..." : isLoadingSummary ? "Cargando..." : "Actualizar Resumen"}
+            </span>
+            <span className="sm:hidden">{isGeneratingSummary || isLoadingSummary ? "..." : "Actualizar"}</span>
           </button>
         </div>
 
@@ -465,7 +499,7 @@ export function CotizacionesAiChatModal({
               <button
                 type="button"
                 onClick={handleRefreshSummary}
-                disabled={isGeneratingSummary || attachments.length === 0}
+                disabled={isGeneratingSummary || isLoadingSummary || attachments.length === 0}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-500/20 transition-all cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingSummary ? "animate-spin" : ""}`} />
@@ -480,6 +514,12 @@ export function CotizacionesAiChatModal({
                 <p className="text-xs text-gray-400 max-w-sm mx-auto">
                   Extrayendo listas de precios, plazos, condiciones comerciales y armando el dictamen comparativo.
                 </p>
+              </div>
+            ) : isLoadingSummary ? (
+              <div className="py-16 text-center space-y-3">
+                <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-sm font-semibold text-white">Cargando resumen de esta cotización...</p>
+                <p className="text-xs text-gray-400">Consultando el reporte almacenado para esta cotización específica.</p>
               </div>
             ) : summary ? (
               <div className="prose prose-invert max-w-none text-xs sm:text-sm overflow-x-auto space-y-3 bg-[#0a0f19] p-4 sm:p-6 rounded-2xl border border-white/5">
