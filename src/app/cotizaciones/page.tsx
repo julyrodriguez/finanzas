@@ -964,6 +964,23 @@ export default function CotizacionesPage() {
   // ATTACHMENTS (PRESUPUESTOS Y MAILS .EML / .PDF)
   // -----------------------------------------------------
 
+  const triggerAiSummaryUpdate = (quoteId: string, updatedAtts?: QuoteAttachment[]) => {
+    if (!quoteId || quoteId.startsWith("local-") || quoteId.startsWith("temp_")) return;
+    const currentAtts = updatedAtts || attachments;
+    if (!currentAtts || currentAtts.length === 0) return;
+    fetch("https://apivacas.jariel.com.ar/api/cotizaciones-ia/generate-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cotizacionId: quoteId,
+        quoteName: quoteName || "Cotización",
+        items: items.map((it) => ({ name: it.name, targetQuantity: it.targetQuantity, baseUnit: it.baseUnit })),
+        providers: providers.map((p) => ({ id: p.id, name: p.name })),
+        attachments: currentAtts
+      })
+    }).catch((err) => console.warn("Background AI summary generation error:", err));
+  };
+
   const handleUploadAttachment = async (file: File, providerId?: string, providerName?: string) => {
     try {
       const formData = new FormData();
@@ -1001,6 +1018,9 @@ export default function CotizacionesPage() {
             attachments: updated,
             updatedAt: serverTimestamp()
           }).catch(console.error);
+
+          // Disparar regeneración de resumen ejecutivo en segundo plano
+          triggerAiSummaryUpdate(currentQuoteId, updated);
         }
       }
 
@@ -1027,6 +1047,10 @@ export default function CotizacionesPage() {
             attachments: updated,
             updatedAt: serverTimestamp()
           }).catch(console.error);
+
+          if (updated.length > 0) {
+            triggerAiSummaryUpdate(currentQuoteId, updated);
+          }
         }
       }
 
@@ -1199,6 +1223,8 @@ export default function CotizacionesPage() {
           attachments: updatedAttachments,
           updatedAt: serverTimestamp()
         }).catch(console.error);
+
+        triggerAiSummaryUpdate(currentQuoteId, updatedAttachments);
       }
     }
 
@@ -4664,6 +4690,17 @@ export default function CotizacionesPage() {
         attachments={attachments}
         onUploadAttachment={handleUploadAttachment}
         onDeleteAttachment={handleDeleteAttachment}
+        onSummaryUpdated={(newSummary) => {
+          if (currentQuoteId) {
+            const db = getFirebaseDb();
+            if (db && !currentQuoteId.startsWith("local-")) {
+              updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+                aiSummary: newSummary,
+                updatedAt: serverTimestamp()
+              }).catch(console.error);
+            }
+          }
+        }}
       />
 
       {/* Cotizaciones AI Import Modal (PDF / EML / Presupuestos) */}
