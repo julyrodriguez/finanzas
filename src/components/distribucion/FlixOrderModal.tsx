@@ -35,6 +35,7 @@ export interface FlixRow {
 
 // Fixed order of the Distribución table (24 complexes) + Others (801)
 const MASTER_FLIX_ROWS: Omit<FlixRow, "monto" | "matched" | "rawMatchName">[] = [
+  // Cinemark complexes (1 a 13)
   { orden: 1,  codigo: "00730", codigoCuenta: "730", solomon: "730-00000000000000000", nombre: "Puerto Madero 8 ARG", region: "CABA", cadena: "Cinemark" },
   { orden: 2,  codigo: "00732", codigoCuenta: "732", solomon: "732-00000000000000000", nombre: "Mendoza 10 ARG", region: "Interior", cadena: "Cinemark" },
   { orden: 3,  codigo: "00733", codigoCuenta: "733", solomon: "733-00000000000000000", nombre: "Beruti Bulnes 10 RDLP", region: "CABA", cadena: "Cinemark" },
@@ -48,18 +49,20 @@ const MASTER_FLIX_ROWS: Omit<FlixRow, "monto" | "matched" | "rawMatchName">[] = 
   { orden: 11, codigo: "02014", codigoCuenta: "781", solomon: "781-00000000000000000", nombre: "Alto Comahue Neuquen ARG", region: "Interior", cadena: "Cinemark" },
   { orden: 12, codigo: "02015", codigoCuenta: "783", solomon: "783-00000000000000000", nombre: "Alto Avellaneda ARG", region: "GBA", cadena: "Cinemark" },
   { orden: 13, codigo: "02016", codigoCuenta: "784", solomon: "784-00000000000000000", nombre: "Parque Brown ARG", region: "CABA", cadena: "Cinemark" },
-  { orden: 14, codigo: "02000", codigoCuenta: "702", solomon: "702-00000000000000000", nombre: "Unicenter Shopping Martinez ARG", region: "GBA", cadena: "Hoyts" },
-  { orden: 15, codigo: "02001", codigoCuenta: "703", solomon: "703-00000000000000000", nombre: "Plaza Oeste Moron ARG", region: "GBA", cadena: "Hoyts" },
-  { orden: 16, codigo: "02002", codigoCuenta: "701", solomon: "701-00000000000000000", nombre: "Quilmes ARG", region: "GBA", cadena: "Hoyts" },
-  { orden: 17, codigo: "02003", codigoCuenta: "712", solomon: "712-00000000000000000", nombre: "Dot Mall Buenos Aires ARG", region: "CABA", cadena: "Hoyts" },
-  { orden: 18, codigo: "02004", codigoCuenta: "705", solomon: "705-00000000000000000", nombre: "Abasto Shopping Buenos Aires ARG", region: "CABA", cadena: "Hoyts" },
-  { orden: 19, codigo: "02005", codigoCuenta: "709", solomon: "709-00000000000000000", nombre: "Temperley ARG", region: "GBA", cadena: "Hoyts" },
-  { orden: 20, codigo: "02006", codigoCuenta: "711", solomon: "711-00000000000000000", nombre: "Shopping Nine Moreno ARG", region: "GBA", cadena: "Hoyts" },
-  { orden: 21, codigo: "02007", codigoCuenta: "708", solomon: "708-00000000000000000", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts" },
-  { orden: 22, codigo: "02008", codigoCuenta: "706", solomon: "706-00000000000000000", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts" },
-  { orden: 23, codigo: "02009", codigoCuenta: "707", solomon: "707-00000000000000000", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts" },
-  { orden: 24, codigo: "02010", codigoCuenta: "714", solomon: "714-00000000000000000", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts" },
-  { orden: 25, codigo: "00801", codigoCuenta: "801", solomon: "801-00000000000000000", nombre: "Others", region: "-", cadena: "Otros" },
+  // Others
+  { orden: 14, codigo: "00801", codigoCuenta: "801", solomon: "801-00000000000000000", nombre: "Others", region: "-", cadena: "Otros" },
+  // Hoyts complexes (15 a 25)
+  { orden: 15, codigo: "02000", codigoCuenta: "702", solomon: "702-00000000000000000", nombre: "Unicenter Shopping Martinez ARG", region: "GBA", cadena: "Hoyts" },
+  { orden: 16, codigo: "02001", codigoCuenta: "703", solomon: "703-00000000000000000", nombre: "Plaza Oeste Moron ARG", region: "GBA", cadena: "Hoyts" },
+  { orden: 17, codigo: "02002", codigoCuenta: "701", solomon: "701-00000000000000000", nombre: "Quilmes ARG", region: "GBA", cadena: "Hoyts" },
+  { orden: 18, codigo: "02003", codigoCuenta: "712", solomon: "712-00000000000000000", nombre: "Dot Mall Buenos Aires ARG", region: "CABA", cadena: "Hoyts" },
+  { orden: 19, codigo: "02004", codigoCuenta: "705", solomon: "705-00000000000000000", nombre: "Abasto Shopping Buenos Aires ARG", region: "CABA", cadena: "Hoyts" },
+  { orden: 20, codigo: "02005", codigoCuenta: "709", solomon: "709-00000000000000000", nombre: "Temperley ARG", region: "GBA", cadena: "Hoyts" },
+  { orden: 21, codigo: "02006", codigoCuenta: "711", solomon: "711-00000000000000000", nombre: "Shopping Nine Moreno ARG", region: "GBA", cadena: "Hoyts" },
+  { orden: 22, codigo: "02007", codigoCuenta: "708", solomon: "708-00000000000000000", nombre: "Nuevo Noa Shopping Salta ARG", region: "Interior", cadena: "Hoyts" },
+  { orden: 23, codigo: "02008", codigoCuenta: "706", solomon: "706-00000000000000000", nombre: "Nuevo Centro Cordoba ARG", region: "Interior", cadena: "Hoyts" },
+  { orden: 24, codigo: "02009", codigoCuenta: "707", solomon: "707-00000000000000000", nombre: "Patio Olmos Cordoba ARG", region: "Interior", cadena: "Hoyts" },
+  { orden: 25, codigo: "02010", codigoCuenta: "714", solomon: "714-00000000000000000", nombre: "Portal Rosario Shopping ARG", region: "Interior", cadena: "Hoyts" },
 ];
 
 interface ComplexMatcher {
@@ -220,6 +223,7 @@ Libertad 108,500.00
 Alto Comahue 150,250.00
 Alto Avellaneda 259,102.40
 Parque Brown 67,660.00
+Others 50,000.00
 Unicenter 521,040.12
 Plaza Oeste 269,900.00
 Quilmes 248,100.00
@@ -230,8 +234,7 @@ Shopping Nine 170,230.00
 Salta 193,780.00
 Nuevo Centro 160,830.00
 Patio Olmos 142,120.00
-Rosario 83,320.00
-Others 50,000.00`;
+Rosario 83,320.00`;
 
 export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalProps) {
   const [inputText, setInputText] = useState<string>("");
@@ -393,6 +396,26 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
     return useCommaDecimal ? fixed.replace(".", ",") : fixed;
   };
 
+  // Split active rows around Others (cuenta 801)
+  const othersIndex = useMemo(() => {
+    return activeRowsToExport.findIndex(r => r.codigoCuenta === "801");
+  }, [activeRowsToExport]);
+
+  const rowsBeforeOthers = useMemo(() => {
+    if (othersIndex === -1) {
+      return activeRowsToExport;
+    }
+    return activeRowsToExport.slice(0, othersIndex);
+  }, [activeRowsToExport, othersIndex]);
+
+  const rowsAfterOthers = useMemo(() => {
+    if (othersIndex === -1) {
+      return [];
+    }
+    return activeRowsToExport.slice(othersIndex + 1);
+  }, [activeRowsToExport, othersIndex]);
+
+  // 1. Copy Montos (copies all amounts, including Others)
   const handleCopyMontos = () => {
     if (activeRowsToExport.length === 0) {
       showToast("⚠️ No hay filas para copiar");
@@ -401,19 +424,33 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
     const text = activeRowsToExport.map(r => formatAmount(r.monto)).join("\n");
     navigator.clipboard.writeText(text);
     setCopiedType("montos");
-    showToast(`📋 ${activeRowsToExport.length} Montos copiados al portapapeles`);
+    showToast(`📋 ${activeRowsToExport.length} Montos copiados (con Others incluido)`);
     setTimeout(() => setCopiedType(null), 2500);
   };
 
-  const handleCopySolomon = () => {
-    if (activeRowsToExport.length === 0) {
-      showToast("⚠️ No hay filas para copiar");
+  // 2. Copy Solomon accounts from beginning up to Others (excludes 801)
+  const handleCopySolomonBeforeOthers = () => {
+    if (rowsBeforeOthers.length === 0) {
+      showToast("⚠️ No hay cuentas antes de Others");
       return;
     }
-    const text = activeRowsToExport.map(r => r.solomon).join("\n");
+    const text = rowsBeforeOthers.map(r => r.solomon).join("\n");
     navigator.clipboard.writeText(text);
-    setCopiedType("solomon");
-    showToast(`📋 ${activeRowsToExport.length} Cuentas Solomon copiadas al portapapeles`);
+    setCopiedType("solomon-before");
+    showToast(`📋 ${rowsBeforeOthers.length} Cuentas Solomon (Inicio a Others) copiadas`);
+    setTimeout(() => setCopiedType(null), 2500);
+  };
+
+  // 3. Copy Solomon accounts after Others to the end (excludes 801)
+  const handleCopySolomonAfterOthers = () => {
+    if (rowsAfterOthers.length === 0) {
+      showToast("⚠️ No hay cuentas después de Others");
+      return;
+    }
+    const text = rowsAfterOthers.map(r => r.solomon).join("\n");
+    navigator.clipboard.writeText(text);
+    setCopiedType("solomon-after");
+    showToast(`📋 ${rowsAfterOthers.length} Cuentas Solomon (Después de Others) copiadas`);
     setTimeout(() => setCopiedType(null), 2500);
   };
 
@@ -423,7 +460,7 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
       return;
     }
     const text = activeRowsToExport
-      .map(r => `${r.solomon}\t${formatAmount(r.monto)}`)
+      .map(r => `${r.codigoCuenta === "801" ? "" : r.solomon}\t${formatAmount(r.monto)}`)
       .join("\n");
     navigator.clipboard.writeText(text);
     setCopiedType("both");
@@ -639,34 +676,47 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
                 <div className="pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
                   <button
                     onClick={handleCopyMontos}
-                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                    title="Copia solo los montos ordenados exactamente según la tabla de distribución"
+                    className="flex-1 min-w-[130px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                    title="Copia todos los montos en orden (incluye Others)"
                   >
                     {copiedType === "montos" ? (
                       <Check className="w-4 h-4 text-white" />
                     ) : (
                       <Copy className="w-4 h-4" />
                     )}
-                    <span>Copiar Montos</span>
+                    <span>Copiar Montos ({activeRowsToExport.length})</span>
                   </button>
 
                   <button
-                    onClick={handleCopySolomon}
-                    className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
-                    title="Copia las cuentas Solomon ordenadas (formato con 17 ceros, incluyendo 801 para Others)"
+                    onClick={handleCopySolomonBeforeOthers}
+                    className="flex-1 min-w-[160px] py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                    title="Copia cuentas Solomon desde el inicio hasta antes de Others (excluye 801)"
                   >
-                    {copiedType === "solomon" ? (
+                    {copiedType === "solomon-before" ? (
                       <Check className="w-4 h-4 text-white" />
                     ) : (
                       <Copy className="w-4 h-4" />
                     )}
-                    <span>Copiar Cuentas Solomon</span>
+                    <span>Cuentas: Inicio a Others ({rowsBeforeOthers.length})</span>
+                  </button>
+
+                  <button
+                    onClick={handleCopySolomonAfterOthers}
+                    className="flex-1 min-w-[160px] py-2 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/20 transition-all cursor-pointer"
+                    title="Copia cuentas Solomon desde después de Others hasta el final (excluye 801)"
+                  >
+                    {copiedType === "solomon-after" ? (
+                      <Check className="w-4 h-4 text-white" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                    <span>Cuentas: Después de Others ({rowsAfterOthers.length})</span>
                   </button>
 
                   <button
                     onClick={handleCopyBoth}
                     className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-                    title="Copia Cuentas Solomon y Montos separados por tabulación (para pegar directo en Excel)"
+                    title="Copia Cuentas Solomon y Montos separados por tabulación para Excel (en Others la cuenta queda vacía)"
                   >
                     {copiedType === "both" ? (
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
