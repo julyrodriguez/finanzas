@@ -235,6 +235,7 @@ Others 50,000.00`;
 
 export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalProps) {
   const [inputText, setInputText] = useState<string>("");
+  const [redondear, setRedondear] = useState<boolean>(true);
   const [useCommaDecimal, setUseCommaDecimal] = useState<boolean>(true);
   const [copyOnlyMatched, setCopyOnlyMatched] = useState<boolean>(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
@@ -303,14 +304,91 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
     };
   }, [inputText]);
 
+  // Apply rounding (multiples of 10 or 50, without decimals) if enabled, identically to the main Distribución page
+  const { finalRows, displayTotal } = useMemo(() => {
+    if (!redondear || rows.length === 0 || totalMonto === 0) {
+      return { finalRows: rows, displayTotal: totalMonto };
+    }
+
+    let baseVal = 10;
+    if (totalMonto >= 1000000) {
+      if (Math.round(totalMonto) % 50 === 0) {
+        baseVal = 50;
+      } else {
+        baseVal = 10;
+      }
+    }
+
+    const targetTotal = Math.round(totalMonto / baseVal) * baseVal;
+    let sumFloors = 0;
+
+    const activeItems = rows
+      .map((r, idx) => ({ r, idx }))
+      .filter(item => item.r.monto > 0);
+
+    if (activeItems.length === 0) {
+      return { finalRows: rows, displayTotal: totalMonto };
+    }
+
+    const items = activeItems.map(item => {
+      const exact = item.r.monto;
+      const floorVal = Math.floor(exact / baseVal) * baseVal;
+      sumFloors += floorVal;
+      return {
+        idx: item.idx,
+        exact,
+        floorVal,
+        remainder: exact - floorVal
+      };
+    });
+
+    const diff = targetTotal - sumFloors;
+    const bills = Math.round(diff / baseVal);
+
+    if (bills > 0) {
+      items.sort((a, b) => b.remainder - a.remainder || a.idx - b.idx);
+      for (let i = 0; i < bills; i++) {
+        items[i % items.length].floorVal += baseVal;
+      }
+    } else if (bills < 0) {
+      const billsToSubtract = Math.abs(bills);
+      items.sort((a, b) => a.remainder - b.remainder || a.idx - b.idx);
+      for (let i = 0; i < billsToSubtract; i++) {
+        items[i % items.length].floorVal -= baseVal;
+      }
+    }
+
+    items.sort((a, b) => a.idx - b.idx);
+
+    const roundedMap = new Map<number, number>();
+    items.forEach(it => {
+      roundedMap.set(it.idx, it.floorVal);
+    });
+
+    const roundedRows = rows.map((r, idx) => {
+      if (roundedMap.has(idx)) {
+        return {
+          ...r,
+          monto: roundedMap.get(idx)!
+        };
+      }
+      return r;
+    });
+
+    return { finalRows: roundedRows, displayTotal: targetTotal };
+  }, [rows, totalMonto, redondear]);
+
   const activeRowsToExport = useMemo(() => {
     if (copyOnlyMatched) {
-      return rows.filter(r => r.matched);
+      return finalRows.filter(r => r.matched);
     }
-    return rows;
-  }, [rows, copyOnlyMatched]);
+    return finalRows;
+  }, [finalRows, copyOnlyMatched]);
 
   const formatAmount = (val: number): string => {
+    if (redondear) {
+      return val.toFixed(0);
+    }
     const fixed = val.toFixed(2);
     return useCommaDecimal ? fixed.replace(".", ",") : fixed;
   };
@@ -503,7 +581,10 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Total Flix</span>
                       <span className="text-xl font-black text-emerald-400 font-mono">
-                        ${totalMonto.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${displayTotal.toLocaleString("es-AR", { 
+                          minimumFractionDigits: redondear ? 0 : 2, 
+                          maximumFractionDigits: redondear ? 0 : 2 
+                        })}
                       </span>
                     </div>
                     <div className="h-8 w-[1px] bg-white/10" />
@@ -519,16 +600,28 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
                   </div>
 
                   {/* Format toggles */}
-                  <div className="flex items-center gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
                     <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={useCommaDecimal}
-                        onChange={(e) => setUseCommaDecimal(e.target.checked)}
+                        checked={redondear}
+                        onChange={(e) => setRedondear(e.target.checked)}
                         className="rounded border-slate-700 bg-[#080c16] text-indigo-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
                       />
-                      <span className="text-[11px]">Decimal con coma (Excel AR)</span>
+                      <span className="text-[11px] font-medium text-emerald-300">Redondear (Múltiplos de 10)</span>
                     </label>
+
+                    {!redondear && (
+                      <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={useCommaDecimal}
+                          onChange={(e) => setUseCommaDecimal(e.target.checked)}
+                          className="rounded border-slate-700 bg-[#080c16] text-indigo-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="text-[11px]">Decimal con coma (Excel AR)</span>
+                      </label>
+                    )}
 
                     <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer select-none">
                       <input
@@ -599,7 +692,7 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 font-mono">
-                      {rows.map((row) => (
+                      {finalRows.map((row) => (
                         <tr 
                           key={row.codigoCuenta}
                           className={`transition-colors duration-100 ${
@@ -634,10 +727,13 @@ export function FlixOrderModal({ isOpen, onClose, showToast }: FlixOrderModalPro
                           <td className="px-3 py-2 text-right font-bold text-sm">
                             {row.matched ? (
                               <span className="text-emerald-400">
-                                ${row.monto.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                ${row.monto.toLocaleString("es-AR", { 
+                                  minimumFractionDigits: redondear ? 0 : 2, 
+                                  maximumFractionDigits: redondear ? 0 : 2 
+                                })}
                               </span>
                             ) : (
-                              <span className="text-slate-600">$0,00</span>
+                              <span className="text-slate-600">{redondear ? "$0" : "$0,00"}</span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-center font-sans">
