@@ -77,7 +77,7 @@ const COMPLEX_MATCHERS: ComplexMatcher[] = [
   { id: "745", patterns: [/santa fe/i, /sta fe/i, /pto santa fe/i] },
   { id: "748", patterns: [/san justo/i, /\bjusto\b/i] },
   { id: "756", patterns: [/tortuga/i, /\btom\b/i, /tortuguitas/i] },
-  { id: "780", patterns: [/libertad/i, /salta libertad/i, /cinemark salta/i, /salta cinemark/i, /salta.*hiper/i] },
+  { id: "780", patterns: [/libertad/i, /salta libertad/i, /cinemark salta/i, /salta cinemark/i, /salta.*hiper/i, /\bhiper\b/i] },
   { id: "781", patterns: [/comahue/i, /neuquen/i, /neuqu[eé]n/i, /\bnqn\b/i] },
   { id: "783", patterns: [/avellaneda/i] },
   { id: "784", patterns: [/brown/i] },
@@ -88,7 +88,7 @@ const COMPLEX_MATCHERS: ComplexMatcher[] = [
   { id: "705", patterns: [/abasto/i] },
   { id: "709", patterns: [/temperley/i] },
   { id: "711", patterns: [/moreno/i, /\bnine\b/i] },
-  { id: "708", patterns: [/\bnoa\b/i, /salta noa/i, /hoyts salta/i, /salta hoyts/i] },
+  { id: "708", patterns: [/\bnoa\b/i, /salta noa/i, /hoyts salta/i, /salta hoyts/i, /nuevo noa/i, /\bsalta\b/i] },
   { id: "706", patterns: [/nuevo centro/i, /nuevocentro/i, /c[oó]rdoba centro/i, /cordoba centro/i] },
   { id: "707", patterns: [/olmos/i, /patio olmos/i, /c[oó]rdoba olmos/i, /cordoba olmos/i] },
   { id: "714", patterns: [/rosario/i] },
@@ -216,7 +216,7 @@ San Miguel 297,290.10
 Santa Fe 163,220.00
 San Justo 230,660.00
 Tortugas 235,130.00
-Salta Libertad 108,500.00
+Libertad 108,500.00
 Alto Comahue 150,250.00
 Alto Avellaneda 259,102.40
 Parque Brown 67,660.00
@@ -227,7 +227,7 @@ Dot 282,192.83
 Abasto 457,820.10
 Temperley 224,550.00
 Shopping Nine 170,230.00
-Nuevo Noa 193,780.00
+Salta 193,780.00
 Nuevo Centro 160,830.00
 Patio Olmos 142,120.00
 Rosario 83,320.00
