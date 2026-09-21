@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { DistributionPinModal } from "@/components/distribucion/DistributionPinModal";
+import { FlixOrderModal } from "@/components/distribucion/FlixOrderModal";
 
 interface Complejo {
   codigo: string;
@@ -100,6 +101,9 @@ export default function DistribucionPage() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
+
+  // Flix modal state
+  const [showFlixModal, setShowFlixModal] = useState<boolean>(false);
 
   // Success message toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -708,6 +712,16 @@ export default function DistribucionPage() {
               </button>
             )}
 
+            {/* Ordenar Flix button */}
+            <button
+              onClick={() => setShowFlixModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/25 transition-all cursor-pointer"
+              title="Abre el asistente para ordenar datos de Flix y copiar montos y cuentas Solomon"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Ordenar Flix</span>
+            </button>
+
             {/* Copy Cuentas button */}
             <button
               onClick={handleCopyCuentas}
@@ -936,6 +950,13 @@ export default function DistribucionPage() {
         setPinInput={setPinInput}
         pinError={pinError}
         onVerifyPin={handleVerifyPin}
+      />
+
+      {/* 6. Flix Reorder & Solomon accounts modal dialog */}
+      <FlixOrderModal
+        isOpen={showFlixModal}
+        onClose={() => setShowFlixModal(false)}
+        showToast={showToast}
       />
     </AppLayout>
   );
