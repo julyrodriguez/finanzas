@@ -12,6 +12,7 @@ import {
   updateDoc,
   arrayUnion
 } from "firebase/firestore";
+import { syncOrderToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
 import { 
   Clock, 
   Check, 
@@ -110,110 +111,32 @@ export default function ProcesoDeLiberacionPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Load Mandadas (In Process of Liberation)
-  useEffect(() => {
-    const db = getFirebaseDb();
-    if (!db) {
-      setTimeout(() => setLoading(false), 0);
-      return;
-    }
-
-    const colRef = collection(db, "ordenes_compra");
-    const q = query(
-      colRef,
-      where("mandada", "==", true),
-      where("liberada", "==", false)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docs = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            empresa: data.empresa || "Hoyts",
-            numSolicitud: data.numSolicitud || "",
-            numOC: data.numOC || "",
-            razonSocial: data.razonSocial || "",
-            monto: data.monto ?? 0,
-            motivo: data.motivo || "",
-            formaPago: data.formaPago || "30DFF",
-            liberada: Boolean(data.liberada),
-            mandada: Boolean(data.mandada),
-            entregada: Boolean(data.entregada),
-            cancelada: Boolean(data.cancelada),
-            creadoPor: data.creadoPor || "Usuario",
-            notas: data.notas || [],
-            createdAt: data.createdAt || null,
-            relatedOC: data.relatedOC || "",
-            enviado: Boolean(data.enviado),
-            enviadoA1: data.enviadoA1 || "",
-            enviadoA2: data.enviadoA2 || "",
-            fechaEnvio1: data.fechaEnvio1 || "",
-            fechaEnvio2: data.fechaEnvio2 || "",
-            firmado1: Boolean(data.firmado1),
-            firmado2: Boolean(data.firmado2),
-            firmante1: data.firmante1 || "",
-            firmante2: data.firmante2 || "",
-            fechaFirma1: data.fechaFirma1 || "",
-            fechaFirma2: data.fechaFirma2 || "",
-            linkSharepoint: data.linkSharepoint || "",
-          } as OrdenCompra;
-        }).filter(o => !o.cancelada);
-
-        setOrdenes(docs);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Error al escuchar órdenes mandadas:", err);
-        setLoading(false);
+  // Cargar órdenes directamente desde el servidor local (MongoDB)
+  const loadOrdersFromServer = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchOrdersFromMongo({ limit: 0 });
+      if (res && res.success && Array.isArray(res.ordenes)) {
+        const allDocs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
+        allDocs.sort((a, b) => {
+          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+          return timeB - timeA;
+        });
+        setAllOrdersForBatch(allDocs);
+        const mandadas = allDocs.filter((o) => o.mandada && !o.liberada && !o.cancelada);
+        setOrdenes(mandadas);
       }
-    );
+    } catch (err) {
+      console.error("Error al cargar órdenes de proceso de liberación desde el servidor local:", err);
+      showToast("Error al cargar órdenes desde el servidor local");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Also load all orders for batch modals
-    const qAll = query(colRef);
-    const unsubAll = onSnapshot(qAll, (snapshot) => {
-      const allDocs = snapshot.docs.map(docSnap => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          empresa: data.empresa || "Hoyts",
-          numSolicitud: data.numSolicitud || "",
-          numOC: data.numOC || "",
-          razonSocial: data.razonSocial || "",
-          monto: data.monto ?? 0,
-          motivo: data.motivo || "",
-          formaPago: data.formaPago || "30DFF",
-          liberada: Boolean(data.liberada),
-          mandada: Boolean(data.mandada),
-          entregada: Boolean(data.entregada),
-          cancelada: Boolean(data.cancelada),
-          creadoPor: data.creadoPor || "Usuario",
-          notas: data.notas || [],
-          createdAt: data.createdAt || null,
-          relatedOC: data.relatedOC || "",
-          enviado: Boolean(data.enviado),
-          enviadoA1: data.enviadoA1 || "",
-          enviadoA2: data.enviadoA2 || "",
-          fechaEnvio1: data.fechaEnvio1 || "",
-          fechaEnvio2: data.fechaEnvio2 || "",
-          firmado1: Boolean(data.firmado1),
-          firmado2: Boolean(data.firmado2),
-          firmante1: data.firmante1 || "",
-          firmante2: data.firmante2 || "",
-          fechaFirma1: data.fechaFirma1 || "",
-          fechaFirma2: data.fechaFirma2 || "",
-          linkSharepoint: data.linkSharepoint || "",
-        } as OrdenCompra;
-      });
-      setAllOrdersForBatch(allDocs);
-    });
-
-    return () => {
-      unsubscribe();
-      unsubAll();
-    };
+  useEffect(() => {
+    loadOrdersFromServer();
   }, []);
 
   const limite1 = config?.limiteNivel1 || 5000000;
@@ -398,6 +321,7 @@ export default function ProcesoDeLiberacionPage() {
       prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
         .filter(item => !item.liberada && !item.entregada && !item.cancelada)
     );
+    syncOrderToMongo({ id: ordenId, ...updatedFields });
   };
 
   // Add Note handler
@@ -414,23 +338,27 @@ export default function ProcesoDeLiberacionPage() {
       fecha: new Date().toISOString(),
     };
 
+    const updatedNotas = [...(activeNotesOrden.notas || []), newNota];
+    if (activeNotesOrden.id) {
+      syncOrderToMongo({ id: activeNotesOrden.id, ...activeNotesOrden, notas: updatedNotas });
+      showToast("Nota agregada correctamente");
+    }
+
     if (db && activeNotesOrden.id) {
       try {
         const docRef = doc(db, "ordenes_compra", activeNotesOrden.id);
         await updateDoc(docRef, {
           notas: arrayUnion(newNota),
         });
-        showToast("Nota agregada correctamente");
       } catch (err) {
-        console.error("Error al agregar nota:", err);
-        showToast("Error al agregar la nota");
+        console.warn("Aviso Firebase al agregar nota:", err);
       }
     }
 
     setOrdenes((prev) =>
       prev.map((item) =>
         item.id === activeNotesOrden.id
-          ? { ...item, notas: [...(item.notas || []), newNota] }
+          ? { ...item, notas: updatedNotas }
           : item
       )
     );

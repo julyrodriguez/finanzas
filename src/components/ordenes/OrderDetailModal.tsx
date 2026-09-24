@@ -234,6 +234,8 @@ export function OrderDetailModal({
       cancelada: false,
     };
 
+    syncOrderToMongo({ id: orden.id, ...orden, ...updates });
+
     const db = getFirebaseDb();
     if (db) {
       try {
@@ -241,9 +243,8 @@ export function OrderDetailModal({
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updates });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
-        console.error("Error updating firma 1:", err);
+        console.warn("Aviso Firebase actualizando firma 1:", err);
       }
     }
 
@@ -268,6 +269,8 @@ export function OrderDetailModal({
       liberada: false,
     };
 
+    syncOrderToMongo({ id: orden.id, ...orden, ...updates });
+
     const db = getFirebaseDb();
     if (db) {
       try {
@@ -275,9 +278,8 @@ export function OrderDetailModal({
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updates });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
-        console.error("Error removing firma 1:", err);
+        console.warn("Aviso Firebase removiendo firma 1:", err);
       }
     }
 
@@ -303,6 +305,8 @@ export function OrderDetailModal({
       cancelada: false,
     };
 
+    syncOrderToMongo({ id: orden.id, ...orden, ...updates });
+
     const db = getFirebaseDb();
     if (db) {
       try {
@@ -310,9 +314,8 @@ export function OrderDetailModal({
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updates });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
-        console.error("Error updating firma 2:", err);
+        console.warn("Aviso Firebase actualizando firma 2:", err);
       }
     }
 
@@ -337,6 +340,8 @@ export function OrderDetailModal({
       liberada: false,
     };
 
+    syncOrderToMongo({ id: orden.id, ...orden, ...updates });
+
     const db = getFirebaseDb();
     if (db) {
       try {
@@ -344,9 +349,8 @@ export function OrderDetailModal({
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updates });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updates });
       } catch (err) {
-        console.error("Error removing firma 2:", err);
+        console.warn("Aviso Firebase removiendo firma 2:", err);
       }
     }
 

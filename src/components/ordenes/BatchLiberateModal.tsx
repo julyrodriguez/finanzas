@@ -18,6 +18,7 @@ import {
 import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
 import { getOrderStatus, trackBatchStatusChanges } from "@/lib/ordenesStats";
+import { bulkSyncOrdersToMongo } from "@/lib/serverSync";
 import { 
   collection, 
   query, 
@@ -609,7 +610,16 @@ export function BatchLiberateModal({
     setIsProcessing(true);
     const db = getFirebaseDb();
     const itemsToUpdate = [...toLiberateList, ...toPartialSignList];
-    const updatedEntries: { id: string; updates: Partial<OrdenCompra> }[] = [];
+    const updatedEntries: { id: string; updates: Partial<OrdenCompra> }[] = itemsToUpdate
+      .filter((item) => item.order?.id && item.updatesToApply)
+      .map((item) => ({ id: item.order!.id!, updates: item.updatesToApply! }));
+
+    // Sincronizar en MongoDB de forma inmediata
+    bulkSyncOrdersToMongo(
+      itemsToUpdate
+        .filter((item) => item.order?.id && item.updatesToApply)
+        .map((item) => ({ id: item.order!.id!, ...item.order, ...item.updatesToApply }))
+    );
 
     if (db) {
       try {
@@ -618,7 +628,6 @@ export function BatchLiberateModal({
           if (item.order?.id && item.updatesToApply) {
             const docRef = doc(db, "ordenes_compra", item.order.id);
             batch.update(docRef, item.updatesToApply);
-            updatedEntries.push({ id: item.order.id, updates: item.updatesToApply });
           }
         }
         await batch.commit();
@@ -631,30 +640,21 @@ export function BatchLiberateModal({
             newStatus: getOrderStatus({ ...item.order, ...item.updatesToApply }),
           }));
         trackBatchStatusChanges(db, statusChanges);
-
-        if (toLiberateList.length > 0 && toPartialSignList.length > 0) {
-          showToast(`🎉 ${toLiberateList.length} liberadas y ${toPartialSignList.length} firmadas correctamente`);
-        } else if (toLiberateList.length > 0) {
-          showToast(`🎉 ¡${toLiberateList.length} órdenes marcadas como LIBERADAS con éxito!`);
-        } else {
-          showToast(`✍️ ¡${toPartialSignList.length} órdenes firmadas (pendientes de 2da firma)!`);
-        }
-
-        onBatchSuccess(updatedEntries);
-        handleClose();
       } catch (err) {
-        console.error("Error al ejecutar batch update en Firestore:", err);
-        showToast("Error al actualizar las órdenes en el servidor");
+        console.warn("Aviso Firebase al ejecutar batch update:", err);
       }
-    } else {
-      const localUpdates = itemsToUpdate
-        .filter(i => i.order?.id && i.updatesToApply)
-        .map(i => ({ id: i.order!.id!, updates: i.updatesToApply! }));
-      onBatchSuccess(localUpdates);
-      showToast(`🎉 ¡${itemsToUpdate.length} órdenes actualizadas localmente!`);
-      handleClose();
     }
 
+    if (toLiberateList.length > 0 && toPartialSignList.length > 0) {
+      showToast(`🎉 ${toLiberateList.length} liberadas y ${toPartialSignList.length} firmadas correctamente`);
+    } else if (toLiberateList.length > 0) {
+      showToast(`🎉 ¡${toLiberateList.length} órdenes marcadas como LIBERADAS con éxito!`);
+    } else {
+      showToast(`✍️ ¡${toPartialSignList.length} órdenes firmadas (pendientes de 2da firma)!`);
+    }
+
+    onBatchSuccess(updatedEntries);
+    handleClose();
     setIsProcessing(false);
   };
 

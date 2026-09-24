@@ -19,6 +19,7 @@ import {
 import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
 import { getOrderStatus, trackBatchStatusChanges } from "@/lib/ordenesStats";
+import { bulkSyncOrdersToMongo } from "@/lib/serverSync";
 import { 
   collection, 
   query, 
@@ -348,34 +349,45 @@ export function BatchSendToSignModal({
         (m) => (m.status === "send_1ra" || m.status === "send_2da") && m.order && m.order.id && m.updatesToApply
       );
 
+      const updatedEntries: { id: string; updates: Partial<OrdenCompra> }[] = itemsToUpdate
+        .filter((item) => item.order?.id && item.updatesToApply)
+        .map((item) => ({ id: item.order!.id!, updates: item.updatesToApply! }));
+
+      // Sincronizar en MongoDB de forma inmediata
+      bulkSyncOrdersToMongo(
+        itemsToUpdate
+          .filter((item) => item.order?.id && item.updatesToApply)
+          .map((item) => ({ id: item.order!.id!, ...item.order, ...item.updatesToApply }))
+      );
+
       // Batch in chunks of 450 (Firestore limit is 500)
-      const chunkSize = 450;
-      const updatedEntries: { id: string; updates: Partial<OrdenCompra> }[] = [];
+      if (db) {
+        try {
+          const chunkSize = 450;
+          for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
+            const chunk = itemsToUpdate.slice(i, i + chunkSize);
+            const batch = writeBatch(db);
 
-      for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
-        const chunk = itemsToUpdate.slice(i, i + chunkSize);
-        const batch = writeBatch(db);
+            for (const item of chunk) {
+              const docRef = doc(db, "ordenes_compra", item.order!.id!);
+              batch.update(docRef, item.updatesToApply!);
+            }
 
-        for (const item of chunk) {
-          const docRef = doc(db, "ordenes_compra", item.order!.id!);
-          batch.update(docRef, item.updatesToApply!);
-          updatedEntries.push({
-            id: item.order!.id!,
-            updates: item.updatesToApply!,
-          });
+            await batch.commit();
+          }
+
+          // Actualizar contadores atómicos en la base de datos
+          const statusChanges = itemsToUpdate
+            .filter((item) => item.order)
+            .map((item) => ({
+              oldStatus: getOrderStatus(item.order),
+              newStatus: getOrderStatus({ ...item.order, ...item.updatesToApply }),
+            }));
+          trackBatchStatusChanges(db, statusChanges);
+        } catch (err) {
+          console.warn("Aviso Firebase al procesar envío a firmar:", err);
         }
-
-        await batch.commit();
       }
-
-      // Actualizar contadores atómicos en la base de datos
-      const statusChanges = itemsToUpdate
-        .filter((item) => item.order)
-        .map((item) => ({
-          oldStatus: getOrderStatus(item.order),
-          newStatus: getOrderStatus({ ...item.order, ...item.updatesToApply }),
-        }));
-      trackBatchStatusChanges(db, statusChanges);
 
       if (onBatchSuccess) {
         onBatchSuccess(updatedEntries);

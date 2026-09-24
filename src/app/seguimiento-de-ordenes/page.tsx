@@ -15,6 +15,7 @@ import {
 import { getFirebaseDb } from "@/lib/firebase";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/context/AuthContext";
+import { syncOrderToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
 import { 
   Search, 
   X, 
@@ -107,24 +108,7 @@ export default function SeguimientoDeOrdenesPage() {
   };
 
   const handleLoadAllFromDb = async () => {
-    const db = getFirebaseDb();
-    if (!db) return;
-    setLoadingAllDb(true);
-    try {
-      const colRef = collection(db, "ordenes_compra");
-      const q = query(colRef, orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      const allDocs = snap.docs.map((d) => parseSeguimientoDoc(d.id, d.data()));
-      setOrdenes(allDocs);
-      setQueryLimit(allDocs.length);
-      setHasLoadedAllFromDb(true);
-      showToast(`¡Se cargaron ${allDocs.length} órdenes de la base de datos!`);
-    } catch (err) {
-      console.error("Error al cargar toda la base de datos:", err);
-      showToast("Error al cargar todas las órdenes.");
-    } finally {
-      setLoadingAllDb(false);
-    }
+    loadOrdersFromServer();
   };
 
   // Helper to parse currency / amount
@@ -198,81 +182,39 @@ export default function SeguimientoDeOrdenesPage() {
     linkSharepoint: data.linkSharepoint || "",
   });
 
-  // Load Real-time Orders (recent batch)
-  useEffect(() => {
-    const db = getFirebaseDb();
-    if (!db) {
-      setTimeout(() => setLoading(false), 0);
-      return;
-    }
-
-    const colRef = collection(db, "ordenes_compra");
-    const q = query(colRef, orderBy("createdAt", "desc"), limit(120));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docs = snapshot.docs.map((docSnap) => parseSeguimientoDoc(docSnap.id, docSnap.data()));
-        setOrdenes(docs);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error listening to orders:", error);
-        setLoading(false);
+  // Cargar órdenes directamente desde el servidor local (MongoDB)
+  const loadOrdersFromServer = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchOrdersFromMongo({ limit: 0 });
+      if (res && res.success && Array.isArray(res.ordenes)) {
+        const allDocs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
+        allDocs.sort((a, b) => {
+          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+          return timeB - timeA;
+        });
+        setOrdenes(allDocs);
+        setHasLoadedAllFromDb(true);
+        setQueryLimit(allDocs.length);
       }
-    );
+    } catch (err) {
+      console.error("Error al cargar órdenes de seguimiento desde el servidor local:", err);
+      showToast("Error al cargar órdenes desde el servidor local");
+    } finally {
+      setLoading(false);
+      setLoadingAllDb(false);
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    loadOrdersFromServer();
   }, []);
 
-  // Global search directly on Firestore
+  // Búsqueda en memoria instantánea (sin lecturas de Firestore)
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setDbSearchResults([]);
-      setIsSearchingDb(false);
-      return;
-    }
-
-    const db = getFirebaseDb();
-    if (!db) return;
-
-    const term = searchQuery.trim().toLowerCase();
-    setIsSearchingDb(true);
-
-    const timer = setTimeout(async () => {
-      try {
-        const colRef = collection(db, "ordenes_compra");
-        const q = query(colRef, orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-
-        const results: OrdenCompra[] = [];
-        snap.forEach((d) => {
-          const ord = parseSeguimientoDoc(d.id, d.data());
-          const match =
-            ord.numOC.toLowerCase().includes(term) ||
-            ord.numSolicitud.toLowerCase().includes(term) ||
-            ord.razonSocial.toLowerCase().includes(term) ||
-            ord.motivo.toLowerCase().includes(term) ||
-            (ord.creadoPor && ord.creadoPor.toLowerCase().includes(term)) ||
-            (ord.firmante1 && ord.firmante1.toLowerCase().includes(term)) ||
-            (ord.firmante2 && ord.firmante2.toLowerCase().includes(term)) ||
-            (ord.enviadoA1 && ord.enviadoA1.toLowerCase().includes(term)) ||
-            (ord.enviadoA2 && ord.enviadoA2.toLowerCase().includes(term));
-
-          if (match) {
-            results.push(ord);
-          }
-        });
-
-        setDbSearchResults(results);
-      } catch (err) {
-        console.error("Error searching in Firestore:", err);
-      } finally {
-        setIsSearchingDb(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
+    setIsSearchingDb(false);
+    setDbSearchResults([]);
   }, [searchQuery]);
 
   // Helper to determine signature statuses for an order
@@ -553,29 +495,33 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       fecha: new Date().toISOString(),
     };
 
+    const updatedNotas = [...(activeNotesOrden.notas || []), newNota];
+    if (activeNotesOrden.id) {
+      syncOrderToMongo({ id: activeNotesOrden.id, ...activeNotesOrden, notas: updatedNotas });
+      showToast("Nota agregada correctamente");
+    }
+
     if (db && activeNotesOrden.id) {
       try {
         const docRef = doc(db, "ordenes_compra", activeNotesOrden.id);
         await updateDoc(docRef, {
           notas: arrayUnion(newNota),
         });
-        showToast("Nota agregada correctamente");
       } catch (err) {
-        console.error("Error al agregar nota:", err);
-        showToast("Error al agregar la nota");
+        console.warn("Aviso Firebase al agregar nota:", err);
       }
     }
 
     setOrdenes((prev) =>
       prev.map((item) =>
         item.id === activeNotesOrden.id
-          ? { ...item, notas: [...(item.notas || []), newNota] }
+          ? { ...item, notas: updatedNotas }
           : item
       )
     );
 
     setActiveNotesOrden((prev) =>
-      prev ? { ...prev, notas: [...(prev.notas || []), newNota] } : null
+      prev ? { ...prev, notas: updatedNotas } : null
     );
 
     setNewNotaText("");
@@ -586,6 +532,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     setOrdenes((prev) =>
       prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
     );
+    syncOrderToMongo({ id: ordenId, ...updatedFields });
   };
 
   return (

@@ -244,6 +244,13 @@ export function OrderStatusMenu({
       onStatusChange(orden.id, updateData);
     }
 
+    if (orden.id) {
+      syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
+      if (showToast) {
+        showToast(`Estado de OC ${orden.numOC || ""} actualizado a ${STATUS_CONFIG[targetStatus].label}`);
+      }
+    }
+
     // Firestore update
     const db = getFirebaseDb();
     if (db && orden.id) {
@@ -251,15 +258,8 @@ export function OrderStatusMenu({
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
         trackOrderStatusChange(db, currentStatus, targetStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
-        if (showToast) {
-          showToast(`Estado de OC ${orden.numOC || ""} actualizado a ${STATUS_CONFIG[targetStatus].label}`);
-        }
       } catch (err) {
-        console.error("Error al actualizar estado en Firestore:", err);
-        if (showToast) {
-          showToast("Error al guardar el estado en el servidor");
-        }
+        console.warn("Aviso Firebase al actualizar estado (cuota?):", err);
       }
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
@@ -56,7 +56,7 @@ import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
-import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrdersStatsFromMongo } from "@/lib/serverSync";
+import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrdersStatsFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
 import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
 import { 
   OrdenesStats, 
@@ -214,67 +214,32 @@ export default function OrdenesDeComprasPage() {
     }, 600);
   };
 
-  // Listener en tiempo real al documento 'metadata/ordenes_stats' del servidor
+  // Cargar estadísticas de órdenes desde el servidor MongoDB
   useEffect(() => {
-    const db = getFirebaseDb();
-    if (!db) return;
-    const statsDocRef = doc(db, "metadata", "ordenes_stats");
-
-    // Sincronizar inmediatamente desde MongoDB si el backend está activo
-    fetchOrdersStatsFromMongo().then((ms) => {
-      if (ms) {
-        setServerStats({
-          ...ms,
-          updatedAt: new Date().toISOString(),
-        });
-        setDoc(statsDocRef, { ...ms, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
-      }
-    }).catch(() => {});
-
-    const unsubscribe = onSnapshot(
-      statsDocRef,
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          const p = Number(data.pendiente) || 0;
+    fetchOrdersStatsFromMongo()
+      .then((ms) => {
+        if (ms) {
           setServerStats({
-            total: Math.max(0, Number(data.total) || 0),
-            pendiente: Math.max(0, p),
-            mandada: Math.max(0, Number(data.mandada) || 0),
-            liberada: Math.max(0, Number(data.liberada) || 0),
-            entregada: Math.max(0, Number(data.entregada) || 0),
-            cancelada: Math.max(0, Number(data.cancelada) || 0),
-            updatedAt: data.updatedAt,
+            ...ms,
+            updatedAt: new Date().toISOString(),
           });
-          // Si por error previo los pendientes quedaron en 0 pero hay órdenes en el sistema
-          if (p === 0) {
-            recalculateAndSyncStats(db)
-              .then((fresh) => setServerStats(fresh))
-              .catch(() => {});
-          }
-        } else {
-          // Documento aún no creado en el servidor: calcular e inicializar automáticamente
-          recalculateAndSyncStats(db)
-            .then((fresh) => setServerStats(fresh))
-            .catch((err) => console.warn("Error inicializando contadores:", err));
         }
-      },
-      (error) => {
-        console.warn("Aviso en listener de contadores:", error);
-      }
-    );
-
-    return () => unsubscribe();
+      })
+      .catch((err) => console.warn("Aviso stats Mongo:", err));
   }, []);
 
   const handleManualSyncStats = async () => {
-    const db = getFirebaseDb();
-    if (!db || isSyncingStats) return;
+    if (isSyncingStats) return;
     setIsSyncingStats(true);
     try {
-      const fresh = await recalculateAndSyncStats(db);
-      setServerStats(fresh);
-      showToast("Contadores sincronizados con la base de datos");
+      const fresh = await fetchOrdersStatsFromMongo();
+      if (fresh) {
+        setServerStats({
+          ...fresh,
+          updatedAt: new Date().toISOString(),
+        });
+        showToast("Contadores sincronizados con el servidor local");
+      }
     } catch (err) {
       console.error("Error sincronizando contadores:", err);
       showToast("Error al sincronizar contadores");
@@ -356,170 +321,37 @@ export default function OrdenesDeComprasPage() {
     linkSharepoint: data.linkSharepoint || "",
   });
 
-  // Load Firestore real-time data with status filters and query limits
-  // Note: isSearching does NOT restart this listener to protect free tier quotas & preserve real-time updates!
-  useEffect(() => {
-    const db = getFirebaseDb();
-    if (!db) {
-      setTimeout(() => {
-        setLoading(false);
-      }, 0);
-      return;
-    }
-
-    if (hasLoadedAllFromDb) {
-      setLoading(false);
-      return;
-    }
-
-    if (ordenes.length === 0) {
-      setLoading(true);
-    }
-
-    let unsubscribe: () => void = () => {};
-
-    const startListener = (withOrderBy: boolean) => {
-      try {
-        const colRef = collection(db, "ordenes_compra");
-        let q;
-
-        if (filterEstado === "Liberadas") {
-          q = withOrderBy
-            ? query(colRef, where("liberada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
-            : query(colRef, where("liberada", "==", true));
-        } else if (filterEstado === "Entregadas") {
-          q = withOrderBy
-            ? query(colRef, where("entregada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
-            : query(colRef, where("entregada", "==", true));
-        } else if (filterEstado === "Mandadas") {
-          q = withOrderBy
-            ? query(colRef, where("mandada", "==", true), orderBy("createdAt", "desc"), limit(queryLimit + 1))
-            : query(colRef, where("mandada", "==", true));
-        } else if (filterEstado === "Pendientes") {
-          q = withOrderBy
-            ? query(colRef, where("liberada", "==", false), orderBy("createdAt", "desc"), limit(queryLimit + 1))
-            : query(colRef, where("liberada", "==", false));
-        } else if (filterCreadoPor !== "todos") {
-          q = query(colRef, where("creadoPor", "==", filterCreadoPor));
-        } else {
-          // "Todas" without creator filter: paginate from newest to oldest
-          q = query(colRef, orderBy("createdAt", "desc"), limit(queryLimit + 1));
-        }
-
-        unsubscribe = onSnapshot(
-          q,
-          (snapshot) => {
-            const docs: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-              return parseOrdenDoc(docSnap.id, docSnap.data());
-            });
-
-            // Sort manually on client to guarantee ordering
-            docs.sort((a, b) => {
-              const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-              const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
-              return timeB - timeA;
-            });
-
-            setTimeout(() => {
-              setOrdenes(docs);
-              setLoading(false);
-            }, 0);
-          },
-          (error: Error) => {
-            // If composite index is building or not yet active, fall back gracefully to status query
-            if (withOrderBy && error.message && error.message.includes("index")) {
-              console.warn("Composite index pending in Firebase. Falling back to status query without orderBy...", error);
-              startListener(false);
-            } else {
-              console.warn("Firestore snapshot listener error:", error);
-              setTimeout(() => {
-                setLoading(false);
-              }, 0);
-            }
-          }
-        );
-      } catch (err) {
-        console.warn("Firestore collection error:", err);
-        setTimeout(() => {
-          setLoading(false);
-        }, 0);
-      }
-    };
-
-    startListener(true);
-    return () => unsubscribe();
-  }, [queryLimit, filterEstado, filterCreadoPor, hasLoadedAllFromDb]);
-
-  // Targeted background search for older orders (e.g. 3+ digits or text)
-  useEffect(() => {
-    const term = searchQuery.trim();
-    if (term.length < 3) {
-      setDbSearchResults([]);
-      setIsSearchingDb(false);
-      return;
-    }
-
-    setIsSearchingDb(true);
-
-    const timer = setTimeout(async () => {
-      const db = getFirebaseDb();
-      if (!db) {
-        setIsSearchingDb(false);
-        return;
-      }
-
-      try {
-        const colRef = collection(db, "ordenes_compra");
-        const foundDocsMap = new Map<string, OrdenCompra>();
-
-        // Prefix match on numOC and numSolicitud
-        const queries = [
-          query(colRef, where("numOC", ">=", term), where("numOC", "<=", term + "\uf8ff"), limit(25)),
-          query(colRef, where("numSolicitud", ">=", term), where("numSolicitud", "<=", term + "\uf8ff"), limit(25)),
-        ];
-
-        // Also handle numeric search if term is numeric
-        const numVal = Number(term);
-        if (!isNaN(numVal)) {
-          queries.push(query(colRef, where("numOC", "==", numVal), limit(10)));
-        }
-
-        const snapshots = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
-        snapshots.forEach((snap) => {
-          if (!snap) return;
-          snap.docs.forEach((docSnap) => {
-            foundDocsMap.set(docSnap.id, parseOrdenDoc(docSnap.id, docSnap.data()));
-          });
+  // Cargar órdenes directamente desde el servidor local (MongoDB) sin consumir cuota de Firebase
+  const loadOrdersFromServer = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchOrdersFromMongo({ limit: 0 });
+      if (res && res.success && Array.isArray(res.ordenes)) {
+        const docs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
+        docs.sort((a, b) => {
+          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
+          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+          return timeB - timeA;
         });
-
-        // If prefix found nothing and term is alphanumeric, search recent 80 records for substring match
-        if (foundDocsMap.size === 0) {
-          const fallbackSnap = await getDocs(query(colRef, orderBy("createdAt", "desc"), limit(80))).catch(() => null);
-          if (fallbackSnap) {
-            const termLower = term.toLowerCase();
-            fallbackSnap.docs.forEach((docSnap) => {
-              const item = parseOrdenDoc(docSnap.id, docSnap.data());
-              if (
-                item.numOC.toLowerCase().includes(termLower) ||
-                item.razonSocial.toLowerCase().includes(termLower) ||
-                item.numSolicitud.toLowerCase().includes(termLower) ||
-                (item.relatedOC && item.relatedOC.toLowerCase().includes(termLower))
-              ) {
-                foundDocsMap.set(docSnap.id, item);
-              }
-            });
-          }
-        }
-
-        setDbSearchResults(Array.from(foundDocsMap.values()));
-      } catch (err) {
-        console.warn("Error searching Firestore:", err);
-      } finally {
-        setIsSearchingDb(false);
+        setOrdenes(docs);
+        setHasLoadedAllFromDb(true);
       }
-    }, 350);
+    } catch (err) {
+      console.error("Error al cargar órdenes desde el servidor local:", err);
+      showToast("Error al conectar con el servidor local de órdenes");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    loadOrdersFromServer();
+  }, [loadOrdersFromServer]);
+
+  // Búsqueda en memoria instantánea (todas las órdenes están cargadas desde el servidor)
+  useEffect(() => {
+    setIsSearchingDb(false);
+    setDbSearchResults([]);
   }, [searchQuery]);
 
   // Helper to suggest next OC number based on the latest orders
@@ -821,6 +653,8 @@ export default function OrdenesDeComprasPage() {
       setOrdenes((prev) =>
         prev.map((item) => (item.id === editingOrden.id ? { ...item, ...dataToSave } : item))
       );
+      syncOrderToMongo({ id: editingOrden.id, ...editingOrden, ...dataToSave });
+      showToast("¡Orden de compra actualizada!");
 
       if (db) {
         try {
@@ -833,10 +667,8 @@ export default function OrdenesDeComprasPage() {
           }
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), editingOrden.numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
-          syncOrderToMongo({ id: editingOrden.id, ...editingOrden, ...dataToSave });
-          showToast("¡Orden de compra actualizada!");
         } catch (err) {
-          console.error("Error al actualizar orden:", err);
+          console.warn("Aviso Firebase al actualizar orden:", err);
         }
       }
     } else {
@@ -848,6 +680,10 @@ export default function OrdenesDeComprasPage() {
       };
 
       const tempId = generateUniqueId();
+      setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
+      syncOrderToMongo({ id: tempId, ...newOrden });
+      showToast("¡Orden de compra agregada!");
+
       if (db) {
         try {
           const docRef = await addDoc(collection(db, "ordenes_compra"), newOrden);
@@ -855,13 +691,9 @@ export default function OrdenesDeComprasPage() {
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), numOC.trim(), relatedOC.trim(), "");
           syncOrderToMongo({ id: docRef.id, ...newOrden });
-          showToast("¡Orden de compra agregada!");
         } catch (err) {
-          console.error("Error al agregar orden:", err);
-          setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
+          console.warn("Aviso Firebase al agregar orden:", err);
         }
-      } else {
-        setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
       }
     }
 
@@ -919,15 +751,18 @@ export default function OrdenesDeComprasPage() {
     );
     setActiveNotesOrden((prev) => (prev ? { ...prev, notas: updatedNotas } : null));
 
+    if (activeNotesOrden.id) {
+      syncOrderToMongo({ id: activeNotesOrden.id, ...activeNotesOrden, notas: updatedNotas });
+      showToast("Nota agregada");
+    }
+
     const db = getFirebaseDb();
     if (db && activeNotesOrden.id) {
       try {
         const docRef = doc(db, "ordenes_compra", activeNotesOrden.id);
         await updateDoc(docRef, { notas: updatedNotas });
-        syncOrderToMongo({ id: activeNotesOrden.id, ...activeNotesOrden, notas: updatedNotas });
-        showToast("Nota agregada");
       } catch (err) {
-        console.error("Error al agregar nota:", err);
+        console.warn("Aviso Firebase al agregar nota:", err);
       }
     }
 
@@ -960,6 +795,10 @@ export default function OrdenesDeComprasPage() {
       prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
 
+    if (orden.id) {
+      syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
+    }
+
     const db = getFirebaseDb();
     if (db && orden.id) {
       try {
@@ -968,9 +807,8 @@ export default function OrdenesDeComprasPage() {
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updateData });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
-        console.error("Error al actualizar liberada:", err);
+        console.warn("Aviso Firebase al actualizar liberada:", err);
       }
     }
   };
@@ -992,6 +830,10 @@ export default function OrdenesDeComprasPage() {
       prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
 
+    if (orden.id) {
+      syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
+    }
+
     const db = getFirebaseDb();
     if (db && orden.id) {
       try {
@@ -1000,9 +842,8 @@ export default function OrdenesDeComprasPage() {
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updateData });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
-        console.error("Error al actualizar mandada:", err);
+        console.warn("Aviso Firebase al actualizar mandada:", err);
       }
     }
   };
@@ -1024,6 +865,10 @@ export default function OrdenesDeComprasPage() {
       prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
 
+    if (orden.id) {
+      syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
+    }
+
     const db = getFirebaseDb();
     if (db && orden.id) {
       try {
@@ -1032,9 +877,8 @@ export default function OrdenesDeComprasPage() {
         const oldStatus = getOrderStatus(orden);
         const newStatus = getOrderStatus({ ...orden, ...updateData });
         trackOrderStatusChange(db, oldStatus, newStatus);
-        syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
-        console.error("Error al actualizar entregada:", err);
+        console.warn("Aviso Firebase al actualizar entregada:", err);
       }
     }
   };
@@ -1047,6 +891,9 @@ export default function OrdenesDeComprasPage() {
 
     const targetOrden = ordenes.find((item) => item.id === id);
     setOrdenes((prev) => prev.filter((item) => item.id !== id));
+    deleteOrderFromMongo(id);
+    showToast("Orden eliminada");
+
     const db = getFirebaseDb();
     if (db) {
       try {
@@ -1054,10 +901,8 @@ export default function OrdenesDeComprasPage() {
         if (targetOrden) {
           trackOrderDeleted(db, targetOrden);
         }
-        deleteOrderFromMongo(id);
-        showToast("Orden eliminada");
       } catch (err) {
-        console.error("Error al eliminar orden:", err);
+        console.warn("Aviso Firebase al eliminar orden:", err);
       }
     }
   };

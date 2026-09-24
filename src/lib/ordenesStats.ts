@@ -180,7 +180,11 @@ export async function recalculateAndSyncStats(db: Firestore): Promise<OrdenesSta
         cancelada: mongoStats.cancelada,
         updatedAt: serverTimestamp(),
       };
-      await setDoc(statsRef, stats, { merge: true });
+      try {
+        await setDoc(statsRef, stats, { merge: true });
+      } catch (err) {
+        console.warn("Aviso Firebase al sincronizar stats:", err);
+      }
       return stats;
     }
   } catch (mErr) {

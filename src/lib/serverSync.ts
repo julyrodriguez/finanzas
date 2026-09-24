@@ -125,6 +125,82 @@ export async function fetchOrdersFromMongo(params: MongoQueryParams = {}) {
   }
 }
 
+/**
+ * Convierte un documento de orden devuelto por MongoDB en una instancia de OrdenCompra.
+ */
+export function parseMongoDocToOrdenCompra(docItem: any): OrdenCompra {
+  if (!docItem) {
+    return {
+      empresa: "Hoyts",
+      numSolicitud: "",
+      numOC: "",
+      razonSocial: "",
+      monto: 0,
+      motivo: "",
+      formaPago: "30DFF",
+      liberada: false,
+      mandada: false,
+    };
+  }
+
+  let createdAtObj: any = null;
+  const rawDate = docItem.fechaOC || docItem.createdAtFirebase || docItem.createdAt;
+  if (rawDate) {
+    const d = new Date(rawDate);
+    const secs = Math.floor(d.getTime() / 1000);
+    createdAtObj = {
+      seconds: isNaN(secs) ? 0 : secs,
+      nanoseconds: 0,
+      toDate: () => d,
+    };
+  }
+
+  const raw = docItem.raw || {};
+
+  return {
+    id: String(docItem.firebaseId || docItem._id || raw.id || ""),
+    empresa: (docItem.empresa || raw.empresa || "Hoyts") as "Hoyts" | "CMK",
+    numSolicitud: String(docItem.numSolicitud ?? raw.numSolicitud ?? ""),
+    numOC: String(docItem.numOC ?? raw.numOC ?? ""),
+    razonSocial: String(docItem.razonSocial || raw.razonSocial || ""),
+    monto: docItem.monto ?? raw.monto ?? 0,
+    motivo: String(docItem.motivo || raw.motivo || ""),
+    formaPago: String(docItem.formaPago || raw.formaPago || "30DFF"),
+    liberada: Boolean(docItem.liberada ?? raw.liberada),
+    mandada: Boolean(docItem.mandada ?? raw.mandada),
+    entregada: Boolean(docItem.entregada ?? raw.entregada),
+    cancelada: Boolean(docItem.cancelada ?? raw.cancelada),
+    creadoPor: String(docItem.creadoPor || raw.creadoPor || "Usuario"),
+    notas: Array.isArray(docItem.notas)
+      ? docItem.notas
+      : Array.isArray(raw.notas)
+      ? raw.notas
+      : [],
+    createdAt:
+      createdAtObj ||
+      (raw.createdAt
+        ? {
+            seconds: raw.createdAt.seconds || 0,
+            nanoseconds: raw.createdAt.nanoseconds || 0,
+            toDate: () => new Date((raw.createdAt.seconds || 0) * 1000),
+          }
+        : null),
+    relatedOC: String(docItem.relatedOC || raw.relatedOC || ""),
+    enviado: Boolean(docItem.enviado ?? raw.enviado),
+    enviadoA1: String(docItem.enviadoA1 || raw.enviadoA1 || ""),
+    enviadoA2: String(docItem.enviadoA2 || raw.enviadoA2 || ""),
+    fechaEnvio1: String(docItem.fechaEnvio1 || raw.fechaEnvio1 || ""),
+    fechaEnvio2: String(docItem.fechaEnvio2 || raw.fechaEnvio2 || ""),
+    firmado1: Boolean(docItem.firmado1 ?? raw.firmado1),
+    firmado2: Boolean(docItem.firmado2 ?? raw.firmado2),
+    firmante1: String(docItem.firmante1 || raw.firmante1 || ""),
+    firmante2: String(docItem.firmante2 || raw.firmante2 || ""),
+    fechaFirma1: String(docItem.fechaFirma1 || raw.fechaFirma1 || ""),
+    fechaFirma2: String(docItem.fechaFirma2 || raw.fechaFirma2 || ""),
+    linkSharepoint: String(docItem.linkSharepoint || raw.linkSharepoint || ""),
+  };
+}
+
 export interface CapexBudget {
   _id?: string;
   anio: number;
