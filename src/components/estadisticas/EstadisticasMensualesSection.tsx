@@ -271,52 +271,81 @@ export function EstadisticasMensualesSection({
   }, [validOrders, selectedYear, selectedMonth]);
 
   // ==============================================================
-  // 3. ESTADÍSTICAS POR DÍA DEL MES SELECCIONADO
+  // 3. ESTADÍSTICAS POR DÍA DEL MES SELECCIONADO Y 2 MESES PREVIOS
   // ==============================================================
   const dailyStats = useMemo(() => {
-    const current = comparisonMonths.current;
-    const daysInMonth = new Date(current.year, current.month + 1, 0).getDate();
+    const buildMonthDays = (monthData: typeof comparisonMonths.current) => {
+      const daysInMonth = new Date(monthData.year, monthData.month + 1, 0).getDate();
+      const daysArray: Array<{
+        day: number;
+        total: number;
+        opex: number;
+        capex: number;
+        monto: number;
+      }> = [];
 
-    const daysArray: Array<{
-      day: number;
-      total: number;
-      opex: number;
-      capex: number;
-      monto: number;
-    }> = [];
+      let maxDayCount = 0;
+      let peakDay = 1;
+      let peakCount = 0;
 
-    let maxDayCount = 0;
-    let peakDay = 1;
-    let peakCount = 0;
+      for (let d = 1; d <= 31; d++) {
+        if (d <= daysInMonth) {
+          const data = monthData.dailyCounts[d] || { total: 0, opex: 0, capex: 0, monto: 0 };
+          daysArray.push({
+            day: d,
+            total: data.total,
+            opex: data.opex,
+            capex: data.capex,
+            monto: data.monto,
+          });
 
-    for (let d = 1; d <= daysInMonth; d++) {
-      const data = current.dailyCounts[d] || { total: 0, opex: 0, capex: 0, monto: 0 };
-      daysArray.push({
-        day: d,
-        total: data.total,
-        opex: data.opex,
-        capex: data.capex,
-        monto: data.monto,
-      });
-
-      if (data.total > maxDayCount) {
-        maxDayCount = data.total;
+          if (data.total > maxDayCount) {
+            maxDayCount = data.total;
+          }
+          if (data.total > peakCount) {
+            peakCount = data.total;
+            peakDay = d;
+          }
+        } else {
+          daysArray.push({
+            day: d,
+            total: 0,
+            opex: 0,
+            capex: 0,
+            monto: 0,
+          });
+        }
       }
-      if (data.total > peakCount) {
-        peakCount = data.total;
-        peakDay = d;
-      }
-    }
 
-    // Top días con más órdenes
-    const topDays = [...daysArray]
-      .filter((d) => d.total > 0)
+      return {
+        daysInMonth,
+        daysArray,
+        maxDayCount: Math.max(1, maxDayCount),
+        peakDay,
+        peakCount,
+      };
+    };
+
+    const currentStats = buildMonthDays(comparisonMonths.current);
+    const m1Stats = buildMonthDays(comparisonMonths.m1);
+    const m2Stats = buildMonthDays(comparisonMonths.m2);
+
+    const globalMaxDayCount = Math.max(
+      1,
+      currentStats.maxDayCount,
+      m1Stats.maxDayCount,
+      m2Stats.maxDayCount
+    );
+
+    // Top días con más órdenes (mes actual)
+    const topDays = [...currentStats.daysArray]
+      .filter((d) => d.day <= currentStats.daysInMonth && d.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
 
-    // Ranking de días de la semana
+    // Ranking de días de la semana (mes actual)
     const dowRanking = DIAS_SEMANA.map((dow) => {
-      const info = current.dowCounts[dow.id] || { total: 0, opex: 0, capex: 0 };
+      const info = comparisonMonths.current.dowCounts[dow.id] || { total: 0, opex: 0, capex: 0 };
       return {
         ...dow,
         total: info.total,
@@ -328,11 +357,15 @@ export function EstadisticasMensualesSection({
     const busiestDow = dowRanking[0];
 
     return {
-      daysInMonth,
-      daysArray,
-      maxDayCount: Math.max(1, maxDayCount),
-      peakDay,
-      peakCount,
+      current: currentStats,
+      m1: m1Stats,
+      m2: m2Stats,
+      globalMaxDayCount,
+      daysInMonth: currentStats.daysInMonth,
+      daysArray: currentStats.daysArray,
+      maxDayCount: currentStats.maxDayCount,
+      peakDay: currentStats.peakDay,
+      peakCount: currentStats.peakCount,
       topDays,
       dowRanking,
       busiestDow,
@@ -775,83 +808,209 @@ export function EstadisticasMensualesSection({
       {/* 3. ESTADÍSTICAS POR DÍAS (¿QUÉ DÍAS HUBO MÁS?)                  */}
       {/* ============================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Col (8 cols): Gráfico Diario del 1 al 31 */}
-        <div className="lg:col-span-8 p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* Left Col (8 cols): Gráficos Diarios Comparativos del 1 al 31 (Mes Actual y 2 Meses Previos) */}
+        <div className="lg:col-span-8 p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div>
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-emerald-400" />
-                <span>Distribución Diaria de Órdenes ({comparisonMonths.current.name})</span>
+                <span>Distribución Diaria de Órdenes</span>
               </h4>
-              <p className="text-xs text-slate-400">
-                Cantidad de compras generadas cada día del mes
+              <p className="text-xs text-slate-400 mt-0.5">
+                Comparativa de compras emitidas día por día: mes actual vs. 2 meses anteriores
               </p>
             </div>
 
-            {/* Peak day badge */}
-            <div className="flex items-center gap-2 text-xs bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl text-emerald-300 self-start sm:self-auto font-medium">
-              <Award className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Día pico: <strong>Día {dailyStats.peakDay}</strong> ({dailyStats.peakCount} OCs)</span>
+            {/* Badges de leyenda de meses */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                <span>{comparisonMonths.current.name} (Actual)</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span>{comparisonMonths.m1.shortName}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                <span className="w-2 h-2 rounded-full bg-purple-400" />
+                <span>{comparisonMonths.m2.shortName}</span>
+              </span>
             </div>
           </div>
 
-          {/* Daily Bar Chart (1 to 31) */}
-          <div className="pt-2">
-            <div className="flex items-end gap-1 sm:gap-1.5 h-44 w-full overflow-x-auto pb-2 pt-6">
-              {dailyStats.daysArray.map((d) => {
-                const heightPct = Math.max(8, Math.round((d.total / dailyStats.maxDayCount) * 100));
-                const isPeak = d.total === dailyStats.peakCount && d.total > 0;
-                const hasOrders = d.total > 0;
+          {/* Comparativa de los 3 meses en filas alineadas día por día */}
+          <div className="space-y-6">
+            {[
+              {
+                monthData: comparisonMonths.current,
+                stats: dailyStats.current,
+                theme: {
+                  badgeBg: "bg-indigo-500/15",
+                  badgeBorder: "border-indigo-500/30",
+                  badgeText: "text-indigo-300",
+                  peakGradient: "bg-gradient-to-t from-emerald-600 to-emerald-400",
+                  peakShadow: "shadow-md shadow-emerald-500/30",
+                  peakText: "text-emerald-400",
+                  barGradient: "bg-gradient-to-t from-indigo-700 to-indigo-500",
+                  barHover: "group-hover:from-indigo-600 group-hover:to-indigo-400",
+                  barText: "text-slate-300",
+                  labelSuffix: "(Actual)",
+                },
+              },
+              {
+                monthData: comparisonMonths.m1,
+                stats: dailyStats.m1,
+                theme: {
+                  badgeBg: "bg-amber-500/15",
+                  badgeBorder: "border-amber-500/30",
+                  badgeText: "text-amber-300",
+                  peakGradient: "bg-gradient-to-t from-amber-500 to-amber-300",
+                  peakShadow: "shadow-md shadow-amber-500/30",
+                  peakText: "text-amber-300",
+                  barGradient: "bg-gradient-to-t from-amber-800/80 to-amber-600/90",
+                  barHover: "group-hover:from-amber-700 group-hover:to-amber-500",
+                  barText: "text-amber-200/80",
+                  labelSuffix: `(M-1: ${comparisonMonths.varVsM1 > 0 ? "+" : ""}${comparisonMonths.varVsM1}%)`,
+                },
+              },
+              {
+                monthData: comparisonMonths.m2,
+                stats: dailyStats.m2,
+                theme: {
+                  badgeBg: "bg-purple-500/15",
+                  badgeBorder: "border-purple-500/30",
+                  badgeText: "text-purple-300",
+                  peakGradient: "bg-gradient-to-t from-purple-500 to-purple-300",
+                  peakShadow: "shadow-md shadow-purple-500/30",
+                  peakText: "text-purple-300",
+                  barGradient: "bg-gradient-to-t from-purple-800/80 to-purple-600/90",
+                  barHover: "group-hover:from-purple-700 group-hover:to-purple-500",
+                  barText: "text-purple-200/80",
+                  labelSuffix: `(M-2: ${comparisonMonths.varVsM2 > 0 ? "+" : ""}${comparisonMonths.varVsM2}%)`,
+                },
+              },
+            ].map((item, mIdx) => {
+              const { monthData, stats, theme } = item;
+              return (
+                <div key={monthData.name} className="space-y-2">
+                  {/* Sub-encabezado de mes con métricas clave */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}>
+                        <span>{monthData.name}</span>
+                        <span className="text-[10px] font-normal opacity-90">{theme.labelSuffix}</span>
+                      </span>
+                      <span className="font-mono text-slate-300 font-semibold">
+                        {monthData.totalCount.toLocaleString("es-AR")} OCs
+                      </span>
+                      <span className="text-slate-600">•</span>
+                      <span className="font-mono text-slate-400">
+                        $ {(monthData.totalMonto / 1e6).toFixed(1)}M
+                      </span>
+                    </div>
 
-                return (
-                  <div
-                    key={d.day}
-                    className="flex-1 min-w-[20px] sm:min-w-[24px] flex flex-col items-center justify-end h-full group relative"
-                  >
-                    {/* Tooltip on hover */}
-                    {hasOrders && (
-                      <div className="absolute -top-12 z-20 hidden group-hover:flex flex-col items-center bg-slate-900 border border-slate-700 text-white text-[10px] py-1 px-2 rounded-lg shadow-xl pointer-events-none whitespace-nowrap">
-                        <span className="font-bold">Día {d.day}: {d.total} OCs</span>
-                        <span className="text-slate-400 text-[9px] font-mono">
-                          {d.opex} OPEX / {d.capex} CAPEX
-                        </span>
-                        <span className="text-emerald-400 text-[9px] font-mono">
-                          $ {d.monto.toLocaleString("es-AR")}
+                    {stats.peakCount > 0 && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                        <Award className="w-3.5 h-3.5 text-amber-400" />
+                        <span>
+                          Día pico: <strong className={`${theme.peakText} font-bold`}>Día {stats.peakDay}</strong> ({stats.peakCount} OCs)
                         </span>
                       </div>
                     )}
-
-                    {/* Bar Label (Count) */}
-                    {hasOrders && (
-                      <span className={`text-[9px] font-mono font-bold mb-1 ${
-                        isPeak ? "text-emerald-400" : "text-slate-400"
-                      }`}>
-                        {d.total}
-                      </span>
-                    )}
-
-                    {/* The Bar */}
-                    <div
-                      style={{ height: `${heightPct}%` }}
-                      className={`w-full rounded-t-md transition-all duration-300 ${
-                        isPeak
-                          ? "bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-md shadow-emerald-500/30"
-                          : hasOrders
-                          ? "bg-gradient-to-t from-indigo-700 to-indigo-500 group-hover:from-indigo-600 group-hover:to-indigo-400"
-                          : "bg-white/[0.04]"
-                      }`}
-                    />
-
-                    {/* Day number */}
-                    <span className={`text-[10px] mt-1 font-mono ${
-                      isPeak ? "text-emerald-400 font-black" : hasOrders ? "text-slate-300 font-semibold" : "text-slate-600"
-                    }`}>
-                      {d.day}
-                    </span>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Gráfico de Barras del 1 al 31 */}
+                  <div className="relative">
+                    <div className="flex items-end gap-1 sm:gap-1.5 h-32 sm:h-36 w-full overflow-x-auto pb-2 pt-14 px-1 custom-scrollbar">
+                      {stats.daysArray.map((d) => {
+                        const isOutOfMonth = d.day > stats.daysInMonth;
+                        const maxForScale = Math.max(1, dailyStats.globalMaxDayCount);
+                        const heightPct = isOutOfMonth
+                          ? 0
+                          : d.total > 0
+                          ? Math.max(10, Math.round((d.total / maxForScale) * 60))
+                          : 6;
+                        const isPeak = d.total === stats.peakCount && d.total > 0 && !isOutOfMonth;
+                        const hasOrders = d.total > 0 && !isOutOfMonth;
+
+                        return (
+                          <div
+                            key={d.day}
+                            className="flex-1 min-w-[20px] sm:min-w-[24px] flex flex-col items-center justify-end h-full group relative"
+                          >
+                            {/* Tooltip on hover - NUNCA CORTADO EN LA PARTE SUPERIOR */}
+                            {hasOrders && (
+                              <div
+                                className={`absolute top-0 z-40 hidden group-hover:flex flex-col items-center bg-slate-950/95 border border-slate-700 text-white text-[10px] py-1 px-2.5 rounded-lg shadow-2xl pointer-events-none whitespace-nowrap backdrop-blur-md ${
+                                  d.day <= 2
+                                    ? "left-0"
+                                    : d.day >= 30
+                                    ? "right-0"
+                                    : "left-1/2 -translate-x-1/2"
+                                }`}
+                              >
+                                <span className="font-bold text-slate-100">
+                                  {monthData.shortName} • Día {d.day}: {d.total} OCs
+                                </span>
+                                <span className="text-slate-400 text-[9px] font-mono">
+                                  {d.opex} OPEX • {d.capex} CAPEX
+                                </span>
+                                <span className="text-emerald-400 text-[9px] font-mono font-bold">
+                                  $ {d.monto.toLocaleString("es-AR")}
+                                </span>
+                                <div className="w-1.5 h-1.5 bg-slate-950 border-r border-b border-slate-700 rotate-45 -mb-1 mt-0.5" />
+                              </div>
+                            )}
+
+                            {/* Bar Label (Count) */}
+                            {hasOrders && (
+                              <span
+                                className={`text-[9px] font-mono font-bold mb-1 ${
+                                  isPeak ? `${theme.peakText} font-black` : theme.barText
+                                }`}
+                              >
+                                {d.total}
+                              </span>
+                            )}
+
+                            {/* The Bar */}
+                            <div
+                              style={{ height: `${heightPct}%` }}
+                              className={`w-full rounded-t-md transition-all duration-300 ${
+                                isOutOfMonth
+                                  ? "opacity-0 pointer-events-none"
+                                  : isPeak
+                                  ? `${theme.peakGradient} ${theme.peakShadow}`
+                                  : hasOrders
+                                  ? `${theme.barGradient} ${theme.barHover}`
+                                  : "bg-white/[0.04]"
+                              }`}
+                            />
+
+                            {/* Day number */}
+                            <span
+                              className={`text-[10px] mt-1 font-mono ${
+                                isOutOfMonth
+                                  ? "text-transparent"
+                                  : isPeak
+                                  ? `${theme.peakText} font-black`
+                                  : hasOrders
+                                  ? "text-slate-300 font-semibold"
+                                  : "text-slate-600"
+                              }`}
+                            >
+                              {d.day}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {mIdx < 2 && <div className="border-t border-white/5 my-3" />}
+                </div>
+              );
+            })}
           </div>
         </div>
 
