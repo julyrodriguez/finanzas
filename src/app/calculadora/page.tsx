@@ -12,9 +12,9 @@ import {
   RefreshCw, 
   ArrowRightLeft,
   History,
-  Sparkles,
-  Equal,
-  Delete
+  Delete,
+  ArrowRight,
+  Sparkles
 } from "lucide-react";
 
 interface CalculationHistoryItem {
@@ -88,21 +88,22 @@ export default function CalculadoraPage() {
     fetchDolar();
     // Load history from localStorage
     try {
-      const saved = localStorage.getItem("finanzas_calc_history");
-      if (saved) {
-        setHistory(JSON.parse(saved));
+      const stored = localStorage.getItem("finanzas_calc_history");
+      if (stored) {
+        setHistory(JSON.parse(stored));
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error("Failed to parse history:", e);
     }
   }, []);
 
+  // Save history to localStorage
   const saveHistory = (newHistory: CalculationHistoryItem[]) => {
     setHistory(newHistory);
     try {
-      localStorage.setItem("finanzas_calc_history", JSON.stringify(newHistory.slice(0, 50)));
-    } catch {
-      // ignore
+      localStorage.setItem("finanzas_calc_history", JSON.stringify(newHistory));
+    } catch (e) {
+      console.error("Failed to save history:", e);
     }
   };
 
@@ -111,19 +112,20 @@ export default function CalculadoraPage() {
       id: Date.now().toString(),
       expression: expr,
       result: res,
-      date: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      date: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
     };
-    saveHistory([item, ...history.slice(0, 49)]);
+    const updated = [item, ...history].slice(0, 30);
+    saveHistory(updated);
   };
 
-  // Helper to format float cleanly
-  const cleanNumber = (num: number): string => {
-    if (isNaN(num) || !isFinite(num)) return "Error";
-    const rounded = Math.round(num * 1000000) / 1000000;
+  // Safe number formatter helper
+  const cleanNumber = (val: number): string => {
+    if (isNaN(val) || !isFinite(val)) return "Error";
+    const rounded = Math.round(val * 10000) / 10000;
     return rounded.toString();
   };
 
-  // Calculator Actions
+  // Calculator Engine
   const handleDigit = (digit: string) => {
     if (waitingForNewValue) {
       setDisplay(digit);
@@ -149,7 +151,7 @@ export default function CalculadoraPage() {
 
   const handleBackspace = () => {
     if (waitingForNewValue) return;
-    if (display.length <= 1 || display === "Error") {
+    if (display.length === 1 || (display.length === 2 && display.startsWith("-"))) {
       setDisplay("0");
     } else {
       setDisplay(display.slice(0, -1));
@@ -168,10 +170,13 @@ export default function CalculadoraPage() {
   const handlePercent = () => {
     const val = parseFloat(display);
     if (isNaN(val)) return;
-    const res = val / 100;
-    const resStr = cleanNumber(res);
-    setDisplay(resStr);
-    addHistoryItem(`${val}%`, resStr);
+    if (previousValue !== null && operation !== null) {
+      const percentVal = (previousValue * val) / 100;
+      setDisplay(cleanNumber(percentVal));
+    } else {
+      setDisplay(cleanNumber(val / 100));
+    }
+    setWaitingForNewValue(true);
   };
 
   const executeOperation = (prev: number, current: number, op: "+" | "-" | "*" | "/"): number => {
@@ -242,7 +247,7 @@ export default function CalculadoraPage() {
     setWaitingForNewValue(true);
   };
 
-  // DIVIDIR POR DÓLAR (Obtener valor en USD)
+  // DIVIDIR POR DÓLAR
   const handleDivideByDolar = () => {
     const currentVal = parseFloat(display);
     if (isNaN(currentVal) || currentVal === 0) return;
@@ -260,7 +265,6 @@ export default function CalculadoraPage() {
     setWaitingForNewValue(true);
   };
 
-  // Copy display value
   const handleCopyResult = () => {
     navigator.clipboard.writeText(display);
     setCopied(true);
@@ -270,10 +274,7 @@ export default function CalculadoraPage() {
   // Keyboard support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in custom inputs
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
+      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
 
       if (e.key >= "0" && e.key <= "9") {
         e.preventDefault();
@@ -302,9 +303,6 @@ export default function CalculadoraPage() {
       } else if (e.key === "Escape") {
         e.preventDefault();
         handleClear();
-      } else if (e.key === "%") {
-        e.preventDefault();
-        handlePercent();
       }
     };
 
@@ -312,7 +310,7 @@ export default function CalculadoraPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [display, previousValue, operation, waitingForNewValue]);
 
-  // Conversor Handlers
+  // Handle Quick Currency Inputs
   const handleUsdChange = (val: string) => {
     setConvertUsd(val);
     const num = parseFloat(val);
@@ -338,7 +336,6 @@ export default function CalculadoraPage() {
     setWaitingForNewValue(true);
   };
 
-  // Formatted display helper
   const formattedDisplay = () => {
     if (display === "Error") return "Error";
     if (display.includes(".")) {
@@ -355,84 +352,93 @@ export default function CalculadoraPage() {
       title="Calculadora"
       subtitle="Calculadora comercial rápida y conversor integrado con el tipo de cambio oficial BNA"
     >
-      <div className="max-w-7xl mx-auto space-y-6 pb-12">
+      <div className="max-w-7xl mx-auto space-y-6 pb-16">
         
-        {/* Top Currency Bar */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-sm">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-white">Cotización Dólar Banco Nación</h3>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
+        {/* ========================================================
+            1. TOP HERO CURRENCY PANEL (Glass Panel with Ambient Glow)
+            ======================================================== */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#111726]/90 to-[#0b0f19]/90 border border-white/10 p-5 sm:p-6 shadow-xl backdrop-blur-sm">
+          <div className="absolute -top-24 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-24 -right-24 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-inner">
+                <DollarSign className="w-5 h-5" />
               </div>
-              <p className="text-xs text-slate-400">
-                {dolarHora ? `Actualizado BNA: ${dolarHora}hs (${dolarFecha})` : "Obtenido desde apivacas.jariel.com.ar"}
-              </p>
-            </div>
-          </div>
-
-          {/* Dolar Rate Selector & Refresh */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setDolarType("venta")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                dolarType === "venta"
-                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/10"
-                  : "bg-slate-800/60 text-slate-400 border-slate-700 hover:text-white"
-              }`}
-            >
-              Venta: ${dolarVenta.toLocaleString("es-AR")}
-            </button>
-
-            <button
-              onClick={() => setDolarType("compra")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                dolarType === "compra"
-                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/10"
-                  : "bg-slate-800/60 text-slate-400 border-slate-700 hover:text-white"
-              }`}
-            >
-              Compra: ${dolarCompra.toLocaleString("es-AR")}
-            </button>
-
-            <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700 rounded-xl px-2 py-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Manual:</span>
-              <input
-                type="number"
-                value={customDolar}
-                onChange={(e) => {
-                  setCustomDolar(e.target.value);
-                  setDolarType("custom");
-                }}
-                onFocus={() => setDolarType("custom")}
-                placeholder="Valor..."
-                className="w-20 bg-transparent text-xs font-mono font-bold text-white focus:outline-none text-right"
-              />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white tracking-wide">Cotización Dólar Banco Nación</h3>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-medium">
+                  {dolarHora ? `Actualizado BNA: ${dolarHora}hs (${dolarFecha})` : "Obtenido desde apivacas.jariel.com.ar"}
+                </p>
+              </div>
             </div>
 
-            <button
-              onClick={fetchDolar}
-              disabled={loadingDolar}
-              title="Refrescar cotización del dólar"
-              className="p-2 rounded-xl bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingDolar ? "animate-spin text-emerald-400" : ""}`} />
-            </button>
+            {/* Dólar Rate Buttons & Manual Override */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setDolarType("venta")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  dolarType === "venta"
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-2 ring-emerald-500/20 shadow-sm"
+                    : "bg-[#0a0e18] text-slate-400 border-white/10 hover:text-white"
+                }`}
+              >
+                Venta: ${dolarVenta.toLocaleString("es-AR")}
+              </button>
+
+              <button
+                onClick={() => setDolarType("compra")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  dolarType === "compra"
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 ring-2 ring-emerald-500/20 shadow-sm"
+                    : "bg-[#0a0e18] text-slate-400 border-white/10 hover:text-white"
+                }`}
+              >
+                Compra: ${dolarCompra.toLocaleString("es-AR")}
+              </button>
+
+              <div className="flex items-center gap-1.5 bg-[#0a0e18] border border-white/10 rounded-xl px-2.5 py-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Manual:</span>
+                <input
+                  type="number"
+                  value={customDolar}
+                  onChange={(e) => {
+                    setCustomDolar(e.target.value);
+                    setDolarType("custom");
+                  }}
+                  onFocus={() => setDolarType("custom")}
+                  placeholder="Valor..."
+                  className="w-20 bg-transparent text-xs font-mono font-bold text-white focus:outline-none text-right"
+                />
+              </div>
+
+              <button
+                onClick={fetchDolar}
+                disabled={loadingDolar}
+                title="Refrescar cotización del dólar"
+                className="p-2 rounded-xl bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingDolar ? "animate-spin text-emerald-400" : ""}`} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Main Grid: Calculator & Secondary Tools */}
+        {/* ========================================================
+            2. MAIN GRID: CALCULATOR & CONVERTER TOOLS
+            ======================================================== */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* LEFT: Standard Calculator (lg:col-span-7) */}
+          {/* LEFT: Commercial Calculator (lg:col-span-7) */}
           <div className="lg:col-span-7 space-y-4">
-            <div className="p-5 sm:p-6 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl space-y-5">
+            <div className="p-5 sm:p-6 rounded-2xl bg-[#0f1422] border border-white/10 shadow-xl space-y-5">
               
               {/* Header inside Calculator */}
               <div className="flex items-center justify-between">
@@ -442,7 +448,7 @@ export default function CalculadoraPage() {
                 </div>
                 <button
                   onClick={handleCopyResult}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
                   title="Copiar número actual en pantalla"
                 >
                   {copied ? (
@@ -460,7 +466,7 @@ export default function CalculadoraPage() {
               </div>
 
               {/* Calculator Screen / Display */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-black/60 border border-white/5 shadow-inner flex flex-col justify-end items-end min-h-[105px] overflow-hidden">
+              <div className="p-4 sm:p-5 rounded-xl bg-[#0a0e18] border border-white/10 shadow-inner flex flex-col justify-end items-end min-h-[110px] overflow-hidden">
                 <div className="text-xs sm:text-sm font-mono text-slate-400 font-medium tracking-wide truncate max-w-full h-5">
                   {expression || "\u00A0"}
                 </div>
@@ -477,7 +483,7 @@ export default function CalculadoraPage() {
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={handleMultiplyByDolar}
-                  className="px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600/25 to-teal-600/25 hover:from-emerald-600/35 hover:to-teal-600/35 border border-emerald-500/40 text-emerald-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer group"
+                  className="px-4 py-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-[0.98] group"
                 >
                   <TrendingUp className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
                   <span>× USD (${activeRate.toLocaleString("es-AR")})</span>
@@ -485,7 +491,7 @@ export default function CalculadoraPage() {
 
                 <button
                   onClick={handleDivideByDolar}
-                  className="px-4 py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="px-4 py-3 rounded-xl bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-slate-200 hover:text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-[0.98]"
                   title="Dividir entre el dólar para obtener el monto en USD"
                 >
                   <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -498,26 +504,26 @@ export default function CalculadoraPage() {
                 {/* Row 1 */}
                 <button
                   onClick={handleClear}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-black text-sm transition-all cursor-pointer active:scale-95"
+                  className="py-3.5 sm:py-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-black text-sm transition-all cursor-pointer active:scale-95"
                 >
                   AC
                 </button>
                 <button
                   onClick={handleBackspace}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/80 hover:bg-slate-700/90 text-slate-300 border border-slate-700/80 font-bold text-sm flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-slate-300 border border-white/10 font-bold text-sm flex items-center justify-center transition-all cursor-pointer active:scale-95"
                   title="Borrar último dígito"
                 >
                   <Delete className="w-4 h-4" />
                 </button>
                 <button
                   onClick={handlePercent}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/80 hover:bg-slate-700/90 text-slate-300 border border-slate-700/80 font-bold text-sm transition-all cursor-pointer active:scale-95"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-slate-300 border border-white/10 font-bold text-sm transition-all cursor-pointer active:scale-95"
                 >
                   %
                 </button>
                 <button
                   onClick={() => handleOperator("/")}
-                  className={`py-3.5 sm:py-4 rounded-2xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
+                  className={`py-3.5 sm:py-4 rounded-xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
                     operation === "/"
                       ? "bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30"
                       : "bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/30"
@@ -529,25 +535,25 @@ export default function CalculadoraPage() {
                 {/* Row 2 */}
                 <button
                   onClick={() => handleDigit("7")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   7
                 </button>
                 <button
                   onClick={() => handleDigit("8")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   8
                 </button>
                 <button
                   onClick={() => handleDigit("9")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   9
                 </button>
                 <button
                   onClick={() => handleOperator("*")}
-                  className={`py-3.5 sm:py-4 rounded-2xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
+                  className={`py-3.5 sm:py-4 rounded-xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
                     operation === "*"
                       ? "bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30"
                       : "bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/30"
@@ -559,25 +565,25 @@ export default function CalculadoraPage() {
                 {/* Row 3 */}
                 <button
                   onClick={() => handleDigit("4")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   4
                 </button>
                 <button
                   onClick={() => handleDigit("5")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   5
                 </button>
                 <button
                   onClick={() => handleDigit("6")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   6
                 </button>
                 <button
                   onClick={() => handleOperator("-")}
-                  className={`py-3.5 sm:py-4 rounded-2xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
+                  className={`py-3.5 sm:py-4 rounded-xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
                     operation === "-"
                       ? "bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30"
                       : "bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/30"
@@ -589,25 +595,25 @@ export default function CalculadoraPage() {
                 {/* Row 4 */}
                 <button
                   onClick={() => handleDigit("1")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   1
                 </button>
                 <button
                   onClick={() => handleDigit("2")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   2
                 </button>
                 <button
                   onClick={() => handleDigit("3")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   3
                 </button>
                 <button
                   onClick={() => handleOperator("+")}
-                  className={`py-3.5 sm:py-4 rounded-2xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
+                  className={`py-3.5 sm:py-4 rounded-xl font-bold text-base transition-all cursor-pointer active:scale-95 border ${
                     operation === "+"
                       ? "bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30"
                       : "bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border-indigo-500/30"
@@ -619,25 +625,25 @@ export default function CalculadoraPage() {
                 {/* Row 5 */}
                 <button
                   onClick={handleToggleSign}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/80 hover:bg-slate-700/90 text-slate-300 border border-slate-700/80 font-bold text-sm transition-all cursor-pointer active:scale-95"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-slate-300 border border-white/10 font-bold text-sm transition-all cursor-pointer active:scale-95"
                 >
                   ±
                 </button>
                 <button
                   onClick={() => handleDigit("0")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   0
                 </button>
                 <button
                   onClick={() => handleDigit(".")}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-slate-800/50 hover:bg-slate-700/70 text-white font-bold text-lg border border-slate-700/50 transition-all cursor-pointer active:scale-95 shadow-sm"
+                  className="py-3.5 sm:py-4 rounded-xl bg-[#0a0e18] hover:bg-slate-800 text-white font-bold text-lg border border-white/10 transition-all cursor-pointer active:scale-95 shadow-sm"
                 >
                   ,
                 </button>
                 <button
                   onClick={handleEquals}
-                  className="py-3.5 sm:py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-black text-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer active:scale-95"
+                  className="py-3.5 sm:py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xl shadow-md shadow-blue-900/30 transition-all cursor-pointer active:scale-95 border border-blue-400/30"
                 >
                   =
                 </button>
@@ -646,7 +652,7 @@ export default function CalculadoraPage() {
               {/* Keyboard Shortcut Help */}
               <div className="pt-2 text-center">
                 <span className="text-[11px] text-slate-400">
-                  💡 Tip: Puedes usar el teclado físico numérico, <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono">Enter</kbd> para calcular y <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono">Esc</kbd> para limpiar.
+                  💡 Tip: Puedes usar el teclado físico numérico, <kbd className="px-1.5 py-0.5 rounded bg-[#0a0e18] border border-white/10 text-slate-300 font-mono">Enter</kbd> para calcular y <kbd className="px-1.5 py-0.5 rounded bg-[#0a0e18] border border-white/10 text-slate-300 font-mono">Esc</kbd> para limpiar.
                 </span>
               </div>
             </div>
@@ -656,7 +662,7 @@ export default function CalculadoraPage() {
           <div className="lg:col-span-5 space-y-6">
 
             {/* Quick Converter Box */}
-            <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
+            <div className="p-5 rounded-2xl bg-[#0f1422] border border-white/10 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
                   <ArrowRightLeft className="w-4 h-4 text-emerald-400" />
@@ -669,12 +675,12 @@ export default function CalculadoraPage() {
 
               <div className="space-y-3">
                 {/* Input USD */}
-                <div className="p-3 rounded-2xl bg-black/40 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
+                <div className="p-3.5 rounded-xl bg-[#0a0e18] border border-white/10 focus-within:border-emerald-500/50 transition-colors">
                   <div className="flex items-center justify-between text-xs text-slate-400 font-semibold mb-1">
                     <span>Monto en Dólares (USD)</span>
                     <button
                       onClick={() => sendToCalculator(convertUsd)}
-                      className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold hover:underline cursor-pointer"
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-bold hover:underline cursor-pointer"
                     >
                       Cargar en calculadora →
                     </button>
@@ -692,12 +698,12 @@ export default function CalculadoraPage() {
                 </div>
 
                 {/* Input ARS */}
-                <div className="p-3 rounded-2xl bg-black/40 border border-slate-800 focus-within:border-emerald-500/50 transition-colors">
+                <div className="p-3.5 rounded-xl bg-[#0a0e18] border border-white/10 focus-within:border-emerald-500/50 transition-colors">
                   <div className="flex items-center justify-between text-xs text-slate-400 font-semibold mb-1">
                     <span>Equivalente en Pesos (ARS)</span>
                     <button
                       onClick={() => sendToCalculator(convertArs)}
-                      className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold hover:underline cursor-pointer"
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-bold hover:underline cursor-pointer"
                     >
                       Cargar en calculadora →
                     </button>
@@ -717,7 +723,7 @@ export default function CalculadoraPage() {
             </div>
 
             {/* Calculations Tape / History */}
-            <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
+            <div className="p-5 rounded-2xl bg-[#0f1422] border border-white/10 shadow-xl space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
                   <History className="w-4 h-4 text-indigo-400" />
@@ -738,7 +744,7 @@ export default function CalculadoraPage() {
                 <div className="py-8 text-center text-slate-400 text-xs font-medium space-y-1">
                   <Calculator className="w-8 h-8 text-slate-600 mx-auto stroke-1" />
                   <p>Aún no hay cálculos realizados.</p>
-                  <p className="text-[10px] text-slate-400">Los resultados aparecerán aquí automáticamente.</p>
+                  <p className="text-[10px] text-slate-500">Los resultados aparecerán aquí automáticamente.</p>
                 </div>
               ) : (
                 <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
@@ -746,20 +752,17 @@ export default function CalculadoraPage() {
                     <div
                       key={item.id}
                       onClick={() => sendToCalculator(item.result)}
-                      className="p-3 rounded-2xl bg-black/30 hover:bg-slate-800/70 border border-white/5 hover:border-indigo-500/30 transition-all cursor-pointer group"
+                      className="p-3 rounded-xl bg-[#0a0e18] hover:bg-[#12192b] border border-white/5 hover:border-indigo-500/30 transition-all cursor-pointer group"
                       title="Haz clic para cargar este resultado en la calculadora"
                     >
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono mb-0.5">
-                        <span className="truncate">{item.expression}</span>
-                        <span className="text-[10px] text-slate-400 shrink-0">{item.date}</span>
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-0.5">
+                        <span className="font-mono text-[11px] text-slate-400 group-hover:text-slate-300 truncate max-w-[200px]">
+                          {item.expression}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">{item.date}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-base font-mono font-black text-white group-hover:text-emerald-400 transition-colors">
-                          = {Number(item.result).toLocaleString("es-AR")}
-                        </span>
-                        <span className="opacity-0 group-hover:opacity-100 text-[10px] text-indigo-400 font-bold transition-opacity">
-                          Usar →
-                        </span>
+                      <div className="font-mono font-bold text-emerald-400 text-sm text-right">
+                        = {Number(item.result).toLocaleString("es-AR")}
                       </div>
                     </div>
                   ))}

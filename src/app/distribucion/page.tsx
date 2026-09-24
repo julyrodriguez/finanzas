@@ -518,9 +518,9 @@ export default function DistribucionPage() {
         </div>
 
         {/* 1. Main configuration panel */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 no-print">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 no-print">
           {/* Main Input Card */}
-          <div className="xl:col-span-1 p-5 rounded-2xl glass-card border border-white/10 flex flex-col justify-center space-y-4 shadow-xl bg-[#0e1322]">
+          <div className="xl:col-span-1 p-5 rounded-2xl bg-[#0f1422] border border-white/10 flex flex-col justify-center space-y-4 shadow-xl">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
                 <Calculator className="w-5 h-5" />
@@ -540,10 +540,10 @@ export default function DistribucionPage() {
                   value={montoTotal}
                   onChange={(e) => setMontoTotal(e.target.value)}
                   placeholder="ej: 1000000"
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#080c16] border border-slate-700/80 text-white font-mono text-xl font-bold focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#0a0e18] border border-white/10 text-white font-mono text-xl font-bold focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-1.5">
+              <p className="text-[10px] text-slate-500 mt-1.5 font-medium">
                 Ingresa el importe total que se subdividirá proporcionalmente entre los cines.
               </p>
             </div>
@@ -554,7 +554,7 @@ export default function DistribucionPage() {
                 type="checkbox"
                 checked={redondear}
                 onChange={(e) => setRedondear(e.target.checked)}
-                className="rounded border-slate-700 bg-[#080c16] text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                className="rounded border-white/10 bg-[#0a0e18] text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer"
               />
               <label 
                 htmlFor="checkbox-redondear" 
@@ -566,7 +566,7 @@ export default function DistribucionPage() {
           </div>
 
           {/* Filters Selector Card */}
-          <div className="xl:col-span-2 p-5 rounded-2xl glass-card border border-white/10 space-y-4 shadow-xl bg-[#0e1322]">
+          <div className="xl:col-span-2 p-5 rounded-2xl bg-[#0f1422] border border-white/10 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
@@ -580,7 +580,7 @@ export default function DistribucionPage() {
               {/* Cadena select */}
               <div className="space-y-1.5">
                 <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block">Cadena / Empresa</span>
-                <div className="inline-flex w-full p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner">
+                <div className="inline-flex w-full p-1 bg-[#0a0e18] rounded-xl border border-white/10 text-xs shadow-inner">
                   {(["Cinemark", "Hoyts", "Consolidados"] as const).map((cad) => {
                     const isSelected = cadenaFilter === cad;
                     return (
@@ -590,10 +590,10 @@ export default function DistribucionPage() {
                         className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
                           isSelected
                             ? cad === "Hoyts"
-                              ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                              ? "bg-purple-600 text-white shadow-sm"
                               : cad === "Cinemark"
-                              ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
-                              : "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                              ? "bg-teal-600 text-white shadow-sm"
+                              : "bg-indigo-600 text-white shadow-sm"
                             : "text-slate-400 hover:text-white hover:bg-white/5"
                         }`}
                       >
@@ -610,7 +610,7 @@ export default function DistribucionPage() {
                 <select
                   value={ambitoFilter}
                   onChange={(e) => setAmbitoFilter(e.target.value as "todos" | "todos_oficina" | "caba" | "gba" | "amba" | "amba_oficina" | "interior" | "personalizado")}
-                  className="w-full px-3 py-2 rounded-xl bg-[#080c16] border border-slate-700/80 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500 shadow-sm cursor-pointer"
+                  className="w-full px-3 py-2 rounded-xl bg-[#0a0e18] border border-white/10 text-white text-xs font-semibold focus:outline-none focus:border-indigo-500 shadow-sm cursor-pointer"
                 >
                   <option value="todos" className="bg-[#0b0f19] text-white">Todos los Cines (100% complejos)</option>
                   <option value="todos_oficina" className="bg-[#0b0f19] text-white">Todos los Cines + Oficina Central (8.34% fijo)</option>
@@ -627,18 +627,18 @@ export default function DistribucionPage() {
         </div>
 
         {/* 2. Top Summary KPI Widgets */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-2xl glass-card border border-slate-800 bg-[#0e1322] print-card space-y-1 shadow-lg">
-            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block">Complejos</span>
-            <div className="text-xl lg:text-2xl font-extrabold text-white flex items-baseline gap-1">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="p-4 rounded-xl bg-[#0d121f]/70 border border-white/5 print-card space-y-1 shadow-md">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Complejos</span>
+            <div className="text-xl lg:text-2xl font-black text-white flex items-baseline gap-1">
               <span>{complexesCount}</span>
-              <span className="text-xs font-normal text-slate-500">cines</span>
+              <span className="text-xs font-medium text-slate-500">cines</span>
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl glass-card border border-slate-800 bg-[#0e1322] print-card space-y-1 shadow-lg">
-            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block">Cines Activos</span>
-            <div className="text-xl lg:text-2xl font-extrabold text-emerald-400 font-mono">
+          <div className="p-4 rounded-xl bg-[#0d121f]/70 border border-white/5 print-card space-y-1 shadow-md">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Cines Activos</span>
+            <div className="text-xl lg:text-2xl font-black text-emerald-400 font-mono">
               ${distributedToCines.toLocaleString("es-AR", { 
                 minimumFractionDigits: isRoundingApplied ? 0 : 2, 
                 maximumFractionDigits: isRoundingApplied ? 0 : 2 
@@ -646,9 +646,9 @@ export default function DistribucionPage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl glass-card border border-slate-800 bg-[#0e1322] print-card space-y-1 shadow-lg">
-            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block">Oficina Central</span>
-            <div className="text-xl lg:text-2xl font-extrabold text-purple-400 font-mono">
+          <div className="p-4 rounded-xl bg-[#0d121f]/70 border border-white/5 print-card space-y-1 shadow-md">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Oficina Central</span>
+            <div className="text-xl lg:text-2xl font-black text-purple-400 font-mono">
               ${distributedToOficina.toLocaleString("es-AR", { 
                 minimumFractionDigits: isRoundingApplied ? 0 : 2, 
                 maximumFractionDigits: isRoundingApplied ? 0 : 2 
@@ -656,9 +656,9 @@ export default function DistribucionPage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl glass-card border border-slate-800 bg-[#0e1322] print-card space-y-1 shadow-lg">
-            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider block">Total Distribuido</span>
-            <div className="text-xl lg:text-2xl font-extrabold text-white font-mono">
+          <div className="p-4 rounded-xl bg-[#0d121f]/70 border border-white/5 print-card space-y-1 shadow-md">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Distribuido</span>
+            <div className="text-xl lg:text-2xl font-black text-white font-mono">
               ${sumDistributed.toLocaleString("es-AR", { 
                 minimumFractionDigits: isRoundingApplied ? 0 : 2, 
                 maximumFractionDigits: isRoundingApplied ? 0 : 2 
@@ -676,7 +676,7 @@ export default function DistribucionPage() {
                 <span>Attendance Editable (Desbloqueado)</span>
               </div>
             ) : (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 text-xs font-semibold">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0a0e18] border border-white/10 text-slate-300 text-xs font-semibold">
                 <Lock className="w-3.5 h-3.5 text-slate-400" />
                 <span>Attendance Protegido (Solo Lectura)</span>
               </div>
@@ -696,7 +696,7 @@ export default function DistribucionPage() {
                 </button>
                 <button
                   onClick={handleCancelEdit}
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+                  className="px-3 py-2 rounded-xl bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -704,7 +704,7 @@ export default function DistribucionPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Pide PIN 1234 para desbloquear attendance"
               >
                 <Unlock className="w-3.5 h-3.5 text-amber-400" />
@@ -725,7 +725,7 @@ export default function DistribucionPage() {
             {/* Copy Cuentas button */}
             <button
               onClick={handleCopyCuentas}
-              className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              className="px-3.5 py-2 rounded-xl bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
               title="Copia solo las cuentas listadas (un valor por renglón)"
             >
               <Copy className="w-3.5 h-3.5" />
@@ -735,7 +735,7 @@ export default function DistribucionPage() {
             {/* Copy Cuenta y Monto button */}
             <button
               onClick={handleCopyMontosYIds}
-              className="px-3.5 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              className="px-3.5 py-2 rounded-xl bg-[#0a0e18] hover:bg-slate-800 border border-white/10 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
               title="Copia Código de Cuenta y Monto tabulados, ideal para pegar en Excel"
             >
               <Copy className="w-3.5 h-3.5" />
@@ -775,10 +775,10 @@ export default function DistribucionPage() {
         </div>
 
         {/* 4. Distribution table */}
-        <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-2xl print-card bg-[#0e1322]">
+        <div className="rounded-2xl border border-white/10 overflow-hidden shadow-2xl print-card bg-[#0f1422]">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-bold">
+              <thead className="bg-[#0b0f19] border-b border-white/10 text-slate-400 uppercase font-bold text-[10px] tracking-wider">
                 <tr>
                   <th className="px-4 py-3.5 text-center w-12 no-print">
                     <input
@@ -802,7 +802,7 @@ export default function DistribucionPage() {
                   <th className="px-4 py-3.5 text-right text-emerald-400 font-bold">Monto Prorrateado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5 text-gray-300">
+              <tbody className="divide-y divide-white/5 text-slate-300">
                 {tableRows.map((row) => (
                   <tr 
                     key={row.codigo} 

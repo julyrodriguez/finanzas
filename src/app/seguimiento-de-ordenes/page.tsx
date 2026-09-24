@@ -6,9 +6,8 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  limit,
-  where,
-  getDocs,
+  limit, 
+  getDocs, 
   doc, 
   updateDoc, 
   arrayUnion 
@@ -26,12 +25,15 @@ import {
   ShieldCheck, 
   Eye, 
   Loader2, 
-  ExternalLink,
-  PackageCheck,
-  FileSpreadsheet,
-  Layers,
-  Database,
-  Check
+  PackageCheck, 
+  FileSpreadsheet, 
+  Layers, 
+  Database, 
+  Check, 
+  LayoutGrid, 
+  ListFilter,
+  Building2,
+  Sparkles
 } from "lucide-react";
 import { getCreadorBadgeStyle, type Nota, type OrdenCompra } from "@/types/ordenes";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
@@ -40,9 +42,9 @@ import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
 
 interface ApprovalConfig {
-  limiteNivel1: number; // 5000000 (Tomás + Área)
-  limiteNivel2: number; // 18000000 (Pablo Mondelo + Darío)
-  limiteNivel3: number; // 150000000 (Hernán/Matías + Darío)
+  limiteNivel1: number;
+  limiteNivel2: number;
+  limiteNivel3: number;
   firmantes1Nivel1: string[];
   firmantes2Nivel1: string[];
   firmantes1Nivel2: string[];
@@ -74,11 +76,16 @@ export default function SeguimientoDeOrdenesPage() {
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // View Mode: Cards or Compact Table
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   // Search, Filters and Pagination
   const [searchQuery, setSearchQuery] = useState("");
   const [empresaFilter, setEmpresaFilter] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
-  const [queryLimit, setQueryLimit] = useState(15);
+  const [statusFilter, setStatusFilter] = useState<string>("todas");
+  const [queryLimit, setQueryLimit] = useState(20);
   const [hasLoadedAllFromDb, setHasLoadedAllFromDb] = useState(false);
   const [loadingAllDb, setLoadingAllDb] = useState(false);
 
@@ -90,7 +97,6 @@ export default function SeguimientoDeOrdenesPage() {
   const [savingNota, setSavingNota] = useState(false);
 
   const { user } = useAuth();
-  const isOrdenesUser = Boolean(user?.email?.startsWith("ordenes"));
   const authorName = user?.email?.split("@")[0] || "Usuario";
 
   const showToast = (message: string) => {
@@ -179,6 +185,10 @@ export default function SeguimientoDeOrdenesPage() {
     createdAt: data.createdAt || null,
     relatedOC: data.relatedOC || "",
     enviado: Boolean(data.enviado),
+    enviadoA1: data.enviadoA1 || "",
+    enviadoA2: data.enviadoA2 || "",
+    fechaEnvio1: data.fechaEnvio1 || "",
+    fechaEnvio2: data.fechaEnvio2 || "",
     firmado1: Boolean(data.firmado1),
     firmado2: Boolean(data.firmado2),
     firmante1: data.firmante1 || "",
@@ -186,130 +196,94 @@ export default function SeguimientoDeOrdenesPage() {
     fechaFirma1: data.fechaFirma1 || "",
     fechaFirma2: data.fechaFirma2 || "",
     linkSharepoint: data.linkSharepoint || "",
-    enviadoA1: data.enviadoA1 || "",
-    enviadoA2: data.enviadoA2 || "",
-    fechaEnvio1: data.fechaEnvio1 || "",
-    fechaEnvio2: data.fechaEnvio2 || "",
   });
 
-  // Real-time Firestore Listener: Reads ONLY 15 (+1) docs initially to save Firebase read quotas.
-  // Kept permanently connected for live updates without restarting on search.
+  // Load Real-time Orders (recent batch)
   useEffect(() => {
     const db = getFirebaseDb();
     if (!db) {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 0);
       return;
     }
 
-    const fetchLimit = queryLimit + 1;
-    const q = query(
-      collection(db, "ordenes_compra"),
-      orderBy("createdAt", "desc"),
-      limit(fetchLimit)
-    );
+    const colRef = collection(db, "ordenes_compra");
+    const q = query(colRef, orderBy("createdAt", "desc"), limit(120));
 
-    const unsub = onSnapshot(
+    const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const items: OrdenCompra[] = snapshot.docs.map((docSnap) => {
-          return parseSeguimientoDoc(docSnap.id, docSnap.data());
-        });
-        setOrdenes(items);
+        const docs = snapshot.docs.map((docSnap) => parseSeguimientoDoc(docSnap.id, docSnap.data()));
+        setOrdenes(docs);
         setLoading(false);
       },
       (error) => {
-        console.error("Error fetching ordenes:", error);
+        console.error("Error listening to orders:", error);
         setLoading(false);
       }
     );
 
-    return () => unsub();
-  }, [queryLimit]);
+    return () => unsubscribe();
+  }, []);
 
-  // Targeted background search for older orders (e.g. 3+ digits or text)
+  // Global search directly on Firestore
   useEffect(() => {
-    const term = searchQuery.trim();
-    if (term.length < 3) {
+    if (!searchQuery.trim()) {
       setDbSearchResults([]);
       setIsSearchingDb(false);
       return;
     }
 
+    const db = getFirebaseDb();
+    if (!db) return;
+
+    const term = searchQuery.trim().toLowerCase();
     setIsSearchingDb(true);
 
     const timer = setTimeout(async () => {
-      const db = getFirebaseDb();
-      if (!db) {
-        setIsSearchingDb(false);
-        return;
-      }
-
       try {
         const colRef = collection(db, "ordenes_compra");
-        const foundDocsMap = new Map<string, OrdenCompra>();
+        const q = query(colRef, orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
 
-        // Prefix match on numOC and numSolicitud
-        const queries = [
-          query(colRef, where("numOC", ">=", term), where("numOC", "<=", term + "\uf8ff"), limit(25)),
-          query(colRef, where("numSolicitud", ">=", term), where("numSolicitud", "<=", term + "\uf8ff"), limit(25)),
-        ];
+        const results: OrdenCompra[] = [];
+        snap.forEach((d) => {
+          const ord = parseSeguimientoDoc(d.id, d.data());
+          const match =
+            ord.numOC.toLowerCase().includes(term) ||
+            ord.numSolicitud.toLowerCase().includes(term) ||
+            ord.razonSocial.toLowerCase().includes(term) ||
+            ord.motivo.toLowerCase().includes(term) ||
+            (ord.creadoPor && ord.creadoPor.toLowerCase().includes(term)) ||
+            (ord.firmante1 && ord.firmante1.toLowerCase().includes(term)) ||
+            (ord.firmante2 && ord.firmante2.toLowerCase().includes(term)) ||
+            (ord.enviadoA1 && ord.enviadoA1.toLowerCase().includes(term)) ||
+            (ord.enviadoA2 && ord.enviadoA2.toLowerCase().includes(term));
 
-        // Also handle numeric search if term is numeric
-        const numVal = Number(term);
-        if (!isNaN(numVal)) {
-          queries.push(query(colRef, where("numOC", "==", numVal), limit(10)));
-        }
-
-        const snapshots = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
-        snapshots.forEach((snap) => {
-          if (!snap) return;
-          snap.docs.forEach((docSnap) => {
-            foundDocsMap.set(docSnap.id, parseSeguimientoDoc(docSnap.id, docSnap.data()));
-          });
+          if (match) {
+            results.push(ord);
+          }
         });
 
-        // Fallback shallow scan for substring match
-        if (foundDocsMap.size === 0) {
-          const fallbackSnap = await getDocs(query(colRef, orderBy("createdAt", "desc"), limit(80))).catch(() => null);
-          if (fallbackSnap) {
-            const termLower = term.toLowerCase();
-            fallbackSnap.docs.forEach((docSnap) => {
-              const item = parseSeguimientoDoc(docSnap.id, docSnap.data());
-              if (
-                item.numOC.toLowerCase().includes(termLower) ||
-                item.razonSocial.toLowerCase().includes(termLower) ||
-                item.numSolicitud.toLowerCase().includes(termLower) ||
-                (item.relatedOC && item.relatedOC.toLowerCase().includes(termLower))
-              ) {
-                foundDocsMap.set(docSnap.id, item);
-              }
-            });
-          }
-        }
-
-        setDbSearchResults(Array.from(foundDocsMap.values()));
+        setDbSearchResults(results);
       } catch (err) {
-        console.warn("Error searching Firestore:", err);
+        console.error("Error searching in Firestore:", err);
       } finally {
         setIsSearchingDb(false);
       }
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Compute Signature and Tier Info
+  // Helper to determine signature statuses for an order
   const getOrderSignatureInfo = (orden: OrdenCompra) => {
     const numMonto = parseMontoToNumber(orden.monto);
-    const limite1 = config.limiteNivel1;
-    const limite2 = config.limiteNivel2;
-    const limite3 = config.limiteNivel3;
 
-    if (numMonto <= limite1) {
-      const isF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada || orden.entregada);
-      const isF2 = Boolean(orden.firmante2?.trim() || orden.liberada || orden.entregada);
+    if (numMonto <= config.limiteNivel1) {
+      const isF1 = Boolean(orden.firmado1 || (orden.firmante1 && orden.firmante1.trim().length > 0) || orden.mandada || orden.liberada);
+      const isF2 = Boolean(orden.firmado2 || (orden.firmante2 && orden.firmante2.trim().length > 0) || orden.liberada);
       return {
-        tierName: "Nivel 1 (Hasta $5M)",
+        tierName: "Nivel 1 (≤ $5M)",
         tierKey: "Nivel 1",
         f1Label: "Tomás",
         f2Label: "Área",
@@ -321,13 +295,13 @@ export default function SeguimientoDeOrdenesPage() {
       };
     }
 
-    if (numMonto <= limite2) {
+    if (numMonto > config.limiteNivel1 && numMonto <= config.limiteNivel2) {
       const isF1 = Boolean(orden.firmado1 || (orden.firmante1 && orden.firmante1.trim().length > 0));
       const isF2 = Boolean(orden.firmado2 || (orden.firmante2 && orden.firmante2.trim().length > 0));
       return {
         tierName: "Nivel 2 ($5M - $18M)",
         tierKey: "Nivel 2",
-        f1Label: "Pablo M.",
+        f1Label: "Pablo Mondelo",
         f2Label: "Darío",
         f1Signer: orden.firmante1?.trim() || "",
         f2Signer: orden.firmante2?.trim() || "",
@@ -337,7 +311,7 @@ export default function SeguimientoDeOrdenesPage() {
       };
     }
 
-    if (numMonto <= limite3) {
+    if (numMonto > config.limiteNivel2 && numMonto <= config.limiteNivel3) {
       const isF1 = Boolean(orden.firmado1 || (orden.firmante1 && orden.firmante1.trim().length > 0));
       const isF2 = Boolean(orden.firmado2 || (orden.firmante2 && orden.firmante2.trim().length > 0));
       return {
@@ -353,7 +327,6 @@ export default function SeguimientoDeOrdenesPage() {
       };
     }
 
-    // Nivel 4 (> $150M)
     const isF1 = Boolean(orden.firmado1 || (orden.firmante1 && orden.firmante1.trim().length > 0));
     const isF2 = Boolean(orden.firmado2 || (orden.firmante2 && orden.firmante2.trim().length > 0));
     return {
@@ -369,29 +342,19 @@ export default function SeguimientoDeOrdenesPage() {
     };
   };
 
-  // Helper to check if an order's next pending signature has NOT been sent
   const isOrderNotSent = (orden: OrdenCompra) => {
     if (orden.liberada || orden.entregada || orden.cancelada) return false;
     const info = getOrderSignatureInfo(orden);
-    if (!info.isF1Signed) {
-      return !orden.enviadoA1?.trim();
-    }
-    if (!info.isF2Signed) {
-      return !orden.enviadoA2?.trim();
-    }
+    if (!info.isF1Signed) return !orden.enviadoA1?.trim();
+    if (!info.isF2Signed) return !orden.enviadoA2?.trim();
     return false;
   };
 
-  // Helper to check if an order's next pending signature HAS been sent
   const isOrderSent = (orden: OrdenCompra) => {
     if (orden.liberada || orden.entregada || orden.cancelada) return false;
     const info = getOrderSignatureInfo(orden);
-    if (!info.isF1Signed) {
-      return Boolean(orden.enviadoA1?.trim());
-    }
-    if (!info.isF2Signed) {
-      return Boolean(orden.enviadoA2?.trim());
-    }
+    if (!info.isF1Signed) return Boolean(orden.enviadoA1?.trim());
+    if (!info.isF2Signed) return Boolean(orden.enviadoA2?.trim());
     return false;
   };
 
@@ -402,7 +365,6 @@ export default function SeguimientoDeOrdenesPage() {
     let countLiberadas = 0;
     let countEntregadas = 0;
     let countPendientes = 0;
-    let countCanceladas = 0;
     let countSinEnviar = 0;
     let countEnviadas = 0;
 
@@ -413,13 +375,9 @@ export default function SeguimientoDeOrdenesPage() {
       else if (st === "liberada") countLiberadas++;
       else if (st === "entregada") countEntregadas++;
       else if (st === "pendiente") countPendientes++;
-      else if (st === "cancelada") countCanceladas++;
 
-      if (isOrderNotSent(ord)) {
-        countSinEnviar++;
-      } else if (isOrderSent(ord)) {
-        countEnviadas++;
-      }
+      if (isOrderNotSent(ord)) countSinEnviar++;
+      else if (isOrderSent(ord)) countEnviadas++;
     }
 
     return {
@@ -429,13 +387,12 @@ export default function SeguimientoDeOrdenesPage() {
       countLiberadas,
       countEntregadas,
       countPendientes,
-      countCanceladas,
       countSinEnviar,
       countEnviadas,
     };
   }, [ordenes, config]);
 
-  // Combine live real-time orders with any deep search results from Firestore
+  // Combine live real-time orders with any deep search results
   const combinedOrdenes = useMemo(() => {
     if (dbSearchResults.length === 0) return ordenes;
     const map = new Map<string, OrdenCompra>();
@@ -482,25 +439,34 @@ export default function SeguimientoDeOrdenesPage() {
         }
       }
 
+      // 3. Status Filter Toggle
+      if (statusFilter !== "todas") {
+        const currentSt = getOrderStatus(ord);
+        if (statusFilter === "sin_enviar") {
+          if (!isOrderNotSent(ord)) return false;
+        } else if (statusFilter === "mandada") {
+          if (currentSt !== "mandada") return false;
+        } else if (statusFilter === "liberada") {
+          if (currentSt !== "liberada") return false;
+        } else if (statusFilter === "entregada") {
+          if (currentSt !== "entregada") return false;
+        }
+      }
+
       return true;
     });
-  }, [combinedOrdenes, searchQuery, empresaFilter]);
+  }, [combinedOrdenes, searchQuery, empresaFilter, statusFilter]);
 
-  // Paginated visible orders: If searching, search across all DB orders and show all matches.
-  // Otherwise, slice up to queryLimit.
   const visibleOrdenes = useMemo(() => {
-    if (isSearching) {
-      return filteredOrdenes;
-    }
+    if (isSearching) return filteredOrdenes;
     return filteredOrdenes.slice(0, queryLimit);
   }, [filteredOrdenes, isSearching, queryLimit]);
 
   const hasMore = !isSearching && (ordenes.length > queryLimit || filteredOrdenes.length > queryLimit);
 
-  // Reset pagination limit when changing primary filters
   useEffect(() => {
-    setQueryLimit(15);
-  }, [empresaFilter]);
+    setQueryLimit(20);
+  }, [empresaFilter, statusFilter]);
 
   // Copy helpers
   const getOrderCopyText = (orden: OrdenCompra) => {
@@ -528,6 +494,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   const handleCopy = (orden: OrdenCompra) => {
     const copyText = getOrderCopyText(orden);
     navigator.clipboard.writeText(copyText);
+    setCopiedId(orden.id || orden.numOC);
+    setTimeout(() => setCopiedId(null), 2000);
     showToast(`¡Copiada OC ${orden.numOC}!`);
   };
 
@@ -625,165 +593,209 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       title="Seguimiento de Órdenes"
       subtitle="Visualización completa de órdenes, firmas requeridas, envíos y estado de entrega"
     >
-      <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      <div className="space-y-6 max-w-7xl mx-auto pb-16">
         
         {/* Toast Notification */}
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-600 text-white font-semibold text-xs shadow-2xl animate-in slide-in-from-bottom duration-200 border border-emerald-400">
-            <CheckCircle2 className="w-4 h-4" />
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-900/95 text-emerald-300 font-semibold text-xs shadow-2xl backdrop-blur-md border border-emerald-500/30 animate-in slide-in-from-bottom duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{toastMessage}</span>
           </div>
         )}
 
-        {/* Top Header Banner */}
-        <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-[#0b0f19] via-[#0f172a] to-[#0b0f19] border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="p-3 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
-              <Layers className="w-6 h-6" />
+        {/* ========================================================
+            1. TOP HERO HEADER (Modern Glass Panel)
+            ======================================================== */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#111726]/90 to-[#0b0f19]/90 border border-white/10 p-5 sm:p-6 shadow-xl backdrop-blur-sm">
+          <div className="absolute -top-24 -left-24 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-24 -right-24 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-inner">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2.5 flex-wrap">
+                    <span>Panel de Seguimiento Integral</span>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-mono">
+                      {stats.totalCount} órdenes
+                    </span>
+                  </h1>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Consulta el estado de cada orden, firmas autorizadas, destinatarios de envío y entregas.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
-                <span>Panel Integral de Órdenes</span>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
-                  {stats.totalCount} órdenes
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 font-medium">
-                Consulta el estado de cada orden, firmas autorizadas, destinatarios de envío y entregas
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Valor Dólar Venta BNA (Leftmost) */}
-            <DolarVentaBadge />
+            {/* Quick Actions Toolbar */}
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+              <DolarVentaBadge />
 
-            {/* Cargar toda la base de datos Button */}
-            <button
-              onClick={handleLoadAllFromDb}
-              disabled={loadingAllDb || hasLoadedAllFromDb}
-              className={`px-4 py-2.5 rounded-2xl border font-bold text-xs transition-all flex items-center gap-2 shadow-sm ${
-                hasLoadedAllFromDb
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
-                  : "bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
-              }`}
-              title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
-            >
-              {loadingAllDb ? (
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-              ) : hasLoadedAllFromDb ? (
-                <Check className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <Database className="w-4 h-4 text-indigo-400" />
-              )}
-              <span>{loadingAllDb ? "Cargando..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
-            </button>
-
-            {/* Copiar Todas button (desktop only) */}
-            {filteredOrdenes.length > 0 && (
+              {/* Load All From DB */}
               <button
-                onClick={handleCopyAll}
-                className="hidden sm:inline-flex px-4 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs transition-all items-center gap-2 shadow-sm cursor-pointer"
-                title="Copiar todas las órdenes filtradas al portapapeles"
+                onClick={handleLoadAllFromDb}
+                disabled={loadingAllDb || hasLoadedAllFromDb}
+                className={`px-3.5 py-2 rounded-xl border font-bold text-xs transition-all flex items-center gap-2 shadow-sm ${
+                  hasLoadedAllFromDb
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
+                    : "bg-slate-800/90 hover:bg-slate-700/90 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+                }`}
+                title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
               >
-                <Copy className="w-4 h-4 text-emerald-400" />
-                <span>Copiar Todas ({filteredOrdenes.length})</span>
+                {loadingAllDb ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                ) : hasLoadedAllFromDb ? (
+                  <Check className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <Database className="w-4 h-4 text-indigo-400" />
+                )}
+                <span>{loadingAllDb ? "Cargando..." : hasLoadedAllFromDb ? "BD Cargada" : "Cargar BD"}</span>
               </button>
-            )}
 
-            {/* Export to Excel button */}
-            <button
-              onClick={handleExportExcel}
-              className="px-4 py-2.5 rounded-2xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-              title="Exportar listado a Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Exportar Excel</span>
-            </button>
+              {/* Copiar Todas button */}
+              {filteredOrdenes.length > 0 && (
+                <button
+                  onClick={handleCopyAll}
+                  className="hidden sm:inline-flex px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs transition-all items-center gap-2 shadow-sm cursor-pointer"
+                  title="Copiar todas las órdenes filtradas"
+                >
+                  <Copy className="w-4 h-4 text-emerald-400" />
+                  <span>Copiar ({filteredOrdenes.length})</span>
+                </button>
+              )}
+
+              {/* Export Excel button */}
+              <button
+                onClick={handleExportExcel}
+                className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                title="Exportar listado a Excel"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Exportar Excel</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* KPI Stats Grid */}
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
-            <div className="p-4 rounded-2xl bg-[#0b0f19] border border-slate-800 space-y-1 shadow-sm">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                Total Órdenes
-              </span>
-              <div className="text-2xl font-black text-white font-mono">
-                {stats.totalCount}
-              </div>
-              <p className="text-[10.5px] text-slate-500">
-                {isSearching ? "Encontradas en base de datos" : `Últimas ${visibleOrdenes.length} cargadas`}
-              </p>
+        {/* ========================================================
+            2. INTERACTIVE KPI METRIC CARDS (Filter Toggles)
+            ======================================================== */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          
+          {/* Card: Total */}
+          <button
+            onClick={() => setStatusFilter("todas")}
+            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+              statusFilter === "todas"
+                ? "bg-slate-800/90 border-slate-500/80 ring-2 ring-indigo-500/40 shadow-lg"
+                : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</span>
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             </div>
-
-            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-1 shadow-sm">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-rose-400" />
-                📫 Sin Enviar
-              </span>
-              <div className="text-2xl font-black text-rose-400 font-mono">
-                {stats.countSinEnviar}
-              </div>
-              <p className="text-[10.5px] text-slate-400">
-                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
-              </p>
+            <div className="text-xl font-black text-white font-mono mt-1">
+              {stats.totalCount}
             </div>
-
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-sm">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-                <Send className="w-3.5 h-3.5 text-amber-400" />
-                🟡 En Proceso
-              </span>
-              <div className="text-2xl font-black text-amber-400 font-mono">
-                {stats.countMandadas}
-              </div>
-              <p className="text-[10.5px] text-slate-400">
-                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
-              </p>
+            <div className="text-[10px] text-slate-400 font-mono truncate">
+              {isSearching ? "En base de datos" : `Últimas ${visibleOrdenes.length}`}
             </div>
+          </button>
 
-            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1 shadow-sm">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                ✅ Liberadas
-              </span>
-              <div className="text-2xl font-black text-emerald-400 font-mono">
-                {stats.countLiberadas}
-              </div>
-              <p className="text-[10.5px] text-slate-400">
-                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
-              </p>
+          {/* Card: Sin Enviar */}
+          <button
+            onClick={() => setStatusFilter("sin_enviar")}
+            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+              statusFilter === "sin_enviar"
+                ? "bg-rose-500/20 border-rose-400/70 ring-2 ring-rose-500/40 shadow-lg"
+                : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300">Sin Enviar</span>
+              <Clock className="w-3.5 h-3.5 text-rose-400" />
             </div>
-
-            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-1 shadow-sm">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
-                <PackageCheck className="w-3.5 h-3.5 text-blue-400" />
-                📦 Entregadas
-              </span>
-              <div className="text-2xl font-black text-blue-400 font-mono">
-                {stats.countEntregadas}
-              </div>
-              <p className="text-[10.5px] text-slate-400">
-                {isSearching ? "En toda la base de datos" : `Ref. a las últimas ${visibleOrdenes.length}`}
-              </p>
+            <div className="text-xl font-black text-rose-400 font-mono mt-1">
+              {stats.countSinEnviar}
             </div>
-          </div>
+            <div className="text-[10px] text-rose-300/70 truncate">
+              Falta despacho
+            </div>
+          </button>
 
-          <div className="flex items-center gap-2 px-1 text-[11px] text-slate-400">
-            <span className="text-indigo-400 font-bold">ℹ️ Nota:</span>
-            <span>
-              {isSearching
-                ? "Búsqueda activa: Se están revisando todas las órdenes cargadas en la base de datos."
-                : `Los totales son en referencia a las últimas ${visibleOrdenes.length} órdenes. Al utilizar el buscador se revisará en todas las órdenes cargadas en la base de datos.`}
-            </span>
-          </div>
+          {/* Card: En Proceso */}
+          <button
+            onClick={() => setStatusFilter("mandada")}
+            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+              statusFilter === "mandada"
+                ? "bg-amber-500/20 border-amber-400/70 ring-2 ring-amber-500/40 shadow-lg"
+                : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">En Proceso</span>
+              <Send className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+            <div className="text-xl font-black text-amber-400 font-mono mt-1">
+              {stats.countMandadas}
+            </div>
+            <div className="text-[10px] text-amber-300/70 truncate">
+              Mandadas a firma
+            </div>
+          </button>
+
+          {/* Card: Liberadas */}
+          <button
+            onClick={() => setStatusFilter("liberada")}
+            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+              statusFilter === "liberada"
+                ? "bg-emerald-500/20 border-emerald-400/70 ring-2 ring-emerald-500/40 shadow-lg"
+                : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Liberadas</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <div className="text-xl font-black text-emerald-400 font-mono mt-1">
+              {stats.countLiberadas}
+            </div>
+            <div className="text-[10px] text-emerald-300/70 truncate">
+              Listas / Pagadas
+            </div>
+          </button>
+
+          {/* Card: Entregadas */}
+          <button
+            onClick={() => setStatusFilter("entregada")}
+            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+              statusFilter === "entregada"
+                ? "bg-blue-500/20 border-blue-400/70 ring-2 ring-blue-500/40 shadow-lg"
+                : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">Entregadas</span>
+              <PackageCheck className="w-3.5 h-3.5 text-blue-400" />
+            </div>
+            <div className="text-xl font-black text-blue-400 font-mono mt-1">
+              {stats.countEntregadas}
+            </div>
+            <div className="text-[10px] text-blue-300/70 truncate">
+              Recepción final
+            </div>
+          </button>
+
         </div>
 
-        {/* Filters and Search Bar */}
-        <div className="p-4 rounded-3xl bg-[#0b0f19] border border-slate-800 space-y-3.5">
+        {/* ========================================================
+            3. FILTER BAR, SEARCH & CONTROLS
+            ======================================================== */}
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0f1422] border border-white/10 space-y-3 shadow-md">
           <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
             
             {/* Search Input */}
@@ -793,88 +805,254 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por OC, SC, Proveedor, Detalle o Firmante..."
-                className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-[#111726] border border-slate-700/80 text-white text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+                placeholder="Buscar por OC, Solicitud, Proveedor, Creador o Firmante..."
+                className="w-full pl-10 pr-9 py-2 rounded-xl bg-[#0a0e18] border border-white/10 text-white text-xs font-medium placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
               />
-                {isSearchingDb && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 absolute right-9 top-1/2 -translate-y-1/2 pointer-events-none" />
-                )}
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded-md cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            {/* Empresa Selector */}
-            <div className="flex items-center gap-1.5 bg-[#111726] p-1 rounded-2xl border border-slate-700/80 shrink-0">
-              {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
-                const isSelected = empresaFilter === emp;
-                return (
-                  <button
-                    key={emp}
-                    onClick={() => setEmpresaFilter(emp)}
-                    className={"px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer " + (
-                      isSelected
-                        ? emp === "Hoyts"
-                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                          : emp === "CMK"
-                          ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
-                          : "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
-                    )}
-                  >
-                    {emp === "CMK" ? "CMK (Cinemark)" : emp}
-                  </button>
-                );
-              })}
+            {/* Right Group: Empresa & View Mode */}
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+              {/* Segmented Empresa */}
+              <div className="flex items-center bg-[#0a0e18] p-1 rounded-xl border border-white/10 shrink-0">
+                {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
+                  const isSelected = empresaFilter === emp;
+                  return (
+                    <button
+                      key={emp}
+                      onClick={() => setEmpresaFilter(emp)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? emp === "Hoyts"
+                            ? "bg-purple-600 text-white shadow-sm"
+                            : emp === "CMK"
+                            ? "bg-teal-600 text-white shadow-sm"
+                            : "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-400 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {emp === "CMK" ? "CMK (Cinemark)" : emp}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* View Switcher */}
+              <div className="flex items-center bg-[#0a0e18] p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setViewMode("cards")}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                    viewMode === "cards" 
+                      ? "bg-slate-800 text-indigo-400 shadow-sm" 
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Vista en Tarjetas"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                    viewMode === "table" 
+                      ? "bg-slate-800 text-indigo-400 shadow-sm" 
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  title="Vista Compacta en Tabla"
+                >
+                  <ListFilter className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+
+          </div>
+
+          {/* Active Filter Counter */}
+          <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-white/5">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-300">
+                {visibleOrdenes.length} {visibleOrdenes.length === 1 ? "orden mostrada" : "órdenes mostradas"}
+                {isSearching && ` de ${filteredOrdenes.length} coincidencias`}
+              </span>
+              {(statusFilter !== "todas" || empresaFilter !== "Todas" || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setStatusFilter("todas");
+                    setEmpresaFilter("Todas");
+                    setSearchQuery("");
+                  }}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 underline underline-offset-2 ml-1 cursor-pointer font-medium"
+                >
+                  Restablecer filtros
+                </button>
+              )}
+            </div>
+
+            {isSearchingDb && (
+              <div className="flex items-center gap-1.5 text-indigo-400 font-semibold text-[11px]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Buscando en base de datos...</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Search Feedback Banner */}
-        {isSearching && (
-          <div className="px-4 py-2.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs flex items-center justify-between shadow-sm">
-            <span className="flex items-center gap-2">
-              <Search className="w-3.5 h-3.5" />
-              <span>Buscando en <strong>todas</strong> las órdenes de la base de datos</span>
-            </span>
-            <span className="font-mono font-bold text-white bg-indigo-500/20 px-2 py-0.5 rounded-lg border border-indigo-500/30">
-              {filteredOrdenes.length} {filteredOrdenes.length === 1 ? "resultado" : "resultados"}
-            </span>
-          </div>
-        )}
-
-        {/* Orders List / Cards */}
+        {/* ========================================================
+            4. ORDERS CONTENT (CARDS OR TABLE)
+            ======================================================== */}
         {loading ? (
-          <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 flex flex-col items-center justify-center gap-3">
+          <div className="p-16 text-center bg-[#0f1422] rounded-2xl border border-white/10 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
             <span className="text-xs font-semibold text-slate-400">Cargando órdenes del sistema...</span>
           </div>
-        ) : isSearchingDb && filteredOrdenes.length === 0 ? (
-          <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 space-y-3">
-            <Loader2 className="w-9 h-9 text-indigo-400 animate-spin mx-auto" />
-            <h4 className="text-base font-bold text-white">Buscando en la base de datos...</h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Consultando órdenes históricas coincidentes con &quot;{searchQuery}&quot;...
-            </p>
-          </div>
         ) : filteredOrdenes.length === 0 ? (
-          <div className="p-12 text-center bg-[#0b0f19] rounded-3xl border border-slate-800 space-y-2">
-            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto stroke-[1.5]" />
+          <div className="p-16 text-center bg-[#0f1422] rounded-2xl border border-white/10 space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6 stroke-[2]" />
+            </div>
             <h4 className="text-base font-bold text-white">¡No se encontraron órdenes con los filtros aplicados!</h4>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
               Probá cambiando los términos de búsqueda o seleccionando otro filtro de estado o empresa.
             </p>
           </div>
+        ) : viewMode === "table" ? (
+          /* ========================================================
+             COMPACT TABLE VIEW
+             ======================================================== */
+          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0f1422] shadow-xl">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/10 bg-[#0b0f19]">
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Empresa</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">OC / Solicitud</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Proveedor</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Estado</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider text-right">Monto</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">1ra Firma</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">2da Firma</th>
+                  <th className="py-3 px-4 text-slate-400 font-semibold uppercase text-[10px] tracking-wider text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {visibleOrdenes.map((orden) => {
+                  const sigInfo = getOrderSignatureInfo(orden);
+                  const numMonto = parseMontoToNumber(orden.monto);
+                  const isCopied = copiedId === (orden.id || orden.numOC);
+                  const orderStatusKey = getOrderStatus(orden);
+                  const statusCfg = STATUS_CONFIG[orderStatusKey];
+                  const StatusIcon = statusCfg.icon;
+
+                  return (
+                    <tr key={orden.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <td className="py-3 px-4">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
+                          orden.empresa === "Hoyts"
+                            ? "bg-purple-950/60 text-purple-300 border-purple-800/60"
+                            : "bg-teal-950/60 text-teal-300 border-teal-800/60"
+                        }`}>
+                          {orden.empresa}
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="font-mono font-bold text-white flex items-center gap-1.5">
+                          <span>OC {orden.numOC}</span>
+                          <button
+                            onClick={() => handleCopy(orden)}
+                            className="text-slate-500 hover:text-emerald-400 p-0.5 rounded cursor-pointer"
+                            title="Copiar datos de orden"
+                          >
+                            {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        </div>
+                        {orden.numSolicitud && (
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            SC {orden.numSolicitud}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 font-semibold text-slate-200 max-w-[180px] truncate" title={orden.razonSocial}>
+                        {orden.razonSocial || "Sin razón social"}
+                      </td>
+
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusCfg.badgeClass}`}>
+                          <StatusIcon className="w-2.5 h-2.5" />
+                          <span>{statusCfg.label}</span>
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-400 text-right whitespace-nowrap">
+                        $ {numMonto.toLocaleString("es-AR")}
+                      </td>
+
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {sigInfo.isF1Signed ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                            <Check className="w-2.5 h-2.5 text-emerald-400" />
+                            {sigInfo.f1Signer || "Tomás"}
+                          </span>
+                        ) : orden.enviadoA1 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-300 border border-blue-500/30">
+                            <Send className="w-2.5 h-2.5 text-blue-400" />
+                            {orden.enviadoA1}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                            Sin enviar
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {sigInfo.isF2Signed ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                            <Check className="w-2.5 h-2.5 text-emerald-400" />
+                            {sigInfo.f2Signer}
+                          </span>
+                        ) : orden.enviadoA2 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-300 border border-blue-500/30">
+                            <Send className="w-2.5 h-2.5 text-blue-400" />
+                            {orden.enviadoA2}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                            Sin enviar
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => setActiveNotesOrden(orden)}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Ver</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div className="space-y-5">
+          /* ========================================================
+             DETAILED CARD VIEW
+             ======================================================== */
+          <div className="space-y-3.5">
             {visibleOrdenes.map((orden) => {
               const sigInfo = getOrderSignatureInfo(orden);
               const numMonto = parseMontoToNumber(orden.monto);
+              const isCopied = copiedId === (orden.id || orden.numOC);
               const orderStatusKey = getOrderStatus(orden);
               const statusCfg = STATUS_CONFIG[orderStatusKey];
               const StatusIcon = statusCfg.icon;
@@ -882,318 +1060,283 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               return (
                 <div
                   key={orden.id}
-                  className="rounded-3xl bg-[#0f1629] border-2 border-slate-700/70 hover:border-indigo-500/60 transition-all shadow-2xl shadow-black/60 overflow-hidden group"
+                  className="rounded-2xl bg-[#0f1422] border border-white/10 hover:border-white/20 transition-all shadow-md overflow-hidden group"
                 >
                   {/* Card Header Bar */}
-                  <div className="px-5 py-3.5 bg-[#141d34] border-b border-slate-700/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={"px-2.5 py-0.5 rounded-lg text-[11px] font-bold font-mono tracking-wider border shadow-sm " + (
-                          orden.empresa === "Hoyts"
-                            ? "bg-purple-950/90 text-purple-300 border-purple-600/70"
-                            : "bg-teal-950/90 text-teal-300 border-teal-600/70"
-                        )}
-                      >
+                  <div className="p-4 sm:p-4.5 bg-gradient-to-r from-[#121829] to-[#0f1422] border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold font-mono tracking-wider border shadow-sm ${
+                        orden.empresa === "Hoyts"
+                          ? "bg-purple-950/80 text-purple-300 border-purple-700/60"
+                          : "bg-teal-950/80 text-teal-300 border-teal-700/60"
+                      }`}>
                         {orden.empresa}
                       </span>
 
-                      <div className="inline-flex items-center gap-1.5 bg-[#0b101e] border border-slate-600/80 px-2.5 py-0.5 rounded-lg shadow-sm">
+                      <div className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded-lg">
                         <span className="text-sm font-black text-white font-mono tracking-tight">
-                          OC: {orden.numOC}
+                          OC {orden.numOC}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopy(orden)}
-                          className="p-0.5 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                           title="Copiar datos de esta orden"
                         >
-                          <Copy className="w-3 h-3 text-emerald-400" />
+                          {isCopied ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200" />
+                          )}
                         </button>
                       </div>
 
                       {orden.numSolicitud && (
-                        <span className="text-[11px] font-mono text-slate-300 bg-[#0b101e] px-2.5 py-0.5 rounded-md border border-slate-700">
+                        <span className="text-[11px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
                           SC: {orden.numSolicitud}
                         </span>
                       )}
 
-                      {/* General Status Badge */}
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1 shadow-sm ${statusCfg.badgeClass}`}>
                         <StatusIcon className="w-3 h-3" />
                         <span>{statusCfg.label}</span>
                       </span>
 
-                      <span className="text-[10px] font-semibold text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-600">
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-700/60">
                         {sigInfo.tierName}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className="text-base font-black text-emerald-400 font-mono tracking-tight">
-                        $ {numMonto.toLocaleString("es-AR")}
-                      </span>
+                    <div className="flex items-center justify-between sm:justify-end gap-3">
+                      <div className="text-right">
+                        <span className="text-base sm:text-lg font-black text-emerald-400 font-mono tracking-tight">
+                          $ {numMonto.toLocaleString("es-AR")}
+                        </span>
+                        <div className="text-[10px] text-slate-400 font-medium">
+                          {orden.formaPago || "Transferencia"}
+                        </div>
+                      </div>
 
                       <button
                         onClick={() => setActiveNotesOrden(orden)}
-                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-950/50"
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98]"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Ver Detalle</span>
                       </button>
                     </div>
+
                   </div>
 
                   {/* Card Body */}
-                  <div className="p-5 space-y-4 bg-[#0a0f1d]">
-                    {/* Middle Details Grid */}
+                  <div className="p-4 sm:p-4.5 space-y-3.5">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                      <div className="md:col-span-2 space-y-1.5">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider">Proveedor:</span>
-                          <span className="text-white font-bold text-sm tracking-tight">{orden.razonSocial}</span>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <span className="text-slate-400 font-semibold text-[11px] uppercase tracking-wider shrink-0 mt-0.5">Motivo:</span>
-                          <p className="text-slate-200 font-medium leading-relaxed">{orden.motivo}</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5 bg-[#0e1526] p-3 rounded-2xl border border-slate-700/70 text-[11px]">
-                        <div className="flex items-center justify-between text-slate-400">
-                          <span>Forma de Pago:</span>
-                          <span className="text-white font-bold">{orden.formaPago}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-slate-400">
-                          <span>Creado por:</span>
-                          {(() => {
-                            const creatorStyle = getCreadorBadgeStyle(orden.creadoPor);
-                            return (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${creatorStyle.badge}`}>
-                                <span>{orden.creadoPor || "-"}</span>
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Signatures and Sent Tracking Timeline Bar */}
-                    <div className="p-3.5 rounded-2xl bg-[#070b14] border border-slate-800 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                          Seguimiento de Firmas y Envíos
+                      
+                      <div className="md:col-span-1 space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-slate-400" />
+                          Proveedor
                         </span>
-                        {orden.notas && orden.notas.length > 0 && (
-                          <span className="text-[10.5px] text-amber-300 font-medium">
-                            💬 {orden.notas.length} nota(s) registrada(s)
-                          </span>
+                        <div className="font-bold text-slate-100 text-sm">
+                          {orden.razonSocial || "Sin razón social registrada"}
+                        </div>
+                        {orden.creadoPor && (
+                          <div className="pt-1">
+                            {(() => {
+                              const creatorStyle = getCreadorBadgeStyle(orden.creadoPor);
+                              return (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${creatorStyle.badge}`}>
+                                  <span>Creado por: {orden.creadoPor}</span>
+                                </span>
+                              );
+                            })()}
+                          </div>
                         )}
                       </div>
 
+                      <div className="md:col-span-2 space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          Motivo / Detalle
+                        </span>
+                        <p className="text-slate-300 font-medium text-xs bg-[#0b0f19]/60 p-2.5 rounded-xl border border-white/5 leading-relaxed">
+                          {orden.motivo || "Sin detalle registrado"}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    {/* Stepper Pipeline */}
+                    <div className="pt-2 border-t border-white/5">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                         
                         {/* 1ra Firma */}
-                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${
+                        <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
                           sigInfo.isF1Signed 
-                            ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
+                            ? "bg-emerald-500/10 border-emerald-500/30" 
                             : orden.enviadoA1?.trim()
-                            ? "bg-blue-950/40 border-blue-600/60 text-blue-300"
-                            : "bg-[#0d1322] border-slate-700 text-slate-400"
+                            ? "bg-blue-500/10 border-blue-500/30"
+                            : "bg-[#0b0f19]/70 border-white/5"
                         }`}>
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
-                            sigInfo.isF1Signed 
-                              ? "bg-emerald-500 text-black" 
-                              : orden.enviadoA1?.trim()
-                              ? "bg-blue-500 text-white"
-                              : "bg-slate-700 text-slate-300"
-                          }`}>
-                            1
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                                1ra Firma ({sigInfo.f1Label})
-                              </span>
-                              {sigInfo.isF1Signed ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
-                                  LISTA
-                                </span>
-                              ) : orden.enviadoA1?.trim() ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
-                                  ENVIADA
-                                </span>
-                              ) : (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-300">
-                                  SIN ENVIAR
-                                </span>
-                              )}
+                          <div className="flex items-center gap-2.5 truncate">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                              sigInfo.isF1Signed 
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
+                                : orden.enviadoA1?.trim()
+                                ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                                : "bg-white/5 text-slate-400 border-white/10"
+                            }`}>
+                              {sigInfo.isF1Signed ? <Check className="w-3.5 h-3.5" /> : orden.enviadoA1?.trim() ? <Send className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                             </div>
-                            <p className="text-[11px] font-semibold truncate text-white mt-0.5">
-                              {sigInfo.isF1Signed ? (
-                                `Firmado por ${sigInfo.f1Signer || "Tomás"}`
-                              ) : orden.enviadoA1?.trim() ? (
-                                `Enviado a ${orden.enviadoA1}`
-                              ) : (
-                                "Pendiente de envío"
-                              )}
-                            </p>
+                            <div className="truncate">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                1ra Firma ({sigInfo.f1Label})
+                              </div>
+                              <div className="text-xs font-semibold truncate">
+                                {sigInfo.isF1Signed ? (
+                                  <span className="text-emerald-300 font-bold">{sigInfo.f1Signer || "Tomás"}</span>
+                                ) : orden.enviadoA1?.trim() ? (
+                                  <span className="text-blue-300 font-medium">Enviado a {orden.enviadoA1}</span>
+                                ) : (
+                                  <span className="text-slate-400">Sin enviar</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                            sigInfo.isF1Signed 
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                              : orden.enviadoA1?.trim()
+                              ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                              : "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+                          }`}>
+                            {sigInfo.isF1Signed ? "Firmado" : orden.enviadoA1?.trim() ? "Enviado" : "Sin enviar"}
+                          </span>
                         </div>
 
                         {/* 2da Firma */}
-                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${
+                        <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
                           sigInfo.isF2Signed 
-                            ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
+                            ? "bg-emerald-500/10 border-emerald-500/30" 
                             : orden.enviadoA2?.trim()
-                            ? "bg-blue-950/40 border-blue-600/60 text-blue-300"
-                            : "bg-[#0d1322] border-slate-700 text-slate-400"
+                            ? "bg-blue-500/10 border-blue-500/30"
+                            : "bg-[#0b0f19]/70 border-white/5"
                         }`}>
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold ${
-                            sigInfo.isF2Signed 
-                              ? "bg-emerald-500 text-black" 
-                              : orden.enviadoA2?.trim()
-                              ? "bg-blue-500 text-white"
-                              : "bg-slate-700 text-slate-300"
-                          }`}>
-                            2
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                                2da Firma ({sigInfo.f2Label})
-                              </span>
-                              {sigInfo.isF2Signed ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
-                                  LISTA
-                                </span>
-                              ) : orden.enviadoA2?.trim() ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
-                                  ENVIADA
-                                </span>
-                              ) : (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-300">
-                                  SIN ENVIAR
-                                </span>
-                              )}
+                          <div className="flex items-center gap-2.5 truncate">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                              sigInfo.isF2Signed 
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
+                                : orden.enviadoA2?.trim()
+                                ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                                : "bg-white/5 text-slate-400 border-white/10"
+                            }`}>
+                              {sigInfo.isF2Signed ? <Check className="w-3.5 h-3.5" /> : orden.enviadoA2?.trim() ? <Send className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                             </div>
-                            <p className="text-[11px] font-semibold truncate text-white mt-0.5">
-                              {sigInfo.isF2Signed ? (
-                                `Firmado por ${sigInfo.f2Signer}`
-                              ) : orden.enviadoA2?.trim() ? (
-                                `Enviado a ${orden.enviadoA2}`
-                              ) : (
-                                "Pendiente de envío"
-                              )}
-                            </p>
+                            <div className="truncate">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                2da Firma ({sigInfo.f2Label})
+                              </div>
+                              <div className="text-xs font-semibold truncate">
+                                {sigInfo.isF2Signed ? (
+                                  <span className="text-emerald-300 font-bold">{sigInfo.f2Signer}</span>
+                                ) : orden.enviadoA2?.trim() ? (
+                                  <span className="text-blue-300 font-medium">Enviado a {orden.enviadoA2}</span>
+                                ) : (
+                                  <span className="text-slate-400">Sin enviar</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                            sigInfo.isF2Signed 
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                              : orden.enviadoA2?.trim()
+                              ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                              : "bg-rose-500/15 text-rose-300 border border-rose-500/20"
+                          }`}>
+                            {sigInfo.isF2Signed ? "Firmado" : orden.enviadoA2?.trim() ? "Enviado" : "Sin enviar"}
+                          </span>
                         </div>
 
-                        {/* Estado Entrega / Pago */}
-                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${
+                        {/* Entrega / Pago */}
+                        <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
                           orden.entregada 
-                            ? "bg-blue-950/50 border-blue-500/70 text-blue-300 shadow-sm"
+                            ? "bg-blue-500/10 border-blue-500/30 text-blue-300"
                             : orden.liberada
-                            ? "bg-emerald-950/40 border-emerald-600/60 text-emerald-300"
-                            : "bg-[#0d1322] border-slate-700 text-slate-400"
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                            : "bg-[#0b0f19]/70 border-white/5"
                         }`}>
-                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-xs font-black ${
-                            orden.entregada 
-                              ? "bg-blue-400 text-black shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
-                              : orden.liberada
-                              ? "bg-emerald-500 text-black"
-                              : "bg-slate-700 text-slate-300"
-                          }`}>
-                            ✓
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
-                                Entrega / Pago
-                              </span>
-                              {orden.entregada ? (
-                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-blue-500/25 text-blue-300 border border-blue-500/40">
-                                  ENTREGADA
-                                </span>
-                              ) : orden.liberada ? (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">
-                                  LIBERADA
-                                </span>
-                              ) : (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">
-                                  PENDIENTE
-                                </span>
-                              )}
+                          <div className="flex items-center gap-2.5 truncate">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                              orden.entregada 
+                                ? "bg-blue-500/20 text-blue-400 border-blue-500/30" 
+                                : orden.liberada
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                : "bg-white/5 text-slate-400 border-white/10"
+                            }`}>
+                              {orden.entregada ? <PackageCheck className="w-3.5 h-3.5" /> : orden.liberada ? <ShieldCheck className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                             </div>
-                            <p className="text-[11px] font-semibold truncate text-white mt-0.5">
-                              {orden.entregada ? (
-                                "Comprobante / pago entregado"
-                              ) : orden.liberada ? (
-                                "Autorizada para pago"
-                              ) : (
-                                "En proceso de autorización"
-                              )}
-                            </p>
+                            <div className="truncate">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Entrega / Pago
+                              </div>
+                              <div className="text-xs font-semibold truncate">
+                                {orden.entregada ? (
+                                  <span className="text-blue-300 font-bold">Entregada</span>
+                                ) : orden.liberada ? (
+                                  <span className="text-emerald-300 font-bold">Liberada</span>
+                                ) : (
+                                  <span className="text-slate-400">En proceso</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                            orden.entregada 
+                              ? "bg-blue-500/20 text-blue-300 border border-blue-500/30" 
+                              : orden.liberada
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : "bg-white/5 text-slate-400 border border-white/10"
+                          }`}>
+                            {orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : "Pendiente"}
+                          </span>
                         </div>
 
                       </div>
                     </div>
-                  </div>
 
+                  </div>
                 </div>
               );
             })}
 
-            {/* Cargar más órdenes y Cargar Todo */}
-            <div className="flex flex-col sm:flex-row items-center justify-center pt-4 pb-2 gap-3">
-              {hasMore && !hasLoadedAllFromDb && (
+            {/* Pagination Load More */}
+            {hasMore && (
+              <div className="text-center pt-4">
                 <button
-                  onClick={() => setQueryLimit((prev) => prev + 15)}
-                  className="px-6 py-3 rounded-2xl bg-[#111726] hover:bg-slate-800 border border-slate-700/80 hover:border-slate-600 text-white font-bold text-xs transition-all shadow-lg flex items-center gap-2.5 cursor-pointer"
+                  onClick={() => setQueryLimit((prev) => prev + 20)}
+                  className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs border border-slate-700 transition-all cursor-pointer shadow-sm"
                 >
-                  <span>Cargar más órdenes (+15)</span>
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    (Mostrando {visibleOrdenes.length} órdenes)
-                  </span>
+                  Cargar más órdenes
                 </button>
-              )}
-              {!hasLoadedAllFromDb && (
-                <button
-                  onClick={handleLoadAllFromDb}
-                  disabled={loadingAllDb}
-                  className="px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-lg flex items-center gap-2 cursor-pointer"
-                >
-                  {loadingAllDb ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                  ) : (
-                    <Database className="w-4 h-4 text-indigo-400" />
-                  )}
-                  <span>{loadingAllDb ? "Cargando toda la base de datos..." : "Cargar todas las de la base de datos"}</span>
-                </button>
-              )}
-              {hasLoadedAllFromDb && (
-                <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-4 py-2.5 rounded-2xl inline-flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  <span>Todas las órdenes de la base de datos están cargadas ({ordenes.length})</span>
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
       </div>
 
-      {/* Modal de Detalle / Notas */}
+      {/* Modal de Detalle */}
       <OrderDetailModal
-        orden={activeNotesOrden}
+        orden={activeNotesOrden ? (ordenes.find((o) => o.id === activeNotesOrden.id) || activeNotesOrden) : null}
         onClose={() => setActiveNotesOrden(null)}
-        isOrdenesUser={isOrdenesUser}
+        isOrdenesUser={false}
+        onStatusChange={handleStatusChange}
         newNotaText={newNotaText}
         setNewNotaText={setNewNotaText}
         savingNota={savingNota}
         onAddNota={handleAddNota}
-        onStatusChange={handleStatusChange}
         showToast={showToast}
       />
     </AppLayout>
