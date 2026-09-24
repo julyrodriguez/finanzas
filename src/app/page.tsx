@@ -39,7 +39,11 @@ import {
   FolderOpen, 
   FileSpreadsheet, 
   Eye, 
-  Database 
+  Database,
+  Clock,
+  Send,
+  PackageCheck,
+  RefreshCw
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -51,6 +55,14 @@ import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo } from "@/lib/serverSync";
 import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
+import { 
+  OrdenesStats, 
+  getOrderStatus, 
+  trackOrderStatusChange, 
+  trackOrderCreated, 
+  trackOrderDeleted, 
+  recalculateAndSyncStats 
+} from "@/lib/ordenesStats";
 
 const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -69,6 +81,10 @@ export default function OrdenesDeComprasPage() {
   const [filterEstado, setFilterEstado] = useState<
     "Todas" | "Liberadas" | "Mandadas" | "Entregadas" | "Pendientes"
   >("Todas");
+
+  // Server-side live counters from 'metadata/ordenes_stats'
+  const [serverStats, setServerStats] = useState<OrdenesStats | null>(null);
+  const [isSyncingStats, setIsSyncingStats] = useState(false);
   
   // Pagination State: Limit initial query reads to 15
   const [queryLimit, setQueryLimit] = useState(15);
@@ -193,6 +209,56 @@ export default function OrdenesDeComprasPage() {
         console.warn("Could not save cmd path to Firestore:", err);
       }
     }, 600);
+  };
+
+  // Listener en tiempo real al documento 'metadata/ordenes_stats' del servidor
+  useEffect(() => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    const statsDocRef = doc(db, "metadata", "ordenes_stats");
+    const unsubscribe = onSnapshot(
+      statsDocRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setServerStats({
+            total: Math.max(0, Number(data.total) || 0),
+            pendiente: Math.max(0, Number(data.pendiente) || 0),
+            mandada: Math.max(0, Number(data.mandada) || 0),
+            liberada: Math.max(0, Number(data.liberada) || 0),
+            entregada: Math.max(0, Number(data.entregada) || 0),
+            cancelada: Math.max(0, Number(data.cancelada) || 0),
+            updatedAt: data.updatedAt,
+          });
+        } else {
+          // Documento aún no creado en el servidor: calcular e inicializar automáticamente
+          recalculateAndSyncStats(db)
+            .then((fresh) => setServerStats(fresh))
+            .catch((err) => console.warn("Error inicializando contadores:", err));
+        }
+      },
+      (error) => {
+        console.warn("Aviso en listener de contadores:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleManualSyncStats = async () => {
+    const db = getFirebaseDb();
+    if (!db || isSyncingStats) return;
+    setIsSyncingStats(true);
+    try {
+      const fresh = await recalculateAndSyncStats(db);
+      setServerStats(fresh);
+      showToast("Contadores sincronizados con la base de datos");
+    } catch (err) {
+      console.error("Error sincronizando contadores:", err);
+      showToast("Error al sincronizar contadores");
+    } finally {
+      setIsSyncingStats(false);
+    }
   };
 
   const getFormattedCreatedAt = (orden: OrdenCompra | null) => {
@@ -738,6 +804,11 @@ export default function OrdenesDeComprasPage() {
         try {
           const docRef = doc(db, "ordenes_compra", editingOrden.id);
           await updateDoc(docRef, dataToSave);
+          const oldStatus = getOrderStatus(editingOrden);
+          const newStatus = getOrderStatus(dataToSave);
+          if (oldStatus !== newStatus) {
+            trackOrderStatusChange(db, oldStatus, newStatus);
+          }
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), editingOrden.numOC.trim(), relatedOC.trim(), editingOrden.relatedOC || "");
           syncOrderToMongo({ id: editingOrden.id, ...editingOrden, ...dataToSave });
@@ -758,6 +829,7 @@ export default function OrdenesDeComprasPage() {
       if (db) {
         try {
           const docRef = await addDoc(collection(db, "ordenes_compra"), newOrden);
+          trackOrderCreated(db, newOrden);
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), numOC.trim(), relatedOC.trim(), "");
           syncOrderToMongo({ id: docRef.id, ...newOrden });
@@ -871,6 +943,9 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        const oldStatus = getOrderStatus(orden);
+        const newStatus = getOrderStatus({ ...orden, ...updateData });
+        trackOrderStatusChange(db, oldStatus, newStatus);
         syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
         console.error("Error al actualizar liberada:", err);
@@ -900,6 +975,9 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        const oldStatus = getOrderStatus(orden);
+        const newStatus = getOrderStatus({ ...orden, ...updateData });
+        trackOrderStatusChange(db, oldStatus, newStatus);
         syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
         console.error("Error al actualizar mandada:", err);
@@ -929,6 +1007,9 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
+        const oldStatus = getOrderStatus(orden);
+        const newStatus = getOrderStatus({ ...orden, ...updateData });
+        trackOrderStatusChange(db, oldStatus, newStatus);
         syncOrderToMongo({ id: orden.id, ...orden, ...updateData });
       } catch (err) {
         console.error("Error al actualizar entregada:", err);
@@ -942,11 +1023,15 @@ export default function OrdenesDeComprasPage() {
     if (!id) return;
     if (!confirm("¿Estás seguro de eliminar esta orden de compra?")) return;
 
+    const targetOrden = ordenes.find((item) => item.id === id);
     setOrdenes((prev) => prev.filter((item) => item.id !== id));
     const db = getFirebaseDb();
     if (db) {
       try {
         await deleteDoc(doc(db, "ordenes_compra", id));
+        if (targetOrden) {
+          trackOrderDeleted(db, targetOrden);
+        }
         deleteOrderFromMongo(id);
         showToast("Orden eliminada");
       } catch (err) {
@@ -1254,6 +1339,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <DolarVentaBadge />
 
             <button
+              onClick={handleManualSyncStats}
+              disabled={isSyncingStats}
+              className={`px-3 py-2 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-200 hover:text-white cursor-pointer ${
+                isSyncingStats ? "opacity-75 cursor-not-allowed" : ""
+              }`}
+              title="Sincronizar y recalcular contadores con la base de datos del servidor"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isSyncingStats ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">{isSyncingStats ? "Sincronizando..." : "Sincronizar"}</span>
+            </button>
+
+            <button
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
               className={`px-3 py-2 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
@@ -1292,6 +1389,162 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               </button>
             )}
           </div>
+        </div>
+
+        {/* KPI Live Server Metrics Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* Card 1: Total */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterEstado("Todas");
+              setQueryLimit(15);
+            }}
+            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-blue-500/50 ${
+              filterEstado === "Todas"
+                ? "border-blue-500/60 bg-blue-500/10 shadow-sm shadow-blue-500/10"
+                : "border-white/10 hover:bg-slate-800/40"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px] text-slate-400">Total Órdenes</span>
+              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
+                <Database className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-white tracking-tight">
+                {serverStats ? serverStats.total.toLocaleString("es-AR") : (
+                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                )}
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">En BD</span>
+            </div>
+          </button>
+
+          {/* Card 2: Pendientes */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterEstado("Pendientes");
+              setQueryLimit(15);
+            }}
+            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-slate-400/50 ${
+              filterEstado === "Pendientes"
+                ? "border-slate-400/60 bg-slate-500/10 shadow-sm shadow-slate-500/10"
+                : "border-white/10 hover:bg-slate-800/40"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px] text-slate-300">Pendientes</span>
+              <div className="p-1.5 rounded-lg bg-slate-500/15 text-slate-300 group-hover:scale-110 transition-transform">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-slate-200 tracking-tight">
+                {serverStats ? serverStats.pendiente.toLocaleString("es-AR") : (
+                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                )}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-300 border border-slate-500/20 font-medium">
+                Sin enviar
+              </span>
+            </div>
+          </button>
+
+          {/* Card 3: Mandadas / En Autorización */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterEstado("Mandadas");
+              setQueryLimit(15);
+            }}
+            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-amber-500/50 ${
+              filterEstado === "Mandadas"
+                ? "border-amber-500/60 bg-amber-500/10 shadow-sm shadow-amber-500/10"
+                : "border-white/10 hover:bg-slate-800/40"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px] text-amber-300">En Autorización</span>
+              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
+                <Send className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-amber-400 tracking-tight">
+                {serverStats ? serverStats.mandada.toLocaleString("es-AR") : (
+                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                )}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+                Mandadas
+              </span>
+            </div>
+          </button>
+
+          {/* Card 4: Liberadas */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterEstado("Liberadas");
+              setQueryLimit(15);
+            }}
+            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-emerald-500/50 ${
+              filterEstado === "Liberadas"
+                ? "border-emerald-500/60 bg-emerald-500/10 shadow-sm shadow-emerald-500/10"
+                : "border-white/10 hover:bg-slate-800/40"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px] text-emerald-300">Liberadas</span>
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-emerald-400 tracking-tight">
+                {serverStats ? serverStats.liberada.toLocaleString("es-AR") : (
+                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                )}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
+                Aprobadas
+              </span>
+            </div>
+          </button>
+
+          {/* Card 5: Entregadas */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterEstado("Entregadas");
+              setQueryLimit(15);
+            }}
+            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-blue-400/50 col-span-2 sm:col-span-1 ${
+              filterEstado === "Entregadas"
+                ? "border-blue-400/60 bg-blue-500/10 shadow-sm shadow-blue-500/10"
+                : "border-white/10 hover:bg-slate-800/40"
+            }`}
+          >
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px] text-blue-300">Entregadas</span>
+              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
+                <PackageCheck className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-blue-400 tracking-tight">
+                {serverStats ? serverStats.entregada.toLocaleString("es-AR") : (
+                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                )}
+              </span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-medium">
+                Pagadas
+              </span>
+            </div>
+          </button>
         </div>
 
         {/* Buscador & Filters Bar */}

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
+import { getOrderStatus, trackBatchStatusChanges } from "@/lib/ordenesStats";
 import { 
   collection, 
   query, 
@@ -366,6 +367,15 @@ export function BatchSendToSignModal({
 
         await batch.commit();
       }
+
+      // Actualizar contadores atómicos en la base de datos
+      const statusChanges = itemsToUpdate
+        .filter((item) => item.order)
+        .map((item) => ({
+          oldStatus: getOrderStatus(item.order),
+          newStatus: getOrderStatus({ ...item.order, ...item.updatesToApply }),
+        }));
+      trackBatchStatusChanges(db, statusChanges);
 
       if (onBatchSuccess) {
         onBatchSuccess(updatedEntries);
