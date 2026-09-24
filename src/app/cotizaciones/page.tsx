@@ -1217,7 +1217,7 @@ export default function CotizacionesPage() {
     if (currentQuoteId) {
       const db = getFirebaseDb();
       if (db && !currentQuoteId.startsWith("local-")) {
-        await updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+        updateDoc(doc(db, "cotizaciones", currentQuoteId), {
           items: currentItems,
           providers: updatedProviders,
           attachments: updatedAttachments,

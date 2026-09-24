@@ -112,13 +112,10 @@ export default function ProcesoDeLiberacionPage() {
   };
 
   // Cargar órdenes directamente desde el servidor local (MongoDB) usando el índice compuesto
-  const loadOrdersFromServer = async () => {
-    setLoading(true);
+  const loadOrdersFromServer = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const [resMandadas, resAll] = await Promise.all([
-        fetchOrdersFromMongo({ estado: "mandada", limit: 0 }),
-        fetchOrdersFromMongo({ limit: 0 }).catch(() => null)
-      ]);
+      const resMandadas = await fetchOrdersFromMongo({ estado: "mandada", limit: 200 });
 
       if (resMandadas && resMandadas.success && Array.isArray(resMandadas.ordenes)) {
         const mandadas: OrdenCompra[] = resMandadas.ordenes.map(parseMongoDocToOrdenCompra);
@@ -129,21 +126,24 @@ export default function ProcesoDeLiberacionPage() {
         });
         setOrdenes(mandadas);
       }
-
-      if (resAll && resAll.success && Array.isArray(resAll.ordenes)) {
-        const allDocs: OrdenCompra[] = resAll.ordenes.map(parseMongoDocToOrdenCompra);
-        setAllOrdersForBatch(allDocs);
-      }
     } catch (err) {
       console.error("Error al cargar órdenes de proceso de liberación desde el servidor local:", err);
-      showToast("Error al cargar órdenes desde el servidor local");
+      if (!silent) showToast("Error al cargar órdenes desde el servidor local");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadOrdersFromServer();
+    // Carga ligera inicial para el lote en segundo plano
+    fetchOrdersFromMongo({ limit: 150 })
+      .then((res) => {
+        if (res && res.success && Array.isArray(res.ordenes)) {
+          setAllOrdersForBatch(res.ordenes.map(parseMongoDocToOrdenCompra));
+        }
+      })
+      .catch(() => null);
   }, []);
 
   const limite1 = config?.limiteNivel1 || 5000000;
@@ -1201,7 +1201,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               return o;
             })
           );
-          loadOrdersFromServer();
+          loadOrdersFromServer(true);
         }}
         showToast={showToast}
       />
@@ -1232,7 +1232,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               return o;
             })
           );
-          loadOrdersFromServer();
+          loadOrdersFromServer(true);
         }}
         showToast={showToast}
       />

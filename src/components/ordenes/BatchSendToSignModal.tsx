@@ -284,37 +284,38 @@ export function BatchSendToSignModal({
     }
 
     setSearchingDb(true);
-    const fetched: OrdenCompra[] = [];
-
-    const chunkSize = 50;
-    for (let i = 0; i < unsearched.length; i += chunkSize) {
-      const chunk = unsearched.slice(i, i + chunkSize);
-      try {
-        const res = await fetchOrdersFromMongo({ numsOC: chunk, limit: 100 });
-        if (res && res.ordenes && Array.isArray(res.ordenes)) {
-          for (const doc of res.ordenes) {
-            const parsed = parseMongoDocToOrdenCompra(doc);
-            if (!fetched.some((f) => f.id === parsed.id || (f.numOC && f.numOC === parsed.numOC))) {
-              fetched.push(parsed);
+    try {
+      const fetched: OrdenCompra[] = [];
+      const chunkSize = 50;
+      for (let i = 0; i < unsearched.length; i += chunkSize) {
+        const chunk = unsearched.slice(i, i + chunkSize);
+        try {
+          const res = await fetchOrdersFromMongo({ numsOC: chunk, limit: 100 });
+          if (res && res.ordenes && Array.isArray(res.ordenes)) {
+            for (const doc of res.ordenes) {
+              const parsed = parseMongoDocToOrdenCompra(doc);
+              if (!fetched.some((f) => f.id === parsed.id || (f.numOC && f.numOC === parsed.numOC))) {
+                fetched.push(parsed);
+              }
             }
           }
+        } catch (err) {
+          console.error("Error en deep search en Mongo:", err);
         }
-      } catch (err) {
-        console.error("Error en deep search en Mongo:", err);
       }
-    }
 
-    if (fetched.length > 0) {
-      setDbExtraOrders((prev) => {
-        const map = new Map<string, OrdenCompra>();
-        for (const o of prev) if (o.id) map.set(o.id, o);
-        for (const o of fetched) if (o.id) map.set(o.id, o);
-        return Array.from(map.values());
-      });
-      showToast(`🔍 Se encontraron ${fetched.length} órdenes en la base de datos`);
+      if (fetched.length > 0) {
+        setDbExtraOrders((prev) => {
+          const map = new Map<string, OrdenCompra>();
+          for (const o of prev) if (o.id) map.set(o.id, o);
+          for (const o of fetched) if (o.id) map.set(o.id, o);
+          return Array.from(map.values());
+        });
+        showToast(`🔍 Se encontraron ${fetched.length} órdenes en la base de datos`);
+      }
+    } finally {
+      setSearchingDb(false);
     }
-
-    setSearchingDb(false);
   };
 
   useEffect(() => {
@@ -368,8 +369,9 @@ export function BatchSendToSignModal({
               const docRef = doc(db, "ordenes_compra", item.order!.id!);
               batch.update(docRef, item.updatesToApply!);
             }
-
-            await batch.commit();
+            batch.commit().catch((err) => {
+              console.warn("Aviso Firebase al procesar envío a firmar:", err);
+            });
           }
 
           // Actualizar contadores atómicos en la base de datos

@@ -245,7 +245,9 @@ export function CotizacionesImportAiModal({
       });
       // Cerramos el modal de inmediato para no dejar al usuario trabado en 'Importando...'
       handleClose();
-      await importPromise;
+      Promise.resolve(importPromise).catch((err) => {
+        console.warn("Aviso al guardar datos importados:", err);
+      });
     } catch (err: any) {
       setError(err.message || "Error al guardar los datos importados");
     } finally {
