@@ -249,3 +249,36 @@ export async function deleteCapexGastoDirecto(id: string): Promise<boolean> {
   }
   return true;
 }
+
+/**
+ * Consulta el resumen estadístico exacto de estados de órdenes desde el servidor MongoDB.
+ */
+export async function fetchOrdersStatsFromMongo(): Promise<{
+  total: number;
+  pendiente: number;
+  mandada: number;
+  liberada: number;
+  entregada: number;
+  cancelada: number;
+} | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/stats/summary`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json && json.success && json.summary) {
+      return {
+        total: Number(json.summary.totalOrdenes) || 0,
+        pendiente: Number(json.summary.pendientes) || 0,
+        mandada: Number(json.summary.mandadas) || 0,
+        liberada: Number(json.summary.liberadas) || 0,
+        entregada: Number(json.summary.entregadas) || 0,
+        cancelada: Number(json.summary.canceladas) || 0,
+      };
+    }
+  } catch (err) {
+    console.warn("⚠️ [Mongo Stats] Error consultando stats:", err);
+  }
+  return null;
+}

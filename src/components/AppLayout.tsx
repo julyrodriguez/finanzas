@@ -29,7 +29,8 @@ import {
   Layers,
   ArrowRight,
   PanelLeftClose,
-  PanelLeft
+  PanelLeft,
+  CalendarDays
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -178,6 +179,14 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     {
       title: "Análisis & Sistemas",
       items: [
+        {
+          name: "Estadísticas Mensuales",
+          href: "/estadisticas-mensuales",
+          icon: CalendarDays,
+          exact: false,
+          badge: "Nuevo",
+          hideForOrders: true,
+        },
         {
           name: "Estadísticas",
           href: "/estadisticas",

@@ -53,7 +53,7 @@ import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
-import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo } from "@/lib/serverSync";
+import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrdersStatsFromMongo } from "@/lib/serverSync";
 import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
 import { 
   OrdenesStats, 
@@ -216,20 +216,39 @@ export default function OrdenesDeComprasPage() {
     const db = getFirebaseDb();
     if (!db) return;
     const statsDocRef = doc(db, "metadata", "ordenes_stats");
+
+    // Sincronizar inmediatamente desde MongoDB si el backend está activo
+    fetchOrdersStatsFromMongo().then((ms) => {
+      if (ms) {
+        setServerStats({
+          ...ms,
+          updatedAt: new Date().toISOString(),
+        });
+        setDoc(statsDocRef, { ...ms, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      }
+    }).catch(() => {});
+
     const unsubscribe = onSnapshot(
       statsDocRef,
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
+          const p = Number(data.pendiente) || 0;
           setServerStats({
             total: Math.max(0, Number(data.total) || 0),
-            pendiente: Math.max(0, Number(data.pendiente) || 0),
+            pendiente: Math.max(0, p),
             mandada: Math.max(0, Number(data.mandada) || 0),
             liberada: Math.max(0, Number(data.liberada) || 0),
             entregada: Math.max(0, Number(data.entregada) || 0),
             cancelada: Math.max(0, Number(data.cancelada) || 0),
             updatedAt: data.updatedAt,
           });
+          // Si por error previo los pendientes quedaron en 0 pero hay órdenes en el sistema
+          if (p === 0) {
+            recalculateAndSyncStats(db)
+              .then((fresh) => setServerStats(fresh))
+              .catch(() => {});
+          }
         } else {
           // Documento aún no creado en el servidor: calcular e inicializar automáticamente
           recalculateAndSyncStats(db)

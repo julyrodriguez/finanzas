@@ -12,6 +12,7 @@ import {
   getDocs 
 } from "firebase/firestore";
 import type { OrdenCompra } from "@/types/ordenes";
+import { fetchOrdersStatsFromMongo } from "@/lib/serverSync";
 
 export type OrderStatusKey = "pendiente" | "mandada" | "liberada" | "entregada" | "cancelada";
 
@@ -166,23 +167,53 @@ export async function recalculateAndSyncStats(db: Firestore): Promise<OrdenesSta
   const colRef = collection(db, "ordenes_compra");
   const statsRef = getStatsDocRef(db);
 
+  // 1. Intentar obtener el conteo exacto de la base de datos central en MongoDB
   try {
-    const [totalSnap, canceladaSnap, entregadaSnap, liberadaSnap, mandadaSnap] = await Promise.all([
+    const mongoStats = await fetchOrdersStatsFromMongo();
+    if (mongoStats && mongoStats.total > 0) {
+      const stats: OrdenesStats = {
+        total: mongoStats.total,
+        pendiente: mongoStats.pendiente,
+        mandada: mongoStats.mandada,
+        liberada: mongoStats.liberada,
+        entregada: mongoStats.entregada,
+        cancelada: mongoStats.cancelada,
+        updatedAt: serverTimestamp(),
+      };
+      await setDoc(statsRef, stats, { merge: true });
+      return stats;
+    }
+  } catch (mErr) {
+    console.warn("⚠️ [ordenesStats] Mongo stats unavailable, computing from Firestore:", mErr);
+  }
+
+  // 2. Cálculo en Firestore escaneando las órdenes activas (no entregadas)
+  try {
+    const [totalSnap, canceladaSnap, entregadaSnap] = await Promise.all([
       getCountFromServer(colRef),
       getCountFromServer(query(colRef, where("cancelada", "==", true))),
       getCountFromServer(query(colRef, where("entregada", "==", true))),
-      getCountFromServer(query(colRef, where("liberada", "==", true))),
-      getCountFromServer(query(colRef, where("mandada", "==", true))),
     ]);
 
     const total = totalSnap.data().count;
     const cancelada = canceladaSnap.data().count;
     const entregada = entregadaSnap.data().count;
-    const liberada = liberadaSnap.data().count;
-    const mandadaRaw = mandadaSnap.data().count;
-    // Mandadas que no estén aún liberadas
-    const mandada = Math.max(0, mandadaRaw > liberada ? mandadaRaw - liberada : mandadaRaw);
-    const pendiente = Math.max(0, total - (liberada + mandada + entregada + cancelada));
+
+    // Escanear únicamente las órdenes que no están marcadas como entregadas
+    const activeSnap = await getDocs(query(colRef, where("entregada", "==", false)));
+    
+    let pendiente = 0;
+    let mandada = 0;
+    let liberada = 0;
+
+    activeSnap.docs.forEach((docSnap) => {
+      const data = docSnap.data() as Partial<OrdenCompra>;
+      if (data.cancelada) return;
+      if (data.entregada) return;
+      if (data.liberada) liberada++;
+      else if (data.mandada) mandada++;
+      else pendiente++;
+    });
 
     const stats: OrdenesStats = {
       total,
