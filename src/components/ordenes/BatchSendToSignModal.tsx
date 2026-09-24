@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { 
   X, 
   Send, 
@@ -19,7 +19,7 @@ import {
 import type { OrdenCompra } from "@/types/ordenes";
 import { getFirebaseDb } from "@/lib/firebase";
 import { getOrderStatus, trackBatchStatusChanges } from "@/lib/ordenesStats";
-import { bulkSyncOrdersToMongo } from "@/lib/serverSync";
+import { bulkSyncOrdersToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
 import { 
   collection, 
   query, 
@@ -267,82 +267,78 @@ export function BatchSendToSignModal({
 
   const totalExecutableCount = send1raList.length + send2daList.length;
 
-  // Deep search in Firestore for any tokens not found in local memory state
+  // Deep search in DB (MongoDB) for any tokens not found in local memory state
+  const searchedTokensRef = useRef<Set<string>>(new Set());
+
   const handleDeepSearch = async () => {
     if (notFoundList.length === 0) return;
-    const db = getFirebaseDb();
-    if (!db) return;
+
+    const unsearched = notFoundList
+      .flatMap((m) => [m.normalizedOC, m.rawToken])
+      .filter((t) => t && !searchedTokensRef.current.has(t));
+
+    if (unsearched.length === 0) return;
+
+    for (const t of unsearched) {
+      searchedTokensRef.current.add(t);
+    }
 
     setSearchingDb(true);
-    const tokensToSearch = notFoundList.map((m) => m.normalizedOC);
     const fetched: OrdenCompra[] = [];
 
-    const chunkSize = 30;
-    for (let i = 0; i < tokensToSearch.length; i += chunkSize) {
-      const chunk = tokensToSearch.slice(i, i + chunkSize);
+    const chunkSize = 50;
+    for (let i = 0; i < unsearched.length; i += chunkSize) {
+      const chunk = unsearched.slice(i, i + chunkSize);
       try {
-        const colRef = collection(db, "ordenes_compra");
-        const q = query(colRef, where("numOC", "in", chunk));
-        const snap = await getDocs(q);
-        for (const docSnap of snap.docs) {
-          const data = docSnap.data();
-          fetched.push({
-            id: docSnap.id,
-            empresa: data.empresa || "Hoyts",
-            numSolicitud: data.numSolicitud || "",
-            numOC: data.numOC || "",
-            razonSocial: data.razonSocial || "",
-            monto: data.monto ?? "",
-            motivo: data.motivo || "",
-            formaPago: data.formaPago || "30DFF",
-            liberada: Boolean(data.liberada),
-            mandada: Boolean(data.mandada),
-            entregada: Boolean(data.entregada),
-            cancelada: Boolean(data.cancelada),
-            creadoPor: data.creadoPor || "Usuario",
-            notas: data.notas || [],
-            createdAt: data.createdAt || null,
-            relatedOC: data.relatedOC || "",
-            enviado: Boolean(data.enviado),
-            enviadoA1: data.enviadoA1 || "",
-            enviadoA2: data.enviadoA2 || "",
-            fechaEnvio1: data.fechaEnvio1 || "",
-            fechaEnvio2: data.fechaEnvio2 || "",
-            firmado1: Boolean(data.firmado1),
-            firmado2: Boolean(data.firmado2),
-            firmante1: data.firmante1 || "",
-            firmante2: data.firmante2 || "",
-            fechaFirma1: data.fechaFirma1 || "",
-            fechaFirma2: data.fechaFirma2 || "",
-            linkSharepoint: data.linkSharepoint || "",
-          });
+        const res = await fetchOrdersFromMongo({ numsOC: chunk, limit: 100 });
+        if (res && res.ordenes && Array.isArray(res.ordenes)) {
+          for (const doc of res.ordenes) {
+            const parsed = parseMongoDocToOrdenCompra(doc);
+            if (!fetched.some((f) => f.id === parsed.id || (f.numOC && f.numOC === parsed.numOC))) {
+              fetched.push(parsed);
+            }
+          }
         }
       } catch (err) {
-        console.error("Error in deep search chunk:", err);
+        console.error("Error en deep search en Mongo:", err);
       }
     }
 
     if (fetched.length > 0) {
-      setDbExtraOrders((prev) => [...prev, ...fetched]);
-      showToast(`🔍 Se encontraron ${fetched.length} órdenes adicionales en la base de datos`);
-    } else {
-      showToast("No se encontraron coincidencias adicionales en la base de datos");
+      setDbExtraOrders((prev) => {
+        const map = new Map<string, OrdenCompra>();
+        for (const o of prev) if (o.id) map.set(o.id, o);
+        for (const o of fetched) if (o.id) map.set(o.id, o);
+        return Array.from(map.values());
+      });
+      showToast(`🔍 Se encontraron ${fetched.length} órdenes en la base de datos`);
     }
 
     setSearchingDb(false);
   };
 
-  // Execute Batch Send Updates in Firestore
+  useEffect(() => {
+    if (notFoundList.length === 0) return;
+    const hasUnsearched = notFoundList.some((m) => {
+      const norm = m.normalizedOC;
+      const raw = m.rawToken;
+      return (norm && !searchedTokensRef.current.has(norm)) || (raw && !searchedTokensRef.current.has(raw));
+    });
+    if (!hasUnsearched) return;
+
+    const timer = setTimeout(() => {
+      handleDeepSearch();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [notFoundList]);
+
+  // Execute Batch Send Updates in Mongo and Firebase
   const handleExecuteBatch = async () => {
     if (totalExecutableCount === 0) return;
 
     setIsProcessing(true);
     const db = getFirebaseDb();
-    if (!db) {
-      showToast("Error de conexión con la base de datos");
-      setIsProcessing(false);
-      return;
-    }
 
     try {
       const itemsToUpdate = parsedMatches.filter(
@@ -353,8 +349,8 @@ export function BatchSendToSignModal({
         .filter((item) => item.order?.id && item.updatesToApply)
         .map((item) => ({ id: item.order!.id!, updates: item.updatesToApply! }));
 
-      // Sincronizar en MongoDB de forma inmediata
-      bulkSyncOrdersToMongo(
+      // Sincronizar en MongoDB de forma inmediata y esperar confirmación
+      await bulkSyncOrdersToMongo(
         itemsToUpdate
           .filter((item) => item.order?.id && item.updatesToApply)
           .map((item) => ({ id: item.order!.id!, ...item.order, ...item.updatesToApply }))
@@ -397,14 +393,20 @@ export function BatchSendToSignModal({
         `🚀 ${itemsToUpdate.length} órdenes marcadas como enviadas a firmar (${send1raList.length} para 1ra firma, ${send2daList.length} para 2da firma)`
       );
 
-      setInputText("");
-      onClose();
+      handleClose();
     } catch (err) {
       console.error("Error al procesar lote de envío a firmar:", err);
       showToast("Error al guardar los cambios en la base de datos");
     }
 
     setIsProcessing(false);
+  };
+
+  const handleClose = () => {
+    setInputText("");
+    setDbExtraOrders([]);
+    searchedTokensRef.current.clear();
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -433,7 +435,7 @@ export function BatchSendToSignModal({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -656,7 +658,7 @@ export function BatchSendToSignModal({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancelar

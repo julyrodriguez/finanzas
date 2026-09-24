@@ -111,21 +111,28 @@ export default function ProcesoDeLiberacionPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Cargar órdenes directamente desde el servidor local (MongoDB)
+  // Cargar órdenes directamente desde el servidor local (MongoDB) usando el índice compuesto
   const loadOrdersFromServer = async () => {
     setLoading(true);
     try {
-      const res = await fetchOrdersFromMongo({ limit: 0 });
-      if (res && res.success && Array.isArray(res.ordenes)) {
-        const allDocs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
-        allDocs.sort((a, b) => {
+      const [resMandadas, resAll] = await Promise.all([
+        fetchOrdersFromMongo({ estado: "mandada", limit: 0 }),
+        fetchOrdersFromMongo({ limit: 0 }).catch(() => null)
+      ]);
+
+      if (resMandadas && resMandadas.success && Array.isArray(resMandadas.ordenes)) {
+        const mandadas: OrdenCompra[] = resMandadas.ordenes.map(parseMongoDocToOrdenCompra);
+        mandadas.sort((a, b) => {
           const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
           const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
           return timeB - timeA;
         });
-        setAllOrdersForBatch(allDocs);
-        const mandadas = allDocs.filter((o) => o.mandada && !o.liberada && !o.cancelada);
         setOrdenes(mandadas);
+      }
+
+      if (resAll && resAll.success && Array.isArray(resAll.ordenes)) {
+        const allDocs: OrdenCompra[] = resAll.ordenes.map(parseMongoDocToOrdenCompra);
+        setAllOrdersForBatch(allDocs);
       }
     } catch (err) {
       console.error("Error al cargar órdenes de proceso de liberación desde el servidor local:", err);
@@ -1184,8 +1191,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 return { ...o, ...updateMap.get(o.id) };
               }
               return o;
-            }).filter(o => !o.liberada && !o.entregada && !o.cancelada)
+            }).filter((o) => !o.liberada && !o.entregada && !o.cancelada)
           );
+          setAllOrdersForBatch((prev) =>
+            prev.map((o) => {
+              if (o.id && updateMap.has(o.id)) {
+                return { ...o, ...updateMap.get(o.id) };
+              }
+              return o;
+            })
+          );
+          loadOrdersFromServer();
         }}
         showToast={showToast}
       />
@@ -1206,8 +1222,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 return { ...o, ...updateMap.get(o.id) };
               }
               return o;
-            }).filter(o => !o.liberada && !o.entregada && !o.cancelada)
+            }).filter((o) => !o.liberada && !o.entregada && !o.cancelada)
           );
+          setAllOrdersForBatch((prev) =>
+            prev.map((o) => {
+              if (o.id && updateMap.has(o.id)) {
+                return { ...o, ...updateMap.get(o.id) };
+              }
+              return o;
+            })
+          );
+          loadOrdersFromServer();
         }}
         showToast={showToast}
       />

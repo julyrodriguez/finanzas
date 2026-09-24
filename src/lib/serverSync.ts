@@ -13,10 +13,12 @@ const API_BASE_URL = "https://apivacas.jariel.com.ar/api/ordenes";
 
 export interface MongoQueryParams {
   empresa?: "Hoyts" | "CMK";
+  creadoPor?: string;
   anio?: number | string;
   year?: number | string;
   search?: string;
-  estado?: "liberada" | "entregada" | "mandada" | "cancelada" | "pendiente";
+  numsOC?: string[] | string;
+  estado?: string;
   limit?: number;
   page?: number;
   sort?: string;
@@ -68,24 +70,27 @@ export async function deleteOrderFromMongo(orderId?: string): Promise<void> {
 /**
  * Sincronización masiva (bulk) de múltiples órdenes hacia MongoDB.
  */
-export async function bulkSyncOrdersToMongo(orders: (Partial<OrdenCompra> & { id?: string; firebaseId?: string })[]): Promise<void> {
+export async function bulkSyncOrdersToMongo(orders: (Partial<OrdenCompra> & { id?: string; firebaseId?: string })[]): Promise<any> {
   try {
-    if (!orders || orders.length === 0) return;
+    if (!orders || orders.length === 0) return null;
 
     const formatted = orders.map((o) => ({
       ...o,
       firebaseId: o.id || o.firebaseId,
     }));
 
-    fetch(`${API_BASE_URL}/bulk`, {
+    const res = await fetch(`${API_BASE_URL}/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ordenes: formatted }),
-    }).catch((err) => {
-      console.warn("⚠️ [Mongo Bulk Sync] Error:", err.message || err);
     });
-  } catch (err) {
-    console.warn("⚠️ [Mongo Bulk Sync] Error:", err);
+    if (!res.ok) {
+      console.warn("⚠️ [Mongo Bulk Sync] Error status:", res.status);
+    }
+    return await res.json().catch(() => null);
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Bulk Sync] Error:", err?.message || err);
+    return null;
   }
 }
 
@@ -97,8 +102,13 @@ export async function fetchOrdersFromMongo(params: MongoQueryParams = {}) {
   try {
     const searchParams = new URLSearchParams();
     if (params.empresa) searchParams.set("empresa", params.empresa);
+    if (params.creadoPor && params.creadoPor !== "todos") searchParams.set("creadoPor", params.creadoPor);
     if (params.anio || params.year) searchParams.set("anio", String(params.anio || params.year));
     if (params.search) searchParams.set("search", params.search);
+    if (params.numsOC) {
+      const val = Array.isArray(params.numsOC) ? params.numsOC.join(",") : params.numsOC;
+      searchParams.set("numsOC", val);
+    }
     if (params.estado) searchParams.set("estado", params.estado);
     if (params.limit !== undefined) searchParams.set("limit", String(params.limit));
     if (params.page !== undefined) searchParams.set("page", String(params.page));

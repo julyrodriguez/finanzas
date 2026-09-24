@@ -321,11 +321,27 @@ export default function OrdenesDeComprasPage() {
     linkSharepoint: data.linkSharepoint || "",
   });
 
-  // Cargar órdenes directamente desde el servidor local (MongoDB) sin consumir cuota de Firebase
+  // Debounce search query to search directly in MongoDB without lagging
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Cargar órdenes directamente desde el servidor local (MongoDB) usando los índices optimizados
   const loadOrdersFromServer = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchOrdersFromMongo({ limit: 0 });
+      const res = await fetchOrdersFromMongo({
+        estado: filterEstado === "Todas" ? undefined : filterEstado.toLowerCase(),
+        empresa: filterEmpresa === "Todas" ? undefined : filterEmpresa,
+        creadoPor: filterCreadoPor === "todos" ? undefined : filterCreadoPor,
+        search: debouncedSearchQuery.trim() || undefined,
+        limit: hasLoadedAllFromDb ? 0 : queryLimit + 1,
+      });
       if (res && res.success && Array.isArray(res.ordenes)) {
         const docs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
         docs.sort((a, b) => {
@@ -334,7 +350,6 @@ export default function OrdenesDeComprasPage() {
           return timeB - timeA;
         });
         setOrdenes(docs);
-        setHasLoadedAllFromDb(true);
       }
     } catch (err) {
       console.error("Error al cargar órdenes desde el servidor local:", err);
@@ -342,7 +357,7 @@ export default function OrdenesDeComprasPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterEstado, filterEmpresa, filterCreadoPor, debouncedSearchQuery, queryLimit, hasLoadedAllFromDb]);
 
   useEffect(() => {
     loadOrdersFromServer();
