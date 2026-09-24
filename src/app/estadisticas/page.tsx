@@ -14,12 +14,14 @@ import {
   CapexGastoDirecto
 } from "@/lib/serverSync";
 import { extractProvidersFromOrders } from "@/lib/providersRegistry";
+import { EstadisticasMensualesSection } from "@/components/estadisticas/EstadisticasMensualesSection";
 import { 
   TrendingUp, 
   BarChart3, 
   PieChart, 
   Building2, 
   Calendar, 
+  CalendarDays, 
   DollarSign, 
   Layers, 
   Search, 
@@ -346,8 +348,8 @@ export default function EstadisticasPage() {
   const [activeProviderModal, setActiveProviderModal] = useState<GroupedProvider | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Tab switching & CAPEX dashboard states
-  const [activeTab, setActiveTab] = useState<"general" | "capex">("general");
+  // Tab switching & CAPEX & Mensual dashboard states
+  const [activeTab, setActiveTab] = useState<"general" | "capex" | "mensual">("general");
   const [capexSearchQuery, setCapexSearchQuery] = useState<string>("");
   const [capexTypeFilter, setCapexTypeFilter] = useState<"Todos" | "CAPEX" | "PCT">("Todos");
   const [capexSortBy, setCapexSortBy] = useState<"monto" | "fecha" | "numOC" | "proveedor">("monto");
@@ -820,6 +822,16 @@ export default function EstadisticasPage() {
       setLoading(false);
     }
   };
+
+  // Auto-cargar datos desde el servidor MongoDB si no hay caché previa
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (orders.length === 0 && !loading) {
+        handleActualizarDatos();
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ==========================================
   // DYNAMIC AVAILABLE YEARS
@@ -1682,23 +1694,50 @@ export default function EstadisticasPage() {
                     {filteredCapexOrders.length} OCs
                   </span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab("mensual")}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeTab === "mensual"
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 ring-1 ring-white/20"
+                      : "bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-white/10"
+                  }`}
+                >
+                  <CalendarDays className="w-4 h-4 text-emerald-300" />
+                  <span>Estadísticas Mensuales</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                      activeTab === "mensual"
+                        ? "bg-black/40 text-white"
+                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    }`}
+                  >
+                    Nuevo
+                  </span>
+                </button>
               </div>
 
               {/* Quick info indicator */}
               <div className="text-xs text-slate-400 flex items-center gap-1.5">
                 {activeTab === "general" ? (
                   <span>Analizando compras generales, operativas y ranking de proveedores unificados.</span>
-                ) : (
+                ) : activeTab === "capex" ? (
                   <span className="text-amber-400/90 flex items-center gap-1">
                     <Tag className="w-3.5 h-3.5" />
                     Filtrado por órdenes con descripción <strong>CAPEX</strong> o código <strong>PCT</strong>.
+                  </span>
+                ) : (
+                  <span className="text-emerald-400/90 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Comparativas trimestrales, picos diarios y proyección de política OPEX vs CAPEX.
                   </span>
                 )}
               </div>
             </div>
 
-            {/* FILTERS BAR */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+            {/* FILTERS BAR (For General & CAPEX tabs) */}
+            {activeTab !== "mensual" && (
+              <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto min-w-0 max-w-full">
                 {/* Year filter: responsive con scroll táctil suave y selector rápido para listas largas de años */}
                 <div className="w-full sm:w-auto max-w-full flex items-center bg-slate-800/80 p-1 rounded-xl border border-white/10 min-w-0">
@@ -1829,6 +1868,7 @@ export default function EstadisticasPage() {
                 )}
               </div>
             </div>
+          )}
 
             {activeTab === "general" ? (
               <>
@@ -2466,7 +2506,7 @@ export default function EstadisticasPage() {
               </div>
             </div>
           </>
-        ) : (
+        ) : activeTab === "capex" ? (
           /* CAPEX & PCT DASHBOARD */
           <div className="space-y-6 animate-in fade-in duration-300">
             {/* ============================================================================ */}
@@ -3386,6 +3426,13 @@ export default function EstadisticasPage() {
               )}
             </div>
           </div>
+        ) : (
+          /* ESTADÍSTICAS MENSUALES (Comparativas, Días pico, OPEX vs CAPEX y Novedades) */
+          <EstadisticasMensualesSection
+            orders={orders}
+            onRefreshData={handleActualizarDatos}
+            isLoading={loading}
+          />
         )}
       </>
     )}
