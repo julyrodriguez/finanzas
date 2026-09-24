@@ -1030,7 +1030,8 @@ export function EstadisticasMensualesSection({
                       height: `${heightPercent}%`,
                       transform: trimestralChartInView ? "scaleY(1)" : "scaleY(0)",
                       transformOrigin: "bottom",
-                      transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                      transition: "transform 750ms cubic-bezier(0.16, 1, 0.3, 1)",
+                      transitionDelay: `${idx * 150}ms`,
                       willChange: "transform",
                     }}
                     className="w-full rounded-xl flex flex-col overflow-hidden shadow-sm"
@@ -1240,7 +1241,8 @@ export function EstadisticasMensualesSection({
                               <span
                                 style={{
                                   opacity: inView ? 1 : 0,
-                                  transition: "opacity 180ms ease",
+                                  transition: "opacity 300ms ease",
+                                  transitionDelay: inView && !isOutOfMonth ? `${Math.min(d.day * 14 + 100, 450)}ms` : "0ms",
                                 }}
                                 className={`text-[10px] sm:text-xs font-mono font-black mb-1 ${
                                   isPeak ? `${theme.peakText} font-black` : theme.barText
@@ -1256,7 +1258,8 @@ export function EstadisticasMensualesSection({
                                 height: isOutOfMonth ? "0%" : `${heightPct}%`,
                                 transform: inView && !isOutOfMonth ? "scaleY(1)" : "scaleY(0)",
                                 transformOrigin: "bottom",
-                                transition: "transform 250ms cubic-bezier(0.16, 1, 0.3, 1)",
+                                transition: "transform 700ms cubic-bezier(0.16, 1, 0.3, 1)",
+                                transitionDelay: inView && !isOutOfMonth ? `${Math.min(d.day * 14, 400)}ms` : "0ms",
                                 willChange: "transform",
                               }}
                               className={`w-full max-w-[24px] sm:max-w-[30px] rounded-t-md shadow-sm ${
@@ -1387,7 +1390,8 @@ export function EstadisticasMensualesSection({
                             width: `${pct}%`,
                             transform: dowInView ? "scaleX(1)" : "scaleX(0)",
                             transformOrigin: "left",
-                            transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                            transition: "transform 650ms cubic-bezier(0.16, 1, 0.3, 1)",
+                            transitionDelay: `${dow.id * 60}ms`,
                             willChange: "transform",
                           }}
                           className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500"
@@ -1485,7 +1489,7 @@ export function EstadisticasMensualesSection({
                     width: `${comparisonMonths.current.totalMonto > 0 ? (comparisonMonths.current.opexMonto / comparisonMonths.current.totalMonto) * 100 : 0}%`,
                     transform: opexCapexInView ? "scaleX(1)" : "scaleX(0)",
                     transformOrigin: "left",
-                    transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    transition: "transform 750ms cubic-bezier(0.16, 1, 0.3, 1)",
                     willChange: "transform",
                   }}
                   className="h-full rounded-full bg-blue-500"
@@ -1550,7 +1554,8 @@ export function EstadisticasMensualesSection({
                     width: `${comparisonMonths.current.totalMonto > 0 ? (comparisonMonths.current.capexMonto / comparisonMonths.current.totalMonto) * 100 : 0}%`,
                     transform: opexCapexInView ? "scaleX(1)" : "scaleX(0)",
                     transformOrigin: "left",
-                    transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    transition: "transform 750ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    transitionDelay: "150ms",
                     willChange: "transform",
                   }}
                   className="h-full rounded-full bg-purple-500"
