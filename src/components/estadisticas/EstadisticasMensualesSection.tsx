@@ -919,24 +919,24 @@ export function EstadisticasMensualesSection({
                     )}
                   </div>
 
-                  {/* Gráfico de Barras del 1 al 31 */}
+                  {/* Gráfico de Barras del 1 al 31 con Altura e Impacto Visual Prominente */}
                   <div className="relative">
-                    <div className="flex items-end gap-1 sm:gap-1.5 h-32 sm:h-36 w-full overflow-x-auto pb-2 pt-14 px-1 custom-scrollbar">
+                    <div className="flex items-end gap-1 sm:gap-1.5 h-44 sm:h-52 w-full overflow-x-auto pb-2 pt-14 px-1 custom-scrollbar">
                       {stats.daysArray.map((d) => {
                         const isOutOfMonth = d.day > stats.daysInMonth;
-                        const maxForScale = Math.max(1, dailyStats.globalMaxDayCount);
+                        const maxForScale = Math.max(1, stats.maxDayCount);
                         const heightPct = isOutOfMonth
                           ? 0
                           : d.total > 0
-                          ? Math.max(10, Math.round((d.total / maxForScale) * 60))
-                          : 6;
+                          ? Math.max(16, Math.round((d.total / maxForScale) * 96))
+                          : 4;
                         const isPeak = d.total === stats.peakCount && d.total > 0 && !isOutOfMonth;
                         const hasOrders = d.total > 0 && !isOutOfMonth;
 
                         return (
                           <div
                             key={d.day}
-                            className="flex-1 min-w-[20px] sm:min-w-[24px] flex flex-col items-center justify-end h-full group relative"
+                            className="flex-1 min-w-[22px] sm:min-w-[26px] flex flex-col items-center justify-end h-full group relative"
                           >
                             {/* Tooltip on hover - NUNCA CORTADO EN LA PARTE SUPERIOR */}
                             {hasOrders && (
@@ -965,7 +965,7 @@ export function EstadisticasMensualesSection({
                             {/* Bar Label (Count) */}
                             {hasOrders && (
                               <span
-                                className={`text-[9px] font-mono font-bold mb-1 ${
+                                className={`text-[10px] sm:text-xs font-mono font-black mb-1 ${
                                   isPeak ? `${theme.peakText} font-black` : theme.barText
                                 }`}
                               >
@@ -976,7 +976,7 @@ export function EstadisticasMensualesSection({
                             {/* The Bar */}
                             <div
                               style={{ height: `${heightPct}%` }}
-                              className={`w-full rounded-t-md transition-all duration-300 ${
+                              className={`w-full max-w-[24px] sm:max-w-[30px] rounded-t-md transition-all duration-300 shadow-sm ${
                                 isOutOfMonth
                                   ? "opacity-0 pointer-events-none"
                                   : isPeak
@@ -989,14 +989,14 @@ export function EstadisticasMensualesSection({
 
                             {/* Day number */}
                             <span
-                              className={`text-[10px] mt-1 font-mono ${
+                              className={`text-[10px] sm:text-[11px] mt-1.5 font-mono ${
                                 isOutOfMonth
                                   ? "text-transparent"
                                   : isPeak
                                   ? `${theme.peakText} font-black`
                                   : hasOrders
-                                  ? "text-slate-300 font-semibold"
-                                  : "text-slate-600"
+                                  ? "text-slate-200 font-bold"
+                                  : "text-slate-600 font-medium"
                               }`}
                             >
                               {d.day}
