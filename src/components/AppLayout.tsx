@@ -41,27 +41,29 @@ interface AppLayoutProps {
 
 export function AppLayout({ title, subtitle, children, publicRoute = false }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const isExpanded = isPinned || isHovered;
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("sidebar_collapsed");
+      const saved = localStorage.getItem("sidebar_pinned");
       if (saved !== null) {
-        setSidebarCollapsed(saved === "true");
+        setIsPinned(saved === "true");
       }
     } catch {
       // ignore
     }
   }, []);
 
-  const toggleSidebarCollapse = () => {
-    setSidebarCollapsed((prev) => {
+  const togglePin = () => {
+    setIsPinned((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem("sidebar_collapsed", String(next));
+        localStorage.setItem("sidebar_pinned", String(next));
       } catch {}
       return next;
     });
@@ -238,11 +240,11 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     );
   }
 
-  const renderSidebarContent = () => (
+  const renderSidebarContent = (expanded: boolean) => (
     <div className="flex flex-col h-full bg-[#0a0e17] border-r border-white/10 text-slate-300">
-      {/* Brand Header */}
-      <div className="px-4 py-4 border-b border-white/10 shrink-0">
-        <div className="flex items-center justify-between">
+      {/* Brand / Header */}
+      {expanded ? (
+        <div className="px-4 py-3.5 border-b border-white/10 shrink-0 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="h-9 w-9 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
               <TrendingUp className="w-5 h-5" />
@@ -258,14 +260,14 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           </div>
 
           <div className="flex items-center gap-1">
-            {/* Desktop Collapse Button */}
+            {/* Desktop Pin / Unpin Button */}
             <button
-              onClick={toggleSidebarCollapse}
+              onClick={togglePin}
               className="hidden lg:flex p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              title="Ocultar menú lateral"
-              aria-label="Ocultar menú lateral"
+              title={isPinned ? "Desfijar menú (se contrae al retirar el mouse)" : "Fijar menú siempre abierto"}
+              aria-label="Fijar o desfijar menú"
             >
-              <PanelLeftClose className="w-4 h-4" />
+              {isPinned ? <PanelLeftClose className="w-4 h-4 text-blue-400" /> : <PanelLeft className="w-4 h-4" />}
             </button>
 
             {/* Mobile Close Button */}
@@ -278,11 +280,23 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             </button>
           </div>
         </div>
-      </div>
+      ) : (
+        /* Collapsed Header with Open Button at Top */
+        <div className="h-16 flex items-center justify-center border-b border-white/10 shrink-0">
+          <button
+            onClick={togglePin}
+            className="p-2.5 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:text-white hover:bg-blue-600/30 transition-all cursor-pointer shadow-sm group"
+            title="Abrir y fijar menú lateral"
+            aria-label="Abrir menú"
+          >
+            <PanelLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </button>
+        </div>
+      )}
 
       {/* Main Navigation List */}
-      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-3 space-y-4">
-        {navigationSections.map((section) => {
+      <div className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar py-3 ${expanded ? "px-3 space-y-4" : "px-1.5 space-y-2"}`}>
+        {navigationSections.map((section, sIdx) => {
           const visibleItems = section.items.filter((item) => {
             if (isOrdenesUser) return !item.hideForOrders;
             if (item.onlyForOrders) return false;
@@ -291,6 +305,38 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           });
 
           if (visibleItems.length === 0) return null;
+
+          if (!expanded) {
+            return (
+              <div key={section.title} className="space-y-1">
+                {sIdx > 0 && <div className="my-2 border-t border-white/10 mx-2" />}
+                <nav aria-label={section.title} className="space-y-1">
+                  {visibleItems.map((item) => {
+                    const active = isActive(item.href, item.exact);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.name}
+                        href={item.href}
+                        onClick={() => setSidebarOpen(false)}
+                        title={item.name}
+                        className={`flex items-center justify-center h-10 w-10 mx-auto rounded-xl transition-all relative ${
+                          active
+                            ? "bg-blue-600 text-white shadow-sm border border-blue-500"
+                            : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.06] border border-transparent"
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-slate-400"}`} />
+                        {item.badge && (
+                          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0a0e17]" />
+                        )}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            );
+          }
 
           return (
             <div key={section.title} className="space-y-1">
@@ -331,90 +377,110 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       </div>
 
       {/* Footer Controls: Theme, Ticker, User */}
-      <div className="p-3 border-t border-white/10 space-y-2.5 shrink-0 bg-[#080c14]">
-        {/* Theme Switcher Segmented Control */}
-        <div className="space-y-1">
-          <div className="px-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-            Tema Visual
-          </div>
-          <div className="p-1 rounded-lg bg-black/50 border border-white/10 grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={() => setTheme("dark")}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                theme === "dark"
-                  ? "bg-slate-800 text-white shadow-sm border border-slate-700"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              <Moon className="w-3.5 h-3.5 text-blue-400" />
-              <span>Oscuro</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTheme("pink")}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                theme === "pink"
-                  ? "bg-pink-600 text-white shadow-sm border border-pink-500"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              <span>🌸</span>
-              <span>Rosa</span>
-            </button>
-          </div>
-        </div>
-
-        {/* BNA Broker Ticker Tape */}
-        <CotizacionesTicker isExpanded={true} />
-
-        {/* User Profile & Logout */}
-        <div className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="h-7 w-7 rounded-md bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-xs shrink-0">
-              {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
+      {expanded ? (
+        <div className="p-3 border-t border-white/10 space-y-2.5 shrink-0 bg-[#080c14]">
+          {/* Theme Switcher Segmented Control */}
+          <div className="space-y-1">
+            <div className="px-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+              Tema Visual
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-200 truncate leading-tight">
-                {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
-              </p>
-              <p className="text-[10px] text-slate-400 truncate flex items-center gap-1 leading-tight mt-0.5">
-                {isOrdenesUser ? (
-                  <>
-                    <ShieldCheck className="w-2.5 h-2.5 text-amber-400" /> Consulta
-                  </>
-                ) : user ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Activo
-                  </>
-                ) : (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Consulta
-                  </>
-                )}
-              </p>
+            <div className="p-1 rounded-lg bg-black/50 border border-white/10 grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => setTheme("dark")}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  theme === "dark"
+                    ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5 text-blue-400" />
+                <span>Oscuro</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTheme("pink")}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  theme === "pink"
+                    ? "bg-pink-600 text-white shadow-sm border border-pink-500"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>🌸</span>
+                <span>Rosa</span>
+              </button>
             </div>
           </div>
 
-          {user ? (
-            <button
-              onClick={handleLogout}
-              title="Cerrar Sesión"
-              className="p-1.5 rounded-md hover:bg-red-500/15 text-slate-400 hover:text-red-400 transition-colors shrink-0 cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <Link
-              href="/login"
-              title="Iniciar Sesión"
-              className="p-1.5 rounded-md hover:bg-emerald-500/15 text-slate-400 hover:text-emerald-400 transition-colors shrink-0"
-            >
-              <UserIcon className="w-3.5 h-3.5" />
-            </Link>
-          )}
+          {/* BNA Broker Ticker Tape */}
+          <CotizacionesTicker isExpanded={true} />
+
+          {/* User Profile & Logout */}
+          <div className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-7 w-7 rounded-md bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-xs shrink-0">
+                {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-200 truncate leading-tight">
+                  {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate flex items-center gap-1 leading-tight mt-0.5">
+                  {isOrdenesUser ? (
+                    <>
+                      <ShieldCheck className="w-2.5 h-2.5 text-amber-400" /> Consulta
+                    </>
+                  ) : user ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Activo
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Consulta
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {user ? (
+              <button
+                onClick={handleLogout}
+                title="Cerrar Sesión"
+                className="p-1.5 rounded-md hover:bg-red-500/15 text-slate-400 hover:text-red-400 transition-colors shrink-0 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                title="Iniciar Sesión"
+                className="p-1.5 rounded-md hover:bg-emerald-500/15 text-slate-400 hover:text-emerald-400 transition-colors shrink-0"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+              </Link>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Collapsed Compact Footer */
+        <div className="p-2 border-t border-white/10 flex flex-col items-center gap-2 bg-[#080c14] shrink-0">
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "dark" ? "pink" : "dark")}
+            title={theme === "dark" ? "Cambiar a modo Rosa" : "Cambiar a modo Oscuro"}
+            className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+          >
+            {theme === "dark" ? <Moon className="w-4 h-4 text-blue-400" /> : <span className="text-sm">🌸</span>}
+          </button>
+          <div
+            title={isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
+            className="h-8 w-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-xs shrink-0"
+          >
+            {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -428,28 +494,17 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         />
       )}
 
-      {/* Desktop Fixed Sidebar */}
+      {/* Desktop Column / Collapsible Sidebar */}
       <aside
         aria-label="Barra lateral de navegación"
-        className={`hidden lg:flex fixed inset-y-0 left-0 w-64 z-30 flex-col shadow-xl transition-transform duration-200 ease-in-out ${
-          sidebarCollapsed ? "-translate-x-full" : "translate-x-0"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-[#0a0e17] border-r border-white/10 shadow-2xl transition-[width] duration-300 ease-in-out overflow-hidden ${
+          isExpanded ? "w-64" : "w-16"
         }`}
       >
-        {renderSidebarContent()}
+        {renderSidebarContent(isExpanded)}
       </aside>
-
-      {/* Floating button to open sidebar when collapsed on desktop */}
-      {sidebarCollapsed && (
-        <button
-          onClick={toggleSidebarCollapse}
-          className="hidden lg:flex fixed top-4 left-4 z-40 p-2.5 rounded-xl bg-[#0a0e17]/95 border border-white/15 hover:border-blue-500/50 text-slate-300 hover:text-white shadow-2xl backdrop-blur-md cursor-pointer transition-all hover:scale-105 group items-center gap-2"
-          title="Mostrar menú lateral"
-          aria-label="Mostrar menú lateral"
-        >
-          <PanelLeft className="w-4 h-4 text-blue-400 group-hover:text-blue-300" />
-          <span className="text-xs font-semibold text-slate-200 pr-1">Menú</span>
-        </button>
-      )}
 
       {/* Mobile Sliding Drawer */}
       <aside
@@ -458,12 +513,12 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {renderSidebarContent()}
+        {renderSidebarContent(true)}
       </aside>
 
       {/* Main Content Area */}
-      <div className={`flex flex-col min-h-screen min-w-0 transition-[padding] duration-200 ease-in-out ${
-        sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"
+      <div className={`flex flex-col min-h-screen min-w-0 transition-[padding] duration-300 ease-in-out ${
+        isPinned ? "lg:pl-64" : "lg:pl-16"
       }`}>
         {/* Mobile Header Bar */}
         <header className="lg:hidden sticky top-0 z-20 bg-[#0a0d14]/95 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
