@@ -923,10 +923,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                             <Check className="w-2.5 h-2.5 text-emerald-400" />
                             {sigInfo.f1Signer || "Firmado"}
                           </span>
-                        ) : orden.enviadoA1 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-300 border border-blue-500/30">
-                            <Send className="w-2.5 h-2.5 text-blue-400" />
-                            Enviado ({sigInfo.f1Label})
+                        ) : orden.enviadoA1?.trim() ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            <Send className="w-2.5 h-2.5 text-purple-400" />
+                            Enviado a {orden.enviadoA1.trim()}
+                          </span>
+                        ) : (orden.enviado && !sigInfo.isF1Signed) ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            <Send className="w-2.5 h-2.5 text-purple-400" />
+                            Enviado a {sigInfo.f1Label}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-slate-400 border border-white/10">
@@ -942,10 +947,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                             <Check className="w-2.5 h-2.5 text-emerald-400" />
                             {sigInfo.f2Signer || "Firmado"}
                           </span>
-                        ) : orden.enviadoA2 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/30">
+                        ) : orden.enviadoA2?.trim() ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
                             <Send className="w-2.5 h-2.5 text-purple-400" />
-                            Enviado ({sigInfo.f2Label})
+                            Enviado a {orden.enviadoA2.trim()}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/5 text-slate-400 border border-white/10">
