@@ -66,38 +66,35 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent flex flex-col justify-center items-center p-4 relative overflow-hidden">
-      {/* Ambient Lighting Gradients */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#090d16] flex flex-col justify-center items-center p-4 relative overflow-hidden">
+      {/* Subtle Corporate Lighting */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Main Container */}
-      <div className="w-full max-w-md space-y-6 relative z-10">
+      <div className="w-full max-w-sm space-y-6 relative z-10">
         {/* Brand Header */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-xl shadow-emerald-500/20">
-            <div className="h-full w-full bg-[#0d131f] rounded-[14px] flex items-center justify-center">
-              <TrendingUp className="w-7 h-7 text-emerald-400" />
-            </div>
+        <div className="text-center space-y-2.5">
+          <div className="inline-flex h-12 w-12 rounded-xl bg-blue-600/15 border border-blue-500/30 items-center justify-center text-blue-400 shadow-sm">
+            <TrendingUp className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            <h1 className="text-2xl font-bold text-white tracking-tight">
               Finanzas
             </h1>
-            <p className="text-xs sm:text-sm text-gray-400 mt-1">
+            <p className="text-xs text-slate-400 mt-0.5">
               Plataforma de gestión financiera corporativa
             </p>
           </div>
         </div>
 
         {/* Card Form */}
-        <div className="glass-card border border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl backdrop-blur-xl">
-          <h2 className="text-lg font-bold text-white mb-6 text-center">Iniciar Sesión</h2>
+        <div className="glass-card border border-white/10 p-6 sm:p-7 rounded-xl shadow-xl bg-[#0f1422]">
+          <h2 className="text-sm font-semibold text-white mb-5 text-center">Iniciar Sesión</h2>
 
           {/* Error Alert */}
           {error && (
-            <div className="mb-4 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
@@ -105,35 +102,35 @@ export default function LoginPage() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Usuario
               </label>
               <div className="relative">
-                <UserIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Ingresa tu usuario"
-                  className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-lg bg-[#0b0f19] border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Contraseña
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-lg bg-[#0b0f19] border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
@@ -141,7 +138,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full mt-2 py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -155,18 +152,18 @@ export default function LoginPage() {
           </form>
 
           {/* Bottom links */}
-          <div className="mt-6 text-center">
-            <div className="relative flex py-2 items-center justify-center mb-4">
-              <div className="flex-grow border-t border-white/5"></div>
-              <span className="flex-shrink mx-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">o continuar como</span>
-              <div className="flex-grow border-t border-white/5"></div>
+          <div className="mt-5 text-center">
+            <div className="relative flex py-2 items-center justify-center mb-3">
+              <div className="flex-grow border-t border-white/10"></div>
+              <span className="flex-shrink mx-3 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">o continuar como</span>
+              <div className="flex-grow border-t border-white/10"></div>
             </div>
 
             <Link
               href="/distribucion"
-              className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 group"
+              className="w-full py-2 px-3 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 hover:text-white font-medium text-xs transition-colors flex items-center justify-center gap-2"
             >
-              <Percent className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <Percent className="w-3.5 h-3.5 text-blue-400" />
               <span>Acceder a Distribución Pública</span>
             </Link>
           </div>

@@ -56,8 +56,8 @@ export function DolarVentaBadge() {
 
   if (loading && !data) {
     return (
-      <div className="h-9 px-3.5 rounded-xl bg-slate-800/50 border border-slate-700/60 flex items-center gap-2 animate-pulse">
-        <span className="w-2 h-2 rounded-full bg-emerald-500/50" />
+      <div className="h-9 px-3 rounded-lg bg-slate-800/40 border border-slate-700/60 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
         <span className="text-xs text-slate-400 font-mono">Cargando dólar...</span>
       </div>
     );
@@ -71,39 +71,31 @@ export function DolarVentaBadge() {
   return (
     <div
       title={tooltipText}
-      className="relative px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-slate-900/90 via-[#0d1527] to-slate-900/90 border border-emerald-500/30 hover:border-emerald-400/50 shadow-sm shadow-emerald-500/10 flex items-center justify-between sm:justify-start gap-2.5 transition-all group select-none cursor-default"
+      className="px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-700/70 hover:border-slate-600 flex items-center justify-between sm:justify-start gap-2.5 transition-all select-none cursor-default shadow-sm"
     >
-      {/* Live Glowing Dot */}
       <div className="flex items-center gap-2">
-        <div className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-        </div>
-
-        {/* Currency Icon & Tag */}
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
         <div className="flex flex-col">
-          <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 leading-none">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-none">
             USD BNA VTA
           </span>
-          <span className="text-[9px] text-emerald-500/90 font-medium leading-none mt-0.5">
+          <span className="text-[9px] text-emerald-400 font-medium leading-none mt-0.5">
             Oficial
           </span>
         </div>
       </div>
 
-      {/* Main Value Display */}
-      <div className="flex items-center gap-1.5 pl-1 border-l border-white/10">
-        <span className="font-mono text-sm font-black text-emerald-400 tracking-tight">
+      <div className="flex items-center gap-1.5 pl-2 border-l border-white/10">
+        <span className="font-mono text-xs font-bold text-emerald-400 tracking-tight">
           ${ventaFormatted}
         </span>
         <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
       </div>
 
-      {/* Quick Refresh Icon */}
       <button
         onClick={handleManualRefresh}
         title="Actualizar cotización"
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 -mr-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white cursor-pointer"
+        className="p-1 hover:bg-white/10 rounded text-slate-400 hover:text-white cursor-pointer transition-colors"
       >
         <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin text-emerald-400" : ""}`} />
       </button>

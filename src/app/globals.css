@@ -2,77 +2,69 @@
 
 @layer base {
   :root {
-    --bg-primary: #090d16;
-    --bg-secondary: #0b0f19;
-    --card-bg: #111726;
+    --bg-primary: #0a0d14;
+    --bg-secondary: #0f1420;
+    --card-bg: #121826;
     --border-color: rgba(255, 255, 255, 0.08);
   }
 
   body {
-    background-color: #090d16;
+    background-color: #0a0d14;
     color: #f1f5f9;
     font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
     background-image: 
-      radial-gradient(rgba(255, 255, 255, 0.22) 1.25px, transparent 1.25px),
-      linear-gradient(180deg, #070a10 0%, #0c111c 100%);
-    background-size: 28px 28px, 100% 100%;
+      radial-gradient(ellipse 90% 60% at 50% -20%, rgba(30, 41, 59, 0.35), transparent),
+      linear-gradient(180deg, #090c13 0%, #0d121c 100%);
     background-attachment: fixed;
+    min-height: 100vh;
   }
 }
 
 /* ============================================================
-   VERCEL / STRIPE SAAS ENTERPRISE DESIGN SYSTEM
+   ENTERPRISE FINANCIAL DESIGN SYSTEM (DARK MODE PRESET)
    ============================================================ */
 
 .glass-panel {
   background: #111726;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.35);
 }
 
 .glass-card {
   background: #111726;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .glass-card:hover {
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
-.glow-emerald {
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25);
-}
-
-.glow-indigo {
-  box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.25);
-}
-
-/* Custom Scrollbar */
+/* Custom Scrollbar - Clean & Narrow */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.4);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Inputs & Form Controls Default */
 input, select, textarea {
-  background-color: #0b0f19;
+  background-color: #0b101c;
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #f8fafc;
   border-radius: 8px;
@@ -80,8 +72,9 @@ input, select, textarea {
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+  outline: none;
 }
 
 input::placeholder, textarea::placeholder {
@@ -90,7 +83,7 @@ input::placeholder, textarea::placeholder {
 
 /* Table Default Typography & Contrast */
 table th {
-  background-color: #0c121e;
+  background-color: #0d1320;
   color: #94a3b8;
   font-weight: 600;
   text-transform: uppercase;
@@ -104,48 +97,46 @@ table tr {
 }
 
 table tr:hover {
-  background-color: rgba(99, 102, 241, 0.04);
+  background-color: rgba(255, 255, 255, 0.02);
 }
 
 /* Primary Action Buttons */
 button[class*="from-emerald-500"],
 button[class*="bg-gradient-to-r"] {
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  background: #2563eb;
   color: #ffffff;
-  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35);
   border-radius: 8px;
   font-weight: 600;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 button[class*="from-emerald-500"]:hover,
 button[class*="bg-gradient-to-r"]:hover {
-  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
-  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.5);
+  background: #1d4ed8;
 }
 
 /* ============================================================
-   ROSE ENTERPRISE DESIGN SYSTEM (MODO ROSA REALISTA / VELVET ROSE)
+   EXECUTIVE ROSE DESIGN SYSTEM (MODO ROSA CORPORATIVO / VELVET)
    ============================================================ */
 
 .pink-theme {
-  background-color: #130614 !important;
+  background-color: #120713 !important;
   color: #fff1f2 !important;
   background-image: 
-    radial-gradient(rgba(244, 114, 182, 0.22) 1.25px, transparent 1.25px),
-    linear-gradient(180deg, #180819 0%, #0e030e 100%) !important;
-  background-size: 28px 28px, 100% 100% !important;
+    radial-gradient(ellipse 90% 60% at 50% -20%, rgba(131, 24, 67, 0.28), transparent),
+    linear-gradient(180deg, #130715 0%, #0d040e 100%) !important;
   background-attachment: fixed !important;
 }
 
 .pink-theme aside {
-  background-color: #160817 !important;
+  background-color: #160a18 !important;
   border-color: rgba(244, 114, 182, 0.18) !important;
-  box-shadow: 10px 0 30px -10px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 1px 0 0 0 rgba(244, 114, 182, 0.15) !important;
 }
 
 .pink-theme header {
-  background-color: rgba(19, 6, 20, 0.9) !important;
-  border-color: rgba(244, 114, 182, 0.15) !important;
+  background-color: rgba(18, 7, 19, 0.95) !important;
+  border-color: rgba(244, 114, 182, 0.18) !important;
 }
 
 .pink-theme h1,
@@ -156,7 +147,7 @@ button[class*="bg-gradient-to-r"]:hover {
 }
 
 .pink-theme .text-gray-400 {
-  color: #fda4af !important;
+  color: #f4a6b8 !important;
 }
 
 .pink-theme .text-gray-300,
@@ -166,13 +157,13 @@ button[class*="bg-gradient-to-r"]:hover {
 
 .pink-theme .glass-card,
 .pink-theme .glass-panel {
-  background: #1c0b1d !important;
-  border: 1px solid rgba(244, 114, 182, 0.2) !important;
-  box-shadow: 0 4px 20px -2px rgba(8, 1, 8, 0.6) !important;
+  background: #1a0d1e !important;
+  border: 1px solid rgba(244, 114, 182, 0.18) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5) !important;
 }
 
 .pink-theme .glass-card:hover {
-  border-color: rgba(244, 114, 182, 0.4) !important;
+  border-color: rgba(244, 114, 182, 0.35) !important;
 }
 
 /* Inset containers (Search, Segmented Filters, Modals) */
@@ -180,22 +171,22 @@ button[class*="bg-gradient-to-r"]:hover {
 .pink-theme [class*="bg-[#0b0f19]"],
 .pink-theme [class*="bg-[#0e1322]"],
 .pink-theme [class*="bg-[#0d131f]"] {
-  background-color: #140715 !important;
-  border-color: rgba(244, 114, 182, 0.22) !important;
+  background-color: #150917 !important;
+  border-color: rgba(244, 114, 182, 0.2) !important;
 }
 
 .pink-theme [class*="bg-[#111726]"],
 .pink-theme [class*="bg-[#141b2d]"] {
-  background-color: #1d0c1e !important;
-  border-color: rgba(244, 114, 182, 0.2) !important;
+  background-color: #1b0d1e !important;
+  border-color: rgba(244, 114, 182, 0.18) !important;
 }
 
-/* Inputs & Form Controls */
+/* Inputs & Form Controls in Rose Mode */
 .pink-theme input,
 .pink-theme select,
 .pink-theme textarea {
-  background-color: #100411 !important;
-  border-color: rgba(244, 114, 182, 0.25) !important;
+  background-color: #130815 !important;
+  border-color: rgba(244, 114, 182, 0.22) !important;
   color: #ffffff !important;
 }
 
@@ -203,25 +194,29 @@ button[class*="bg-gradient-to-r"]:hover {
 .pink-theme select:focus,
 .pink-theme textarea:focus {
   border-color: #ec4899 !important;
-  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.3) !important;
+  box-shadow: 0 0 0 1px #ec4899 !important;
 }
 
 .pink-theme input::placeholder,
 .pink-theme textarea::placeholder {
-  color: rgba(251, 207, 232, 0.4) !important;
+  color: rgba(251, 207, 232, 0.45) !important;
 }
 
-/* Primary buttons & Active filter tabs */
+/* Primary buttons & Active filter tabs in Rose Mode */
 .pink-theme [class*="bg-indigo-600"],
-.pink-theme button[class*="from-indigo-500"] {
-  background: linear-gradient(135deg, #db2777 0%, #ec4899 100%) !important;
+.pink-theme button[class*="from-indigo-500"],
+.pink-theme button[class*="from-emerald-500"],
+.pink-theme button[class*="bg-gradient-to-r"] {
+  background: #db2777 !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 14px rgba(219, 39, 119, 0.4) !important;
+  box-shadow: 0 1px 3px rgba(219, 39, 119, 0.35) !important;
 }
 
 .pink-theme [class*="bg-indigo-600"]:hover,
-.pink-theme button[class*="from-indigo-500"]:hover {
-  background: linear-gradient(135deg, #be185d 0%, #db2777 100%) !important;
+.pink-theme button[class*="from-indigo-500"]:hover,
+.pink-theme button[class*="from-emerald-500"]:hover,
+.pink-theme button[class*="bg-gradient-to-r"]:hover {
+  background: #be185d !important;
 }
 
 /* Accent Indigo Overrides to Rose/Pink */
@@ -233,20 +228,20 @@ button[class*="bg-gradient-to-r"]:hover {
 .pink-theme [class*="bg-indigo-500/15"],
 .pink-theme [class*="bg-indigo-500/10"],
 .pink-theme [class*="bg-indigo-500/20"] {
-  background-color: rgba(236, 72, 153, 0.18) !important;
-  border-color: rgba(236, 72, 153, 0.35) !important;
+  background-color: rgba(236, 72, 153, 0.16) !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
   color: #fbcfe8 !important;
 }
 
 .pink-theme [class*="border-indigo-500"] {
-  border-color: rgba(244, 114, 182, 0.4) !important;
+  border-color: rgba(244, 114, 182, 0.35) !important;
 }
 
-/* Navigation Links */
+/* Navigation Links in Rose Mode */
 .pink-theme aside nav a[class*="bg-indigo-500/15"],
 .pink-theme aside a.active {
-  background: linear-gradient(90deg, rgba(236, 72, 153, 0.22) 0%, rgba(236, 72, 153, 0.08) 100%) !important;
-  border-color: rgba(236, 72, 153, 0.45) !important;
+  background: rgba(236, 72, 153, 0.15) !important;
+  border-color: rgba(236, 72, 153, 0.35) !important;
   color: #fbcfe8 !important;
 }
 
@@ -255,88 +250,78 @@ button[class*="bg-gradient-to-r"]:hover {
   color: #ffffff !important;
 }
 
-.pink-theme aside nav a div[class*="bg-indigo-500/20"] {
-  background-color: rgba(236, 72, 153, 0.25) !important;
-  color: #f472b6 !important;
-}
-
-/* Tables */
+/* Tables in Rose Mode */
 .pink-theme thead,
 .pink-theme th {
-  background-color: #200b21 !important;
+  background-color: #1f0d22 !important;
   color: #fbcfe8 !important;
-  border-bottom: 1px solid rgba(244, 114, 182, 0.25) !important;
+  border-bottom: 1px solid rgba(244, 114, 182, 0.2) !important;
 }
 
 .pink-theme tbody tr {
-  border-color: rgba(244, 114, 182, 0.12) !important;
+  border-color: rgba(244, 114, 182, 0.1) !important;
 }
 
 .pink-theme tbody tr:hover {
-  background-color: rgba(244, 114, 182, 0.06) !important;
+  background-color: rgba(244, 114, 182, 0.04) !important;
 }
 
-/* Slate Element Overrides */
+/* Slate Element Overrides in Rose Mode */
 .pink-theme [class*="bg-slate-800"],
 .pink-theme [class*="bg-slate-700"],
 .pink-theme [class*="bg-slate-900"] {
-  background-color: #1e0d20 !important;
-  border-color: rgba(244, 114, 182, 0.25) !important;
+  background-color: #1b0d1e !important;
+  border-color: rgba(244, 114, 182, 0.2) !important;
 }
 
 .pink-theme [class*="border-slate-800"],
 .pink-theme [class*="border-slate-700"],
 .pink-theme [class*="border-slate-600"] {
-  border-color: rgba(244, 114, 182, 0.2) !important;
+  border-color: rgba(244, 114, 182, 0.18) !important;
 }
 
 .pink-theme [class*="hover:bg-slate-700"]:hover,
 .pink-theme [class*="hover:bg-slate-800"]:hover,
 .pink-theme [class*="hover:bg-slate-900"]:hover {
-  background-color: #28112b !important;
+  background-color: #241128 !important;
 }
 
-/* Calendar & Day Cells */
+/* Calendar & Day Cells in Rose Mode */
 .pink-theme div[class*="bg-[#0b0f19]"],
 .pink-theme div[class*="bg-[#0d131f]"],
 .pink-theme div[class*="bg-[#0a0e17]"] {
-  background-color: #150716 !important;
-  border-color: rgba(244, 114, 182, 0.2) !important;
+  background-color: #150816 !important;
+  border-color: rgba(244, 114, 182, 0.18) !important;
 }
 
-/* Cotizaciones, Interbanking & Terminal Consoles */
+/* Terminal Consoles in Rose Mode */
 .pink-theme pre,
 .pink-theme code,
 .pink-theme div[class*="font-mono"][class*="bg-black"],
 .pink-theme div[class*="font-mono"][class*="bg-[#050811]"] {
-  background-color: #100311 !important;
-  border-color: rgba(244, 114, 182, 0.25) !important;
+  background-color: #100411 !important;
+  border-color: rgba(244, 114, 182, 0.2) !important;
   color: #fbcfe8 !important;
 }
 
-/* Modals & Backdrop Blur */
+/* Modals & Backdrop Blur in Rose Mode */
 .pink-theme div[class*="bg-black/70"],
 .pink-theme div[class*="bg-black/80"],
 .pink-theme div[class*="bg-slate-950/80"] {
-  background-color: rgba(14, 4, 15, 0.85) !important;
+  background-color: rgba(14, 5, 15, 0.88) !important;
 }
 
-/* Scrollbars */
-.pink-theme ::-webkit-scrollbar-track {
-  background: rgba(236, 72, 153, 0.05);
-}
-
+/* Scrollbars in Rose Mode */
 .pink-theme ::-webkit-scrollbar-thumb {
-  background: rgba(236, 72, 153, 0.3);
-  border-radius: 4px;
+  background: rgba(236, 72, 153, 0.25);
 }
 
 .pink-theme ::-webkit-scrollbar-thumb:hover {
-  background: rgba(236, 72, 153, 0.5);
+  background: rgba(236, 72, 153, 0.4);
 }
 
 /* ============================================================
-   BROKER COTIZACIONES TICKER TAPE
+   FINANCIAL TICKER TAPE (INSTITUTIONAL BNA MONITOR)
    ============================================================ */
 
 @keyframes broker-ticker {
@@ -351,7 +336,7 @@ button[class*="bg-gradient-to-r"]:hover {
 .animate-broker-ticker {
   display: flex;
   width: max-content;
-  animation: broker-ticker 22s linear infinite;
+  animation: broker-ticker 26s linear infinite;
 }
 
 .animate-broker-ticker:hover {
@@ -359,6 +344,6 @@ button[class*="bg-gradient-to-r"]:hover {
 }
 
 .ticker-fade-mask {
-  mask-image: linear-gradient(to right, transparent 0%, black 14px, black calc(100% - 14px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 14px, black calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
 }

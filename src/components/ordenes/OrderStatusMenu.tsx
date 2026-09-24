@@ -63,14 +63,14 @@ export const STATUS_CONFIG: Record<
     label: "Liberada",
     description: "Autorizada para pago",
     badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:border-emerald-400/50",
-    dotClass: "bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+    dotClass: "bg-emerald-400",
     icon: Check,
   },
   entregada: {
     label: "Entregada",
     description: "Pago / comprobante entregado",
     badgeClass: "bg-blue-500/10 text-blue-400 border-blue-500/30 hover:border-blue-400/50",
-    dotClass: "bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.5)]",
+    dotClass: "bg-blue-400",
     icon: PackageCheck,
   },
   cancelada: {
@@ -289,15 +289,15 @@ export function OrderStatusMenu({
           setIsOpen(!isOpen);
         }}
         disabled={isUpdating}
-        className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-200 shadow-sm cursor-pointer ${
+        className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors shadow-sm cursor-pointer ${
           config.badgeClass
         } ${isUpdating ? "opacity-60 cursor-wait" : ""}`}
         title="Cambiar estado de la orden"
       >
-        <span className={`w-2 h-2 rounded-full transition-transform group-hover:scale-125 ${config.dotClass}`} />
+        <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass}`} />
         <span className="tracking-tight">{config.label}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-transform duration-200 ${
+          className={`w-3 h-3 opacity-60 group-hover:opacity-100 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
           }`}
         />
@@ -314,9 +314,9 @@ export function OrderStatusMenu({
             transform: menuPosition.openUpward ? "translateY(-100%)" : "none",
             zIndex: 9999,
           }}
-          className="w-56 rounded-2xl bg-[#0b0f19] border border-slate-700/80 shadow-2xl p-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150"
+          className="w-52 rounded-lg bg-[#0d121c] border border-slate-700 shadow-xl p-1 backdrop-blur-md animate-in fade-in duration-100"
         >
-          <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-white/5 mb-1">
+          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-white/5 mb-1">
             Cambiar Estado
           </div>
 

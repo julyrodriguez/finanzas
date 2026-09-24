@@ -180,26 +180,26 @@ export function OrderFormModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto flex items-start justify-center p-4">
-      <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl relative space-y-5 my-auto">
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+      <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-7 rounded-xl shadow-2xl relative space-y-4 my-auto bg-[#0f1422]">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
+          <h3 className="text-base font-semibold text-white flex items-center gap-2">
             {editingOrden ? (
               <>
-                <Edit3 className="w-5 h-5 text-emerald-400" />
+                <Edit3 className="w-4 h-4 text-blue-400" />
                 Editar Orden de Compra
               </>
             ) : (
               <>
-                <Plus className="w-5 h-5 text-emerald-400" />
+                <Plus className="w-4 h-4 text-blue-400" />
                 Agregar Solicitud de OC
               </>
             )}
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-xl bg-white/5 text-gray-400 hover:text-white"
+            className="p-1 rounded-lg bg-white/5 text-slate-400 hover:text-white"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -580,7 +580,7 @@ export function OrderFormModal({
           )}
 
           {/* Action Buttons: Delete (when editing) + Cancel + Save */}
-          <div className="pt-4 flex items-center justify-between gap-3 border-t border-white/10">
+          <div className="pt-3.5 flex items-center justify-between gap-3 border-t border-white/10">
             {editingOrden && editingOrden.id ? (
               <button
                 type="button"
@@ -588,33 +588,33 @@ export function OrderFormModal({
                   onClose();
                   onDelete(editingOrden.id!);
                 }}
-                className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-semibold flex items-center gap-1.5 transition-colors"
+                className="px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>Eliminar Orden</span>
               </button>
             ) : (
               <div />
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-medium"
+                className="px-3.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-medium transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <>
-                    {editingOrden ? <Edit3 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    {editingOrden ? <Edit3 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                     <span>{editingOrden ? "Guardar Cambios" : "Guardar Orden"}</span>
                   </>
                 )}

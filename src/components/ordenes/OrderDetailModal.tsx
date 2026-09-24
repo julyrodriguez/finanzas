@@ -358,53 +358,53 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
   const getStatusBadge = () => {
     if (orden.cancelada) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 font-bold text-xs">
-          <span className="w-2 h-2 rounded-full bg-red-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-red-500/10 border border-red-500/25 text-red-300 font-semibold text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
           Cancelada
         </span>
       );
     }
     if (orden.entregada) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 font-bold text-xs">
-          <span className="w-2 h-2 rounded-full bg-blue-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/25 text-blue-400 font-semibold text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
           Entregada
         </span>
       );
     }
     if (orden.liberada) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 font-semibold text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           Liberada (100%)
         </span>
       );
     }
     if (orden.mandada) {
       return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-xs">
-          <span className="w-2 h-2 rounded-full bg-amber-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300 font-semibold text-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
           Mandada (En Proceso)
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-500/15 border border-slate-500/30 text-slate-300 font-bold text-xs">
-        <span className="w-2 h-2 rounded-full bg-slate-400" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-500/10 border border-slate-500/25 text-slate-300 font-semibold text-xs">
+        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
         Pendiente
       </span>
     );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl rounded-3xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
+      <div className="relative w-full max-w-3xl rounded-xl bg-[#0d121c] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
+        <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
           <div className="flex items-center gap-3">
             <span
-              className={`px-3 py-1 rounded-xl text-xs font-bold font-mono tracking-wider border shadow-sm ${
+              className={`px-2.5 py-0.5 rounded-md text-xs font-semibold font-mono tracking-wider border ${
                 orden.empresa === "Hoyts"
                   ? "bg-purple-950/80 text-purple-300 border-purple-700/60"
                   : "bg-teal-950/80 text-teal-300 border-teal-700/60"
@@ -415,11 +415,11 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
 
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black text-white font-mono tracking-tight">
+                <h3 className="text-base font-bold text-white font-mono tracking-tight">
                   OC: {String(orden.numOC || "")}
                 </h3>
                 {orden.numSolicitud && (
-                  <span className="text-xs font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-lg border border-white/10">
+                  <span className="text-xs font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
                     SC: {String(orden.numSolicitud)}
                   </span>
                 )}
@@ -427,13 +427,13 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {getStatusBadge()}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>

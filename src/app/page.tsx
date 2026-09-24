@@ -1229,34 +1229,34 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     >
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-emerald-500 text-white font-semibold text-xs shadow-2xl flex items-center gap-2 animate-bounce">
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-medium text-xs shadow-xl flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Top Header Controls: Title, Metrics & Actions */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-500/10">
+              <div className="p-2 rounded-lg bg-blue-600/15 border border-blue-500/30 text-blue-400 shadow-sm">
                 <ShoppingBag className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-xl font-bold text-white tracking-tight">
                   Solicitudes de Órdenes
                 </h2>
                 <div className="flex items-center gap-2 text-xs text-slate-400 flex-wrap mt-0.5">
                   <span className="font-medium text-slate-300">
-                    Mostrando <strong className="text-white font-bold">{visibleOrdenes.length}</strong> de <strong className="text-white font-bold">{filteredOrdenes.length}</strong> órdenes
+                    Mostrando <strong className="text-white font-semibold">{visibleOrdenes.length}</strong> de <strong className="text-white font-semibold">{filteredOrdenes.length}</strong> órdenes
                   </span>
                   <span className="text-slate-600">•</span>
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     {ordenes.filter(o => o.liberada).length} liberadas
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     {ordenes.filter(o => o.mandada && !o.liberada).length} mandadas
                   </span>
@@ -1265,7 +1265,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             {/* Valor Dólar Venta BNA (Leftmost) */}
             <DolarVentaBadge />
 
@@ -1273,19 +1273,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <button
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
-              className={`px-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
+              className={`px-3 py-1.5 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
                 hasLoadedAllFromDb
                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
-                  : "bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+                  : "bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
               }`}
               title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
             >
               {loadingAllDb ? (
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
               ) : hasLoadedAllFromDb ? (
-                <Check className="w-4 h-4 text-emerald-400" />
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
-                <Database className="w-4 h-4 text-indigo-400" />
+                <Database className="w-3.5 h-3.5 text-blue-400" />
               )}
               <span>{loadingAllDb ? "Cargando todo..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
             </button>
@@ -1293,19 +1293,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {/* Exportar a Excel Button */}
             <button
               onClick={handleExportExcel}
-              className="px-4 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               title="Descargar listado actual de órdenes en Excel (.xlsx)"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Exportar Excel</span>
             </button>
 
             {!isOrdenesUser && (
               <button
                 onClick={handleOpenAddModal}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
                 <span>Nueva Orden</span>
               </button>
             )}
@@ -1313,8 +1313,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         </div>
 
         {/* Buscador & Filters Bar */}
-        <div className="glass-card border border-white/10 p-4 sm:p-5 rounded-2xl space-y-4 shadow-xl bg-[#0e1322]">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 flex-wrap">
+        <div className="glass-card border border-white/10 p-3.5 sm:p-4 rounded-xl space-y-3.5 shadow-sm bg-[#0d121c]">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 flex-wrap">
             {/* Buscador Search Input Group */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-md">
               {/* Dropdown de campo */}
@@ -1325,19 +1325,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setSearchField(e.target.value as "todos" | "numSolicitud" | "numOC" | "razonSocial");
                     setQueryLimit(15);
                   }}
-                  className="w-full sm:w-auto pl-3 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white font-medium focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none shadow-sm"
+                  className="w-full sm:w-auto pl-3 pr-8 py-1.5 text-xs rounded-lg bg-[#0b0f19] border border-slate-700/80 text-white font-medium focus:outline-none focus:border-blue-500 cursor-pointer appearance-none shadow-sm"
                 >
-                  <option value="todos" className="bg-[#080c16] text-white">Todos los campos</option>
-                  <option value="numOC" className="bg-[#080c16] text-white">N° OC</option>
-                  <option value="numSolicitud" className="bg-[#080c16] text-white">N° Solicitud</option>
-                  <option value="razonSocial" className="bg-[#080c16] text-white">Proveedor</option>
+                  <option value="todos" className="bg-[#0b0f19] text-white">Todos los campos</option>
+                  <option value="numOC" className="bg-[#0b0f19] text-white">N° OC</option>
+                  <option value="numSolicitud" className="bg-[#0b0f19] text-white">N° Solicitud</option>
+                  <option value="razonSocial" className="bg-[#0b0f19] text-white">Proveedor</option>
                 </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
 
               {/* Input de búsqueda */}
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -1346,10 +1346,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setQueryLimit(15);
                   }}
                   placeholder="Buscar orden, proveedor..."
-                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-[#080c16] border border-slate-700/80 text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
+                  className="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg bg-[#0b0f19] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
                 />
                 {isSearchingDb && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
                 )}
                 {searchQuery && (
                   <button
@@ -1357,7 +1357,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       setSearchQuery("");
                       setQueryLimit(15);
                     }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1366,8 +1366,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Filter Pills for Empresa */}
-            <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner">
-              <span className="text-gray-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Empresa</span>
+            <div className="inline-flex items-center p-0.5 bg-[#0b0f19] rounded-lg border border-slate-700/80 text-xs">
+              <span className="text-slate-400 text-[10px] px-2 font-semibold uppercase tracking-wider">Empresa</span>
               {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
                 const isSelected = filterEmpresa === emp;
                 return (
@@ -1377,14 +1377,14 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       setFilterEmpresa(emp);
                       setQueryLimit(15);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                       isSelected
                         ? emp === "Hoyts"
-                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                          ? "bg-purple-600 text-white shadow-sm"
                           : emp === "CMK"
-                          ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
-                          : "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                          ? "bg-teal-600 text-white shadow-sm"
+                          : "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
                     {emp}
@@ -1394,8 +1394,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Filter Pills for Estado */}
-            <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner flex-wrap gap-0.5">
-              <span className="text-gray-400 text-[11px] px-2.5 font-semibold uppercase tracking-wider">Estado</span>
+            <div className="inline-flex items-center p-0.5 bg-[#0b0f19] rounded-lg border border-slate-700/80 text-xs flex-wrap gap-0.5">
+              <span className="text-slate-400 text-[10px] px-2 font-semibold uppercase tracking-wider">Estado</span>
               {(
                 [
                   { id: "Todas", label: "Todas", dot: null },
@@ -1414,10 +1414,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       setQueryLimit(15);
                       setSelectedOCIds([]);
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                       isSelected
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
                     {est.dot && <span className={`w-1.5 h-1.5 rounded-full ${est.dot}`} />}
@@ -1440,32 +1440,32 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           />
 
           {/* Leyenda de Estados & Referencia de Mismo Solicitante */}
-          <div className="flex flex-wrap items-center gap-2.5 pt-3 text-[11px] text-gray-400 border-t border-white/5">
-            <span className="font-semibold text-gray-500 uppercase tracking-wider text-[10px] mr-1">Guía de Estados:</span>
-            <span className="inline-flex items-center gap-1.5 bg-slate-500/10 text-slate-300 px-2.5 py-1 rounded-xl border border-slate-500/30 font-medium">
+          <div className="flex flex-wrap items-center gap-2 pt-2.5 text-[11px] text-slate-400 border-t border-white/5">
+            <span className="font-semibold text-slate-500 uppercase tracking-wider text-[10px] mr-1">Guía de Estados:</span>
+            <span className="inline-flex items-center gap-1.5 bg-slate-500/10 text-slate-300 px-2 py-0.5 rounded-md border border-slate-500/20 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
               <span>Pendiente</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-xl border border-amber-500/30 font-medium">
+            <span className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
               <span>Mandada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/30 font-medium">
+            <span className="inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               <span>Liberada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-2.5 py-1 rounded-xl border border-blue-500/30 font-medium">
+            <span className="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-md border border-blue-500/20 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
               <span>Entregada</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2.5 py-1 rounded-xl border border-red-500/30 font-medium">
+            <span className="inline-flex items-center gap-1.5 bg-red-500/10 text-red-400 px-2 py-0.5 rounded-md border border-red-500/20 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
               <span>Cancelada</span>
             </span>
 
-            {/* Badge Mejorado de Mismo Solicitante */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-semibold shadow-sm ml-auto">
-              <Link2 className="w-3.5 h-3.5 text-purple-400" />
+            {/* Badge de Mismo Solicitante */}
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px] font-medium ml-auto">
+              <Link2 className="w-3 h-3 text-purple-400" />
               <span>Vinculadas: Mismo Solicitante</span>
             </div>
           </div>
@@ -1473,13 +1473,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
         {/* Table / List View */}
         {loading ? (
-          <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+          <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-3">
+            <Loader2 className="w-7 h-7 animate-spin text-blue-400" />
             <p className="text-xs">Cargando órdenes de compra de Firestore...</p>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl">
+            <div className="rounded-xl glass-card border border-white/10 overflow-hidden shadow-sm">
               {/* Desktop Table View */}
               <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full text-left text-xs">
@@ -1953,13 +1953,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Botón Cargar Más y Cargar Todo */}
-            <div className="py-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="py-4 flex flex-col sm:flex-row items-center justify-center gap-2.5">
               {hasMore && !hasLoadedAllFromDb && (
                 <button
                   onClick={() => setQueryLimit((prev) => prev + 15)}
-                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 group cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-medium transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                  <ChevronDown className="w-3.5 h-3.5" />
                   <span>Cargar más órdenes (+15)</span>
                 </button>
               )}
@@ -1967,19 +1967,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 <button
                   onClick={handleLoadAllFromDb}
                   disabled={loadingAllDb}
-                  className="px-6 py-3 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white text-xs font-semibold transition-all shadow-lg inline-flex items-center gap-2 cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-medium transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   {loadingAllDb ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
                   ) : (
-                    <Database className="w-4 h-4 text-indigo-400" />
+                    <Database className="w-3.5 h-3.5 text-blue-400" />
                   )}
                   <span>{loadingAllDb ? "Cargando toda la base de datos..." : "Cargar todas las de la base de datos"}</span>
                 </button>
               )}
               {hasLoadedAllFromDb && (
-                <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 rounded-xl inline-flex items-center gap-2">
-                  <Check className="w-4 h-4" />
+                <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" />
                   <span>Todas las órdenes de la base de datos están cargadas ({ordenes.length})</span>
                 </span>
               )}
