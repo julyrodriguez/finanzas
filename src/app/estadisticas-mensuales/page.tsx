@@ -44,7 +44,7 @@ export default function EstadisticasMensualesPage() {
     }, 4000);
   };
 
-  // 1. Cargar caché instantánea de localStorage
+  // 1. Cargar caché instantánea de localStorage y consultar siempre la base completa a MongoDB
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -54,14 +54,13 @@ export default function EstadisticasMensualesPage() {
         if (parsed && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
           setOrders(parsed.orders);
           setLastSync(parsed.lastSync || null);
-          return;
         }
       }
     } catch (e) {
       console.warn("Error leyendo caché de órdenes:", e);
     }
 
-    // Si no hay caché, cargar automáticamente del servidor local
+    // Siempre consultar y sincronizar la base completa desde el servidor local MongoDB
     handleRefresh();
   }, []);
 

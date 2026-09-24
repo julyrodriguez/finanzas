@@ -823,14 +823,9 @@ export default function EstadisticasPage() {
     }
   };
 
-  // Auto-cargar datos desde el servidor MongoDB si no hay caché previa
+  // Auto-cargar siempre la base completa desde el servidor local MongoDB al ingresar
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (orders.length === 0 && !loading) {
-        handleActualizarDatos();
-      }
-    }, 400);
-    return () => clearTimeout(timer);
+    handleActualizarDatos();
   }, []);
 
   // ==========================================
