@@ -241,61 +241,49 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   }
 
   const renderSidebarContent = (expanded: boolean) => (
-    <div className="flex flex-col h-full bg-[#0a0e17] border-r border-white/10 text-slate-300">
-      {/* Brand / Header */}
-      {expanded ? (
-        <div className="px-4 py-3.5 border-b border-white/10 shrink-0 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="h-9 w-9 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="font-bold text-sm text-white tracking-wider uppercase truncate">
-                Finanzas
-              </h1>
-              <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
-                Cinemark & Hoyts
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            {/* Desktop Pin / Unpin Button */}
-            <button
-              onClick={togglePin}
-              className="hidden lg:flex p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              title={isPinned ? "Desfijar menú (se contrae al retirar el mouse)" : "Fijar menú siempre abierto"}
-              aria-label="Fijar o desfijar menú"
-            >
-              {isPinned ? <PanelLeftClose className="w-4 h-4 text-blue-400" /> : <PanelLeft className="w-4 h-4" />}
-            </button>
-
-            {/* Mobile Close Button */}
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
-              aria-label="Cerrar menú"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* Collapsed Header with Open Button at Top */
-        <div className="h-16 flex items-center justify-center border-b border-white/10 shrink-0">
+    <div className="flex flex-col h-full bg-[#0a0e17] border-r border-white/10 text-slate-300 overflow-hidden select-none">
+      {/* Brand Header */}
+      <div className="h-16 px-2.5 border-b border-white/10 shrink-0 flex items-center justify-between overflow-hidden">
+        <div className="flex items-center min-w-0">
+          {/* Top Open / Toggle Button - Fixed position at left */}
           <button
             onClick={togglePin}
-            className="p-2.5 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:text-white hover:bg-blue-600/30 transition-all cursor-pointer shadow-sm group"
-            title="Abrir y fijar menú lateral"
-            aria-label="Abrir menú"
+            className="h-10 w-10 rounded-xl bg-blue-600/15 border border-blue-500/30 text-blue-400 hover:text-white hover:bg-blue-600/30 transition-all flex items-center justify-center shrink-0 cursor-pointer shadow-sm group"
+            title={expanded ? (isPinned ? "Desfijar menú (se contrae al retirar el mouse)" : "Fijar menú siempre abierto") : "Abrir y fijar menú lateral"}
+            aria-label="Abrir o fijar menú"
           >
-            <PanelLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            {expanded && isPinned ? (
+              <PanelLeftClose className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+            ) : (
+              <PanelLeft className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            )}
           </button>
-        </div>
-      )}
 
-      {/* Main Navigation List */}
-      <div className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar py-3 ${expanded ? "px-3 space-y-4" : "px-1.5 space-y-2"}`}>
+          {/* Brand Title: Smoothly fades and expands without shifting the button */}
+          <div className={`ml-3 min-w-0 transition-all duration-300 ease-in-out ${
+            expanded ? "opacity-100 max-w-[140px] translate-x-0" : "opacity-0 max-w-0 -translate-x-2 pointer-events-none"
+          }`}>
+            <h1 className="font-bold text-sm text-white tracking-wider uppercase truncate whitespace-nowrap">
+              Finanzas
+            </h1>
+            <p className="text-[10px] text-slate-400 font-medium truncate whitespace-nowrap">
+              Cinemark & Hoyts
+            </p>
+          </div>
+        </div>
+
+        {/* Mobile Close Button */}
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white shrink-0"
+          aria-label="Cerrar menú"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Main Navigation List - Unified DOM where icons never shift pixel position */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar py-3 px-2 space-y-3">
         {navigationSections.map((section, sIdx) => {
           const visibleItems = section.items.filter((item) => {
             if (isOrdenesUser) return !item.hideForOrders;
@@ -306,44 +294,22 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
           if (visibleItems.length === 0) return null;
 
-          if (!expanded) {
-            return (
-              <div key={section.title} className="space-y-1">
-                {sIdx > 0 && <div className="my-2 border-t border-white/10 mx-2" />}
-                <nav aria-label={section.title} className="space-y-1">
-                  {visibleItems.map((item) => {
-                    const active = isActive(item.href, item.exact);
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        onClick={() => setSidebarOpen(false)}
-                        title={item.name}
-                        className={`flex items-center justify-center h-10 w-10 mx-auto rounded-xl transition-all relative ${
-                          active
-                            ? "bg-blue-600 text-white shadow-sm border border-blue-500"
-                            : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.06] border border-transparent"
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-slate-400"}`} />
-                        {item.badge && (
-                          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0a0e17]" />
-                        )}
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
-            );
-          }
-
           return (
             <div key={section.title} className="space-y-1">
-              <div className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                {section.title}
+              {/* Collapsible Section Title */}
+              <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                expanded ? "max-h-6 opacity-100 mb-1" : "max-h-0 opacity-0 mb-0 pointer-events-none"
+              }`}>
+                <div className="px-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate whitespace-nowrap">
+                  {section.title}
+                </div>
               </div>
-              <nav aria-label={section.title} className="space-y-0.5">
+
+              {/* Thin divider line when collapsed */}
+              {!expanded && sIdx > 0 && <div className="my-1.5 border-t border-white/10 mx-1" />}
+
+              {/* Items List */}
+              <nav aria-label={section.title} className="space-y-1">
                 {visibleItems.map((item) => {
                   const active = isActive(item.href, item.exact);
                   const Icon = item.icon;
@@ -352,20 +318,33 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                       key={item.name}
                       href={item.href}
                       onClick={() => setSidebarOpen(false)}
-                      className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                      title={!expanded ? item.name : undefined}
+                      className={`group flex items-center h-10 px-2 rounded-xl text-xs font-medium transition-colors relative overflow-hidden ${
                         active
                           ? "bg-blue-600 text-white font-semibold shadow-sm border border-blue-500"
-                          : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] border border-transparent"
+                          : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.06] border border-transparent"
                       }`}
                     >
-                      <Icon className={`w-4 h-4 shrink-0 transition-colors ${
-                        active ? "text-white" : "text-slate-400 group-hover:text-slate-200"
-                      }`} />
-                      <span className="truncate flex-1">{item.name}</span>
-                      {item.badge && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          {item.badge}
-                        </span>
+                      {/* Fixed 24px icon container - mathematically centered in 44px link area */}
+                      <div className="w-6 h-6 shrink-0 flex items-center justify-center">
+                        <Icon className={`w-4 h-4 transition-colors ${active ? "text-white" : "text-slate-400 group-hover:text-slate-200"}`} />
+                      </div>
+
+                      {/* Text label & badge - smoothly fades and slides */}
+                      <div className={`flex items-center justify-between flex-1 min-w-0 ml-3 transition-all duration-300 ease-in-out ${
+                        expanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-3 pointer-events-none"
+                      }`}>
+                        <span className="truncate whitespace-nowrap">{item.name}</span>
+                        {item.badge && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 ml-1.5">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Small badge dot when collapsed */}
+                      {!expanded && item.badge && (
+                        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-[#0a0e17]" />
                       )}
                     </Link>
                   );
@@ -377,70 +356,78 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       </div>
 
       {/* Footer Controls: Theme, Ticker, User */}
-      {expanded ? (
-        <div className="p-3 border-t border-white/10 space-y-2.5 shrink-0 bg-[#080c14]">
-          {/* Theme Switcher Segmented Control */}
-          <div className="space-y-1">
-            <div className="px-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-              Tema Visual
+      <div className="p-2 border-t border-white/10 space-y-2 shrink-0 bg-[#080c14] overflow-hidden">
+        {/* Theme Switcher */}
+        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          expanded ? "max-h-24 opacity-100" : "max-h-10 opacity-100"
+        }`}>
+          {expanded ? (
+            <div className="space-y-1">
+              <div className="px-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                Tema Visual
+              </div>
+              <div className="p-1 rounded-lg bg-black/50 border border-white/10 grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTheme("dark")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    theme === "dark"
+                      ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Moon className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Oscuro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme("pink")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    theme === "pink"
+                      ? "bg-pink-600 text-white shadow-sm border border-pink-500"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span>🌸</span>
+                  <span>Rosa</span>
+                </button>
+              </div>
             </div>
-            <div className="p-1 rounded-lg bg-black/50 border border-white/10 grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                onClick={() => setTheme("dark")}
-                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  theme === "dark"
-                    ? "bg-slate-800 text-white shadow-sm border border-slate-700"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Moon className="w-3.5 h-3.5 text-blue-400" />
-                <span>Oscuro</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTheme("pink")}
-                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  theme === "pink"
-                    ? "bg-pink-600 text-white shadow-sm border border-pink-500"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <span>🌸</span>
-                <span>Rosa</span>
-              </button>
-            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTheme(theme === "dark" ? "pink" : "dark")}
+              title={theme === "dark" ? "Modo Oscuro (clic para Rosa)" : "Modo Rosa (clic para Oscuro)"}
+              className="h-10 w-10 mx-auto rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+            >
+              {theme === "dark" ? <Moon className="w-4 h-4 text-blue-400" /> : <span className="text-sm">🌸</span>}
+            </button>
+          )}
+        </div>
+
+        {/* Cotizaciones Ticker (fades in when expanded) */}
+        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          expanded ? "max-h-20 opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+        }`}>
+          <CotizacionesTicker isExpanded={true} />
+        </div>
+
+        {/* User Profile Card */}
+        <div className="flex items-center h-10 px-1 rounded-lg bg-white/[0.03] border border-white/5 overflow-hidden">
+          <div className="h-7 w-7 rounded-md bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-xs shrink-0 ml-0.5">
+            {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
           </div>
 
-          {/* BNA Broker Ticker Tape */}
-          <CotizacionesTicker isExpanded={true} />
-
-          {/* User Profile & Logout */}
-          <div className="flex items-center justify-between p-2 rounded-lg bg-white/[0.03] border border-white/5">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="h-7 w-7 rounded-md bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-xs shrink-0">
-                {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-200 truncate leading-tight">
-                  {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
-                </p>
-                <p className="text-[10px] text-slate-400 truncate flex items-center gap-1 leading-tight mt-0.5">
-                  {isOrdenesUser ? (
-                    <>
-                      <ShieldCheck className="w-2.5 h-2.5 text-amber-400" /> Consulta
-                    </>
-                  ) : user ? (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Activo
-                    </>
-                  ) : (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Consulta
-                    </>
-                  )}
-                </p>
-              </div>
+          <div className={`flex items-center justify-between flex-1 min-w-0 ml-2.5 transition-all duration-300 ease-in-out ${
+            expanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 pointer-events-none"
+          }`}>
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-slate-200 truncate whitespace-nowrap leading-tight">
+                {isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
+              </p>
+              <p className="text-[10px] text-slate-400 truncate whitespace-nowrap flex items-center gap-1 leading-tight mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" /> Activo
+              </p>
             </div>
 
             {user ? (
@@ -451,36 +438,10 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
-            ) : (
-              <Link
-                href="/login"
-                title="Iniciar Sesión"
-                className="p-1.5 rounded-md hover:bg-emerald-500/15 text-slate-400 hover:text-emerald-400 transition-colors shrink-0"
-              >
-                <UserIcon className="w-3.5 h-3.5" />
-              </Link>
-            )}
+            ) : null}
           </div>
         </div>
-      ) : (
-        /* Collapsed Compact Footer */
-        <div className="p-2 border-t border-white/10 flex flex-col items-center gap-2 bg-[#080c14] shrink-0">
-          <button
-            type="button"
-            onClick={() => setTheme(theme === "dark" ? "pink" : "dark")}
-            title={theme === "dark" ? "Cambiar a modo Rosa" : "Cambiar a modo Oscuro"}
-            className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
-          >
-            {theme === "dark" ? <Moon className="w-4 h-4 text-blue-400" /> : <span className="text-sm">🌸</span>}
-          </button>
-          <div
-            title={isOrdenesUser ? "Usuario Órdenes" : (user ? getCleanUsername() : "Público")}
-            className="h-8 w-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 text-xs shrink-0"
-          >
-            {isOrdenesUser ? "OR" : (user ? getCleanUsername()[0]?.toUpperCase() : "P")}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 
