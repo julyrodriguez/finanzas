@@ -224,7 +224,8 @@ export function CotizacionesImportAiModal({
 
     setIsSubmitting(true);
     try {
-      await onConfirmImport({
+      // Llamamos a la importación
+      const importPromise = onConfirmImport({
         providerName: providerName.trim() || "Proveedor Importado",
         currency,
         notes,
@@ -242,7 +243,9 @@ export function CotizacionesImportAiModal({
           matchedItemId: it.matchedItemId
         }))
       });
+      // Cerramos el modal de inmediato para no dejar al usuario trabado en 'Importando...'
       handleClose();
+      await importPromise;
     } catch (err: any) {
       setError(err.message || "Error al guardar los datos importados");
     } finally {

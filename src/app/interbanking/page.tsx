@@ -379,11 +379,11 @@ export default function InterbankingPage() {
     <AppLayout title="Automatización Interbanking" subtitle="Descarga automatizada de comprobantes CBU">
       <div className="space-y-6 max-w-6xl mx-auto pb-12">
         {/* Banner informativo */}
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex gap-3 text-sm text-emerald-300">
-          <Sparkles className="w-5 h-5 flex-shrink-0 text-emerald-400" />
+        <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex gap-3.5 text-sm text-emerald-300 shadow-xl">
+          <Sparkles className="w-5 h-5 flex-shrink-0 text-emerald-400 mt-0.5" />
           <div>
-            <p className="font-semibold text-white">Automatización de Descargas de CBU</p>
-            <p className="text-gray-400 text-xs mt-0.5">
+            <p className="font-bold text-white text-base">Automatización de Descargas de CBU</p>
+            <p className="text-gray-400 text-xs mt-1 leading-relaxed">
               Este módulo ejecuta un navegador automatizado en el servidor (<code className="text-emerald-400">apivacas.jariel.com.ar</code>) que inicia sesión, selecciona la empresa elegida, busca en el historial de CBU por el lote y mes provistos, descarga los archivos en PDF y los transmite directamente a esta página para tu descarga.
             </p>
           </div>
@@ -392,21 +392,24 @@ export default function InterbankingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Formulario de control */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="p-6 rounded-2xl glass-card border border-white/10 space-y-4">
-              <h3 className="text-white font-bold text-base flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-emerald-400" /> Parámetros de Ejecución
+            <div className="p-6 rounded-3xl glass-card border border-white/10 space-y-5 bg-[#0d1322] shadow-2xl">
+              <h3 className="text-white font-black text-lg flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <span>Parámetros de Ejecución</span>
               </h3>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Selector de Empresa */}
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-300 font-medium">Empresa</label>
+                  <label className="text-xs text-gray-300 font-bold uppercase tracking-wider text-[10px]">Empresa</label>
                   <div className="relative">
                     <select
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
                       disabled={isBusy}
-                      className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                      className="w-full bg-[#080d18] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-gray-100 font-semibold focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer shadow-inner"
                     >
                       <option value="BULNES">BULNES</option>
                       <option value="CINEMARK ARGENTINA S.A.">CINEMARK ARGENTINA S.A.</option>
@@ -414,7 +417,7 @@ export default function InterbankingPage() {
                       <option value="HOYTS GENERAL CINEMA DE ARGENTINA SA">HOYTS GENERAL CINEMA DE ARGENTINA SA</option>
                       <option value="HOYTS GENERAL CINE DE ARGENTINA SA">HOYTS GENERAL CINE DE ARGENTINA SA</option>
                     </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3.5 pointer-events-none text-gray-400 text-xs">
                       ▼
                     </div>
                   </div>
@@ -422,7 +425,7 @@ export default function InterbankingPage() {
 
                 {/* Selector de Mes (calcula fechas) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
+                  <label className="text-xs text-gray-300 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
                     <CalendarIcon className="w-3.5 h-3.5 text-gray-400" /> Mes de Búsqueda
                   </label>
                   <input
@@ -430,10 +433,10 @@ export default function InterbankingPage() {
                     value={monthYear}
                     onChange={(e) => setMonthYear(e.target.value)}
                     disabled={isBusy}
-                    className="w-full bg-[#0d131f] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-gray-100 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-[#080d18] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-gray-100 font-semibold focus:outline-none focus:border-emerald-500 shadow-inner"
                   />
-                  <p className="text-[10px] text-gray-500">
-                    Se buscará automáticamente un rango de hasta 30 días (hasta el día 30 o el día de hoy si es el mes actual) para respetar el límite de rango de Interbanking.
+                  <p className="text-[10px] text-gray-500 leading-relaxed">
+                    Se buscará automáticamente un rango de hasta 30 días para respetar el límite de rango de Interbanking.
                   </p>
                 </div>
 
@@ -728,12 +731,15 @@ export default function InterbankingPage() {
             )}
 
             {/* Consola de Eventos en Vivo */}
-            <div className="p-6 rounded-2xl glass-card border border-white/10 space-y-3 flex flex-col h-[400px]">
-              <h3 className="text-white font-bold text-base flex items-center gap-2">
-                <Terminal className="w-5 h-5 text-emerald-400" /> Consola de Logs del Servidor
+            <div className="p-6 rounded-3xl glass-card border border-white/10 space-y-4 flex flex-col h-[400px] bg-[#0d1322] shadow-2xl">
+              <h3 className="text-white font-black text-base flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                  <Terminal className="w-4 h-4" />
+                </div>
+                <span>Consola de Logs del Servidor</span>
               </h3>
               
-              <div className="flex-1 bg-slate-950/80 border border-white/5 rounded-xl p-4 font-mono text-[11px] text-emerald-300/90 overflow-y-auto space-y-1 shadow-inner h-full">
+              <div className="flex-1 bg-[#080d18] border border-white/10 rounded-2xl p-4 font-mono text-[11px] text-emerald-300/90 overflow-y-auto space-y-1 shadow-inner h-full">
                 {allLogs.length === 0 ? (
                   <p className="text-gray-500 italic">La consola está lista. Inicia el proceso para ver los eventos en tiempo real...</p>
                 ) : (

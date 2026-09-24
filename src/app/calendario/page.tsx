@@ -431,12 +431,12 @@ export default function CalendarioPage() {
       {/* Main Container */}
       <div className="space-y-6">
         {/* 1. Header Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 glass-card p-4 rounded-2xl border border-white/10 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 glass-card p-5 rounded-3xl border border-white/10 shadow-2xl bg-[#0d1322]">
           {/* Month/Week Navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={handlePrev}
-              className="p-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
+              className="p-2.5 rounded-xl bg-[#080d18] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors shadow-inner cursor-pointer"
               title="Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -444,20 +444,20 @@ export default function CalendarioPage() {
             
             <button
               onClick={handleToday}
-              className="px-3.5 py-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-200 transition-colors"
+              className="px-4 py-2.5 rounded-xl bg-[#080d18] hover:bg-white/10 border border-white/10 text-xs font-bold text-gray-200 transition-colors shadow-inner cursor-pointer"
             >
               Hoy
             </button>
 
             <button
               onClick={handleNext}
-              className="p-2 rounded-xl bg-[#0b0f19] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors"
+              className="p-2.5 rounded-xl bg-[#080d18] hover:bg-white/10 border border-white/10 text-gray-300 transition-colors shadow-inner cursor-pointer"
               title="Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
 
-            <h2 className="ml-2 font-bold text-sm sm:text-base text-white capitalize tracking-wide">
+            <h2 className="ml-2 font-black text-base sm:text-lg text-white capitalize tracking-wide">
               {viewMode === "month" ? getMonthName() : getWeekRangeName(weekDays)}
             </h2>
           </div>
@@ -465,12 +465,12 @@ export default function CalendarioPage() {
           {/* View Toggles & Add Event */}
           <div className="flex items-center justify-between sm:justify-end gap-3">
             {/* Monthly / Weekly toggle */}
-            <div className="flex bg-[#0b0f19] border border-white/10 p-1 rounded-xl gap-1">
+            <div className="flex bg-[#080d18] border border-white/10 p-1 rounded-xl gap-1 shadow-inner">
               <button
                 onClick={() => setViewMode("month")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   viewMode === "month"
-                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -478,9 +478,9 @@ export default function CalendarioPage() {
               </button>
               <button
                 onClick={() => setViewMode("week")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   viewMode === "week"
-                    ? "bg-indigo-600 text-white shadow-sm font-semibold"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold"
                     : "text-gray-400 hover:text-white"
                 }`}
               >
@@ -491,7 +491,7 @@ export default function CalendarioPage() {
             {/* "+ Nuevo" Button */}
             <button
               onClick={() => openAddModal()}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Nuevo Evento</span>

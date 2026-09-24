@@ -986,23 +986,23 @@ export default function PendientesPage() {
           
           {/* Header Stats & Action */}
           {selectedId === null ? (
-            <div className="glass-card p-4 sm:p-5 border border-white/10 rounded-2xl flex flex-col gap-3.5 shadow-xl bg-[#0e1322]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-500/10">
-                    <ListTodo className="w-5 h-5" />
+            <div className="glass-card p-5 sm:p-6 border border-white/10 rounded-3xl flex flex-col gap-4 shadow-2xl bg-[#0d1322]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/15">
+                    <ListTodo className="w-6 h-6" />
                   </div>
                   <div>
-                    <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                       Bitácora de Pendientes
                     </h2>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5 flex-wrap">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                    <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                         {pendingCount} activos
                       </span>
                       <span className="text-slate-600">•</span>
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/40 text-[11px] font-semibold">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/40 text-[11px] font-semibold">
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                         {completedCount} terminados
                       </span>
@@ -1010,18 +1010,18 @@ export default function PendientesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <button
                     onClick={() => setSelectedId("general")}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all bg-[#080c16] border-slate-700/80 hover:bg-white/5 text-slate-300 hover:text-white shadow-sm cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all bg-[#080d18] border-white/10 hover:bg-white/5 text-slate-200 hover:text-white shadow-sm cursor-pointer"
                     title="Abrir bloc de notas general"
                   >
-                    <StickyNote className="w-3.5 h-3.5 text-indigo-400" />
+                    <StickyNote className="w-4 h-4 text-indigo-400" />
                     <span>Bloc General</span>
                   </button>
                   <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white shadow-md shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Nuevo Pendiente</span>
@@ -1148,7 +1148,7 @@ export default function PendientesPage() {
               {/* Quick Segmented Filters & Search Bar */}
               <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 pt-1">
                 {/* Status Segment */}
-                <div className="inline-flex items-center p-1 bg-[#080c16] rounded-xl border border-slate-700/80 text-xs shadow-inner">
+                <div className="inline-flex items-center p-1 bg-[#080d18] rounded-xl border border-white/10 text-xs shadow-inner">
                   <button
                     onClick={() => setFilterEstado("pendientes")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
@@ -1183,13 +1183,13 @@ export default function PendientesPage() {
 
                 {/* Search Input */}
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
                     placeholder="Buscar por título, detalle o autor..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-[#080c16] border border-slate-700/80 rounded-xl py-2 pl-9 pr-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors shadow-sm"
+                    className="w-full bg-[#080d18] border border-white/10 rounded-xl py-2 pl-9 pr-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors shadow-inner"
                   />
                   {searchTerm && (
                     <button
@@ -1205,7 +1205,7 @@ export default function PendientesPage() {
                 <select
                   value={filterPrioridad}
                   onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterPrioridad(e.target.value as "todas" | "alta" | "media" | "baja")}
-                  className="bg-[#080c16] border border-slate-700/80 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors shadow-sm cursor-pointer"
+                  className="bg-[#080d18] border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors shadow-inner cursor-pointer"
                 >
                   <option value="todas" className="bg-[#0b0f19]">Prioridad: Todas</option>
                   <option value="alta" className="bg-[#0b0f19]">Alta</option>
@@ -1278,10 +1278,10 @@ export default function PendientesPage() {
                   <div
                     key={item.id}
                     onClick={() => setSelectedId(isSelected ? null : item.id)}
-                    className={`group relative flex flex-col p-3 rounded-2xl border transition-all duration-200 cursor-pointer ${
+                    className={`group relative flex flex-col p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer ${
                       isSelected
-                        ? "bg-[#141b2d] border-indigo-500/60 shadow-lg shadow-indigo-500/10 ring-1 ring-indigo-500/40"
-                        : "bg-[#111726] hover:bg-[#151d30] border-slate-800 hover:border-slate-700 shadow-md"
+                        ? "bg-[#141b2e] border-indigo-500/60 shadow-xl shadow-indigo-500/10 ring-1 ring-indigo-500/40"
+                        : "bg-[#0c1220] hover:bg-[#12192c] border-white/10 hover:border-slate-600 shadow-md"
                     }`}
                   >
                     {/* Glowing side accent */}

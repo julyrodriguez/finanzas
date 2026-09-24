@@ -1342,28 +1342,28 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
       <div className="space-y-6">
         {/* Executive Header Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-white/10">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-white/10">
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="text-2xl font-bold text-white tracking-tight">
+              <h2 className="text-2xl font-black text-white tracking-tight">
                 Órdenes de Compra
               </h2>
-              <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono font-bold uppercase tracking-wider">
+              <span className="px-2.5 py-1 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono font-bold uppercase tracking-wider">
                 Control Corporativo
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1 font-medium">
               Gestión, autorización, notas internas y seguimiento presupuestario de Cinemark & Hoyts
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             <DolarVentaBadge />
 
             <button
               onClick={handleManualSyncStats}
               disabled={isSyncingStats}
-              className={`px-3 py-2 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-200 hover:text-white cursor-pointer ${
+              className={`px-3 py-2 rounded-xl border border-white/10 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm bg-[#0e1424] hover:bg-white/5 text-slate-200 hover:text-white cursor-pointer ${
                 isSyncingStats ? "opacity-75 cursor-not-allowed" : ""
               }`}
               title="Sincronizar y recalcular contadores con la base de datos del servidor"
@@ -1375,10 +1375,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <button
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
-              className={`px-3 py-2 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+              className={`px-3.5 py-2 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm ${
                 hasLoadedAllFromDb
                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
-                  : "bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
+                  : "bg-[#0e1424] hover:bg-white/5 border-white/10 text-slate-200 hover:text-white cursor-pointer"
               }`}
               title={hasLoadedAllFromDb ? "Toda la base de datos ya está cargada" : "Cargar todas las órdenes históricas de la base de datos"}
             >
@@ -1394,7 +1394,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
             <button
               onClick={handleExportExcel}
-              className="px-3.5 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[#0e1424] hover:bg-white/5 border border-white/10 text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               title="Descargar listado actual de órdenes en Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
@@ -1404,7 +1404,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {!isOrdenesUser && (
               <button
                 onClick={handleOpenAddModal}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 <span>Nueva Orden</span>
@@ -1422,25 +1422,25 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               setFilterEstado("Pendientes");
               setQueryLimit(15);
             }}
-            className={`glass-card p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-slate-400/50 ${
+            className={`glass-card p-5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
               filterEstado === "Pendientes"
-                ? "border-slate-400/60 bg-slate-500/10 shadow-sm shadow-slate-500/10"
-                : "border-white/10 hover:bg-slate-800/40"
+                ? "border-slate-400/60 bg-slate-500/10 shadow-lg shadow-slate-500/10 ring-1 ring-slate-400/30"
+                : "border-white/10 hover:border-slate-400/40 hover:bg-white/[0.02]"
             }`}
           >
             <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px] text-slate-300">Órdenes Pendientes</span>
-              <div className="p-1.5 rounded-lg bg-slate-500/15 text-slate-300 group-hover:scale-110 transition-transform">
+              <span className="uppercase tracking-wider text-[10px] text-slate-300 font-bold">Órdenes Pendientes</span>
+              <div className="p-2 rounded-xl bg-slate-500/15 text-slate-300 group-hover:scale-110 transition-transform">
                 <Clock className="w-4 h-4" />
               </div>
             </div>
-            <div className="mt-2.5 flex items-baseline justify-between">
-              <span className="text-3xl font-bold font-mono text-slate-100 tracking-tight">
+            <div className="mt-3 flex items-baseline justify-between">
+              <span className="text-3xl font-black font-mono text-slate-100 tracking-tight">
                 {serverStats ? serverStats.pendiente.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-7 bg-slate-700/50 animate-pulse rounded" />
+                  <span className="inline-block w-8 h-7 bg-slate-700/50 animate-pulse rounded-lg" />
                 )}
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded bg-slate-500/10 text-slate-300 border border-slate-500/20 font-medium">
+              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-500/10 text-slate-300 border border-slate-500/20 font-semibold">
                 Sin enviar a autorizar
               </span>
             </div>
@@ -1453,25 +1453,25 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               setFilterEstado("Mandadas");
               setQueryLimit(15);
             }}
-            className={`glass-card p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-amber-500/50 ${
+            className={`glass-card p-5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
               filterEstado === "Mandadas"
-                ? "border-amber-500/60 bg-amber-500/10 shadow-sm shadow-amber-500/10"
-                : "border-white/10 hover:bg-slate-800/40"
+                ? "border-amber-500/60 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30"
+                : "border-white/10 hover:border-amber-500/40 hover:bg-white/[0.02]"
             }`}
           >
             <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px] text-amber-300">En Autorización</span>
-              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
+              <span className="uppercase tracking-wider text-[10px] text-amber-300 font-bold">En Autorización</span>
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 group-hover:scale-110 transition-transform">
                 <Send className="w-4 h-4" />
               </div>
             </div>
-            <div className="mt-2.5 flex items-baseline justify-between">
-              <span className="text-3xl font-bold font-mono text-amber-400 tracking-tight">
+            <div className="mt-3 flex items-baseline justify-between">
+              <span className="text-3xl font-black font-mono text-amber-400 tracking-tight">
                 {serverStats ? serverStats.mandada.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-7 bg-slate-700/50 animate-pulse rounded" />
+                  <span className="inline-block w-8 h-7 bg-slate-700/50 animate-pulse rounded-lg" />
                 )}
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold">
                 Mandadas a firma
               </span>
             </div>
@@ -1507,10 +1507,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         </Link>
 
         {/* Buscador & Filters Bar */}
-        <div className="glass-card border border-white/10 p-3.5 sm:p-4 rounded-xl space-y-3.5 shadow-sm bg-[#0d121c]">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 flex-wrap">
+        <div className="glass-card border border-white/10 p-4 sm:p-5 rounded-2xl space-y-4 shadow-xl bg-[#0d1322]">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 flex-wrap">
             {/* Buscador Search Input Group */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-md">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:max-w-md">
               {/* Dropdown de campo */}
               <div className="relative flex-shrink-0">
                 <select
@@ -1519,7 +1519,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setSearchField(e.target.value as "todos" | "numSolicitud" | "numOC" | "razonSocial");
                     setQueryLimit(15);
                   }}
-                  className="w-full sm:w-auto pl-3 pr-8 py-1.5 text-xs rounded-lg bg-[#0b0f19] border border-slate-700/80 text-white font-medium focus:outline-none focus:border-blue-500 cursor-pointer appearance-none shadow-sm"
+                  className="w-full sm:w-auto pl-3.5 pr-8 py-2 text-xs rounded-xl bg-[#080d18] border border-white/10 text-white font-semibold focus:outline-none focus:border-blue-500 cursor-pointer appearance-none shadow-inner"
                 >
                   <option value="todos" className="bg-[#0b0f19] text-white">Todos los campos</option>
                   <option value="numOC" className="bg-[#0b0f19] text-white">N° OC</option>
@@ -1531,7 +1531,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
               {/* Input de búsqueda */}
               <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -1540,10 +1540,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     setQueryLimit(15);
                   }}
                   placeholder="Buscar orden, proveedor..."
-                  className="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg bg-[#0b0f19] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
+                  className="w-full pl-9 pr-9 py-2 text-xs rounded-xl bg-[#080d18] border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner"
                 />
                 {isSearchingDb && (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
                 )}
                 {searchQuery && (
                   <button
@@ -1560,8 +1560,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Filter Pills for Empresa */}
-            <div className="inline-flex items-center p-0.5 bg-[#0b0f19] rounded-lg border border-slate-700/80 text-xs">
-              <span className="text-slate-400 text-[10px] px-2 font-semibold uppercase tracking-wider">Empresa</span>
+            <div className="inline-flex items-center p-1 bg-[#080d18] rounded-xl border border-white/10 text-xs shadow-inner">
+              <span className="text-slate-400 text-[10px] px-2 font-bold uppercase tracking-wider">Empresa</span>
               {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
                 const isSelected = filterEmpresa === emp;
                 return (
@@ -1571,13 +1571,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       setFilterEmpresa(emp);
                       setQueryLimit(15);
                     }}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       isSelected
                         ? emp === "Hoyts"
-                          ? "bg-purple-600 text-white shadow-sm"
+                          ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
                           : emp === "CMK"
-                          ? "bg-teal-600 text-white shadow-sm"
-                          : "bg-blue-600 text-white shadow-sm"
+                          ? "bg-teal-600 text-white shadow-md shadow-teal-600/30"
+                          : "bg-blue-600 text-white shadow-md shadow-blue-600/30"
                         : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
@@ -1588,8 +1588,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
 
             {/* Filter Pills for Estado */}
-            <div className="inline-flex items-center p-0.5 bg-[#0b0f19] rounded-lg border border-slate-700/80 text-xs flex-wrap gap-0.5">
-              <span className="text-slate-400 text-[10px] px-2 font-semibold uppercase tracking-wider">Estado</span>
+            <div className="inline-flex items-center p-1 bg-[#080d18] rounded-xl border border-white/10 text-xs flex-wrap gap-1 shadow-inner">
+              <span className="text-slate-400 text-[10px] px-2 font-bold uppercase tracking-wider">Estado</span>
               {(
                 [
                   { id: "Todas", label: "Todas", dot: null },
@@ -1608,9 +1608,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       setQueryLimit(15);
                       setSelectedOCIds([]);
                     }}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       isSelected
-                        ? "bg-blue-600 text-white shadow-sm"
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
                         : "text-slate-400 hover:text-white hover:bg-white/5"
                     }`}
                   >
@@ -1673,11 +1673,11 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl glass-card border border-white/10 overflow-hidden shadow-sm">
+            <div className="rounded-2xl glass-card border border-white/10 overflow-hidden shadow-xl bg-[#0d1322]">
               {/* Desktop Table View */}
               <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-white/5 border-b border-white/10 text-gray-400 uppercase font-semibold">
+                  <thead className="bg-[#101726]/90 border-b border-white/10 text-gray-400 uppercase font-bold tracking-wider">
                     <tr>
                       {showCMDSection && (
                         <th className="px-4 py-3.5 w-10">
