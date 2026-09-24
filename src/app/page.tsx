@@ -27,21 +27,19 @@ import {
   Copy, 
   CheckCircle2, 
   X, 
-  ShoppingBag, 
   Edit3, 
   Loader2, 
   AlertCircle, 
   Check, 
-  Send, 
   MessageSquare, 
   User as UserIcon, 
   ChevronDown, 
   Link2, 
-  Folder,
+  Folder, 
   FolderOpen, 
-  FileSpreadsheet,
-  Eye,
-  Database
+  FileSpreadsheet, 
+  Eye, 
+  Database 
 } from "lucide-react";
 import type { Nota, OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -1253,6 +1251,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <DolarVentaBadge />
+
             <button
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
@@ -1291,72 +1291,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 <span>Nueva Orden</span>
               </button>
             )}
-          </div>
-        </div>
-
-        {/* 4 KPI Metrics Dashboard Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* KPI 1 */}
-          <div className="glass-card p-4 rounded-xl border border-white/10 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px]">Registros Totales</span>
-              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
-                <ShoppingBag className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline gap-2">
-              <span className="text-2xl font-bold font-mono text-white tracking-tight">
-                {visibleOrdenes.length}
-              </span>
-              <span className="text-xs text-slate-400">
-                de {filteredOrdenes.length} filtradas
-              </span>
-            </div>
-          </div>
-
-          {/* KPI 2 */}
-          <div className="glass-card p-4 rounded-xl border border-white/10 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px]">Órdenes Liberadas</span>
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-emerald-400 tracking-tight">
-                {ordenes.filter(o => o.liberada).length}
-              </span>
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                Aprobadas
-              </span>
-            </div>
-          </div>
-
-          {/* KPI 3 */}
-          <div className="glass-card p-4 rounded-xl border border-white/10 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px]">En Autorización</span>
-              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-                <Send className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-amber-400 tracking-tight">
-                {ordenes.filter(o => o.mandada && !o.liberada).length}
-              </span>
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                Mandadas
-              </span>
-            </div>
-          </div>
-
-          {/* KPI 4 */}
-          <div className="glass-card p-3.5 rounded-xl border border-white/10 flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1">
-              <span className="uppercase tracking-wider text-[10px]">Cotización BNA</span>
-              <span className="text-[10px] text-emerald-400 font-mono font-bold">Oficial</span>
-            </div>
-            <DolarVentaBadge />
           </div>
         </div>
 
