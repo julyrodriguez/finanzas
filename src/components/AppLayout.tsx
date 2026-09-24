@@ -25,7 +25,9 @@ import {
   BarChart3,
   FileUp,
   Moon,
-  Sparkles
+  Sparkles,
+  Layers,
+  ArrowRight
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -69,104 +71,111 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     }
   }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
-  const menuItems: {
-    name: string;
-    href: string;
-    icon: React.ComponentType<{ className?: string }>;
-    exact: boolean;
-    badge?: string;
-    hideForOrders?: boolean;
-    onlyForOrders?: boolean;
+  const navigationSections: {
+    title: string;
+    items: {
+      name: string;
+      href: string;
+      icon: React.ComponentType<{ className?: string }>;
+      exact: boolean;
+      badge?: string;
+      hideForOrders?: boolean;
+      onlyForOrders?: boolean;
+    }[];
   }[] = [
     {
-      name: "Calendario",
-      href: "/calendario",
-      icon: Calendar,
-      exact: true,
-      hideForOrders: true,
+      title: "Operaciones",
+      items: [
+        {
+          name: "Órdenes de Compra",
+          href: "/",
+          icon: ShoppingBag,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Proceso de Liberación",
+          href: "/proceso-de-liberacion",
+          icon: Clock,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Pendientes",
+          href: "/pendientes",
+          icon: ClipboardList,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Seguimiento de Órdenes",
+          href: "/seguimiento-de-ordenes",
+          icon: ShieldCheck,
+          exact: false,
+          onlyForOrders: true,
+        },
+        {
+          name: "Calendario",
+          href: "/calendario",
+          icon: Calendar,
+          exact: true,
+          hideForOrders: true,
+        },
+      ],
     },
     {
-      name: "Seguimiento de Órdenes",
-      href: "/seguimiento-de-ordenes",
-      icon: ShieldCheck,
-      exact: false,
-      onlyForOrders: true,
+      title: "Finanzas & Control",
+      items: [
+        {
+          name: "Cotizaciones",
+          href: "/cotizaciones",
+          icon: Scale,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Distribución",
+          href: "/distribucion",
+          icon: Percent,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Calculadora",
+          href: "/calculadora",
+          icon: Calculator,
+          exact: false,
+          hideForOrders: true,
+        },
+      ],
     },
     {
-      name: "Órdenes de Compra",
-      href: "/",
-      icon: ShoppingBag,
-      exact: false,
-      hideForOrders: true,
+      title: "Análisis & Sistemas",
+      items: [
+        {
+          name: "Estadísticas",
+          href: "/estadisticas",
+          icon: BarChart3,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Temporal",
+          href: "/temporal",
+          icon: FileUp,
+          exact: false,
+          hideForOrders: true,
+        },
+        {
+          name: "Interbanking",
+          href: "/interbanking",
+          icon: Building2,
+          exact: false,
+          hideForOrders: true,
+        },
+      ],
     },
-    {
-      name: "Proceso de Liberación",
-      href: "/proceso-de-liberacion",
-      icon: Clock,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Pendientes",
-      href: "/pendientes",
-      icon: ClipboardList,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Cotizaciones",
-      href: "/cotizaciones",
-      icon: Scale,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Distribución",
-      href: "/distribucion",
-      icon: Percent,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Calculadora",
-      href: "/calculadora",
-      icon: Calculator,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Estadísticas",
-      href: "/estadisticas",
-      icon: BarChart3,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Temporal",
-      href: "/temporal",
-      icon: FileUp,
-      exact: false,
-      hideForOrders: true,
-    },
-    {
-      name: "Interbanking",
-      href: "/interbanking",
-      icon: Building2,
-      exact: false,
-      hideForOrders: true,
-    },
-  ].filter(item => {
-    if (isOrdenesUser) {
-      return !item.hideForOrders;
-    }
-    if (item.onlyForOrders) {
-      return false;
-    }
-    if (item.href === "/interbanking") {
-      return isJulian;
-    }
-    return true;
-  });
+  ];
 
   const isActive = (href: string, exact: boolean) => {
     if (href === "/calendario") {
@@ -191,9 +200,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
   if (loading || (!user && !publicRoute) || isForbiddenForOrdenes || isForbiddenForOtherUsers) {
     return (
-      <div className="min-h-screen bg-[#0a0d14] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#070a12] flex flex-col items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4 p-8 rounded-xl glass-card border border-white/10 text-center max-w-sm w-full">
-          <div className="h-10 w-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+          <div className="h-10 w-10 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
           <div className="space-y-1">
@@ -206,23 +215,29 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   }
 
   const renderSidebarContent = () => (
-    <div className="flex flex-col h-full bg-[#0d121c] border-r border-white/10">
+    <div className="flex flex-col h-full bg-[#0a0e17] border-r border-white/10 text-slate-300">
       {/* Brand Header */}
-      <div className="p-4 border-b border-white/10 shrink-0">
+      <div className="px-5 py-4 border-b border-white/10 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 w-9 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-              <TrendingUp className="w-4 h-4" />
+            <div className="h-10 w-10 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
+              <TrendingUp className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-bold text-sm text-white tracking-tight truncate">
-                Finanzas
-              </h1>
-              <p className="text-[10px] text-slate-400 font-medium truncate">Cinemark & Hoyts</p>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-bold text-sm text-white tracking-wider uppercase truncate">
+                  Finanzas
+                </h1>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono font-bold">
+                  PRO
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
+                Cinemark & Hoyts
+              </p>
             </div>
           </div>
 
-          {/* Close button on mobile */}
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
@@ -234,68 +249,88 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       </div>
 
       {/* Main Navigation List */}
-      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-3 space-y-1">
-        <div className="px-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-          Navegación
-        </div>
-        <nav aria-label="Navegación principal" className="space-y-0.5">
-          {menuItems.map((item) => {
-            const active = isActive(item.href, item.exact);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                  active
-                    ? "bg-blue-600/15 text-blue-300 font-semibold border border-blue-500/30 shadow-sm"
-                    : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] border border-transparent"
-                }`}
-              >
-                <Icon className={`w-4 h-4 shrink-0 transition-colors ${
-                  active ? "text-blue-400" : "text-slate-400 group-hover:text-slate-200"
-                }`} />
-                <span className="truncate flex-1">{item.name}</span>
-                {item.badge && (
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 py-3 space-y-4">
+        {navigationSections.map((section) => {
+          const visibleItems = section.items.filter((item) => {
+            if (isOrdenesUser) return !item.hideForOrders;
+            if (item.onlyForOrders) return false;
+            if (item.href === "/interbanking") return isJulian;
+            return true;
+          });
+
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={section.title} className="space-y-1">
+              <div className="px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {section.title}
+              </div>
+              <nav aria-label={section.title} className="space-y-0.5">
+                {visibleItems.map((item) => {
+                  const active = isActive(item.href, item.exact);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        active
+                          ? "bg-blue-600 text-white font-semibold shadow-sm border border-blue-500"
+                          : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.05] border border-transparent"
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 shrink-0 transition-colors ${
+                        active ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+                      }`} />
+                      <span className="truncate flex-1">{item.name}</span>
+                      {item.badge && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer Controls: Theme, Ticker, User */}
-      <div className="p-3 border-t border-white/10 space-y-2.5 shrink-0 bg-[#0a0e17]">
+      <div className="p-3 border-t border-white/10 space-y-2.5 shrink-0 bg-[#080c14]">
         {/* Theme Switcher Segmented Control */}
-        <div className="p-1 rounded-lg bg-black/40 border border-white/10 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setTheme("dark")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-              theme === "dark"
-                ? "bg-white/10 text-white shadow-sm"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Moon className="w-3.5 h-3.5" />
-            <span>Oscuro</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTheme("pink")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
-              theme === "pink"
-                ? "bg-pink-500/25 text-pink-200 border border-pink-500/30 shadow-sm"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <span>🌸</span>
-            <span>Rosa</span>
-          </button>
+        <div className="space-y-1">
+          <div className="px-1 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+            Tema Visual
+          </div>
+          <div className="p-1 rounded-lg bg-black/50 border border-white/10 grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                theme === "dark"
+                  ? "bg-slate-800 text-white shadow-sm border border-slate-700"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5 text-blue-400" />
+              <span>Oscuro</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("pink")}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                theme === "pink"
+                  ? "bg-pink-600 text-white shadow-sm border border-pink-500"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span>🌸</span>
+              <span>Rosa</span>
+            </button>
+          </div>
         </div>
 
         {/* BNA Broker Ticker Tape */}
@@ -364,7 +399,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       {/* Desktop Fixed Sidebar */}
       <aside
         aria-label="Barra lateral de navegación"
-        className="hidden lg:flex fixed inset-y-0 left-0 w-64 z-30 flex-col shadow-lg"
+        className="hidden lg:flex fixed inset-y-0 left-0 w-64 z-30 flex-col shadow-xl"
       >
         {renderSidebarContent()}
       </aside>
@@ -382,7 +417,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       {/* Main Content Area */}
       <div className="lg:pl-64 flex flex-col min-h-screen min-w-0">
         {/* Mobile Header Bar */}
-        <header className="lg:hidden sticky top-0 z-20 bg-[#0a0d14]/90 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
+        <header className="lg:hidden sticky top-0 z-20 bg-[#0a0d14]/95 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white cursor-pointer"
@@ -396,11 +431,11 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             </div>
             <span className="font-bold text-sm text-white">Finanzas</span>
           </div>
-          <div className="w-9" /> {/* Spacer */}
+          <div className="w-9" />
         </header>
 
         {/* Page Main Content */}
-        <main id="main-content" className="flex-1 p-4 sm:p-6 md:p-8 w-full max-w-[1800px] mx-auto">
+        <main id="main-content" className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-[1800px] mx-auto">
           {children}
         </main>
       </div>

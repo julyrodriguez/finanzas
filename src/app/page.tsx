@@ -1235,45 +1235,28 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         </div>
       )}
 
-      <div className="space-y-5">
-        {/* Top Header Controls: Title, Metrics & Actions */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-600/15 border border-blue-500/30 text-blue-400 shadow-sm">
-                <ShoppingBag className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white tracking-tight">
-                  Solicitudes de Órdenes
-                </h2>
-                <div className="flex items-center gap-2 text-xs text-slate-400 flex-wrap mt-0.5">
-                  <span className="font-medium text-slate-300">
-                    Mostrando <strong className="text-white font-semibold">{visibleOrdenes.length}</strong> de <strong className="text-white font-semibold">{filteredOrdenes.length}</strong> órdenes
-                  </span>
-                  <span className="text-slate-600">•</span>
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    {ordenes.filter(o => o.liberada).length} liberadas
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    {ordenes.filter(o => o.mandada && !o.liberada).length} mandadas
-                  </span>
-                </div>
-              </div>
+      <div className="space-y-6">
+        {/* Executive Header Bar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-white/10">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-2xl font-bold text-white tracking-tight">
+                Órdenes de Compra
+              </h2>
+              <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono font-bold uppercase tracking-wider">
+                Control Corporativo
+              </span>
             </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Gestión, autorización, notas internas y seguimiento presupuestario de Cinemark & Hoyts
+            </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            {/* Valor Dólar Venta BNA (Leftmost) */}
-            <DolarVentaBadge />
-
-            {/* Cargar toda la base de datos Button */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
-              className={`px-3 py-1.5 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+              className={`px-3 py-2 rounded-lg border font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
                 hasLoadedAllFromDb
                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
                   : "bg-slate-800/80 hover:bg-slate-700 border-slate-700 text-slate-200 hover:text-white cursor-pointer"
@@ -1287,13 +1270,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               ) : (
                 <Database className="w-3.5 h-3.5 text-blue-400" />
               )}
-              <span>{loadingAllDb ? "Cargando todo..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
+              <span>{loadingAllDb ? "Cargando..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
             </button>
 
-            {/* Exportar a Excel Button */}
             <button
               onClick={handleExportExcel}
-              className="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-3.5 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               title="Descargar listado actual de órdenes en Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
@@ -1303,12 +1285,78 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {!isOrdenesUser && (
               <button
                 onClick={handleOpenAddModal}
-                className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
                 <span>Nueva Orden</span>
               </button>
             )}
+          </div>
+        </div>
+
+        {/* 4 KPI Metrics Dashboard Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* KPI 1 */}
+          <div className="glass-card p-4 rounded-xl border border-white/10 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px]">Registros Totales</span>
+              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+                <ShoppingBag className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-white tracking-tight">
+                {visibleOrdenes.length}
+              </span>
+              <span className="text-xs text-slate-400">
+                de {filteredOrdenes.length} filtradas
+              </span>
+            </div>
+          </div>
+
+          {/* KPI 2 */}
+          <div className="glass-card p-4 rounded-xl border border-white/10 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px]">Órdenes Liberadas</span>
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2.5 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-emerald-400 tracking-tight">
+                {ordenes.filter(o => o.liberada).length}
+              </span>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                Aprobadas
+              </span>
+            </div>
+          </div>
+
+          {/* KPI 3 */}
+          <div className="glass-card p-4 rounded-xl border border-white/10 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+              <span className="uppercase tracking-wider text-[10px]">En Autorización</span>
+              <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                <Send className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2.5 flex items-baseline justify-between">
+              <span className="text-2xl font-bold font-mono text-amber-400 tracking-tight">
+                {ordenes.filter(o => o.mandada && !o.liberada).length}
+              </span>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                Mandadas
+              </span>
+            </div>
+          </div>
+
+          {/* KPI 4 */}
+          <div className="glass-card p-3.5 rounded-xl border border-white/10 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1">
+              <span className="uppercase tracking-wider text-[10px]">Cotización BNA</span>
+              <span className="text-[10px] text-emerald-400 font-mono font-bold">Oficial</span>
+            </div>
+            <DolarVentaBadge />
           </div>
         </div>
 
@@ -1607,12 +1655,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           </td>
 
                         {/* Empresa Pill */}
-                        <td className="px-4 py-4">
+                        <td className="px-4 py-3.5">
                           <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
                               orden.empresa === "Hoyts"
-                                ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                                : "bg-teal-500/15 text-teal-300 border-teal-500/30"
+                                ? "bg-purple-900/30 text-purple-300 border-purple-700/40"
+                                : "bg-teal-900/30 text-teal-300 border-teal-700/40"
                             }`}
                           >
                             {orden.empresa}
@@ -1620,54 +1668,50 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </td>
 
                         {/* N° Solicitud (Opcional) */}
-                        <td className="px-4 py-4 font-mono text-gray-300">
+                        <td className="px-4 py-3.5 font-mono text-slate-300">
                           {orden.numSolicitud || "-"}
                         </td>
 
                         {/* N° OC + Copy Button */}
                         <td 
-                          className="px-4 py-4"
+                          className="px-4 py-3.5"
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={(e) => handleDropLink(e, orden)}
                         >
                           <div className="flex flex-col items-start gap-1">
-                            <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
-                              <span className="font-mono font-bold text-emerald-400">
-                                {orden.numOC}
+                            <div className="inline-flex items-center gap-1.5 bg-black/40 border border-white/10 px-2 py-1 rounded-md">
+                              <span className="font-mono font-bold text-blue-400 text-xs">
+                                #{orden.numOC}
                               </span>
                               <button
                                 onClick={() => handleCopy(orden)}
-                                className={`p-1 rounded transition-colors ${
-                                  filterEstado === "Liberadas"
-                                    ? "bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500 hover:text-white"
-                                    : "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500 hover:text-white"
-                                }`}
+                                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                                 title="Copiar resumen de OC"
                               >
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-3 h-3" />
                               </button>
                               {orden.linkSharepoint ? (
                                 <a
                                   href={orden.linkSharepoint}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="p-1 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500 hover:text-white transition-colors"
+                                  className="p-1 rounded hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
                                   title="Abrir carpeta vinculada"
                                 >
-                                  <FolderOpen className="w-3.5 h-3.5" />
+                                  <FolderOpen className="w-3 h-3" />
                                 </a>
                               ) : (
                                 <button 
                                   onClick={() => handlePromptLink(orden)}
-                                  className="p-1 rounded border border-dashed border-white/20 text-gray-500 hover:text-gray-300 hover:border-gray-400 cursor-pointer transition-all flex items-center justify-center bg-transparent"
-                                  title="Haz clic para pegar enlace o arrastra un enlace web aquí"
+                                  className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
+                                  title="Pegar enlace"
                                 >
-                                  <Folder className="w-3.5 h-3.5" />
+                                  <Folder className="w-3 h-3" />
                                 </button>
                               )}
                             </div>
                             {orden.relatedOC && (
-                              <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
+                              <div className="flex flex-wrap items-center gap-1 mt-0.5 max-w-[200px]">
                                 {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
                                   <button
                                     key={idx}
@@ -1685,51 +1729,51 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </td>
 
                         {/* Creado Por */}
-                        <td className="px-4 py-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 font-medium text-[11px]">
-                            <UserIcon className="w-3 h-3 text-emerald-400" />
+                        <td className="px-4 py-3.5">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/[0.04] border border-white/5 text-slate-300 font-medium text-[11px]">
+                            <UserIcon className="w-3 h-3 text-slate-400" />
                             {orden.creadoPor || "Usuario"}
                           </span>
                         </td>
 
                         {/* Proveedor */}
-                        <td className="px-4 py-4 max-w-xs">
-                          <div className="font-medium text-white truncate">
+                        <td className="px-4 py-3.5 max-w-xs">
+                          <div className="font-medium text-white truncate text-xs">
                             {orden.razonSocial}
                           </div>
                           {orden.cancelada && (
-                            <div className="text-[10px] text-red-400 mt-1 bg-red-950/20 border border-red-500/20 px-2 py-1 rounded-lg">
+                            <div className="text-[10px] text-red-400 mt-0.5 bg-red-950/20 border border-red-500/20 px-2 py-0.5 rounded">
                               <span className="font-bold">Motivo Cancelación:</span>{" "}
                               {orden.notas && orden.notas.length > 0
                                 ? orden.notas[orden.notas.length - 1].texto
-                                : "(Sin notas registradas)"}
+                                : "(Sin notas)"}
                             </div>
                           )}
                         </td>
 
                         {/* Monto */}
-                        <td className="px-4 py-4 font-semibold text-emerald-300">
+                        <td className="px-4 py-3.5 font-mono font-bold text-white text-xs">
                           {typeof orden.monto === "number"
                             ? `$ ${orden.monto.toLocaleString("es-AR")}`
                             : orden.monto}
                         </td>
 
                         {/* Forma Pago */}
-                        <td className="px-4 py-4 text-gray-300 font-medium">
+                        <td className="px-4 py-3.5 text-slate-400 font-mono text-[11px]">
                           {orden.formaPago || "30DFF"}
                         </td>
 
                         {/* Botón Ver Descripción / Card Detalle */}
-                        <td className="px-4 py-4">
+                        <td className="px-4 py-3.5">
                           <button
                             onClick={() => setActiveNotesOrden(orden)}
-                            className="px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/25 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                            className="px-2.5 py-1 rounded-md bg-blue-500/10 hover:bg-blue-600 hover:text-white text-blue-300 border border-blue-500/25 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                             title="Ver descripción completa, firmas y notas de la orden"
                           >
-                            <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                            <Eye className="w-3.5 h-3.5 text-blue-400" />
                             <span>Ver Descripción</span>
                             {orden.notas && orden.notas.length > 0 && (
-                              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">
                                 {orden.notas.length}
                               </span>
                             )}
@@ -1738,13 +1782,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
                         {/* Action: Open Edit Form (Icon-only) */}
                         {!isOrdenesUser && (
-                          <td className="px-4 py-4 text-right">
+                          <td className="px-4 py-3.5 text-right">
                             <button
                               onClick={() => handleOpenEditModal(orden)}
-                              className="p-1.5 rounded-lg bg-white/5 text-gray-300 hover:text-white hover:bg-white/10 border border-white/10 ml-auto transition-colors inline-flex items-center justify-center"
+                              className="p-1.5 rounded-md bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/10 ml-auto transition-colors inline-flex items-center justify-center cursor-pointer"
                               title="Editar orden"
                             >
-                              <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                              <Edit3 className="w-3.5 h-3.5 text-blue-400" />
                             </button>
                           </td>
                         )}
