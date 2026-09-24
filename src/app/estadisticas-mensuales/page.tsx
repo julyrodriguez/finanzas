@@ -31,6 +31,47 @@ const parseMonto = (raw: any): number => {
   return isNaN(num) ? 0 : num;
 };
 
+const mapDocToSerializableOrder = (docItem: any): SerializableOrder => {
+  const rawMonto = parseMonto(docItem.monto);
+  const rawRazon = (docItem.razonSocial || "Sin Proveedor").toString().trim();
+
+  let timestamp = 0;
+  let year: number | null = docItem.anio ? Number(docItem.anio) : null;
+  let month: number | null = docItem.mes !== undefined && docItem.mes !== null ? Number(docItem.mes) : null;
+  let dateStr = "-";
+
+  const rawDate = docItem.fechaOC || docItem.createdAtFirebase || docItem.createdAt;
+  if (rawDate) {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      timestamp = d.getTime();
+      if (!year) year = d.getFullYear();
+      if (month === null) month = d.getMonth();
+      dateStr = d.toLocaleDateString("es-AR");
+    }
+  }
+
+  return {
+    id: docItem.firebaseId || docItem._id,
+    empresa: docItem.empresa === "Hoyts" ? "Hoyts" : "CMK",
+    numSolicitud: docItem.numSolicitud ? String(docItem.numSolicitud) : "",
+    numOC: docItem.numOC ? String(docItem.numOC) : "",
+    razonSocial: rawRazon,
+    monto: rawMonto,
+    motivo: docItem.motivo ? String(docItem.motivo) : "",
+    formaPago: docItem.formaPago ? String(docItem.formaPago) : "30DFF",
+    liberada: Boolean(docItem.liberada),
+    mandada: Boolean(docItem.mandada),
+    entregada: Boolean(docItem.entregada),
+    cancelada: Boolean(docItem.cancelada),
+    timestamp,
+    year,
+    month,
+    dateStr,
+    creadoPor: docItem.creadoPor ? String(docItem.creadoPor) : "",
+  };
+};
+
 export default function EstadisticasMensualesPage() {
   const [orders, setOrders] = useState<SerializableOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,14 +85,16 @@ export default function EstadisticasMensualesPage() {
     }, 4000);
   };
 
-  // 1. Cargar caché instantánea de localStorage y consultar siempre la base completa a MongoDB
+  // 1. Cargar caché instantánea de localStorage y luego sincronizar solo los cambios recientes
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let initialOrders: SerializableOrder[] = [];
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+          initialOrders = parsed.orders;
           setOrders(parsed.orders);
           setLastSync(parsed.lastSync || null);
         }
@@ -60,12 +103,100 @@ export default function EstadisticasMensualesPage() {
       console.warn("Error leyendo caché de órdenes:", e);
     }
 
-    // Siempre consultar y sincronizar la base completa desde el servidor local MongoDB
-    handleRefresh();
+    // Sincronización inteligente no bloqueante: solo descarga los últimos cambios (delta)
+    syncOrdersIncremental(initialOrders);
   }, []);
 
-  // 2. Fetch de datos completos desde MongoDB
-  const handleRefresh = async () => {
+  // 2. Sincronización incremental ultrarrápida (solo los 100 cambios más recientes de MongoDB)
+  const syncOrdersIncremental = async (currentOrders: SerializableOrder[]) => {
+    // Si la caché está vacía, hacer carga inicial completa
+    if (!currentOrders || currentOrders.length === 0) {
+      return handleFullRefresh();
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetchOrdersFromMongo({ sort: "-updatedAt", limit: 100 });
+      if (!res || !res.success || !Array.isArray(res.ordenes)) {
+        throw new Error("Respuesta inválida del servidor");
+      }
+
+      const totalInDb = Number(res.total) || currentOrders.length;
+      // Si la base creció en más de 80 órdenes desde la última vez, refrescar completo
+      if (totalInDb - currentOrders.length > 80) {
+        return handleFullRefresh();
+      }
+
+      const orderMap = new Map<string, SerializableOrder>();
+      currentOrders.forEach((o) => orderMap.set(o.id, o));
+
+      let hasChanges = false;
+      let newCount = 0;
+      let updatedCount = 0;
+
+      for (const docItem of res.ordenes) {
+        const incoming = mapDocToSerializableOrder(docItem);
+        const existing = orderMap.get(incoming.id);
+
+        if (!existing) {
+          orderMap.set(incoming.id, incoming);
+          hasChanges = true;
+          newCount++;
+        } else {
+          if (
+            existing.monto !== incoming.monto ||
+            existing.liberada !== incoming.liberada ||
+            existing.mandada !== incoming.mandada ||
+            existing.entregada !== incoming.entregada ||
+            existing.cancelada !== incoming.cancelada ||
+            existing.motivo !== incoming.motivo ||
+            existing.empresa !== incoming.empresa ||
+            existing.numOC !== incoming.numOC ||
+            existing.razonSocial !== incoming.razonSocial
+          ) {
+            orderMap.set(incoming.id, incoming);
+            hasChanges = true;
+            updatedCount++;
+          }
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      setLastSync(nowIso);
+
+      if (hasChanges) {
+        const nextOrders = Array.from(orderMap.values());
+        setOrders(nextOrders);
+
+        try {
+          localStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({
+              version: 1,
+              lastSync: nowIso,
+              orders: nextOrders,
+            })
+          );
+          const providers = extractProvidersFromOrders(nextOrders);
+          localStorage.setItem("finanzas_proveedores_registry_v1", JSON.stringify(providers));
+        } catch (storageErr) {
+          console.warn("No se pudo guardar en localStorage:", storageErr);
+        }
+
+        const msgParts = [];
+        if (newCount > 0) msgParts.push(`${newCount} nuevas`);
+        if (updatedCount > 0) msgParts.push(`${updatedCount} actualizadas`);
+        showToast(`⚡ Actualización rápida: ${msgParts.join(", ")}.`);
+      }
+    } catch (err: any) {
+      console.warn("Aviso en sincronización incremental:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Carga completa manual o de respaldo
+  const handleFullRefresh = async () => {
     setLoading(true);
     try {
       const res = await fetchOrdersFromMongo({ limit: 0 });
@@ -73,56 +204,18 @@ export default function EstadisticasMensualesPage() {
         throw new Error("Respuesta inválida del servidor");
       }
 
-      const loadedOrders: SerializableOrder[] = res.ordenes.map((docItem: any) => {
-        const rawMonto = parseMonto(docItem.monto);
-        const rawRazon = (docItem.razonSocial || "Sin Proveedor").toString().trim();
-
-        let timestamp = 0;
-        let year: number | null = docItem.anio ? Number(docItem.anio) : null;
-        let month: number | null = docItem.mes !== undefined && docItem.mes !== null ? Number(docItem.mes) : null;
-        let dateStr = "-";
-
-        const rawDate = docItem.fechaOC || docItem.createdAtFirebase || docItem.createdAt;
-        if (rawDate) {
-          const d = new Date(rawDate);
-          if (!isNaN(d.getTime())) {
-            timestamp = d.getTime();
-            if (!year) year = d.getFullYear();
-            if (month === null) month = d.getMonth();
-            dateStr = d.toLocaleDateString("es-AR");
-          }
-        }
-
-        return {
-          id: docItem.firebaseId || docItem._id,
-          empresa: docItem.empresa === "Hoyts" ? "Hoyts" : "CMK",
-          numSolicitud: docItem.numSolicitud ? String(docItem.numSolicitud) : "",
-          numOC: docItem.numOC ? String(docItem.numOC) : "",
-          razonSocial: rawRazon,
-          monto: rawMonto,
-          motivo: docItem.motivo ? String(docItem.motivo) : "",
-          formaPago: docItem.formaPago ? String(docItem.formaPago) : "30DFF",
-          liberada: Boolean(docItem.liberada),
-          mandada: Boolean(docItem.mandada),
-          entregada: Boolean(docItem.entregada),
-          cancelada: Boolean(docItem.cancelada),
-          timestamp,
-          year,
-          month,
-          dateStr,
-          creadoPor: docItem.creadoPor ? String(docItem.creadoPor) : "",
-        };
-      });
-
+      const loadedOrders: SerializableOrder[] = res.ordenes.map(mapDocToSerializableOrder);
       const nowIso = new Date().toISOString();
-      const payload = {
-        version: 1,
-        lastSync: nowIso,
-        orders: loadedOrders,
-      };
 
       try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+        localStorage.setItem(
+          CACHE_KEY,
+          JSON.stringify({
+            version: 1,
+            lastSync: nowIso,
+            orders: loadedOrders,
+          })
+        );
         const providers = extractProvidersFromOrders(loadedOrders);
         localStorage.setItem("finanzas_proveedores_registry_v1", JSON.stringify(providers));
       } catch (storageErr) {
@@ -131,7 +224,7 @@ export default function EstadisticasMensualesPage() {
 
       setOrders(loadedOrders);
       setLastSync(nowIso);
-      showToast(`✅ ¡Base de datos sincronizada! Se cargaron ${loadedOrders.length.toLocaleString("es-AR")} órdenes.`);
+      showToast(`✅ ¡Base sincronizada! ${loadedOrders.length.toLocaleString("es-AR")} órdenes.`);
     } catch (err: any) {
       console.error("Error al actualizar órdenes:", err);
       showToast("❌ Hubo un error al consultar el servidor local.");
@@ -182,12 +275,13 @@ export default function EstadisticasMensualesPage() {
             </Link>
 
             <button
-              onClick={handleRefresh}
+              onClick={() => syncOrdersIncremental(orders)}
               disabled={loading}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+              title="Sincronización incremental ultrarrápida (solo cambios recientes)"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-              <span>{loading ? "Sincronizando..." : "Recargar BD"}</span>
+              <span>{loading ? "Sincronizando..." : "Sincronizar"}</span>
             </button>
           </div>
         </div>
@@ -195,7 +289,7 @@ export default function EstadisticasMensualesPage() {
         {/* Sección Principal de Estadísticas Mensuales */}
         <EstadisticasMensualesSection
           orders={orders}
-          onRefreshData={handleRefresh}
+          onRefreshData={() => syncOrdersIncremental(orders)}
           isLoading={loading}
         />
       </div>

@@ -147,49 +147,48 @@ export function AnimatedNumber({
       return;
     }
 
+    const startStepping = (targetEl: HTMLSpanElement) => {
+      // Salto en bloques grandes (4 pasos: 25%, 50%, 75%, 100%) en ~180ms ("saltea de a más")
+      const STEPS = [0.25, 0.5, 0.75, 1.0];
+      let stepIndex = 0;
+
+      const interval = setInterval(() => {
+        if (stepIndex < STEPS.length) {
+          const factor = STEPS[stepIndex];
+          const current = factor === 1.0 ? value : value * factor;
+          if (targetEl) targetEl.textContent = formatNumber(current);
+          stepIndex++;
+        } else {
+          clearInterval(interval);
+        }
+      }, 45);
+
+      return () => clearInterval(interval);
+    };
+
     // Si inView no fue provisto externamente, usar IntersectionObserver ligero individual
     if (inView === undefined && typeof IntersectionObserver !== "undefined") {
+      let cleanup: (() => void) | undefined;
       const observer = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting && !hasAnimatedRef.current) {
             hasAnimatedRef.current = true;
             observer.disconnect();
-            runAnimation(el);
+            cleanup = startStepping(el);
           }
         },
         { rootMargin: "0px 0px -30px 0px", threshold: 0.1 }
       );
       observer.observe(el);
-      return () => observer.disconnect();
+      return () => {
+        observer.disconnect();
+        if (cleanup) cleanup();
+      };
     } else {
       hasAnimatedRef.current = true;
-      runAnimation(el);
+      return startStepping(el);
     }
-
-    function runAnimation(targetEl: HTMLSpanElement) {
-      let startTimestamp: number | null = null;
-      let animId: number;
-
-      const step = (timestamp: number) => {
-        if (!startTimestamp) startTimestamp = timestamp;
-        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-        // Desaceleración cúbica suave
-        const eased = 1 - Math.pow(1 - progress, 3);
-        const current = eased * value;
-
-        targetEl.textContent = formatNumber(current);
-
-        if (progress < 1) {
-          animId = requestAnimationFrame(step);
-        } else {
-          targetEl.textContent = formatNumber(value);
-        }
-      };
-
-      animId = requestAnimationFrame(step);
-      return () => cancelAnimationFrame(animId);
-    }
-  }, [inView, triggerKey, value, duration]);
+  }, [inView, triggerKey, value]);
 
   return (
     <span ref={spanRef} className={className}>
@@ -1028,9 +1027,11 @@ export function EstadisticasMensualesSection({
                 }`}>
                   <div
                     style={{
-                      height: trimestralChartInView ? `${heightPercent}%` : "0%",
-                      transition: "height 900ms cubic-bezier(0.16, 1, 0.3, 1)",
-                      transitionDelay: `${idx * 160}ms`,
+                      height: `${heightPercent}%`,
+                      transform: trimestralChartInView ? "scaleY(1)" : "scaleY(0)",
+                      transformOrigin: "bottom",
+                      transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                      willChange: "transform",
                     }}
                     className="w-full rounded-xl flex flex-col overflow-hidden shadow-sm"
                   >
@@ -1234,14 +1235,12 @@ export function EstadisticasMensualesSection({
                               </div>
                             )}
 
-                            {/* Bar Label (Count) con Fade-In Animado */}
+                            {/* Bar Label (Count) */}
                             {hasOrders && (
                               <span
                                 style={{
                                   opacity: inView ? 1 : 0,
-                                  transform: inView ? "translateY(0)" : "translateY(4px)",
-                                  transition: "opacity 400ms ease, transform 400ms ease",
-                                  transitionDelay: inView ? `${Math.min(d.day * 15 + 200, 650)}ms` : "0ms",
+                                  transition: "opacity 180ms ease",
                                 }}
                                 className={`text-[10px] sm:text-xs font-mono font-black mb-1 ${
                                   isPeak ? `${theme.peakText} font-black` : theme.barText
@@ -1251,12 +1250,14 @@ export function EstadisticasMensualesSection({
                               </span>
                             )}
 
-                            {/* The Bar con Animación de Crecimiento Progresivo */}
+                            {/* The Bar con GPU scaleY acelerado */}
                             <div
                               style={{
-                                height: isOutOfMonth ? "0%" : inView ? `${heightPct}%` : "0%",
-                                transition: "height 750ms cubic-bezier(0.16, 1, 0.3, 1)",
-                                transitionDelay: inView && !isOutOfMonth ? `${Math.min(d.day * 15, 450)}ms` : "0ms",
+                                height: isOutOfMonth ? "0%" : `${heightPct}%`,
+                                transform: inView && !isOutOfMonth ? "scaleY(1)" : "scaleY(0)",
+                                transformOrigin: "bottom",
+                                transition: "transform 250ms cubic-bezier(0.16, 1, 0.3, 1)",
+                                willChange: "transform",
                               }}
                               className={`w-full max-w-[24px] sm:max-w-[30px] rounded-t-md shadow-sm ${
                                 isOutOfMonth
@@ -1383,9 +1384,11 @@ export function EstadisticasMensualesSection({
                       <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
                         <div
                           style={{
-                            width: dowInView ? `${pct}%` : "0%",
-                            transition: "width 800ms cubic-bezier(0.16, 1, 0.3, 1)",
-                            transitionDelay: `${dow.id * 60}ms`,
+                            width: `${pct}%`,
+                            transform: dowInView ? "scaleX(1)" : "scaleX(0)",
+                            transformOrigin: "left",
+                            transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                            willChange: "transform",
                           }}
                           className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500"
                         />
@@ -1479,10 +1482,11 @@ export function EstadisticasMensualesSection({
               <div className="w-full h-1.5 rounded-full bg-white/10 mt-2 overflow-hidden">
                 <div
                   style={{
-                    width: opexCapexInView && comparisonMonths.current.totalMonto > 0
-                      ? `${(comparisonMonths.current.opexMonto / comparisonMonths.current.totalMonto) * 100}%`
-                      : "0%",
-                    transition: "width 900ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    width: `${comparisonMonths.current.totalMonto > 0 ? (comparisonMonths.current.opexMonto / comparisonMonths.current.totalMonto) * 100 : 0}%`,
+                    transform: opexCapexInView ? "scaleX(1)" : "scaleX(0)",
+                    transformOrigin: "left",
+                    transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    willChange: "transform",
                   }}
                   className="h-full rounded-full bg-blue-500"
                 />
@@ -1543,10 +1547,11 @@ export function EstadisticasMensualesSection({
               <div className="w-full h-1.5 rounded-full bg-white/10 mt-2 overflow-hidden">
                 <div
                   style={{
-                    width: opexCapexInView && comparisonMonths.current.totalMonto > 0
-                      ? `${(comparisonMonths.current.capexMonto / comparisonMonths.current.totalMonto) * 100}%`
-                      : "0%",
-                    transition: "width 900ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    width: `${comparisonMonths.current.totalMonto > 0 ? (comparisonMonths.current.capexMonto / comparisonMonths.current.totalMonto) * 100 : 0}%`,
+                    transform: opexCapexInView ? "scaleX(1)" : "scaleX(0)",
+                    transformOrigin: "left",
+                    transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1)",
+                    willChange: "transform",
                   }}
                   className="h-full rounded-full bg-purple-500"
                 />
