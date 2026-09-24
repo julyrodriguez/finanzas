@@ -1391,76 +1391,47 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           </div>
         </div>
 
-        {/* KPI Live Server Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* Card 1: Total */}
-          <button
-            type="button"
-            onClick={() => {
-              setFilterEstado("Todas");
-              setQueryLimit(15);
-            }}
-            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-blue-500/50 ${
-              filterEstado === "Todas"
-                ? "border-blue-500/60 bg-blue-500/10 shadow-sm shadow-blue-500/10"
-                : "border-white/10 hover:bg-slate-800/40"
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px] text-slate-400">Total Órdenes</span>
-              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
-                <Database className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-white tracking-tight">
-                {serverStats ? serverStats.total.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
-                )}
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">En BD</span>
-            </div>
-          </button>
-
-          {/* Card 2: Pendientes */}
+        {/* KPI Live Server Metrics Bar: Pendientes y En Autorización */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {/* Card 1: Pendientes */}
           <button
             type="button"
             onClick={() => {
               setFilterEstado("Pendientes");
               setQueryLimit(15);
             }}
-            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-slate-400/50 ${
+            className={`glass-card p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-slate-400/50 ${
               filterEstado === "Pendientes"
                 ? "border-slate-400/60 bg-slate-500/10 shadow-sm shadow-slate-500/10"
                 : "border-white/10 hover:bg-slate-800/40"
             }`}
           >
             <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px] text-slate-300">Pendientes</span>
+              <span className="uppercase tracking-wider text-[10px] text-slate-300">Órdenes Pendientes</span>
               <div className="p-1.5 rounded-lg bg-slate-500/15 text-slate-300 group-hover:scale-110 transition-transform">
-                <Clock className="w-3.5 h-3.5" />
+                <Clock className="w-4 h-4" />
               </div>
             </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-slate-200 tracking-tight">
+            <div className="mt-2.5 flex items-baseline justify-between">
+              <span className="text-3xl font-bold font-mono text-slate-100 tracking-tight">
                 {serverStats ? serverStats.pendiente.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                  <span className="inline-block w-8 h-7 bg-slate-700/50 animate-pulse rounded" />
                 )}
               </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-300 border border-slate-500/20 font-medium">
-                Sin enviar
+              <span className="text-[11px] px-2 py-0.5 rounded bg-slate-500/10 text-slate-300 border border-slate-500/20 font-medium">
+                Sin enviar a autorizar
               </span>
             </div>
           </button>
 
-          {/* Card 3: Mandadas / En Autorización */}
+          {/* Card 2: En Autorización */}
           <button
             type="button"
             onClick={() => {
               setFilterEstado("Mandadas");
               setQueryLimit(15);
             }}
-            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-amber-500/50 ${
+            className={`glass-card p-4 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-amber-500/50 ${
               filterEstado === "Mandadas"
                 ? "border-amber-500/60 bg-amber-500/10 shadow-sm shadow-amber-500/10"
                 : "border-white/10 hover:bg-slate-800/40"
@@ -1469,79 +1440,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
               <span className="uppercase tracking-wider text-[10px] text-amber-300">En Autorización</span>
               <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 group-hover:scale-110 transition-transform">
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-4 h-4" />
               </div>
             </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-amber-400 tracking-tight">
+            <div className="mt-2.5 flex items-baseline justify-between">
+              <span className="text-3xl font-bold font-mono text-amber-400 tracking-tight">
                 {serverStats ? serverStats.mandada.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
+                  <span className="inline-block w-8 h-7 bg-slate-700/50 animate-pulse rounded" />
                 )}
               </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
-                Mandadas
-              </span>
-            </div>
-          </button>
-
-          {/* Card 4: Liberadas */}
-          <button
-            type="button"
-            onClick={() => {
-              setFilterEstado("Liberadas");
-              setQueryLimit(15);
-            }}
-            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-emerald-500/50 ${
-              filterEstado === "Liberadas"
-                ? "border-emerald-500/60 bg-emerald-500/10 shadow-sm shadow-emerald-500/10"
-                : "border-white/10 hover:bg-slate-800/40"
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px] text-emerald-300">Liberadas</span>
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-emerald-400 tracking-tight">
-                {serverStats ? serverStats.liberada.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
-                )}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
-                Aprobadas
-              </span>
-            </div>
-          </button>
-
-          {/* Card 5: Entregadas */}
-          <button
-            type="button"
-            onClick={() => {
-              setFilterEstado("Entregadas");
-              setQueryLimit(15);
-            }}
-            className={`glass-card p-3.5 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden group hover:border-blue-400/50 col-span-2 sm:col-span-1 ${
-              filterEstado === "Entregadas"
-                ? "border-blue-400/60 bg-blue-500/10 shadow-sm shadow-blue-500/10"
-                : "border-white/10 hover:bg-slate-800/40"
-            }`}
-          >
-            <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-              <span className="uppercase tracking-wider text-[10px] text-blue-300">Entregadas</span>
-              <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
-                <PackageCheck className="w-3.5 h-3.5" />
-              </div>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-bold font-mono text-blue-400 tracking-tight">
-                {serverStats ? serverStats.entregada.toLocaleString("es-AR") : (
-                  <span className="inline-block w-8 h-6 bg-slate-700/50 animate-pulse rounded" />
-                )}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-medium">
-                Pagadas
+              <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+                Mandadas a firma
               </span>
             </div>
           </button>

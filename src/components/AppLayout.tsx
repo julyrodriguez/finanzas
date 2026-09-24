@@ -27,7 +27,9 @@ import {
   Moon,
   Sparkles,
   Layers,
-  ArrowRight
+  ArrowRight,
+  PanelLeftClose,
+  PanelLeft
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -39,9 +41,31 @@ interface AppLayoutProps {
 
 export function AppLayout({ title, subtitle, children, publicRoute = false }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sidebar_collapsed");
+      if (saved !== null) {
+        setSidebarCollapsed(saved === "true");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const { user, loading, logout } = useAuth();
   const isOrdenesUser = user?.email?.startsWith("ordenes");
@@ -217,34 +241,42 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   const renderSidebarContent = () => (
     <div className="flex flex-col h-full bg-[#0a0e17] border-r border-white/10 text-slate-300">
       {/* Brand Header */}
-      <div className="px-5 py-4 border-b border-white/10 shrink-0">
+      <div className="px-4 py-4 border-b border-white/10 shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-9 w-9 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-bold text-sm text-white tracking-wider uppercase truncate">
-                  Finanzas
-                </h1>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono font-bold">
-                  PRO
-                </span>
-              </div>
+              <h1 className="font-bold text-sm text-white tracking-wider uppercase truncate">
+                Finanzas
+              </h1>
               <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
                 Cinemark & Hoyts
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
-            aria-label="Cerrar menú"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Desktop Collapse Button */}
+            <button
+              onClick={toggleSidebarCollapse}
+              className="hidden lg:flex p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              title="Ocultar menú lateral"
+              aria-label="Ocultar menú lateral"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+
+            {/* Mobile Close Button */}
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
+              aria-label="Cerrar menú"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -399,10 +431,25 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       {/* Desktop Fixed Sidebar */}
       <aside
         aria-label="Barra lateral de navegación"
-        className="hidden lg:flex fixed inset-y-0 left-0 w-64 z-30 flex-col shadow-xl"
+        className={`hidden lg:flex fixed inset-y-0 left-0 w-64 z-30 flex-col shadow-xl transition-transform duration-200 ease-in-out ${
+          sidebarCollapsed ? "-translate-x-full" : "translate-x-0"
+        }`}
       >
         {renderSidebarContent()}
       </aside>
+
+      {/* Floating button to open sidebar when collapsed on desktop */}
+      {sidebarCollapsed && (
+        <button
+          onClick={toggleSidebarCollapse}
+          className="hidden lg:flex fixed top-4 left-4 z-40 p-2.5 rounded-xl bg-[#0a0e17]/95 border border-white/15 hover:border-blue-500/50 text-slate-300 hover:text-white shadow-2xl backdrop-blur-md cursor-pointer transition-all hover:scale-105 group items-center gap-2"
+          title="Mostrar menú lateral"
+          aria-label="Mostrar menú lateral"
+        >
+          <PanelLeft className="w-4 h-4 text-blue-400 group-hover:text-blue-300" />
+          <span className="text-xs font-semibold text-slate-200 pr-1">Menú</span>
+        </button>
+      )}
 
       {/* Mobile Sliding Drawer */}
       <aside
@@ -415,7 +462,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       </aside>
 
       {/* Main Content Area */}
-      <div className="lg:pl-64 flex flex-col min-h-screen min-w-0">
+      <div className={`flex flex-col min-h-screen min-w-0 transition-[padding] duration-200 ease-in-out ${
+        sidebarCollapsed ? "lg:pl-0" : "lg:pl-64"
+      }`}>
         {/* Mobile Header Bar */}
         <header className="lg:hidden sticky top-0 z-20 bg-[#0a0d14]/95 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
           <button
