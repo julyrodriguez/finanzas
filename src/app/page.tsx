@@ -93,6 +93,8 @@ export default function OrdenesDeComprasPage() {
   const [queryLimit, setQueryLimit] = useState(15);
   const [hasLoadedAllFromDb, setHasLoadedAllFromDb] = useState(false);
   const [loadingAllDb, setLoadingAllDb] = useState(false);
+  const [isServerOffline, setIsServerOffline] = useState(false);
+  const [isFallbackSearchingFirebase, setIsFallbackSearchingFirebase] = useState(false);
 
   // Filter creator state
   const [filterCreadoPor, setFilterCreadoPor] = useState<string>("todos");
@@ -334,6 +336,7 @@ export default function OrdenesDeComprasPage() {
   // Cargar órdenes directamente desde el servidor local (MongoDB) usando los índices optimizados
   const loadOrdersFromServer = useCallback(async () => {
     setLoading(true);
+    setIsFallbackSearchingFirebase(false);
     try {
       const res = await fetchOrdersFromMongo({
         estado: filterEstado === "Todas" ? undefined : filterEstado.toLowerCase(),
@@ -342,6 +345,7 @@ export default function OrdenesDeComprasPage() {
         search: debouncedSearchQuery.trim() || undefined,
         limit: hasLoadedAllFromDb ? 0 : queryLimit + 1,
       });
+      setIsServerOffline(false);
       if (res && res.success && Array.isArray(res.ordenes)) {
         const docs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
         docs.sort((a, b) => {
@@ -353,7 +357,35 @@ export default function OrdenesDeComprasPage() {
       }
     } catch (err) {
       console.error("Error al cargar órdenes desde el servidor local:", err);
-      showToast("Error al conectar con el servidor local de órdenes");
+      setIsServerOffline(true);
+
+      // Si el servidor local está caído y el usuario está buscando algo, recurrir a Firebase como respaldo
+      if (debouncedSearchQuery.trim()) {
+        setIsFallbackSearchingFirebase(true);
+        const db = getFirebaseDb();
+        if (db) {
+          try {
+            const colRef = collection(db, "ordenes_compra");
+            const q = query(
+              colRef,
+              where("numOC", ">=", debouncedSearchQuery.trim()),
+              where("numOC", "<=", debouncedSearchQuery.trim() + "\uf8ff"),
+              limit(25)
+            );
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              const fbDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
+              setOrdenes(fbDocs);
+            } else {
+              setOrdenes([]);
+            }
+          } catch (fbErr) {
+            console.warn("Aviso Firebase backup:", fbErr);
+          }
+        }
+      } else {
+        showToast("⚠️ Servidor local no disponible. Verificá la conexión.");
+      }
     } finally {
       setLoading(false);
     }
@@ -419,30 +451,11 @@ export default function OrdenesDeComprasPage() {
     resetForm();
 
     const immediateNext = getNextSuggestedOC(ordenes);
-    const initialSuggested = immediateNext;
     if (immediateNext) {
       setNumOC(immediateNext);
     }
 
     setIsModalOpen(true);
-
-    const db = getFirebaseDb();
-    if (db) {
-      try {
-        const colRef = collection(db, "ordenes_compra");
-        const q = query(colRef, orderBy("createdAt", "desc"), limit(10));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const recentDocs = snap.docs.map((d) => parseOrdenDoc(d.id, d.data()));
-          const trueNext = getNextSuggestedOC(recentDocs);
-          if (trueNext) {
-            setNumOC((current) => (current === "" || current === initialSuggested ? trueNext : current));
-          }
-        }
-      } catch (err) {
-        console.warn("Could not query latest order for OC suggestion:", err);
-      }
-    }
   };
 
   // Open Modal for Edit
@@ -1418,6 +1431,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 )}
               </div>
             </div>
+
+            {/* Aviso especial cuando el servidor local está offline */}
+            {isServerOffline && (
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-medium animate-in fade-in duration-200">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>
+                  {debouncedSearchQuery.trim()
+                    ? "⚠️ Servidor local no disponible. Buscando en Firebase (modo de respaldo)."
+                    : "⚠️ Servidor local no disponible. Verificá la conexión con tu servidor."}
+                </span>
+              </div>
+            )}
 
             {/* Filter Pills for Empresa */}
             <div className="inline-flex items-center p-1 bg-[#080d18] rounded-xl border border-white/10 text-xs shadow-inner">

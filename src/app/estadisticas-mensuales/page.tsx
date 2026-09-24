@@ -11,7 +11,8 @@ import {
   RefreshCw, 
   Sparkles, 
   ArrowLeft,
-  Database
+  Database,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 
@@ -75,6 +76,7 @@ const mapDocToSerializableOrder = (docItem: any): SerializableOrder => {
 export default function EstadisticasMensualesPage() {
   const [orders, setOrders] = useState<SerializableOrder[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isServerOffline, setIsServerOffline] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -163,6 +165,7 @@ export default function EstadisticasMensualesPage() {
 
       const nowIso = new Date().toISOString();
       setLastSync(nowIso);
+      setIsServerOffline(false);
 
       if (hasChanges) {
         const nextOrders = Array.from(orderMap.values());
@@ -190,6 +193,7 @@ export default function EstadisticasMensualesPage() {
       }
     } catch (err: any) {
       console.warn("Aviso en sincronización incremental:", err);
+      setIsServerOffline(true);
     } finally {
       setLoading(false);
     }
@@ -224,10 +228,12 @@ export default function EstadisticasMensualesPage() {
 
       setOrders(loadedOrders);
       setLastSync(nowIso);
+      setIsServerOffline(false);
       showToast(`✅ ¡Base sincronizada! ${loadedOrders.length.toLocaleString("es-AR")} órdenes.`);
     } catch (err: any) {
       console.error("Error al actualizar órdenes:", err);
-      showToast("❌ Hubo un error al consultar el servidor local.");
+      setIsServerOffline(true);
+      showToast("⚠️ Servidor local desconectado. Las estadísticas no consultan Firebase para proteger tu cuota.");
     } finally {
       setLoading(false);
     }
@@ -239,6 +245,37 @@ export default function EstadisticasMensualesPage() {
       subtitle="Análisis mensual comparativo, días pico, desagregación OPEX vs CAPEX y proyecciones de umbrales"
     >
       <div className="space-y-6 pb-12">
+        {/* SERVIDOR OFFLINE ALERTA */}
+        {isServerOffline && orders.length === 0 && !loading && (
+          <div className="p-8 sm:p-12 text-center rounded-2xl bg-rose-500/10 border border-rose-500/30 max-w-2xl mx-auto space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-500/15 flex items-center justify-center text-rose-400 border border-rose-500/30">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold text-white">
+              Servidor local desconectado
+            </h3>
+            <p className="text-sm text-slate-300 max-w-lg mx-auto">
+              La sección de estadísticas mensuales requiere conexión directa con tu servidor local (MongoDB) para analizar toda la base de datos sin agotar la cuota de Firebase.
+            </p>
+            <button
+              onClick={handleFullRefresh}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Reintentar conexión con el servidor</span>
+            </button>
+          </div>
+        )}
+
+        {isServerOffline && orders.length > 0 && (
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Servidor local desconectado:</strong> Visualizando datos cacheados en este equipo. No se consulta a Firebase para no agotar la cuota.
+            </span>
+          </div>
+        )}
+
         {/* Barra superior con accesos rápidos y estado de sincronización */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-slate-900/60 border border-slate-800 rounded-2xl backdrop-blur-sm">
           <div className="flex items-center gap-3">

@@ -340,6 +340,7 @@ export default function EstadisticasPage() {
   const [orders, setOrders] = useState<SerializableOrder[]>([]);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isServerOffline, setIsServerOffline] = useState<boolean>(false);
   const [selectedYear, setSelectedYear] = useState<string>(() => new Date().getFullYear().toString());
   const [selectedEmpresa, setSelectedEmpresa] = useState<"Todas" | "Hoyts" | "CMK">("Todas");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -814,10 +815,12 @@ export default function EstadisticasPage() {
 
       setOrders(loadedOrders);
       setLastSync(nowIso);
+      setIsServerOffline(false);
       showToast(`✅ ¡Datos sincronizados desde el servidor! Se analizaron ${loadedOrders.length} órdenes.`);
     } catch (err) {
       console.error("Error al actualizar órdenes desde el servidor:", err);
-      showToast("❌ Hubo un error al actualizar los datos desde el servidor local.");
+      setIsServerOffline(true);
+      showToast("⚠️ Servidor local desconectado. Las estadísticas requieren el servidor local para proteger Firebase.");
     } finally {
       setLoading(false);
     }
@@ -1628,8 +1631,39 @@ export default function EstadisticasPage() {
           </div>
         </div>
 
+        {/* SERVIDOR OFFLINE ALERTA */}
+        {isServerOffline && orders.length === 0 && !loading && (
+          <div className="p-8 sm:p-12 text-center rounded-2xl bg-rose-500/10 border border-rose-500/30 max-w-2xl mx-auto space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-500/15 flex items-center justify-center text-rose-400 border border-rose-500/30">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold text-white">
+              Servidor local desconectado
+            </h3>
+            <p className="text-sm text-slate-300 max-w-lg mx-auto">
+              La sección de estadísticas está deshabilitada temporalmente porque tu servidor local está desconectado. No se consulta a Firebase para proteger la cuota de la base de datos.
+            </p>
+            <button
+              onClick={handleActualizarDatos}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Reintentar conexión con el servidor</span>
+            </button>
+          </div>
+        )}
+
+        {isServerOffline && orders.length > 0 && (
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Servidor local desconectado:</strong> Visualizando datos cacheados en este equipo. No se consulta a Firebase para no agotar la cuota.
+            </span>
+          </div>
+        )}
+
         {/* WELCOME / EMPTY CACHE STATE */}
-        {orders.length === 0 && !loading && (
+        {!isServerOffline && orders.length === 0 && !loading && (
           <div className="p-8 sm:p-12 text-center rounded-2xl bg-slate-900/60 border border-dashed border-indigo-500/30">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
               <Sparkles className="w-8 h-8 animate-pulse" />
