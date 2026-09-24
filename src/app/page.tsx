@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -43,7 +44,9 @@ import {
   Clock,
   Send,
   PackageCheck,
-  RefreshCw
+  RefreshCw,
+  CalendarDays,
+  ArrowRight
 } from "lucide-react";
 import { getCreadorBadgeStyle, type Nota, type OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
@@ -1474,6 +1477,34 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             </div>
           </button>
         </div>
+
+        {/* Botón de ancho completo hacia Estadísticas Mensuales */}
+        <Link
+          href="/estadisticas-mensuales"
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-blue-900/30 via-slate-900/40 to-indigo-950/30 hover:from-blue-900/50 hover:via-slate-900/60 hover:to-indigo-950/50 border border-blue-500/30 hover:border-blue-500/50 text-white transition-all shadow-sm group cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-105 group-hover:text-blue-300 transition-all">
+              <CalendarDays className="w-4 h-4" />
+            </div>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-white tracking-tight">Ver estadísticas mensuales</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  Nuevo
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
+                Comparativa trimestral de órdenes, análisis de días pico y desglose OPEX vs CAPEX
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400 group-hover:text-blue-300 transition-colors">
+            <span className="hidden sm:inline">Explorar métricas</span>
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
 
         {/* Buscador & Filters Bar */}
         <div className="glass-card border border-white/10 p-3.5 sm:p-4 rounded-xl space-y-3.5 shadow-sm bg-[#0d121c]">
