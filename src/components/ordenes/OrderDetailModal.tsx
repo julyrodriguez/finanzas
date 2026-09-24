@@ -25,7 +25,7 @@ import {
   Trash2,
   Send
 } from "lucide-react";
-import type { OrdenCompra, Nota } from "@/types/ordenes";
+import { getCreadorBadgeStyle, type OrdenCompra, type Nota } from "@/types/ordenes";
 import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber } from "@/lib/approvalConfig";
 import { getFirebaseDb } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
@@ -469,12 +469,15 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                   <CreditCard className="w-3 h-3 text-slate-500" />
                   {String(orden.formaPago || "30DFF")}
                 </span>
-                {orden.creadoPor && (
-                  <span className="flex items-center gap-1">
-                    <UserIcon className="w-3 h-3 text-slate-500" />
-                    Creado por {String(orden.creadoPor)}
-                  </span>
-                )}
+                {orden.creadoPor && (() => {
+                  const creatorStyle = getCreadorBadgeStyle(orden.creadoPor);
+                  return (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] ${creatorStyle.badge}`}>
+                      <UserIcon className={`w-3 h-3 ${creatorStyle.icon}`} />
+                      Creado por {String(orden.creadoPor)}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

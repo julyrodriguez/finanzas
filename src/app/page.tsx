@@ -45,7 +45,7 @@ import {
   PackageCheck,
   RefreshCw
 } from "lucide-react";
-import type { Nota, OrdenCompra } from "@/types/ordenes";
+import { getCreadorBadgeStyle, type Nota, type OrdenCompra } from "@/types/ordenes";
 export type { Nota, OrdenCompra };
 import { OrderFormModal } from "@/components/ordenes/OrderFormModal";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
@@ -1660,7 +1660,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                               setFilterCreadoPor(e.target.value);
                               setQueryLimit(15);
                             }}
-                            className="bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[10px] font-semibold text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer appearance-none pr-4.5 lowercase"
+                            className={`border rounded px-1.5 py-0.5 text-[10px] font-semibold focus:outline-none cursor-pointer appearance-none pr-4.5 lowercase transition-colors ${
+                              filterCreadoPor.toLowerCase().includes("oalvarez")
+                                ? "bg-pink-500/15 border-pink-500/40 text-pink-300"
+                                : filterCreadoPor.toLowerCase().includes("julian")
+                                ? "bg-blue-500/15 border-blue-500/40 text-blue-300"
+                                : filterCreadoPor.toLowerCase().includes("talbrecht")
+                                ? "bg-red-500/15 border-red-500/40 text-red-300"
+                                : "bg-white/5 border-white/10 text-gray-300 focus:border-emerald-500/50"
+                            }`}
                             style={{ 
                               backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(156, 163, 175, 0.8)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, 
                               backgroundPosition: 'right 4px center', 
@@ -1669,11 +1677,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                             }}
                           >
                             <option value="todos" className="bg-[#090d16] text-gray-300 uppercase">Todos</option>
-                            {uniqueCreators.map((creator) => (
-                              <option key={creator} value={creator} className="bg-[#090d16] text-gray-300">
-                                {creator}
-                              </option>
-                            ))}
+                            {uniqueCreators.map((creator) => {
+                              const cLower = creator.toLowerCase();
+                              let optClass = "bg-[#090d16] text-gray-300";
+                              if (cLower.includes("oalvarez")) optClass = "bg-[#180d15] text-pink-300";
+                              else if (cLower.includes("julian")) optClass = "bg-[#0c1626] text-blue-300";
+                              else if (cLower.includes("talbrecht")) optClass = "bg-[#1f0d0e] text-red-300";
+                              return (
+                                <option key={creator} value={creator} className={optClass}>
+                                  {creator}
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                       </th>
@@ -1826,10 +1841,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
                         {/* Creado Por */}
                         <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/[0.04] border border-white/5 text-slate-300 font-medium text-[11px]">
-                            <UserIcon className="w-3 h-3 text-slate-400" />
-                            {orden.creadoPor || "Usuario"}
-                          </span>
+                          {(() => {
+                            const creatorStyle = getCreadorBadgeStyle(orden.creadoPor);
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] transition-colors ${creatorStyle.badge}`}>
+                                <UserIcon className={`w-3 h-3 ${creatorStyle.icon}`} />
+                                <span>{orden.creadoPor || "Usuario"}</span>
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         {/* Proveedor */}
@@ -1848,7 +1868,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </td>
 
                         {/* Monto */}
-                        <td className="px-4 py-3.5 font-mono font-bold text-white text-xs">
+                        <td className="px-4 py-3.5 font-mono font-bold text-emerald-400 text-xs">
                           {typeof orden.monto === "number"
                             ? `$ ${orden.monto.toLocaleString("es-AR")}`
                             : orden.monto}
@@ -2035,7 +2055,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
                           <div>
                             <span className="text-gray-400 block text-[10px]">Monto</span>
-                            <span className="font-bold text-emerald-300 text-xs">
+                            <span className="font-mono font-bold text-emerald-400 text-xs">
                               {typeof orden.monto === "number"
                                 ? `$ ${orden.monto.toLocaleString("es-AR")}`
                                 : orden.monto}
@@ -2053,9 +2073,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                             {orden.motivo}
                           </div>
                         )}
-                        <div className="text-[10px] text-gray-500 flex items-center gap-1 pt-1">
-                          <UserIcon className="w-3 h-3 text-emerald-400" />
-                          <span>Creado por: {orden.creadoPor || "Usuario"}</span>
+                        <div className="text-[10px] flex items-center gap-1.5 pt-1">
+                          <span className="text-gray-400">Creado por:</span>
+                          {(() => {
+                            const creatorStyle = getCreadorBadgeStyle(orden.creadoPor);
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] ${creatorStyle.badge}`}>
+                                <UserIcon className={`w-2.5 h-2.5 ${creatorStyle.icon}`} />
+                                <span>{orden.creadoPor || "Usuario"}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 

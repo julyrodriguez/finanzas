@@ -33,7 +33,7 @@ import {
   Database,
   Check
 } from "lucide-react";
-import type { Nota, OrdenCompra } from "@/types/ordenes";
+import { getCreadorBadgeStyle, type Nota, type OrdenCompra } from "@/types/ordenes";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { getOrderStatus, STATUS_CONFIG } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
@@ -965,7 +965,14 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </div>
                         <div className="flex items-center justify-between text-slate-400">
                           <span>Creado por:</span>
-                          <span className="text-slate-200 font-medium">{orden.creadoPor || "-"}</span>
+                          {(() => {
+                            const creatorStyle = getCreadorBadgeStyle(orden.creadoPor);
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${creatorStyle.badge}`}>
+                                <span>{orden.creadoPor || "-"}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
