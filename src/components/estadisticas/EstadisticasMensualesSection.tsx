@@ -50,9 +50,14 @@ const DIAS_SEMANA = [
 ];
 
 /**
- * Hook para detectar cuándo un contenedor o gráfico entra en el viewport al hacer scroll
+ * Hook para detectar cuándo un contenedor o gráfico entra en el viewport al hacer scroll.
+ * rootMargin con margen negativo inferior (-40px) asegura que el elemento solo se active
+ * cuando el usuario realmente comienza a scrollear hacia él, evitando activar todo de golpe al abrir.
  */
-export function useInView(threshold = 0.12): [React.RefObject<HTMLDivElement | null>, boolean] {
+export function useInView(
+  rootMargin = "0px 0px -40px 0px",
+  threshold = 0.05
+): [React.RefObject<HTMLDivElement | null>, boolean] {
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
 
@@ -70,18 +75,20 @@ export function useInView(threshold = 0.12): [React.RefObject<HTMLDivElement | n
           observer.disconnect();
         }
       },
-      { threshold }
+      { rootMargin, threshold }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [threshold]);
+  }, [rootMargin, threshold]);
 
   return [ref, inView];
 }
 
 /**
- * Componente que anima números y montos contando desde 0 hasta su valor objetivo
+ * Componente de ultra alto rendimiento (60-120 FPS sin re-renders en React)
+ * Actualiza el DOM directamente via textContent usando requestAnimationFrame.
+ * Evita bloqueos y congelamientos del navegador al montar decenas de métricas simultáneamente.
  */
 interface AnimatedNumberProps {
   value: number;
@@ -91,93 +98,102 @@ interface AnimatedNumberProps {
   suffix?: string;
   className?: string;
   triggerKey?: any;
+  inView?: boolean;
 }
 
 export function AnimatedNumber({
   value,
-  duration = 1100,
+  duration = 900,
   decimals = 0,
   prefix = "",
   suffix = "",
   className = "",
   triggerKey,
+  inView,
 }: AnimatedNumberProps) {
-  const [displayValue, setDisplayValue] = useState<number>(0);
   const spanRef = useRef<HTMLSpanElement | null>(null);
-  const [hasStarted, setHasStarted] = useState(false);
+  const hasAnimatedRef = useRef(false);
+
+  const formatNumber = (val: number) => {
+    if (isNaN(val)) return `${prefix}0${suffix}`;
+    const formatted =
+      decimals > 0
+        ? val.toLocaleString("es-AR", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          })
+        : Math.round(val).toLocaleString("es-AR");
+    return `${prefix}${formatted}${suffix}`;
+  };
 
   useEffect(() => {
-    setDisplayValue(0);
-    setHasStarted(false);
+    // Resetear animación si cambia la fecha/mes/año o el valor
+    hasAnimatedRef.current = false;
+    if (spanRef.current) {
+      spanRef.current.textContent = formatNumber(0);
+    }
   }, [triggerKey, value]);
 
   useEffect(() => {
+    // Si se pasa inView y todavía está fuera de pantalla, no animar aún
+    if (inView === false) return;
+    if (hasAnimatedRef.current) return;
+
     const el = spanRef.current;
     if (!el) return;
 
-    if (typeof IntersectionObserver === "undefined") {
-      setDisplayValue(value);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasStarted) {
-          setHasStarted(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [hasStarted, triggerKey, value]);
-
-  useEffect(() => {
-    if (!hasStarted) return;
-
     if (!value || isNaN(value)) {
-      setDisplayValue(0);
+      el.textContent = formatNumber(0);
       return;
     }
 
-    let startTimestamp: number | null = null;
-    let animId: number;
+    // Si inView no fue provisto externamente, usar IntersectionObserver ligero individual
+    if (inView === undefined && typeof IntersectionObserver !== "undefined") {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting && !hasAnimatedRef.current) {
+            hasAnimatedRef.current = true;
+            observer.disconnect();
+            runAnimation(el);
+          }
+        },
+        { rootMargin: "0px 0px -30px 0px", threshold: 0.1 }
+      );
+      observer.observe(el);
+      return () => observer.disconnect();
+    } else {
+      hasAnimatedRef.current = true;
+      runAnimation(el);
+    }
 
-    const step = (timestamp: number) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      // easeOutCubic para una desaceleración natural y elegante
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = eased * value;
+    function runAnimation(targetEl: HTMLSpanElement) {
+      let startTimestamp: number | null = null;
+      let animId: number;
 
-      setDisplayValue(current);
+      const step = (timestamp: number) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        // Desaceleración cúbica suave
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = eased * value;
 
-      if (progress < 1) {
-        animId = requestAnimationFrame(step);
-      } else {
-        setDisplayValue(value);
-      }
-    };
+        targetEl.textContent = formatNumber(current);
 
-    animId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(animId);
-  }, [hasStarted, value, duration]);
+        if (progress < 1) {
+          animId = requestAnimationFrame(step);
+        } else {
+          targetEl.textContent = formatNumber(value);
+        }
+      };
 
-  const formatted =
-    decimals > 0
-      ? displayValue.toLocaleString("es-AR", {
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-        })
-      : Math.round(displayValue).toLocaleString("es-AR");
+      animId = requestAnimationFrame(step);
+      return () => cancelAnimationFrame(animId);
+    }
+  }, [inView, triggerKey, value, duration]);
 
   return (
     <span ref={spanRef} className={className}>
-      {prefix}
-      {formatted}
-      {suffix}
+      {formatNumber(inView ? value : 0)}
     </span>
   );
 }
@@ -257,11 +273,21 @@ export function EstadisticasMensualesSection({
     });
   };
 
-  // Section InView hooks para animar barras y números al hacer scroll
-  const [novedadRef, novedadInView] = useInView(0.1);
-  const [trimestralRef, trimestralInView] = useInView(0.1);
-  const [dailyRef, dailyInView] = useInView(0.08);
-  const [opexCapexRef, opexCapexInView] = useInView(0.1);
+  // Section InView hooks para animar barras y números al hacer scroll de forma progresiva e independiente
+  const [novedadRef, novedadInView] = useInView("0px 0px -20px 0px", 0.05);
+  const [trimestralCardsRef, trimestralCardsInView] = useInView("0px 0px -40px 0px", 0.05);
+  const [trimestralChartRef, trimestralChartInView] = useInView("0px 0px -40px 0px", 0.05);
+
+  // Subsecciones de Distribución Diaria (se activan una a una al scrollear a cada mes o ranking)
+  const [dailyCurRef, dailyCurInView] = useInView("0px 0px -30px 0px", 0.05);
+  const [dailyM1Ref, dailyM1InView] = useInView("0px 0px -30px 0px", 0.05);
+  const [dailyM2Ref, dailyM2InView] = useInView("0px 0px -30px 0px", 0.05);
+  const [topDaysRef, topDaysInView] = useInView("0px 0px -30px 0px", 0.05);
+  const [dowRef, dowInView] = useInView("0px 0px -30px 0px", 0.05);
+
+  // Subsecciones de OPEX vs CAPEX
+  const [opexCapexRef, opexCapexInView] = useInView("0px 0px -40px 0px", 0.05);
+  const [topOrdersRef, topOrdersInView] = useInView("0px 0px -40px 0px", 0.05);
 
   // Trigger key para reiniciar animaciones cuando cambia el mes o año
   const animTriggerKey = `${selectedYear}-${selectedMonth}`;
@@ -683,6 +709,7 @@ export function EstadisticasMensualesSection({
                 <span className="text-2xl font-mono font-black text-amber-300">
                   <AnimatedNumber
                     value={opexNovedadAnalysis.opexInReductionZoneCount}
+                    inView={novedadInView}
                     triggerKey={animTriggerKey}
                   />
                 </span>
@@ -695,6 +722,7 @@ export function EstadisticasMensualesSection({
                     value={opexNovedadAnalysis.percentOfOpexOrders}
                     decimals={1}
                     suffix="%"
+                    inView={novedadInView}
                     triggerKey={animTriggerKey}
                   />
                 </strong>{" "}
@@ -713,6 +741,7 @@ export function EstadisticasMensualesSection({
                   <AnimatedNumber
                     value={opexNovedadAnalysis.avgMonthlyReductionCount}
                     prefix="~"
+                    inView={novedadInView}
                     triggerKey={animTriggerKey}
                   />
                 </span>
@@ -731,14 +760,14 @@ export function EstadisticasMensualesSection({
               </span>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-mono font-black text-emerald-300">
-                  -<AnimatedNumber value={opexNovedadAnalysis.estimatedNextMonthReductionMin} triggerKey={animTriggerKey} /> a -<AnimatedNumber value={opexNovedadAnalysis.estimatedNextMonthReductionMax} triggerKey={animTriggerKey} />
+                  -<AnimatedNumber value={opexNovedadAnalysis.estimatedNextMonthReductionMin} inView={novedadInView} triggerKey={animTriggerKey} /> a -<AnimatedNumber value={opexNovedadAnalysis.estimatedNextMonthReductionMax} inView={novedadInView} triggerKey={animTriggerKey} />
                 </span>
                 <span className="text-xs font-bold text-emerald-400">OCs</span>
               </div>
               <p className="text-[11px] text-slate-300 mt-1">
                 Se proyecta un ahorro administrativo de{" "}
                 <strong className="text-emerald-300">
-                  ~<AnimatedNumber value={opexNovedadAnalysis.percentOfOpexOrders} decimals={1} suffix="%" triggerKey={animTriggerKey} />
+                  ~<AnimatedNumber value={opexNovedadAnalysis.percentOfOpexOrders} decimals={1} suffix="%" inView={novedadInView} triggerKey={animTriggerKey} />
                 </strong>{" "}
                 menos de órdenes a autorizar.
               </p>
@@ -757,6 +786,7 @@ export function EstadisticasMensualesSection({
                     decimals={1}
                     prefix="$ "
                     suffix="M"
+                    inView={novedadInView}
                     triggerKey={animTriggerKey}
                   />
                 </span>
@@ -768,6 +798,7 @@ export function EstadisticasMensualesSection({
                   decimals={1}
                   prefix="$ "
                   suffix="M"
+                  inView={novedadInView}
                   triggerKey={animTriggerKey}
                 />{" "}
                 / mes que irá a compra directa.
@@ -841,7 +872,7 @@ export function EstadisticasMensualesSection({
       </div>
 
       {/* 3-Month Comparative Metric Cards */}
-      <div ref={trimestralRef} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div ref={trimestralCardsRef} className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Mes M-2 (Hace 2 meses) */}
         <div className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-3 relative overflow-hidden group hover:border-slate-700 transition-all">
           <div className="flex items-center justify-between text-xs text-slate-400">
@@ -851,7 +882,7 @@ export function EstadisticasMensualesSection({
 
           <div className="flex items-baseline justify-between">
             <span className="text-3xl font-black font-mono text-white">
-              <AnimatedNumber value={comparisonMonths.m2.totalCount} triggerKey={animTriggerKey} />
+              <AnimatedNumber value={comparisonMonths.m2.totalCount} inView={trimestralCardsInView} triggerKey={animTriggerKey} />
             </span>
             <span className="text-xs text-slate-400">órdenes totales</span>
           </div>
@@ -860,13 +891,13 @@ export function EstadisticasMensualesSection({
             <div>
               <span className="text-[10px] text-slate-400 block">OPEX</span>
               <span className="font-mono font-bold text-blue-400">
-                <AnimatedNumber value={comparisonMonths.m2.opexCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.m2.opexCount} inView={trimestralCardsInView} suffix=" OCs" triggerKey={animTriggerKey} />
               </span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 block">CAPEX</span>
               <span className="font-mono font-bold text-purple-400">
-                <AnimatedNumber value={comparisonMonths.m2.capexCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.m2.capexCount} inView={trimestralCardsInView} suffix=" OCs" triggerKey={animTriggerKey} />
               </span>
             </div>
           </div>
@@ -881,7 +912,7 @@ export function EstadisticasMensualesSection({
 
           <div className="flex items-baseline justify-between">
             <span className="text-3xl font-black font-mono text-white">
-              <AnimatedNumber value={comparisonMonths.m1.totalCount} triggerKey={animTriggerKey} />
+              <AnimatedNumber value={comparisonMonths.m1.totalCount} inView={trimestralCardsInView} triggerKey={animTriggerKey} />
             </span>
             <span className="text-xs text-slate-400">órdenes totales</span>
           </div>
@@ -890,13 +921,13 @@ export function EstadisticasMensualesSection({
             <div>
               <span className="text-[10px] text-slate-400 block">OPEX</span>
               <span className="font-mono font-bold text-blue-400">
-                <AnimatedNumber value={comparisonMonths.m1.opexCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.m1.opexCount} inView={trimestralCardsInView} suffix=" OCs" triggerKey={animTriggerKey} />
               </span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 block">CAPEX</span>
               <span className="font-mono font-bold text-purple-400">
-                <AnimatedNumber value={comparisonMonths.m1.capexCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.m1.capexCount} inView={trimestralCardsInView} suffix=" OCs" triggerKey={animTriggerKey} />
               </span>
             </div>
           </div>
@@ -916,7 +947,7 @@ export function EstadisticasMensualesSection({
 
           <div className="flex items-baseline justify-between">
             <span className="text-3xl font-black font-mono text-white">
-              <AnimatedNumber value={comparisonMonths.current.totalCount} triggerKey={animTriggerKey} />
+              <AnimatedNumber value={comparisonMonths.current.totalCount} inView={trimestralCardsInView} triggerKey={animTriggerKey} />
             </span>
             <div className="text-right">
               {/* Variación vs M-1 */}
@@ -936,13 +967,13 @@ export function EstadisticasMensualesSection({
             <div>
               <span className="text-[10px] text-slate-400 block">OPEX</span>
               <span className="font-mono font-bold text-blue-300">
-                <AnimatedNumber value={comparisonMonths.current.opexCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.current.opexCount} inView={trimestralCardsInView} suffix=" OCs" triggerKey={animTriggerKey} />
               </span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 block">CAPEX</span>
               <span className="font-mono font-bold text-purple-300">
-                <AnimatedNumber value={comparisonMonths.current.capexCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.current.capexCount} inView={trimestralCardsInView} suffix=" OCs" triggerKey={animTriggerKey} />
               </span>
             </div>
           </div>
@@ -950,7 +981,7 @@ export function EstadisticasMensualesSection({
       </div>
 
       {/* Visual Chart: 3-Month Bar Comparison */}
-      <div className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-4">
+      <div ref={trimestralChartRef} className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -988,7 +1019,7 @@ export function EstadisticasMensualesSection({
             return (
               <div key={idx} className="flex flex-col items-center space-y-2">
                 <span className="text-xs font-mono font-bold text-white">
-                  <AnimatedNumber value={mStats.totalCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                  <AnimatedNumber value={mStats.totalCount} inView={trimestralChartInView} suffix=" OCs" triggerKey={animTriggerKey} />
                 </span>
 
                 {/* Stacked bar container */}
@@ -997,7 +1028,7 @@ export function EstadisticasMensualesSection({
                 }`}>
                   <div
                     style={{
-                      height: trimestralInView ? `${heightPercent}%` : "0%",
+                      height: trimestralChartInView ? `${heightPercent}%` : "0%",
                       transition: "height 900ms cubic-bezier(0.16, 1, 0.3, 1)",
                       transitionDelay: `${idx * 160}ms`,
                     }}
@@ -1035,7 +1066,7 @@ export function EstadisticasMensualesSection({
       {/* ============================================================== */}
       {/* 3. ESTADÍSTICAS POR DÍAS (¿QUÉ DÍAS HUBO MÁS?)                  */}
       {/* ============================================================== */}
-      <div ref={dailyRef} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Col (8 cols): Gráficos Diarios Comparativos del 1 al 31 (Mes Actual y 2 Meses Previos) */}
         <div className="lg:col-span-8 p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
@@ -1073,6 +1104,8 @@ export function EstadisticasMensualesSection({
                 monthData: comparisonMonths.current,
                 stats: dailyStats.current,
                 scrollRef: scrollRefCurrent,
+                inViewRef: dailyCurRef,
+                inView: dailyCurInView,
                 theme: {
                   badgeBg: "bg-indigo-500/15",
                   badgeBorder: "border-indigo-500/30",
@@ -1090,6 +1123,8 @@ export function EstadisticasMensualesSection({
                 monthData: comparisonMonths.m1,
                 stats: dailyStats.m1,
                 scrollRef: scrollRefM1,
+                inViewRef: dailyM1Ref,
+                inView: dailyM1InView,
                 theme: {
                   badgeBg: "bg-amber-500/15",
                   badgeBorder: "border-amber-500/30",
@@ -1107,6 +1142,8 @@ export function EstadisticasMensualesSection({
                 monthData: comparisonMonths.m2,
                 stats: dailyStats.m2,
                 scrollRef: scrollRefM2,
+                inViewRef: dailyM2Ref,
+                inView: dailyM2InView,
                 theme: {
                   badgeBg: "bg-purple-500/15",
                   badgeBorder: "border-purple-500/30",
@@ -1121,9 +1158,9 @@ export function EstadisticasMensualesSection({
                 },
               },
             ].map((item, mIdx) => {
-              const { monthData, stats, theme, scrollRef } = item;
+              const { monthData, stats, theme, scrollRef, inViewRef, inView } = item;
               return (
-                <div key={monthData.name} className="space-y-2">
+                <div ref={inViewRef} key={monthData.name} className="space-y-2">
                   {/* Sub-encabezado de mes con métricas clave */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1132,11 +1169,11 @@ export function EstadisticasMensualesSection({
                         <span className="text-[10px] font-normal opacity-90">{theme.labelSuffix}</span>
                       </span>
                       <span className="font-mono text-slate-300 font-semibold">
-                        <AnimatedNumber value={monthData.totalCount} suffix=" OCs" triggerKey={animTriggerKey} />
+                        <AnimatedNumber value={monthData.totalCount} inView={inView} suffix=" OCs" triggerKey={animTriggerKey} />
                       </span>
                       <span className="text-slate-600">•</span>
                       <span className="font-mono text-slate-400">
-                        <AnimatedNumber value={monthData.totalMonto / 1e6} prefix="$ " suffix="M" decimals={1} triggerKey={animTriggerKey} />
+                        <AnimatedNumber value={monthData.totalMonto / 1e6} inView={inView} prefix="$ " suffix="M" decimals={1} triggerKey={animTriggerKey} />
                       </span>
                     </div>
 
@@ -1144,7 +1181,7 @@ export function EstadisticasMensualesSection({
                       <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
                         <Award className="w-3.5 h-3.5 text-amber-400" />
                         <span>
-                          Día pico: <strong className={`${theme.peakText} font-bold`}>Día {stats.peakDay}</strong> (<AnimatedNumber value={stats.peakCount} suffix=" OCs" triggerKey={animTriggerKey} />)
+                          Día pico: <strong className={`${theme.peakText} font-bold`}>Día {stats.peakDay}</strong> (<AnimatedNumber value={stats.peakCount} inView={inView} suffix=" OCs" triggerKey={animTriggerKey} />)
                         </span>
                       </div>
                     )}
@@ -1201,10 +1238,10 @@ export function EstadisticasMensualesSection({
                             {hasOrders && (
                               <span
                                 style={{
-                                  opacity: dailyInView ? 1 : 0,
-                                  transform: dailyInView ? "translateY(0)" : "translateY(4px)",
+                                  opacity: inView ? 1 : 0,
+                                  transform: inView ? "translateY(0)" : "translateY(4px)",
                                   transition: "opacity 400ms ease, transform 400ms ease",
-                                  transitionDelay: dailyInView ? `${Math.min(d.day * 15 + 200, 650)}ms` : "0ms",
+                                  transitionDelay: inView ? `${Math.min(d.day * 15 + 200, 650)}ms` : "0ms",
                                 }}
                                 className={`text-[10px] sm:text-xs font-mono font-black mb-1 ${
                                   isPeak ? `${theme.peakText} font-black` : theme.barText
@@ -1217,9 +1254,9 @@ export function EstadisticasMensualesSection({
                             {/* The Bar con Animación de Crecimiento Progresivo */}
                             <div
                               style={{
-                                height: isOutOfMonth ? "0%" : dailyInView ? `${heightPct}%` : "0%",
+                                height: isOutOfMonth ? "0%" : inView ? `${heightPct}%` : "0%",
                                 transition: "height 750ms cubic-bezier(0.16, 1, 0.3, 1)",
-                                transitionDelay: dailyInView && !isOutOfMonth ? `${Math.min(d.day * 15, 450)}ms` : "0ms",
+                                transitionDelay: inView && !isOutOfMonth ? `${Math.min(d.day * 15, 450)}ms` : "0ms",
                               }}
                               className={`w-full max-w-[24px] sm:max-w-[30px] rounded-t-md shadow-sm ${
                                 isOutOfMonth
@@ -1262,7 +1299,7 @@ export function EstadisticasMensualesSection({
         {/* Right Col (4 cols): Ranking Días de la Semana & Top Días */}
         <div className="lg:col-span-4 space-y-4">
           {/* Top Días Récord del Mes */}
-          <div className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-3">
+          <div ref={topDaysRef} className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
               <Award className="w-4 h-4 text-amber-400" />
               <span>Top Días con Más Órdenes</span>
@@ -1298,10 +1335,10 @@ export function EstadisticasMensualesSection({
 
                   <div className="text-right">
                     <span className="font-mono font-black text-emerald-400 text-xs block">
-                      <AnimatedNumber value={td.total} suffix=" OCs" triggerKey={animTriggerKey} />
+                      <AnimatedNumber value={td.total} inView={topDaysInView} suffix=" OCs" triggerKey={animTriggerKey} />
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">
-                      <AnimatedNumber value={td.monto / 1e6} prefix="$ " suffix="M" decimals={1} triggerKey={animTriggerKey} />
+                      <AnimatedNumber value={td.monto / 1e6} inView={topDaysInView} prefix="$ " suffix="M" decimals={1} triggerKey={animTriggerKey} />
                     </span>
                   </div>
                 </div>
@@ -1310,7 +1347,7 @@ export function EstadisticasMensualesSection({
           </div>
 
           {/* Días de la Semana con Mayor Emisión */}
-          <div className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-3">
+          <div ref={dowRef} className="p-5 rounded-3xl bg-[#090e1a] border border-white/10 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                 <CalendarDays className="w-4 h-4 text-blue-400" />
@@ -1339,14 +1376,14 @@ export function EstadisticasMensualesSection({
                             ({dow.opex} OP / {dow.capex} CP)
                           </span>
                           <span className="font-mono font-bold text-white">
-                            <AnimatedNumber value={dow.total} suffix=" OCs" triggerKey={animTriggerKey} />
+                            <AnimatedNumber value={dow.total} inView={dowInView} suffix=" OCs" triggerKey={animTriggerKey} />
                           </span>
                         </div>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
                         <div
                           style={{
-                            width: dailyInView ? `${pct}%` : "0%",
+                            width: dowInView ? `${pct}%` : "0%",
                             transition: "width 800ms cubic-bezier(0.16, 1, 0.3, 1)",
                             transitionDelay: `${dow.id * 60}ms`,
                           }}
@@ -1387,7 +1424,7 @@ export function EstadisticasMensualesSection({
           <div className="text-right self-start sm:self-auto">
             <span className="text-[10px] text-slate-400 block font-mono">Total Facturado en el Mes</span>
             <span className="text-xl sm:text-2xl font-mono font-black text-emerald-400">
-              <AnimatedNumber value={comparisonMonths.current.totalMonto} prefix="$ " triggerKey={animTriggerKey} />
+              <AnimatedNumber value={comparisonMonths.current.totalMonto} inView={opexCapexInView} prefix="$ " triggerKey={animTriggerKey} />
             </span>
           </div>
         </div>
@@ -1416,7 +1453,7 @@ export function EstadisticasMensualesSection({
                 <span className="text-[10px] text-slate-400 block">Cantidad de Órdenes</span>
                 <div className="flex items-baseline gap-1 mt-1">
                   <span className="text-2xl font-black font-mono text-blue-300">
-                    <AnimatedNumber value={comparisonMonths.current.opexCount} triggerKey={animTriggerKey} />
+                    <AnimatedNumber value={comparisonMonths.current.opexCount} inView={opexCapexInView} triggerKey={animTriggerKey} />
                   </span>
                   <span className="text-xs text-slate-400">
                     ({comparisonMonths.current.totalCount > 0
@@ -1429,7 +1466,7 @@ export function EstadisticasMensualesSection({
               <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
                 <span className="text-[10px] text-slate-400 block">Ticket Promedio</span>
                 <span className="text-lg font-black font-mono text-emerald-400 mt-1 block truncate">
-                  <AnimatedNumber value={comparisonMonths.current.ticketPromedioOpex / 1e6} prefix="$ " suffix="M" decimals={2} triggerKey={animTriggerKey} />
+                  <AnimatedNumber value={comparisonMonths.current.ticketPromedioOpex / 1e6} inView={opexCapexInView} prefix="$ " suffix="M" decimals={2} triggerKey={animTriggerKey} />
                 </span>
               </div>
             </div>
@@ -1437,7 +1474,7 @@ export function EstadisticasMensualesSection({
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/5">
               <span className="text-[10px] text-slate-400 block">Monto Total Facturado OPEX</span>
               <span className="text-xl sm:text-2xl font-mono font-black text-emerald-400 block mt-0.5">
-                <AnimatedNumber value={comparisonMonths.current.opexMonto} prefix="$ " triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.current.opexMonto} inView={opexCapexInView} prefix="$ " triggerKey={animTriggerKey} />
               </span>
               <div className="w-full h-1.5 rounded-full bg-white/10 mt-2 overflow-hidden">
                 <div
@@ -1480,7 +1517,7 @@ export function EstadisticasMensualesSection({
                 <span className="text-[10px] text-slate-400 block">Cantidad de Órdenes</span>
                 <div className="flex items-baseline gap-1 mt-1">
                   <span className="text-2xl font-black font-mono text-purple-300">
-                    <AnimatedNumber value={comparisonMonths.current.capexCount} triggerKey={animTriggerKey} />
+                    <AnimatedNumber value={comparisonMonths.current.capexCount} inView={opexCapexInView} triggerKey={animTriggerKey} />
                   </span>
                   <span className="text-xs text-slate-400">
                     ({comparisonMonths.current.totalCount > 0
@@ -1493,7 +1530,7 @@ export function EstadisticasMensualesSection({
               <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
                 <span className="text-[10px] text-slate-400 block">Ticket Promedio</span>
                 <span className="text-lg font-black font-mono text-emerald-400 mt-1 block truncate">
-                  <AnimatedNumber value={comparisonMonths.current.ticketPromedioCapex / 1e6} prefix="$ " suffix="M" decimals={2} triggerKey={animTriggerKey} />
+                  <AnimatedNumber value={comparisonMonths.current.ticketPromedioCapex / 1e6} inView={opexCapexInView} prefix="$ " suffix="M" decimals={2} triggerKey={animTriggerKey} />
                 </span>
               </div>
             </div>
@@ -1501,7 +1538,7 @@ export function EstadisticasMensualesSection({
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/5">
               <span className="text-[10px] text-slate-400 block">Monto Total Facturado CAPEX</span>
               <span className="text-xl sm:text-2xl font-mono font-black text-emerald-400 block mt-0.5">
-                <AnimatedNumber value={comparisonMonths.current.capexMonto} prefix="$ " triggerKey={animTriggerKey} />
+                <AnimatedNumber value={comparisonMonths.current.capexMonto} inView={opexCapexInView} prefix="$ " triggerKey={animTriggerKey} />
               </span>
               <div className="w-full h-1.5 rounded-full bg-white/10 mt-2 overflow-hidden">
                 <div
@@ -1524,7 +1561,7 @@ export function EstadisticasMensualesSection({
         </div>
 
         {/* Top 5 Orders Tables for both OPEX & CAPEX in Month */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+        <div ref={topOrdersRef} className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
           {/* Top 5 OPEX */}
           <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
             <h5 className="text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
@@ -1553,7 +1590,7 @@ export function EstadisticasMensualesSection({
                       </span>
                     </div>
                     <span className="font-mono font-bold text-emerald-400 text-xs shrink-0">
-                      <AnimatedNumber value={o.monto} prefix="$ " triggerKey={animTriggerKey} />
+                      <AnimatedNumber value={o.monto} inView={topOrdersInView} prefix="$ " triggerKey={animTriggerKey} />
                     </span>
                   </div>
                 ))
@@ -1593,7 +1630,7 @@ export function EstadisticasMensualesSection({
                       </span>
                     </div>
                     <span className="font-mono font-bold text-emerald-400 text-xs shrink-0">
-                      <AnimatedNumber value={o.monto} prefix="$ " triggerKey={animTriggerKey} />
+                      <AnimatedNumber value={o.monto} inView={topOrdersInView} prefix="$ " triggerKey={animTriggerKey} />
                     </span>
                   </div>
                 ))
