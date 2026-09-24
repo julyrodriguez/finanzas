@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { SerializableOrder } from "@/app/estadisticas/page";
 import {
   Calendar,
@@ -87,6 +87,42 @@ export function EstadisticasMensualesSection({
   const validOrders = useMemo(() => {
     return orders.filter((o) => !o.cancelada);
   }, [orders]);
+
+  // Refs y handler para sincronizar el scroll horizontal simultáneo de los 3 meses
+  const scrollRefCurrent = useRef<HTMLDivElement | null>(null);
+  const scrollRefM1 = useRef<HTMLDivElement | null>(null);
+  const scrollRefM2 = useRef<HTMLDivElement | null>(null);
+  const activeScrollerRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef(false);
+
+  const handleSyncScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+
+    // Si otro elemento ya está controlando el scroll, evitar bucles recursivos
+    if (activeScrollerRef.current && activeScrollerRef.current !== target) {
+      return;
+    }
+    activeScrollerRef.current = target;
+
+    const scrollLeft = target.scrollLeft;
+
+    const targets = [
+      scrollRefCurrent.current,
+      scrollRefM1.current,
+      scrollRefM2.current,
+    ].filter((el): el is HTMLDivElement => el !== null && el !== target);
+
+    targets.forEach((el) => {
+      el.scrollLeft = scrollLeft;
+    });
+
+    if (isSyncingScrollRef.current) return;
+    isSyncingScrollRef.current = true;
+    requestAnimationFrame(() => {
+      activeScrollerRef.current = null;
+      isSyncingScrollRef.current = false;
+    });
+  };
 
   // ==============================================================
   // 1. ANÁLISIS DE NOVEDAD OPEX ($1.5M -> $2.4M) & PROYECCIÓN ANUAL
@@ -844,6 +880,7 @@ export function EstadisticasMensualesSection({
               {
                 monthData: comparisonMonths.current,
                 stats: dailyStats.current,
+                scrollRef: scrollRefCurrent,
                 theme: {
                   badgeBg: "bg-indigo-500/15",
                   badgeBorder: "border-indigo-500/30",
@@ -860,6 +897,7 @@ export function EstadisticasMensualesSection({
               {
                 monthData: comparisonMonths.m1,
                 stats: dailyStats.m1,
+                scrollRef: scrollRefM1,
                 theme: {
                   badgeBg: "bg-amber-500/15",
                   badgeBorder: "border-amber-500/30",
@@ -876,6 +914,7 @@ export function EstadisticasMensualesSection({
               {
                 monthData: comparisonMonths.m2,
                 stats: dailyStats.m2,
+                scrollRef: scrollRefM2,
                 theme: {
                   badgeBg: "bg-purple-500/15",
                   badgeBorder: "border-purple-500/30",
@@ -890,7 +929,7 @@ export function EstadisticasMensualesSection({
                 },
               },
             ].map((item, mIdx) => {
-              const { monthData, stats, theme } = item;
+              const { monthData, stats, theme, scrollRef } = item;
               return (
                 <div key={monthData.name} className="space-y-2">
                   {/* Sub-encabezado de mes con métricas clave */}
@@ -921,7 +960,11 @@ export function EstadisticasMensualesSection({
 
                   {/* Gráfico de Barras del 1 al 31 con Altura e Impacto Visual Prominente */}
                   <div className="relative">
-                    <div className="flex items-end gap-1 sm:gap-1.5 h-44 sm:h-52 w-full overflow-x-auto pb-2 pt-14 px-1 custom-scrollbar">
+                    <div
+                      ref={scrollRef}
+                      onScroll={handleSyncScroll}
+                      className="flex items-end gap-1 sm:gap-1.5 h-44 sm:h-52 w-full overflow-x-auto pb-2 pt-14 px-1 custom-scrollbar"
+                    >
                       {stats.daysArray.map((d) => {
                         const isOutOfMonth = d.day > stats.daysInMonth;
                         const maxForScale = Math.max(1, stats.maxDayCount);
