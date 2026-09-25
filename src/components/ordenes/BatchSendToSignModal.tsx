@@ -186,6 +186,30 @@ export function BatchSendToSignModal({
         if (!matchedOrderIds.has(matchedOrder.id)) {
           matchedOrderIds.add(matchedOrder.id);
 
+          // 1. Si ya se encuentra entregada, NO se modifica
+          if (matchedOrder.entregada) {
+            results.push({
+              rawToken: token,
+              normalizedOC: normToken,
+              order: matchedOrder,
+              status: "already_liberated",
+              statusDetail: "Ya se encuentra entregada (no se modifica)",
+            });
+            continue;
+          }
+
+          // 2. Si está cancelada, tampoco se modifica
+          if (matchedOrder.cancelada) {
+            results.push({
+              rawToken: token,
+              normalizedOC: normToken,
+              order: matchedOrder,
+              status: "already_liberated",
+              statusDetail: "Orden cancelada (no se modifica)",
+            });
+            continue;
+          }
+
           if (matchedOrder.liberada || (matchedOrder.firmado1 && matchedOrder.firmado2)) {
             results.push({
               rawToken: token,

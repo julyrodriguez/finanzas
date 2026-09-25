@@ -48,6 +48,7 @@ export type OrderBatchResolution =
   | "partial_signed"        // 🟡 1 signature registered -> pending 2nd signature
   | "over_limit_warning"    // ⚠️ Signer does not have authority for this amount tier
   | "already_liberated"     // ⚪ Already liberated
+  | "already_delivered"     // 🔵 Already delivered (will not be modified)
   | "not_found";            // 🔴 Token not in database
 
 interface ParsedMatch {
@@ -171,6 +172,31 @@ export function BatchLiberateModal({
         if (!matchedOrderIds.has(matchedOrder.id)) {
           matchedOrderIds.add(matchedOrder.id);
 
+          // 1. Si ya se encuentra entregada, NO se modifica bajo ningún concepto
+          if (matchedOrder.entregada) {
+            results.push({
+              rawToken: token,
+              normalizedOC: normToken,
+              order: matchedOrder,
+              status: "already_delivered",
+              statusDetail: "Ya se encuentra entregada (no se modifica)",
+            });
+            continue;
+          }
+
+          // 2. Si está cancelada, tampoco se modifica
+          if (matchedOrder.cancelada) {
+            results.push({
+              rawToken: token,
+              normalizedOC: normToken,
+              order: matchedOrder,
+              status: "already_liberated",
+              statusDetail: "Orden cancelada (no se modifica)",
+            });
+            continue;
+          }
+
+          // 3. Si ya está 100% liberada, no necesita re-liberarse
           if (matchedOrder.liberada) {
             results.push({
               rawToken: token,
@@ -538,6 +564,7 @@ export function BatchLiberateModal({
   const toPartialSignList = parsedMatches.filter((m) => m.status === "partial_signed" && m.order);
   const overLimitList = parsedMatches.filter((m) => m.status === "over_limit_warning" && m.order);
   const alreadyLiberatedList = parsedMatches.filter((m) => m.status === "already_liberated" && m.order);
+  const alreadyDeliveredList = parsedMatches.filter((m) => m.status === "already_delivered" && m.order);
   const notFoundList = parsedMatches.filter((m) => m.status === "not_found");
 
   const totalExecutableCount = toLiberateList.length + toPartialSignList.length;
@@ -803,7 +830,7 @@ export function BatchLiberateModal({
           {extractedTokens.length > 0 && (
             <div className="space-y-4 pt-2 border-t border-slate-800">
               {/* Summary Stats Badges */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className={`grid grid-cols-2 ${alreadyDeliveredList.length > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-3`}>
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25">
                   <div className="text-[11px] text-emerald-300 font-semibold uppercase tracking-wider">
                     A Liberar (100%)
@@ -830,6 +857,17 @@ export function BatchLiberateModal({
                     {alreadyLiberatedList.length} <span className="text-xs font-normal text-slate-400">órdenes</span>
                   </div>
                 </div>
+
+                {alreadyDeliveredList.length > 0 && (
+                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/25">
+                    <div className="text-[11px] text-blue-300 font-semibold uppercase tracking-wider">
+                      Ya Entregadas
+                    </div>
+                    <div className="text-xl font-bold text-blue-400 mt-0.5">
+                      {alreadyDeliveredList.length} <span className="text-xs font-normal text-slate-400">órdenes</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25">
                   <div className="text-[11px] text-rose-300 font-semibold uppercase tracking-wider flex items-center justify-between">
@@ -1005,6 +1043,27 @@ export function BatchLiberateModal({
                       <span
                         key={idx}
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-400 font-mono text-[11px]"
+                      >
+                        {m.order?.numOC || m.rawToken}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 6. Already delivered preview (no modificado) */}
+              {alreadyDeliveredList.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-blue-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Órdenes ya entregadas (conservan su estado sin cambios) ({alreadyDeliveredList.length}):</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-16 overflow-y-auto">
+                    {alreadyDeliveredList.map((m, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-950/40 border border-blue-500/30 text-blue-300 font-mono text-[11px]"
+                        title={m.statusDetail}
                       >
                         {m.order?.numOC || m.rawToken}
                       </span>
