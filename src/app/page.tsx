@@ -349,9 +349,12 @@ export default function OrdenesDeComprasPage() {
       if (res && res.success && Array.isArray(res.ordenes)) {
         const docs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
         docs.sort((a, b) => {
-          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
-          return timeB - timeA;
+          const timeA = (a.createdAt && "seconds" in a.createdAt) ? (a.createdAt.seconds || 0) : 0;
+          const timeB = (b.createdAt && "seconds" in b.createdAt) ? (b.createdAt.seconds || 0) : 0;
+          if (timeB !== timeA) return timeB - timeA;
+          const numA = parseInt(a.numOC, 10) || 0;
+          const numB = parseInt(b.numOC, 10) || 0;
+          return numB - numA;
         });
         setOrdenes(docs);
       }
@@ -701,27 +704,45 @@ export default function OrdenesDeComprasPage() {
       }
     } else {
       // Add new order
+      const now = new Date();
+      const localTimestamp = {
+        seconds: Math.floor(now.getTime() / 1000),
+        nanoseconds: 0,
+        toDate: () => now,
+      };
+
       const newOrden: Omit<OrdenCompra, "id"> = {
         ...dataToSave,
         notas: [],
-        createdAt: serverTimestamp(),
+        createdAt: localTimestamp as any,
+        fechaOC: now.toISOString(),
       };
 
       const tempId = generateUniqueId();
       setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
-      syncOrderToMongo({ id: tempId, ...newOrden });
       showToast("¡Orden de compra agregada!");
 
       if (db) {
         try {
-          const docRef = await addDoc(collection(db, "ordenes_compra"), newOrden);
+          const docRef = await addDoc(collection(db, "ordenes_compra"), {
+            ...newOrden,
+            createdAt: serverTimestamp(),
+          });
           trackOrderCreated(db, newOrden);
           // Sync bidirectional relationships in Firestore
           syncBidirectional(numOC.trim(), numOC.trim(), relatedOC.trim(), "");
-          syncOrderToMongo({ id: docRef.id, ...newOrden });
+          // Reemplazar tempId por docRef.id real en el estado de React
+          setOrdenes((prev) =>
+            prev.map((item) => (item.id === tempId ? { ...item, id: docRef.id } : item))
+          );
+          // Sincronizar hacia MongoDB una sola vez con el ID definitivo de Firebase y fecha válida
+          syncOrderToMongo({ id: docRef.id, ...newOrden, fechaOC: now.toISOString() });
         } catch (err) {
           console.warn("Aviso Firebase al agregar orden:", err);
+          syncOrderToMongo({ id: tempId, ...newOrden, fechaOC: now.toISOString() });
         }
+      } else {
+        syncOrderToMongo({ id: tempId, ...newOrden, fechaOC: now.toISOString() });
       }
     }
 

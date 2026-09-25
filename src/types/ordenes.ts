@@ -23,6 +23,7 @@ export interface OrdenCompra {
   creadoPor?: string;
   notas?: Nota[];
   createdAt?: Timestamp | FieldValue | null;
+  fechaOC?: string | Date;
   relatedOC?: string;
   enviado?: boolean;
   firmado1?: boolean;

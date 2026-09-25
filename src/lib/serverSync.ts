@@ -27,14 +27,33 @@ export interface MongoQueryParams {
 /**
  * Guarda o actualiza una orden de compra en MongoDB de manera asíncrona.
  */
-export async function syncOrderToMongo(orderData: Partial<OrdenCompra> & { id?: string; firebaseId?: string }): Promise<void> {
+export async function syncOrderToMongo(orderData: Partial<OrdenCompra> & { id?: string; firebaseId?: string; fechaOC?: string | Date }): Promise<void> {
   try {
     const firebaseId = orderData.id || orderData.firebaseId;
     if (!firebaseId) return;
 
+    let fechaOC: string | undefined = undefined;
+    if (orderData.fechaOC) {
+      fechaOC = typeof orderData.fechaOC === "string" ? orderData.fechaOC : orderData.fechaOC.toISOString();
+    } else if (orderData.createdAt) {
+      const ca = orderData.createdAt as any;
+      if (typeof ca === "object" && typeof ca?.toDate === "function") {
+        fechaOC = ca.toDate().toISOString();
+      } else if (typeof ca === "object" && typeof ca?.seconds === "number") {
+        fechaOC = new Date(ca.seconds * 1000).toISOString();
+      } else if (ca instanceof Date) {
+        fechaOC = ca.toISOString();
+      }
+    }
+
+    if (!fechaOC) {
+      fechaOC = new Date().toISOString();
+    }
+
     const payload = {
       ...orderData,
       firebaseId,
+      fechaOC,
     };
 
     // Petición no bloqueante en segundo plano
