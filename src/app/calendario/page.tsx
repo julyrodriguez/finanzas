@@ -24,6 +24,12 @@ import {
   setDoc, 
   deleteDoc
 } from "firebase/firestore";
+import {
+  fetchCalendarEventsFromMongo,
+  syncCalendarEventToMongo,
+  deleteCalendarEventFromMongo,
+  syncCalendarEventsBulkToMongo,
+} from "@/lib/serverSync";
 
 interface CalendarEvent {
   id: string;
@@ -91,30 +97,38 @@ export default function CalendarioPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 1. Initial Load of Events (Firestore real-time listener + LocalStorage fallback)
+  // 1. Initial Load of Events: MongoDB first, then Firebase listener & LocalStorage fallback
   useEffect(() => {
+    let isMounted = true;
+
+    // A. Consultar MongoDB primero (Servidor propio)
+    fetchCalendarEventsFromMongo().then((mongoEvents) => {
+      if (!isMounted) return;
+      if (mongoEvents && Array.isArray(mongoEvents) && mongoEvents.length > 0) {
+        setEvents(mongoEvents);
+      }
+    }).catch((err) => {
+      console.warn("MongoDB initial fetch warning:", err);
+    });
+
     const db = getFirebaseDb();
     if (!db) {
-      // LocalStorage Fallback
+      // LocalStorage Fallback si no hay DB
       const saved = localStorage.getItem("finanzas-calendar-events");
       if (saved) {
         try {
           const parsedEvents = JSON.parse(saved);
           setTimeout(() => {
-            setEvents(parsedEvents);
+            if (isMounted) setEvents(parsedEvents);
           }, 0);
         } catch (error) {
           console.error("Error parsing saved events:", error);
         }
-      } else {
-        setTimeout(() => {
-          setEvents([]);
-        }, 0);
       }
       return;
     }
 
-    // Firestore Listener
+    // B. Listener de Firebase Firestore (sincronización en tiempo real y fallback)
     const colRef = collection(db, "calendar_events");
     const q = query(colRef);
 
@@ -135,17 +149,25 @@ export default function CalendarioPage() {
         });
 
         setTimeout(() => {
-          setEvents(docs);
+          if (!isMounted) return;
+          if (docs.length > 0) {
+            setEvents(docs);
+            // Sincronizar en segundo plano hacia MongoDB
+            syncCalendarEventsBulkToMongo(docs);
+          }
         }, 0);
       },
       (error) => {
-        console.error("Firestore loading error, using local fallback:", error);
+        console.warn("⚠️ Firestore loading error (posible cuota excedida), manteniendo datos locales/MongoDB:", error);
+        // Si no hay eventos cargados aún, intentar LocalStorage
         const saved = localStorage.getItem("finanzas-calendar-events");
         if (saved) {
           try {
             const parsedEvents = JSON.parse(saved);
             setTimeout(() => {
-              setEvents(parsedEvents);
+              if (isMounted) {
+                setEvents((prev) => (prev.length > 0 ? prev : parsedEvents));
+              }
             }, 0);
           } catch (err) {
             console.error("Error parsing saved events on fallback:", err);
@@ -154,7 +176,10 @@ export default function CalendarioPage() {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // 2. Navigation Helpers
@@ -251,57 +276,63 @@ export default function CalendarioPage() {
       endTime: formEndTime,
       category: formCategory,
     };
+    const fullEvent: CalendarEvent = { id: eventId, ...eventData };
 
+    // 1. Optimistic UI Update
+    let updatedEvents: CalendarEvent[];
+    if (editingEvent) {
+      updatedEvents = events.map((e) => (e.id === editingEvent.id ? fullEvent : e));
+    } else {
+      updatedEvents = [...events, fullEvent];
+    }
+    setEvents(updatedEvents);
+
+    // 2. Dual Write: Servidor propio MongoDB
+    syncCalendarEventToMongo(fullEvent);
+
+    // 3. Dual Write: Firebase Firestore (no bloqueante, protegido ante cuota excedida)
     const db = getFirebaseDb();
     if (db) {
-      try {
-        await setDoc(doc(db, "calendar_events", eventId), eventData);
-        showToast(editingEvent ? "📝 Evento guardado en BD" : "➕ Evento creado en BD");
-      } catch (err) {
-        console.error("Error saving event to Firestore:", err);
-        setFormError("Error al guardar el evento en la base de datos.");
-        return;
-      }
-    } else {
-      // LocalStorage Fallback
-      const newLocalEvent: CalendarEvent = { id: eventId, ...eventData };
-      let updatedEvents: CalendarEvent[];
-      if (editingEvent) {
-        updatedEvents = events.map(e => e.id === editingEvent.id ? newLocalEvent : e);
-        showToast("📝 Evento modificado localmente");
-      } else {
-        updatedEvents = [...events, newLocalEvent];
-        showToast("➕ Evento añadido localmente");
-      }
-      setEvents(updatedEvents);
-      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
+      setDoc(doc(db, "calendar_events", eventId), eventData).catch((err) => {
+        console.warn("⚠️ [Calendario] No se pudo guardar en Firebase (cuota o red):", err?.message || err);
+      });
     }
 
+    // 4. Copia en LocalStorage
+    try {
+      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
+    } catch (e) {}
+
+    showToast(editingEvent ? "📝 Evento actualizado" : "➕ Evento creado");
     setShowEventModal(false);
     setEditingEvent(null);
   };
 
   const handleDeleteEvent = async () => {
     if (!editingEvent) return;
+    const targetId = editingEvent.id;
 
+    // 1. Optimistic UI Update
+    const updatedEvents = events.filter((e) => e.id !== targetId);
+    setEvents(updatedEvents);
+
+    // 2. Dual Delete: Servidor propio MongoDB
+    deleteCalendarEventFromMongo(targetId);
+
+    // 3. Dual Delete: Firebase Firestore (no bloqueante)
     const db = getFirebaseDb();
     if (db) {
-      try {
-        await deleteDoc(doc(db, "calendar_events", editingEvent.id));
-        showToast("🗑️ Evento eliminado de BD");
-      } catch (err) {
-        console.error("Error deleting event from Firestore:", err);
-        setFormError("Error al eliminar el evento de la base de datos.");
-        return;
-      }
-    } else {
-      // LocalStorage Fallback
-      const updatedEvents = events.filter(e => e.id !== editingEvent.id);
-      setEvents(updatedEvents);
-      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
-      showToast("🗑️ Evento eliminado localmente");
+      deleteDoc(doc(db, "calendar_events", targetId)).catch((err) => {
+        console.warn("⚠️ [Calendario] No se pudo borrar en Firebase (cuota o red):", err?.message || err);
+      });
     }
 
+    // 4. Actualizar LocalStorage
+    try {
+      localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
+    } catch (e) {}
+
+    showToast("🗑️ Evento eliminado");
     setShowEventModal(false);
     setEditingEvent(null);
   };

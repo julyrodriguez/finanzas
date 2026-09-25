@@ -383,3 +383,217 @@ export async function fetchOrdersStatsFromMongo(): Promise<{
   }
   return null;
 }
+
+// ============================================================================
+// PENDIENTES & CONFIG MONGO SYNC
+// ============================================================================
+const PENDIENTES_API_URL = "https://apivacas.jariel.com.ar/api/pendientes";
+
+export async function fetchPendientesFromMongo(): Promise<{
+  pendientes: any[];
+  config: { general: { content: string; updatedAt: any }; categorias: string[] };
+} | null> {
+  try {
+    const res = await fetch(PENDIENTES_API_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success) {
+      return {
+        pendientes: Array.isArray(data.pendientes) ? data.pendientes : [],
+        config: data.config || { general: { content: "", updatedAt: null }, categorias: [] },
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn("⚠️ [Mongo Pendientes] Error al consultar desde MongoDB:", err);
+    return null;
+  }
+}
+
+export async function syncPendienteToMongo(item: any): Promise<void> {
+  try {
+    const firebaseId = item.id || item.firebaseId;
+    if (!firebaseId) return;
+
+    await fetch(PENDIENTES_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...item, firebaseId }),
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Pendiente Sync] Error:", err?.message || err);
+  }
+}
+
+export async function syncPendientesBulkToMongo(items: any[]): Promise<void> {
+  try {
+    if (!items || items.length === 0) return;
+    const formatted = items.map((p) => ({ ...p, firebaseId: p.id || p.firebaseId }));
+    await fetch(`${PENDIENTES_API_URL}/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pendientes: formatted }),
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Pendientes Bulk] Error:", err?.message || err);
+  }
+}
+
+export async function deletePendienteFromMongo(id: string): Promise<void> {
+  try {
+    if (!id) return;
+    await fetch(`${PENDIENTES_API_URL}/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Pendiente Delete] Error:", err?.message || err);
+  }
+}
+
+export async function syncPendienteConfigToMongo(
+  key: "general" | "categorias",
+  payload: { content?: string; list?: string[]; updatedBy?: string }
+): Promise<void> {
+  try {
+    await fetch(`${PENDIENTES_API_URL}/config/${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err: any) {
+    console.warn(`⚠️ [Mongo Config ${key} Sync] Error:`, err?.message || err);
+  }
+}
+
+// ============================================================================
+// CALENDARIO MONGO SYNC
+// ============================================================================
+const CALENDARIO_API_URL = "https://apivacas.jariel.com.ar/api/calendario";
+
+export async function fetchCalendarEventsFromMongo(): Promise<any[] | null> {
+  try {
+    const res = await fetch(CALENDARIO_API_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.events)) {
+      return data.events;
+    }
+    return null;
+  } catch (err) {
+    console.warn("⚠️ [Mongo Calendario] Error al consultar eventos:", err);
+    return null;
+  }
+}
+
+export async function syncCalendarEventToMongo(event: any): Promise<void> {
+  try {
+    const firebaseId = event.id || event.firebaseId;
+    if (!firebaseId) return;
+
+    await fetch(CALENDARIO_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...event, firebaseId }),
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Calendario Sync] Error:", err?.message || err);
+  }
+}
+
+export async function syncCalendarEventsBulkToMongo(events: any[]): Promise<void> {
+  try {
+    if (!events || events.length === 0) return;
+    const formatted = events.map((e) => ({ ...e, firebaseId: e.id || e.firebaseId }));
+    await fetch(`${CALENDARIO_API_URL}/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events: formatted }),
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Calendario Bulk] Error:", err?.message || err);
+  }
+}
+
+export async function deleteCalendarEventFromMongo(id: string): Promise<void> {
+  try {
+    if (!id) return;
+    await fetch(`${CALENDARIO_API_URL}/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Calendario Delete] Error:", err?.message || err);
+  }
+}
+
+// ============================================================================
+// COTIZACIONES MONGO SYNC
+// ============================================================================
+const COTIZACIONES_API_URL = "https://apivacas.jariel.com.ar/api/cotizaciones";
+
+export async function fetchCotizacionesFromMongo(): Promise<any[] | null> {
+  try {
+    const res = await fetch(COTIZACIONES_API_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.cotizaciones)) {
+      return data.cotizaciones;
+    }
+    return null;
+  } catch (err) {
+    console.warn("⚠️ [Mongo Cotizaciones] Error al consultar cotizaciones:", err);
+    return null;
+  }
+}
+
+export async function syncCotizacionToMongo(quote: any): Promise<void> {
+  try {
+    const firebaseId = quote.id || quote.firebaseId;
+    if (!firebaseId) return;
+
+    await fetch(COTIZACIONES_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...quote, firebaseId }),
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Cotizacion Sync] Error:", err?.message || err);
+  }
+}
+
+export async function syncCotizacionesBulkToMongo(quotes: any[]): Promise<void> {
+  try {
+    if (!quotes || quotes.length === 0) return;
+    const formatted = quotes.map((q) => ({ ...q, firebaseId: q.id || q.firebaseId }));
+    await fetch(`${COTIZACIONES_API_URL}/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cotizaciones: formatted }),
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Cotizaciones Bulk] Error:", err?.message || err);
+  }
+}
+
+export async function deleteCotizacionFromMongo(id: string): Promise<void> {
+  try {
+    if (!id) return;
+    await fetch(`${COTIZACIONES_API_URL}/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Cotizacion Delete] Error:", err?.message || err);
+  }
+}
+

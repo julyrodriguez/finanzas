@@ -19,6 +19,15 @@ import {
   Timestamp
 } from "firebase/firestore";
 import {
+  fetchPendientesFromMongo,
+  syncPendienteToMongo,
+  syncPendientesBulkToMongo,
+  deletePendienteFromMongo,
+  syncPendienteConfigToMongo,
+  fetchCotizacionesFromMongo,
+  syncCotizacionToMongo,
+} from "@/lib/serverSync";
+import {
   Plus,
   Trash2,
   Save,
@@ -262,16 +271,41 @@ export default function PendientesPage() {
       ? pendingItems.length
       : completedItemsAll.length;
 
-  // 1. Fetch all items in real time
+  // 1. Initial Load of Pendientes & Config: MongoDB first, then Firebase listener & fallback
   useEffect(() => {
+    let isMounted = true;
+
+    // A. Consultar MongoDB primero (Servidor propio)
+    fetchPendientesFromMongo().then((data) => {
+      if (!isMounted) return;
+      if (data) {
+        if (Array.isArray(data.pendientes) && data.pendientes.length > 0) {
+          setAllItems(data.pendientes);
+        }
+        if (data.config?.general?.content) {
+          setGeneralNotes(data.config.general.content);
+          if (data.config.general.updatedAt) {
+            setGeneralLastSaved(new Date(data.config.general.updatedAt));
+          }
+        }
+        if (data.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
+          setCustomCategories(data.config.categorias);
+        }
+        setLoading(false);
+        setError(null);
+      }
+    }).catch((err) => {
+      console.warn("MongoDB initial fetch warning in pendientes:", err);
+    });
+
     if (!db) {
       setTimeout(() => {
-        setError("No se pudo conectar a la base de datos de Firebase.");
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }, 0);
       return;
     }
 
+    // B. Listener de Firebase Firestore (tiempo real y fallback)
     const colRef = collection(db, "pendientes");
     const q = query(colRef, orderBy("createdAt", "desc"));
 
@@ -298,26 +332,68 @@ export default function PendientesPage() {
         });
 
         setTimeout(() => {
-          setAllItems(list);
+          if (!isMounted) return;
+          if (list.length > 0) {
+            setAllItems(list);
+            // Sincronizar en segundo plano hacia MongoDB
+            syncPendientesBulkToMongo(list);
+          }
           setLoading(false);
           setError(null);
         }, 0);
       },
       (err) => {
-        console.error("Error loading pending items:", err);
+        console.warn("⚠️ Error Firestore en pendientes (posible cuota excedida). Manteniendo datos de MongoDB:", err);
         setTimeout(() => {
-          setError("No se pudieron cargar los pendientes.");
+          if (!isMounted) return;
           setLoading(false);
+          // Solo mostrar error visual si MongoDB tampoco devolvió datos
+          setAllItems((prev) => {
+            if (prev.length === 0) {
+              setError("No se pudieron cargar los pendientes de Firebase ni del servidor.");
+            }
+            return prev;
+          });
         }, 0);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [db]);
 
-  // 1b. Fetch Cotizaciones list in real time
+  // 1b. Fetch Cotizaciones list: MongoDB first, then Firebase listener
   useEffect(() => {
+    let isMounted = true;
+
+    // A. Consultar MongoDB primero
+    fetchCotizacionesFromMongo().then((quotes) => {
+      if (!isMounted) return;
+      if (quotes && Array.isArray(quotes) && quotes.length > 0) {
+        const list: CotizacionSummary[] = quotes.map((data: any) => ({
+          id: data.id || data.firebaseId,
+          name: data.name || "Cotización sin nombre",
+          notes: data.notes || "",
+          baseCurrency: data.baseCurrency || "ARS",
+          status: data.status || (data.isFinalized ? "finalizada" : "borrador"),
+          createdAt: data.createdAt || null,
+          itemsCount: Array.isArray(data.items) ? data.items.length : 0,
+          providersCount: Array.isArray(data.providers) ? data.providers.length : 0,
+          categoria: data.categoria || "",
+          pendienteId: data.pendienteId || "",
+          pendienteTitulo: data.pendienteTitulo || ""
+        }));
+        setAllCotizaciones(list);
+      }
+    }).catch((err) => {
+      console.warn("MongoDB initial fetch warning in cotizaciones summary:", err);
+    });
+
     if (!db) return;
+
+    // B. Listener de Firebase
     const colRef = collection(db, "cotizaciones");
     const q = query(colRef, orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(
@@ -340,14 +416,20 @@ export default function PendientesPage() {
           };
         });
         setTimeout(() => {
-          setAllCotizaciones(list);
+          if (!isMounted) return;
+          if (list.length > 0) {
+            setAllCotizaciones(list);
+          }
         }, 0);
       },
       (err) => {
-        console.warn("Could not load cotizaciones:", err);
+        console.warn("⚠️ Could not load cotizaciones from Firestore (quota/network):", err);
       }
     );
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [db]);
 
   // 1c. Deep-link: select pendiente from URL param ?id=...
@@ -362,7 +444,7 @@ export default function PendientesPage() {
     }
   }, [allItems]);
 
-  // 2. Fetch General Notepad contents once
+  // 2. Fetch General Notepad contents
   useEffect(() => {
     if (!db) return;
 
@@ -373,14 +455,14 @@ export default function PendientesPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setTimeout(() => {
-            setGeneralNotes(data.content || "");
+            if (data.content !== undefined) setGeneralNotes(data.content);
             if (data.updatedAt && typeof data.updatedAt.toDate === "function") {
               setGeneralLastSaved(data.updatedAt.toDate());
             }
           }, 0);
         }
       } catch (err) {
-        console.warn("Could not read general notepad, might not exist yet:", err);
+        console.warn("Could not read general notepad from Firestore:", err);
       }
     };
 
@@ -397,7 +479,7 @@ export default function PendientesPage() {
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          if (Array.isArray(data.list)) {
+          if (Array.isArray(data.list) && data.list.length > 0) {
             setTimeout(() => {
               setCustomCategories(data.list);
             }, 0);
@@ -405,7 +487,7 @@ export default function PendientesPage() {
         }
       },
       (err) => {
-        console.warn("Could not read categories config:", err);
+        console.warn("Could not read categories config from Firestore:", err);
       }
     );
 
@@ -438,17 +520,27 @@ export default function PendientesPage() {
     }, 0);
   }, [selectedId, selectedItem]);
 
-  // 3. Save general notes to Firestore
+  // 3. Save general notes to Mongo & Firestore
   const handleSaveGeneralNotes = async () => {
-    if (!db) return;
     setSavingGeneral(true);
     try {
-      const docRef = doc(db, "pendientes_config", "general");
-      await setDoc(docRef, {
+      // 1. Dual Write: Servidor propio MongoDB
+      syncPendienteConfigToMongo("general", {
         content: generalNotes,
-        updatedAt: serverTimestamp(),
         updatedBy: getCleanUsername()
-      }, { merge: true });
+      });
+
+      // 2. Dual Write: Firebase Firestore (no bloqueante)
+      if (db) {
+        const docRef = doc(db, "pendientes_config", "general");
+        setDoc(docRef, {
+          content: generalNotes,
+          updatedAt: serverTimestamp(),
+          updatedBy: getCleanUsername()
+        }, { merge: true }).catch((err) => {
+          console.warn("⚠️ Error guardando bloc general en Firebase (cuota):", err);
+        });
+      }
       
       setGeneralLastSaved(new Date());
       showToast("Bloc general guardado correctamente", "success");
@@ -461,17 +553,47 @@ export default function PendientesPage() {
   };
 
   const handleSaveEditorNotes = async () => {
-    if (!db || !selectedId) return;
+    if (!selectedId) return;
     setSavingEditor(true);
     try {
-      const docRef = doc(db, "pendientes", selectedId);
-      await updateDoc(docRef, {
+      // 1. Optimistic UI update
+      setAllItems((prev) =>
+        prev.map((item) =>
+          item.id === selectedId
+            ? {
+                ...item,
+                notasAdicionales: editorNotes,
+                descripcion: editorDescription,
+                fechaLimite: editorFechaLimite || null,
+                categoria: editorCategoria || ""
+              }
+            : item
+        )
+      );
+
+      // 2. Dual Write: MongoDB
+      syncPendienteToMongo({
+        id: selectedId,
         notasAdicionales: editorNotes,
         descripcion: editorDescription,
         fechaLimite: editorFechaLimite || null,
-        categoria: editorCategoria || "",
-        updatedAt: serverTimestamp()
+        categoria: editorCategoria || ""
       });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        const docRef = doc(db, "pendientes", selectedId);
+        updateDoc(docRef, {
+          notasAdicionales: editorNotes,
+          descripcion: editorDescription,
+          fechaLimite: editorFechaLimite || null,
+          categoria: editorCategoria || "",
+          updatedAt: serverTimestamp()
+        }).catch((err) => {
+          console.warn("⚠️ Error guardando notas de proyecto en Firebase:", err);
+        });
+      }
+
       setIsEditorDirty(false);
       setEditorLastSaved(new Date());
       showToast("Notas del proyecto guardadas", "success");
@@ -497,16 +619,19 @@ export default function PendientesPage() {
     }
     const updated = [...customCategories, trimmed];
     setCustomCategories(updated);
+
+    // Dual Write: Mongo
+    syncPendienteConfigToMongo("categorias", { list: updated });
+
+    // Dual Write: Firebase
     if (db) {
-      try {
-        const docRef = doc(db, "pendientes_config", "categorias");
-        await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
-        showToast(`Carpeta "${trimmed}" creada con éxito`, "success");
-      } catch (err) {
-        console.error("Error saving category:", err);
-        showToast("Error al guardar la carpeta", "error");
-      }
+      const docRef = doc(db, "pendientes_config", "categorias");
+      setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true }).catch((err) => {
+        console.warn("⚠️ Error guardando carpeta en Firebase:", err);
+      });
     }
+
+    showToast(`Carpeta "${trimmed}" creada con éxito`, "success");
   };
 
   const handleDeleteCategory = async (catName: string) => {
@@ -532,56 +657,68 @@ export default function PendientesPage() {
       setFilterCategoria("todas");
     }
 
-    if (db) {
-      try {
-        const docRef = doc(db, "pendientes_config", "categorias");
-        await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
-
-        // Unlink any items that had this category so it doesn't reappear
-        if (affectedItems.length > 0) {
-          const updatePromises = affectedItems.map((item) =>
-            updateDoc(doc(db, "pendientes", item.id), {
-              categoria: ""
-            })
-          );
-          await Promise.all(updatePromises);
-        }
-
-        showToast(`Carpeta "${catName}" eliminada`, "info");
-      } catch (err) {
-        console.error("Error deleting category:", err);
-        showToast("Error al eliminar la carpeta", "error");
-      }
+    // 1. Optimistic items update
+    if (affectedItems.length > 0) {
+      setAllItems((prev) =>
+        prev.map((item) =>
+          item.categoria?.toLowerCase() === catName.toLowerCase() ? { ...item, categoria: "" } : item
+        )
+      );
     }
+
+    // 2. Dual Write: Mongo
+    syncPendienteConfigToMongo("categorias", { list: updated });
+    affectedItems.forEach((item) => {
+      syncPendienteToMongo({ id: item.id, categoria: "" });
+    });
+
+    // 3. Dual Write: Firebase
+    if (db) {
+      const docRef = doc(db, "pendientes_config", "categorias");
+      setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+
+      affectedItems.forEach((item) => {
+        updateDoc(doc(db, "pendientes", item.id), { categoria: "" }).catch(console.warn);
+      });
+    }
+
+    showToast(`Carpeta "${catName}" eliminada`, "info");
   };
 
   const handleChangeCategory = async (id: string, newCategory: string) => {
-    if (!db) return;
-    try {
-      const docRef = doc(db, "pendientes", id);
-      await updateDoc(docRef, { categoria: newCategory.trim() });
-      setEditorCategoria(newCategory.trim());
+    const trimmedCat = newCategory.trim();
 
-      // Sync category with any linked cotizaciones
-      const targetItem = allItems.find((p) => p.id === id);
-      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
-        const updatePromises = targetItem.cotizacionesIds.map((cId) =>
-          updateDoc(doc(db, "cotizaciones", cId), {
-            categoria: newCategory.trim()
-          }).catch(console.error)
-        );
-        await Promise.all(updatePromises);
-      }
+    // 1. Optimistic update
+    setAllItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, categoria: trimmedCat } : item))
+    );
+    setEditorCategoria(trimmedCat);
 
-      showToast(newCategory.trim() ? `Rubro asignado: ${newCategory.trim()}` : "Rubro removido", "info");
-    } catch (err) {
-      console.error("Error changing category:", err);
-      showToast("Error al cambiar rubro", "error");
+    // 2. Dual Write: Mongo
+    syncPendienteToMongo({ id, categoria: trimmedCat });
+
+    // Sync category with any linked cotizaciones
+    const targetItem = allItems.find((p) => p.id === id);
+    if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
+      targetItem.cotizacionesIds.forEach((cId) => {
+        syncCotizacionToMongo({ id: cId, categoria: trimmedCat });
+      });
     }
+
+    // 3. Dual Write: Firebase
+    if (db) {
+      updateDoc(doc(db, "pendientes", id), { categoria: trimmedCat }).catch(console.warn);
+      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
+        targetItem.cotizacionesIds.forEach((cId) => {
+          updateDoc(doc(db, "cotizaciones", cId), { categoria: trimmedCat }).catch(console.warn);
+        });
+      }
+    }
+
+    showToast(trimmedCat ? `Rubro asignado: ${trimmedCat}` : "Rubro removido", "info");
   };
 
   const handleLinkCotizacion = async (pendienteId: string, cotizacionId: string) => {
-    if (!db) return;
     try {
       const targetPendiente = allItems.find((p) => p.id === pendienteId);
       const targetCotizacion = allCotizaciones.find((c) => c.id === cotizacionId);
@@ -595,17 +732,41 @@ export default function PendientesPage() {
 
       const updatedIds = [...currentIds, cotizacionId];
 
-      // 1. Update pendiente doc
-      await updateDoc(doc(db, "pendientes", pendienteId), {
-        cotizacionesIds: updatedIds
-      });
+      // 1. Optimistic update
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === pendienteId ? { ...p, cotizacionesIds: updatedIds } : p))
+      );
+      setAllCotizaciones((prev) =>
+        prev.map((c) =>
+          c.id === cotizacionId
+            ? {
+                ...c,
+                pendienteId: targetPendiente.id,
+                pendienteTitulo: targetPendiente.titulo,
+                categoria: targetPendiente.categoria || ""
+              }
+            : c
+        )
+      );
 
-      // 2. Update cotizacion doc with the same rubro/categoria as the pendiente
-      await updateDoc(doc(db, "cotizaciones", cotizacionId), {
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id: pendienteId, cotizacionesIds: updatedIds });
+      syncCotizacionToMongo({
+        id: cotizacionId,
         pendienteId: targetPendiente.id,
         pendienteTitulo: targetPendiente.titulo,
         categoria: targetPendiente.categoria || ""
       });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", pendienteId), { cotizacionesIds: updatedIds }).catch(console.warn);
+        updateDoc(doc(db, "cotizaciones", cotizacionId), {
+          pendienteId: targetPendiente.id,
+          pendienteTitulo: targetPendiente.titulo,
+          categoria: targetPendiente.categoria || ""
+        }).catch(console.warn);
+      }
 
       showToast(`Cotización vinculada con el rubro "${targetPendiente.categoria || "Sin rubro"}"`, "success");
     } catch (err) {
@@ -615,7 +776,6 @@ export default function PendientesPage() {
   };
 
   const handleUnlinkCotizacion = async (pendienteId: string, cotizacionId: string) => {
-    if (!db) return;
     try {
       const targetPendiente = allItems.find((p) => p.id === pendienteId);
       if (!targetPendiente) return;
@@ -623,16 +783,26 @@ export default function PendientesPage() {
       const currentIds = targetPendiente.cotizacionesIds || [];
       const updatedIds = currentIds.filter((id) => id !== cotizacionId);
 
-      // 1. Update pendiente doc
-      await updateDoc(doc(db, "pendientes", pendienteId), {
-        cotizacionesIds: updatedIds
-      });
+      // 1. Optimistic update
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === pendienteId ? { ...p, cotizacionesIds: updatedIds } : p))
+      );
+      setAllCotizaciones((prev) =>
+        prev.map((c) => (c.id === cotizacionId ? { ...c, pendienteId: "", pendienteTitulo: "" } : c))
+      );
 
-      // 2. Update cotizacion doc: remove pendiente link
-      await updateDoc(doc(db, "cotizaciones", cotizacionId), {
-        pendienteId: "",
-        pendienteTitulo: ""
-      });
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id: pendienteId, cotizacionesIds: updatedIds });
+      syncCotizacionToMongo({ id: cotizacionId, pendienteId: "", pendienteTitulo: "" });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", pendienteId), { cotizacionesIds: updatedIds }).catch(console.warn);
+        updateDoc(doc(db, "cotizaciones", cotizacionId), {
+          pendienteId: "",
+          pendienteTitulo: ""
+        }).catch(console.warn);
+      }
 
       showToast("Cotización desvinculada", "info");
     } catch (err) {
@@ -654,9 +824,8 @@ export default function PendientesPage() {
   }, [allCotizaciones, searchCotizacionTerm]);
 
   const handleInsertEtapa = async (index: number) => {
-    if (!db || !selectedId || !newStepTitle.trim()) return;
+    if (!selectedId || !newStepTitle.trim()) return;
     try {
-      const docRef = doc(db, "pendientes", selectedId);
       const newStep: Etapa = {
         id: "etapa-" + generateUniqueId(),
         titulo: newStepTitle.trim(),
@@ -669,7 +838,19 @@ export default function PendientesPage() {
       const updated = [...currentEtapas];
       updated.splice(index, 0, newStep);
 
-      await updateDoc(docRef, { etapas: updated });
+      // 1. Optimistic UI
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
+      );
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id: selectedId, etapas: updated });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
+      }
+
       setInsertingAtIndex(null);
       setNewStepTitle("");
       showToast("Etapa agregada", "success");
@@ -680,11 +861,10 @@ export default function PendientesPage() {
   };
 
   const handleToggleEtapa = async (stepId: string, currentCompletado: boolean) => {
-    if (!db || !selectedId) return;
+    if (!selectedId) return;
     try {
-      const docRef = doc(db, "pendientes", selectedId);
       const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.map(step => {
+      const updated = currentEtapas.map((step) => {
         if (step.id === stepId) {
           const nextCompletado = !currentCompletado;
           return {
@@ -696,7 +876,18 @@ export default function PendientesPage() {
         return step;
       });
 
-      await updateDoc(docRef, { etapas: updated });
+      // 1. Optimistic UI
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
+      );
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id: selectedId, etapas: updated });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
+      }
     } catch (err) {
       console.error("Error toggling stage:", err);
       showToast("Error al actualizar etapa", "error");
@@ -704,16 +895,27 @@ export default function PendientesPage() {
   };
 
   const handleSetEtapaFinal = async (stepId: string) => {
-    if (!db || !selectedId) return;
+    if (!selectedId) return;
     try {
-      const docRef = doc(db, "pendientes", selectedId);
       const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.map(step => ({
+      const updated = currentEtapas.map((step) => ({
         ...step,
         esFinal: step.id === stepId ? !step.esFinal : false
       }));
 
-      await updateDoc(docRef, { etapas: updated });
+      // 1. Optimistic UI
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
+      );
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id: selectedId, etapas: updated });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
+      }
+
       showToast("Etapa final establecida", "success");
     } catch (err) {
       console.error("Error setting final stage:", err);
@@ -722,13 +924,24 @@ export default function PendientesPage() {
   };
 
   const handleDeleteEtapa = async (stepId: string) => {
-    if (!db || !selectedId) return;
+    if (!selectedId) return;
     try {
-      const docRef = doc(db, "pendientes", selectedId);
       const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.filter(step => step.id !== stepId);
+      const updated = currentEtapas.filter((step) => step.id !== stepId);
 
-      await updateDoc(docRef, { etapas: updated });
+      // 1. Optimistic UI
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
+      );
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id: selectedId, etapas: updated });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
+      }
+
       showToast("Etapa eliminada", "info");
     } catch (err) {
       console.error("Error deleting stage:", err);
@@ -799,26 +1012,51 @@ export default function PendientesPage() {
       showToast("Por favor, introduce un título descriptivo", "error");
       return;
     }
-    if (!db) return;
 
     setIsAdding(true);
     try {
-      const docRef = await addDoc(collection(db, "pendientes"), {
+      const generatedId = (db ? doc(collection(db, "pendientes")).id : null) || `pen-${Date.now()}`;
+      const newPendienteItem: Pendiente = {
+        id: generatedId,
         titulo: newTitle.trim(),
         descripcion: newDescription.trim(),
         prioridad: newPriority,
         categoria: newCategoria.trim(),
         completado: false,
         creadoPor: getCleanUsername(),
-        createdAt: serverTimestamp(),
+        createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any,
         completedAt: null,
         notasAdicionales: "",
-        fechaLimite: newFechaLimite || null
-      });
+        etapas: [],
+        fechaLimite: newFechaLimite || null,
+        cotizacionesIds: []
+      };
 
-      // Auto-select the newly created item
-      setSelectedId(docRef.id);
-      
+      // 1. Optimistic UI
+      setAllItems((prev) => [newPendienteItem, ...prev]);
+      setSelectedId(generatedId);
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo(newPendienteItem);
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        setDoc(doc(db, "pendientes", generatedId), {
+          titulo: newPendienteItem.titulo,
+          descripcion: newPendienteItem.descripcion,
+          prioridad: newPendienteItem.prioridad,
+          categoria: newPendienteItem.categoria,
+          completado: false,
+          creadoPor: newPendienteItem.creadoPor,
+          createdAt: serverTimestamp(),
+          completedAt: null,
+          notasAdicionales: "",
+          fechaLimite: newFechaLimite || null
+        }).catch((err) => {
+          console.warn("⚠️ Error al crear pendiente en Firebase (cuota o red):", err);
+        });
+      }
+
       // Reset form
       setNewTitle("");
       setNewDescription("");
@@ -840,14 +1078,35 @@ export default function PendientesPage() {
 
   // 6. Toggle completado status
   const handleToggleCompletado = async (id: string, currentStatus: boolean) => {
-    if (!db) return;
     try {
-      const docRef = doc(db, "pendientes", id);
       const isCompleting = !currentStatus;
-      await updateDoc(docRef, {
+      const completedAtObj = isCompleting
+        ? ({ seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any)
+        : null;
+
+      // 1. Optimistic UI
+      setAllItems((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, completado: isCompleting, completedAt: completedAtObj } : p
+        )
+      );
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({
+        id,
         completado: isCompleting,
-        completedAt: isCompleting ? serverTimestamp() : null
+        completedAt: isCompleting ? new Date().toISOString() : null
       });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", id), {
+          completado: isCompleting,
+          completedAt: isCompleting ? serverTimestamp() : null
+        }).catch((err) => {
+          console.warn("⚠️ Error cambiando estado completado en Firebase:", err);
+        });
+      }
 
       showToast(
         isCompleting ? "¡Proyecto marcado como terminado! 🎉" : "Proyecto reabierto",
@@ -861,12 +1120,22 @@ export default function PendientesPage() {
 
   // 7. Change priority directly
   const handleChangePriority = async (id: string, newPriority: "alta" | "media" | "baja") => {
-    if (!db) return;
     try {
-      const docRef = doc(db, "pendientes", id);
-      await updateDoc(docRef, {
-        prioridad: newPriority
-      });
+      // 1. Optimistic UI
+      setAllItems((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, prioridad: newPriority } : p))
+      );
+
+      // 2. Dual Write: Mongo
+      syncPendienteToMongo({ id, prioridad: newPriority });
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", id), { prioridad: newPriority }).catch((err) => {
+          console.warn("⚠️ Error cambiando prioridad en Firebase:", err);
+        });
+      }
+
       showToast(`Prioridad cambiada a ${newPriority}`, "info");
     } catch (err) {
       console.error("Error updating priority:", err);
@@ -876,17 +1145,27 @@ export default function PendientesPage() {
 
   // 8. Delete Pendiente
   const handleDeletePendiente = async (id: string) => {
-    if (!db) return;
     if (!confirm("¿Estás seguro de que quieres eliminar este pendiente? Se borrarán también todas sus notas.")) {
       return;
     }
 
     try {
-      const docRef = doc(db, "pendientes", id);
-      await deleteDoc(docRef);
+      // 1. Optimistic UI
+      setAllItems((prev) => prev.filter((p) => p.id !== id));
       if (selectedId === id) {
         setSelectedId(null);
       }
+
+      // 2. Dual Write: Mongo
+      deletePendienteFromMongo(id);
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        deleteDoc(doc(db, "pendientes", id)).catch((err) => {
+          console.warn("⚠️ Error borrando pendiente en Firebase:", err);
+        });
+      }
+
       showToast("Proyecto pendiente eliminado", "info");
     } catch (err) {
       console.error("Error deleting pendiente:", err);

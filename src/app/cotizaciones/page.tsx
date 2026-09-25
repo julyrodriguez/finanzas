@@ -19,6 +19,15 @@ import {
   setDoc,
   getDoc
 } from "firebase/firestore";
+import {
+  fetchCotizacionesFromMongo,
+  syncCotizacionToMongo,
+  syncCotizacionesBulkToMongo,
+  deleteCotizacionFromMongo,
+  fetchPendientesFromMongo,
+  syncPendienteToMongo,
+  syncPendienteConfigToMongo,
+} from "@/lib/serverSync";
 import { 
   Plus, 
   Trash2, 
@@ -253,11 +262,21 @@ export default function CotizacionesPage() {
     }, 0);
   }, []);
 
-  // Fetch History from Firebase or LocalStorage
+  // Fetch History from MongoDB first, then Firebase or LocalStorage fallback
   const loadHistory = () => {
     setTimeout(() => setLoadingHistory(true), 0);
-    const db = getFirebaseDb();
 
+    // 1. Consultar MongoDB primero (Servidor propio)
+    fetchCotizacionesFromMongo().then((quotes) => {
+      if (quotes && Array.isArray(quotes) && quotes.length > 0) {
+        setSavedQuotations(quotes);
+        setLoadingHistory(false);
+      }
+    }).catch((err) => {
+      console.warn("MongoDB initial fetch warning in cotizaciones:", err);
+    });
+
+    const db = getFirebaseDb();
     if (db) {
       const q = query(collection(db, "cotizaciones"), orderBy("createdAt", "desc"));
       const unsubscribe = onSnapshot(q, 
@@ -267,15 +286,23 @@ export default function CotizacionesPage() {
             list.push({ id: docSnap.id, ...docSnap.data() } as SavedQuotation);
           });
           setTimeout(() => {
-            setSavedQuotations(list);
+            if (list.length > 0) {
+              setSavedQuotations(list);
+              // Sincronizar en segundo plano hacia MongoDB
+              syncCotizacionesBulkToMongo(list);
+            }
             setLoadingHistory(false);
           }, 0);
         },
         (error) => {
-          console.error("Error loading Firestore history:", error);
-          showToast("Error al cargar historial desde la nube", "error");
+          console.warn("⚠️ Error cargando cotizaciones desde Firebase (posible cuota excedida). Manteniendo datos de MongoDB:", error);
           setTimeout(() => {
-            loadLocalStorageHistory();
+            setSavedQuotations((prev) => {
+              if (prev.length === 0) {
+                loadLocalStorageHistory();
+              }
+              return prev;
+            });
             setLoadingHistory(false);
           }, 0);
         }
@@ -308,8 +335,16 @@ export default function CotizacionesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbActive]);
 
-  // Real-time listener for categories config
+  // Real-time listener for categories config & MongoDB initial fetch
   useEffect(() => {
+    let isMounted = true;
+    fetchPendientesFromMongo().then((data) => {
+      if (!isMounted) return;
+      if (data?.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
+        setCustomCategories(data.config.categorias);
+      }
+    }).catch(console.warn);
+
     const db = getFirebaseDb();
     if (!db) return;
 
@@ -321,18 +356,35 @@ export default function CotizacionesPage() {
           const data = docSnap.data();
           if (Array.isArray(data.list)) {
             setTimeout(() => {
-              setCustomCategories(data.list);
+              if (isMounted) setCustomCategories(data.list);
             }, 0);
           }
         }
       },
       (err) => console.warn("Could not read categories config in cotizaciones:", err)
     );
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [dbActive]);
 
-  // Real-time listener for pendientes list (for linking and category sync)
+  // Real-time listener for pendientes list (for linking and category sync) & MongoDB fetch
   useEffect(() => {
+    let isMounted = true;
+    fetchPendientesFromMongo().then((data) => {
+      if (!isMounted) return;
+      if (data?.pendientes && Array.isArray(data.pendientes) && data.pendientes.length > 0) {
+        const list = data.pendientes.map((p: any) => ({
+          id: p.id || p.firebaseId,
+          titulo: p.titulo || "Pendiente sin título",
+          categoria: p.categoria || "",
+          cotizacionesIds: Array.isArray(p.cotizacionesIds) ? p.cotizacionesIds : []
+        }));
+        setAllPendientes(list);
+      }
+    }).catch(console.warn);
+
     const db = getFirebaseDb();
     if (!db) return;
 
@@ -351,12 +403,15 @@ export default function CotizacionesPage() {
           };
         });
         setTimeout(() => {
-          setAllPendientes(list);
+          if (isMounted) setAllPendientes(list);
         }, 0);
       },
       (err) => console.warn("Could not read pendientes in cotizaciones:", err)
     );
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [dbActive]);
 
   // Distinct categories available across customCategories, quotations, and pendientes
@@ -394,6 +449,7 @@ export default function CotizacionesPage() {
   };
 
   // Create new category in Firestore
+  // Create new category in Mongo & Firestore
   const handleCreateCategory = async (catName: string) => {
     const trimmed = catName.trim();
     if (!trimmed) return;
@@ -404,17 +460,19 @@ export default function CotizacionesPage() {
     const updated = [...customCategories, trimmed];
     setCustomCategories(updated);
     setQuoteCategoria(trimmed);
+
+    // 1. Dual Write: Mongo
+    syncPendienteConfigToMongo("categorias", { list: updated });
+
+    // 2. Dual Write: Firebase (no bloqueante)
     const db = getFirebaseDb();
     if (db) {
-      try {
-        const docRef = doc(db, "pendientes_config", "categorias");
-        await setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true });
-        showToast(`Carpeta "${trimmed}" creada`, "success");
-      } catch (err) {
-        console.error("Error creating category:", err);
-        showToast("Error al guardar carpeta", "error");
-      }
+      const docRef = doc(db, "pendientes_config", "categorias");
+      setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true }).catch((err) => {
+        console.warn("⚠️ Error saving category to Firebase:", err);
+      });
     }
+    showToast(`Carpeta "${trimmed}" creada`, "success");
   };
 
   // Filtered quotations for Historial tab
@@ -747,61 +805,81 @@ export default function CotizacionesPage() {
 
     const db = getFirebaseDb();
     try {
-      let savedId = currentQuoteId;
-      if (db) {
-        if (currentQuoteId) {
-          // Update existing
-          const docRef = doc(db, "cotizaciones", currentQuoteId);
-          await updateDoc(docRef, {
-            ...payload,
-            updatedAt: serverTimestamp()
-          });
-          showToast(`Cotización "${quoteName}" actualizada en la nube`);
-        } else {
-          // Create new
-          const docRef = await addDoc(collection(db, "cotizaciones"), {
-            ...payload,
-            createdAt: serverTimestamp()
-          });
-          savedId = docRef.id;
-          setCurrentQuoteId(docRef.id);
-          showToast(`Cotización "${quoteName}" guardada en la nube`);
-        }
+      const savedId = currentQuoteId || (db ? doc(collection(db, "cotizaciones")).id : null) || `cot-${Date.now()}`;
+      setCurrentQuoteId(savedId);
 
-        // Sync with Pendiente
-        if (savedId) {
-          if (quotePendienteId) {
-            await updateDoc(doc(db, "pendientes", quotePendienteId), {
-              cotizacionesIds: arrayUnion(savedId)
-            }).catch(console.error);
-          }
+      const existingQuote = savedQuotations.find((q) => q.id === savedId);
+      const fullQuote: SavedQuotation = {
+        id: savedId,
+        ...payload,
+        createdAt: existingQuote?.createdAt || ({ seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any)
+      };
 
-          // If previously linked to another pendiente, unlink from it
-          const oldQuote = savedQuotations.find((q) => q.id === savedId);
-          if (oldQuote?.pendienteId && oldQuote.pendienteId !== quotePendienteId) {
-            await updateDoc(doc(db, "pendientes", oldQuote.pendienteId), {
-              cotizacionesIds: arrayRemove(savedId)
-            }).catch(console.error);
+      // 1. Optimistic UI update
+      setSavedQuotations((prev) => {
+        const exists = prev.some((q) => q.id === savedId);
+        return exists ? prev.map((q) => (q.id === savedId ? fullQuote : q)) : [fullQuote, ...prev];
+      });
+
+      // 2. Dual Write: Mongo (servidor propio)
+      syncCotizacionToMongo(fullQuote);
+      if (quotePendienteId) {
+        const p = allPendientes.find((pend) => pend.id === quotePendienteId);
+        if (p) {
+          const currentIds = p.cotizacionesIds || [];
+          if (!currentIds.includes(savedId)) {
+            const updatedIds = [...currentIds, savedId];
+            syncPendienteToMongo({ id: quotePendienteId, cotizacionesIds: updatedIds });
+            setAllPendientes((prev) =>
+              prev.map((pend) => (pend.id === quotePendienteId ? { ...pend, cotizacionesIds: updatedIds } : pend))
+            );
           }
         }
-      } else {
-        // Fallback to localStorage
+      }
+      const oldQuote = savedQuotations.find((q) => q.id === savedId);
+      if (oldQuote?.pendienteId && oldQuote.pendienteId !== quotePendienteId) {
+        const pOld = allPendientes.find((pend) => pend.id === oldQuote.pendienteId);
+        if (pOld) {
+          const updatedOldIds = (pOld.cotizacionesIds || []).filter((id) => id !== savedId);
+          syncPendienteToMongo({ id: oldQuote.pendienteId, cotizacionesIds: updatedOldIds });
+          setAllPendientes((prev) =>
+            prev.map((pend) => (pend.id === oldQuote.pendienteId ? { ...pend, cotizacionesIds: updatedOldIds } : pend))
+          );
+        }
+      }
+
+      // 3. Dual Write: Firebase Firestore (no bloqueante, protegido)
+      if (db && !savedId.startsWith("local-")) {
+        setDoc(doc(db, "cotizaciones", savedId), {
+          ...payload,
+          updatedAt: serverTimestamp()
+        }, { merge: true }).catch((err) => {
+          console.warn("⚠️ Error saving cotizacion to Firebase (cuota o red):", err);
+        });
+
+        if (quotePendienteId) {
+          updateDoc(doc(db, "pendientes", quotePendienteId), {
+            cotizacionesIds: arrayUnion(savedId)
+          }).catch(console.warn);
+        }
+
+        if (oldQuote?.pendienteId && oldQuote.pendienteId !== quotePendienteId) {
+          updateDoc(doc(db, "pendientes", oldQuote.pendienteId), {
+            cotizacionesIds: arrayRemove(savedId)
+          }).catch(console.warn);
+        }
+      }
+
+      // 4. Copia en LocalStorage
+      try {
         const localData = localStorage.getItem("finanzas-cotizaciones");
         let list: SavedQuotation[] = localData ? JSON.parse(localData) : [];
-        
-        if (currentQuoteId) {
-          list = list.map(q => q.id === currentQuoteId ? { ...q, ...payload } : q);
-          showToast(`Cotización "${quoteName}" actualizada localmente`);
-        } else {
-          const newLocalId = `local-${Date.now()}`;
-          const newQuote: SavedQuotation = { id: newLocalId, ...payload, createdAt: new Date().toISOString() };
-          list.unshift(newQuote);
-          setCurrentQuoteId(newLocalId);
-          showToast(`Cotización "${quoteName}" guardada localmente`);
-        }
+        const exists = list.some((q) => q.id === savedId);
+        list = exists ? list.map((q) => (q.id === savedId ? fullQuote : q)) : [fullQuote, ...list];
         localStorage.setItem("finanzas-cotizaciones", JSON.stringify(list));
-        loadLocalStorageHistory();
-      }
+      } catch (e) {}
+
+      showToast(`Cotización "${quoteName}" guardada con éxito`);
     } catch (error) {
       console.error("Error saving quote:", error);
       showToast("Error al guardar la cotización", "error");
@@ -908,35 +986,51 @@ export default function CotizacionesPage() {
     if (!confirm("¿Estás seguro de que querés eliminar esta cotización?")) return;
 
     const targetQuote = savedQuotations.find((q) => q.id === id);
-    const db = getFirebaseDb();
-    try {
-      if (db && !id.startsWith("local-")) {
-        await deleteDoc(doc(db, "cotizaciones", id));
-        if (targetQuote?.pendienteId) {
-          await updateDoc(doc(db, "pendientes", targetQuote.pendienteId), {
-            cotizacionesIds: arrayRemove(id)
-          }).catch(console.error);
-        }
-        showToast("Cotización eliminada de la nube");
-      } else {
-        const localData = localStorage.getItem("finanzas-cotizaciones");
-        if (localData) {
-          const list: SavedQuotation[] = JSON.parse(localData);
-          const updated = list.filter(q => q.id !== id);
-          localStorage.setItem("finanzas-cotizaciones", JSON.stringify(updated));
-          loadLocalStorageHistory();
-          showToast("Cotización eliminada localmente");
-        }
-      }
-      if (currentQuoteId === id) {
-        setCurrentQuoteId(null);
-        setHasActiveQuote(false);
-        setActiveTab("historial");
-      }
-    } catch (error) {
-      console.error("Error deleting quote:", error);
-      showToast("Error al eliminar la cotización", "error");
+
+    // 1. Optimistic UI update
+    setSavedQuotations((prev) => prev.filter((q) => q.id !== id));
+    if (currentQuoteId === id) {
+      setCurrentQuoteId(null);
+      setHasActiveQuote(false);
+      setActiveTab("historial");
     }
+
+    // 2. Dual Delete: Mongo
+    deleteCotizacionFromMongo(id);
+    if (targetQuote?.pendienteId) {
+      const p = allPendientes.find((pend) => pend.id === targetQuote.pendienteId);
+      if (p) {
+        const updatedIds = (p.cotizacionesIds || []).filter((cid) => cid !== id);
+        syncPendienteToMongo({ id: p.id, cotizacionesIds: updatedIds });
+        setAllPendientes((prev) =>
+          prev.map((pend) => (pend.id === p.id ? { ...pend, cotizacionesIds: updatedIds } : pend))
+        );
+      }
+    }
+
+    // 3. Dual Delete: Firebase (no bloqueante)
+    const db = getFirebaseDb();
+    if (db && !id.startsWith("local-")) {
+      deleteDoc(doc(db, "cotizaciones", id)).catch((err) => {
+        console.warn("⚠️ Error deleting cotizacion in Firebase (quota):", err);
+      });
+      if (targetQuote?.pendienteId) {
+        updateDoc(doc(db, "pendientes", targetQuote.pendienteId), {
+          cotizacionesIds: arrayRemove(id)
+        }).catch(console.warn);
+      }
+    }
+
+    // 4. Copia en LocalStorage
+    try {
+      const localData = localStorage.getItem("finanzas-cotizaciones");
+      if (localData) {
+        const list: SavedQuotation[] = JSON.parse(localData);
+        localStorage.setItem("finanzas-cotizaciones", JSON.stringify(list.filter((q) => q.id !== id)));
+      }
+    } catch (e) {}
+
+    showToast("Cotización eliminada");
   };
 
   // Duplicate quote
@@ -1010,14 +1104,18 @@ export default function CotizacionesPage() {
       const updated = [...attachments, newAtt];
       setAttachments(updated);
 
-      // Auto-guardar en Firestore si la cotización ya existe
+      // Auto-guardar si la cotización ya existe
       if (currentQuoteId) {
+        // Dual Write: Mongo
+        syncCotizacionToMongo({ id: currentQuoteId, attachments: updated });
+
+        // Dual Write: Firebase
         const db = getFirebaseDb();
         if (db && !currentQuoteId.startsWith("local-")) {
-          await updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+          updateDoc(doc(db, "cotizaciones", currentQuoteId), {
             attachments: updated,
             updatedAt: serverTimestamp()
-          }).catch(console.error);
+          }).catch(console.warn);
 
           // Disparar regeneración de resumen ejecutivo en segundo plano
           triggerAiSummaryUpdate(currentQuoteId, updated);
@@ -1041,12 +1139,16 @@ export default function CotizacionesPage() {
       setAttachments(updated);
 
       if (currentQuoteId) {
+        // Dual Write: Mongo
+        syncCotizacionToMongo({ id: currentQuoteId, attachments: updated });
+
+        // Dual Write: Firebase
         const db = getFirebaseDb();
         if (db && !currentQuoteId.startsWith("local-")) {
-          await updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+          updateDoc(doc(db, "cotizaciones", currentQuoteId), {
             attachments: updated,
             updatedAt: serverTimestamp()
-          }).catch(console.error);
+          }).catch(console.warn);
 
           if (updated.length > 0) {
             triggerAiSummaryUpdate(currentQuoteId, updated);
@@ -1215,6 +1317,15 @@ export default function CotizacionesPage() {
     }
 
     if (currentQuoteId) {
+      // Dual Write: Mongo
+      syncCotizacionToMongo({
+        id: currentQuoteId,
+        items: currentItems,
+        providers: updatedProviders,
+        attachments: updatedAttachments
+      });
+
+      // Dual Write: Firebase
       const db = getFirebaseDb();
       if (db && !currentQuoteId.startsWith("local-")) {
         updateDoc(doc(db, "cotizaciones", currentQuoteId), {
@@ -1222,7 +1333,7 @@ export default function CotizacionesPage() {
           providers: updatedProviders,
           attachments: updatedAttachments,
           updatedAt: serverTimestamp()
-        }).catch(console.error);
+        }).catch((err) => console.warn("⚠️ Error saving imported AI quote to Firebase (quota):", err));
 
         triggerAiSummaryUpdate(currentQuoteId, updatedAttachments);
       }
@@ -4693,12 +4804,16 @@ export default function CotizacionesPage() {
         onDeleteAttachment={handleDeleteAttachment}
         onSummaryUpdated={(newSummary) => {
           if (currentQuoteId) {
+            // Dual Write: Mongo
+            syncCotizacionToMongo({ id: currentQuoteId, aiSummary: newSummary });
+
+            // Dual Write: Firebase
             const db = getFirebaseDb();
             if (db && !currentQuoteId.startsWith("local-")) {
               updateDoc(doc(db, "cotizaciones", currentQuoteId), {
                 aiSummary: newSummary,
                 updatedAt: serverTimestamp()
-              }).catch(console.error);
+              }).catch(console.warn);
             }
           }
         }}
