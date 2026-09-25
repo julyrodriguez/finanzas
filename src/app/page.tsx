@@ -56,7 +56,7 @@ import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
-import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrdersStatsFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
+import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrdersStatsFromMongo, parseMongoDocToOrdenCompra, getTimestampSeconds } from "@/lib/serverSync";
 import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
 import { 
   OrdenesStats, 
@@ -408,8 +408,8 @@ export default function OrdenesDeComprasPage() {
       if (res && res.success && Array.isArray(res.ordenes)) {
         const docs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
         docs.sort((a, b) => {
-          const timeA = (a.createdAt && "seconds" in a.createdAt) ? (a.createdAt.seconds || 0) : 0;
-          const timeB = (b.createdAt && "seconds" in b.createdAt) ? (b.createdAt.seconds || 0) : 0;
+          const timeA = getTimestampSeconds(a.createdAt);
+          const timeB = getTimestampSeconds(b.createdAt);
           if (timeB !== timeA) return timeB - timeA;
           const numA = parseInt(a.numOC, 10) || 0;
           const numB = parseInt(b.numOC, 10) || 0;
@@ -469,8 +469,8 @@ export default function OrdenesDeComprasPage() {
 
     // Sort by createdAt descending to find the most recent
     const sorted = [...ordersList].sort((a, b) => {
-      const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-      const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+      const timeA = getTimestampSeconds(a.createdAt);
+      const timeB = getTimestampSeconds(b.createdAt);
       return timeB - timeA;
     });
 

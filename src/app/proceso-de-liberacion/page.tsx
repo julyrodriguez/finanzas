@@ -12,7 +12,7 @@ import {
   updateDoc,
   arrayUnion
 } from "firebase/firestore";
-import { syncOrderToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
+import { syncOrderToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra, getTimestampSeconds } from "@/lib/serverSync";
 import { 
   Clock, 
   Check, 
@@ -120,8 +120,8 @@ export default function ProcesoDeLiberacionPage() {
       if (resMandadas && resMandadas.success && Array.isArray(resMandadas.ordenes)) {
         const mandadas: OrdenCompra[] = resMandadas.ordenes.map(parseMongoDocToOrdenCompra);
         mandadas.sort((a, b) => {
-          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+          const timeA = getTimestampSeconds(a.createdAt);
+          const timeB = getTimestampSeconds(b.createdAt);
           return timeB - timeA;
         });
         setOrdenes(mandadas);

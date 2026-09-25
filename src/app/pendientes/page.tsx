@@ -60,6 +60,27 @@ const generateUniqueId = () => {
   return Date.now().toString() + Math.random().toString(36).substring(2, 9);
 };
 
+export function getTimestampSeconds(val: any): number {
+  if (!val) return 0;
+  if (typeof val === "object" && val !== null) {
+    if ("seconds" in val && typeof (val as any).seconds === "number") {
+      return (val as any).seconds;
+    }
+    if ("toDate" in val && typeof (val as any).toDate === "function") {
+      const d = (val as any).toDate();
+      return Math.floor(d.getTime() / 1000);
+    }
+    if (val instanceof Date) {
+      return Math.floor(val.getTime() / 1000);
+    }
+  }
+  if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? 0 : Math.floor(d.getTime() / 1000);
+  }
+  return 0;
+}
+
 // Interfaces
 interface Etapa {
   id: string;
@@ -185,8 +206,8 @@ export default function PendientesPage() {
     const list = allItems.filter(item => item.completado);
     const sorted = [...list];
     sorted.sort((a, b) => {
-      const timeA = (a.completedAt && "seconds" in a.completedAt) ? a.completedAt.seconds : (a.createdAt?.seconds || 0);
-      const timeB = (b.completedAt && "seconds" in b.completedAt) ? b.completedAt.seconds : (b.createdAt?.seconds || 0);
+      const timeA = a.completedAt ? getTimestampSeconds(a.completedAt) : getTimestampSeconds(a.createdAt);
+      const timeB = b.completedAt ? getTimestampSeconds(b.completedAt) : getTimestampSeconds(b.createdAt);
       return timeB - timeA;
     });
     return sorted;
@@ -221,8 +242,8 @@ export default function PendientesPage() {
       if (ordA !== ordB) {
         return ordA - ordB;
       }
-      const timeA = a.createdAt?.seconds || 0;
-      const timeB = b.createdAt?.seconds || 0;
+      const timeA = getTimestampSeconds(a.createdAt);
+      const timeB = getTimestampSeconds(b.createdAt);
       return timeB - timeA;
     });
     
@@ -505,11 +526,8 @@ export default function PendientesPage() {
         setEditorFechaLimite(selectedItem.fechaLimite || "");
         setEditorCategoria(selectedItem.categoria || "");
         setIsEditorDirty(false);
-        setEditorLastSaved(
-          selectedItem.completedAt && typeof selectedItem.completedAt.toDate === "function"
-            ? selectedItem.completedAt.toDate()
-            : null
-        );
+        const s = selectedItem.completedAt ? getTimestampSeconds(selectedItem.completedAt) : 0;
+        setEditorLastSaved(s > 0 ? new Date(s * 1000) : null);
       } else {
         setEditorNotes("");
         setEditorDescription("");
@@ -1653,9 +1671,10 @@ export default function PendientesPage() {
                           <div className="flex items-center gap-2.5 min-w-0">
                             <span className="flex items-center gap-1 shrink-0">
                               <Clock className="w-2.5 h-2.5 text-gray-600" />
-                              {item.createdAt 
-                                ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("es-AR")
-                                : "Reciente"}
+                              {(() => {
+                                const s = getTimestampSeconds(item.createdAt);
+                                return s > 0 ? new Date(s * 1000).toLocaleDateString("es-AR") : "Reciente";
+                              })()}
                             </span>
                             <span className="truncate">Por: {item.creadoPor}</span>
                           </div>

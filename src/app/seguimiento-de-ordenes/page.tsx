@@ -15,7 +15,7 @@ import {
 import { getFirebaseDb } from "@/lib/firebase";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/context/AuthContext";
-import { syncOrderToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra } from "@/lib/serverSync";
+import { syncOrderToMongo, fetchOrdersFromMongo, parseMongoDocToOrdenCompra, getTimestampSeconds } from "@/lib/serverSync";
 import { 
   Search, 
   X, 
@@ -190,8 +190,8 @@ export default function SeguimientoDeOrdenesPage() {
       if (res && res.success && Array.isArray(res.ordenes)) {
         const allDocs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
         allDocs.sort((a, b) => {
-          const timeA = (a.createdAt && "seconds" in a.createdAt) ? a.createdAt.seconds : 0;
-          const timeB = (b.createdAt && "seconds" in b.createdAt) ? b.createdAt.seconds : 0;
+          const timeA = getTimestampSeconds(a.createdAt);
+          const timeB = getTimestampSeconds(b.createdAt);
           return timeB - timeA;
         });
         setOrdenes(allDocs);

@@ -27,6 +27,7 @@ import {
   fetchPendientesFromMongo,
   syncPendienteToMongo,
   syncPendienteConfigToMongo,
+  getTimestampSeconds,
 } from "@/lib/serverSync";
 import { 
   Plus, 
@@ -4183,11 +4184,10 @@ export default function CotizacionesPage() {
               </div>
 
               {filteredQuotations.length > 0 && filteredQuotations.map((quote) => {
-                const date = (quote.createdAt && typeof quote.createdAt === "object" && "seconds" in quote.createdAt)
-                  ? new Date((quote.createdAt as { seconds: number }).seconds * 1000).toLocaleString("es-AR")
-                  : (quote.createdAt && typeof quote.createdAt === "string"
-                      ? new Date(quote.createdAt).toLocaleString("es-AR")
-                      : "Fecha desconocida");
+                const date = (() => {
+                  const s = getTimestampSeconds(quote.createdAt);
+                  return s > 0 ? new Date(s * 1000).toLocaleString("es-AR") : "Fecha desconocida";
+                })();
 
                 const isCurrent = currentQuoteId === quote.id;
 

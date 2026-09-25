@@ -25,6 +25,31 @@ export interface MongoQueryParams {
 }
 
 /**
+ * Helper a prueba de fallos para obtener segundos UNIX de cualquier formato
+ * (Firebase Timestamp, Date, string ISO, objeto o número) sin arrojar TypeErrors.
+ */
+export function getTimestampSeconds(val: any): number {
+  if (!val) return 0;
+  if (typeof val === "object" && val !== null) {
+    if ("seconds" in val && typeof (val as any).seconds === "number") {
+      return (val as any).seconds;
+    }
+    if ("toDate" in val && typeof (val as any).toDate === "function") {
+      const d = (val as any).toDate();
+      return Math.floor(d.getTime() / 1000);
+    }
+    if (val instanceof Date) {
+      return Math.floor(val.getTime() / 1000);
+    }
+  }
+  if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? 0 : Math.floor(d.getTime() / 1000);
+  }
+  return 0;
+}
+
+/**
  * Guarda o actualiza una orden de compra en MongoDB de manera asíncrona.
  */
 export async function syncOrderToMongo(orderData: Partial<OrdenCompra> & { id?: string; firebaseId?: string; fechaOC?: string | Date }): Promise<Response | void> {
