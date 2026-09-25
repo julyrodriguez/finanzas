@@ -10,7 +10,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
-  onSnapshot,
+  getDocs,
   query,
   orderBy,
   serverTimestamp,
@@ -292,138 +292,132 @@ export default function PendientesPage() {
       ? pendingItems.length
       : completedItemsAll.length;
 
-  // 1. Initial Load of Pendientes & Config: MongoDB first, then Firebase listener & fallback
+  // 1. Initial Load of Pendientes & Config: MongoDB first, then Firebase fallback
   useEffect(() => {
     let isMounted = true;
 
-    // A. Consultar MongoDB primero (Servidor propio)
-    fetchPendientesFromMongo().then((data) => {
-      if (!isMounted) return;
-      if (data) {
-        if (Array.isArray(data.pendientes) && data.pendientes.length > 0) {
-          setAllItems(data.pendientes);
-        }
-        if (data.config?.general?.content) {
-          setGeneralNotes(data.config.general.content);
-          if (data.config.general.updatedAt) {
-            setGeneralLastSaved(new Date(data.config.general.updatedAt));
+    const loadData = async () => {
+      // A. Consultar MongoDB primero (Servidor propio)
+      try {
+        const data = await fetchPendientesFromMongo();
+        if (!isMounted) return;
+        if (data) {
+          if (Array.isArray(data.pendientes)) {
+            setAllItems(data.pendientes);
           }
-        }
-        if (data.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
-          setCustomCategories(data.config.categorias);
-        }
-        setLoading(false);
-        setError(null);
-      }
-    }).catch((err) => {
-      console.warn("MongoDB initial fetch warning in pendientes:", err);
-    });
-
-    if (!db) {
-      setTimeout(() => {
-        if (isMounted) setLoading(false);
-      }, 0);
-      return;
-    }
-
-    // B. Listener de Firebase Firestore (tiempo real y fallback)
-    const colRef = collection(db, "pendientes");
-    const q = query(colRef, orderBy("createdAt", "desc"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list: Pendiente[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            titulo: data.titulo || "",
-            descripcion: data.descripcion || "",
-            prioridad: data.prioridad || "media",
-            categoria: data.categoria || "",
-            completado: Boolean(data.completado),
-            creadoPor: data.creadoPor || "Usuario",
-            createdAt: data.createdAt || null,
-            completedAt: data.completedAt || null,
-            notasAdicionales: data.notasAdicionales || "",
-            etapas: data.etapas || [],
-            fechaLimite: data.fechaLimite || null,
-            cotizacionesIds: Array.isArray(data.cotizacionesIds) ? data.cotizacionesIds : []
-          };
-        });
-
-        setTimeout(() => {
-          if (!isMounted) return;
-          if (list.length > 0) {
-            setAllItems(list);
-            // Sincronizar en segundo plano hacia MongoDB
-            syncPendientesBulkToMongo(list);
+          if (data.config?.general?.content !== undefined) {
+            setGeneralNotes(data.config.general.content);
+            if (data.config.general.updatedAt) {
+              setGeneralLastSaved(new Date(data.config.general.updatedAt));
+            }
+          }
+          if (data.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
+            setCustomCategories(data.config.categorias);
           }
           setLoading(false);
           setError(null);
-        }, 0);
-      },
-      (err) => {
-        console.warn("⚠️ Error Firestore en pendientes (posible cuota excedida). Manteniendo datos de MongoDB:", err);
-        setTimeout(() => {
-          if (!isMounted) return;
-          setLoading(false);
-          // Solo mostrar error visual si MongoDB tampoco devolvió datos
-          setAllItems((prev) => {
-            if (prev.length === 0) {
-              setError("No se pudieron cargar los pendientes de Firebase ni del servidor.");
-            }
-            return prev;
-          });
-        }, 0);
+          return;
+        }
+      } catch (err) {
+        console.warn("MongoDB initial fetch warning in pendientes, trying Firebase fallback:", err);
       }
-    );
+
+      // B. Fallback: Firebase Firestore solo si MongoDB falló
+      if (db) {
+        try {
+          const colRef = collection(db, "pendientes");
+          const q = query(colRef, orderBy("createdAt", "desc"));
+          const snapshot = await getDocs(q);
+          if (!isMounted) return;
+          const list: Pendiente[] = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              titulo: data.titulo || "",
+              descripcion: data.descripcion || "",
+              prioridad: data.prioridad || "media",
+              categoria: data.categoria || "",
+              completado: Boolean(data.completado),
+              creadoPor: data.creadoPor || "Usuario",
+              createdAt: data.createdAt || null,
+              completedAt: data.completedAt || null,
+              notasAdicionales: data.notasAdicionales || "",
+              etapas: data.etapas || [],
+              fechaLimite: data.fechaLimite || null,
+              cotizacionesIds: Array.isArray(data.cotizacionesIds) ? data.cotizacionesIds : []
+            };
+          });
+
+          if (list.length > 0) {
+            setAllItems(list);
+            syncPendientesBulkToMongo(list);
+          }
+
+          // Cargar notas generales de fallback
+          try {
+            const noteDoc = await getDoc(doc(db, "pendientes_config", "general"));
+            if (noteDoc.exists() && isMounted) {
+              const noteData = noteDoc.data();
+              if (noteData.content !== undefined) setGeneralNotes(noteData.content);
+              if (noteData.updatedAt && typeof noteData.updatedAt.toDate === "function") {
+                setGeneralLastSaved(noteData.updatedAt.toDate());
+              }
+            }
+          } catch (e) {
+            console.warn("Fallback notepad read failed:", e);
+          }
+
+          // Cargar categorias de fallback
+          try {
+            const catDoc = await getDoc(doc(db, "pendientes_config", "categorias"));
+            if (catDoc.exists() && isMounted) {
+              const catData = catDoc.data();
+              if (Array.isArray(catData.list) && catData.list.length > 0) {
+                setCustomCategories(catData.list);
+              }
+            }
+          } catch (e) {
+            console.warn("Fallback categories read failed:", e);
+          }
+
+          setLoading(false);
+          setError(null);
+          return;
+        } catch (fbErr) {
+          console.warn("⚠️ Error Firestore fallback en pendientes (posible cuota excedida):", fbErr);
+        }
+      }
+
+      if (isMounted) {
+        setLoading(false);
+        setAllItems((prev) => {
+          if (prev.length === 0) {
+            setError("No se pudieron cargar los pendientes del servidor.");
+          }
+          return prev;
+        });
+      }
+    };
+
+    loadData();
 
     return () => {
       isMounted = false;
-      unsubscribe();
     };
   }, [db]);
 
-  // 1b. Fetch Cotizaciones list: MongoDB first, then Firebase listener
+  // 1b. Fetch Cotizaciones list: MongoDB first, then Firebase fallback
   useEffect(() => {
     let isMounted = true;
 
-    // A. Consultar MongoDB primero
-    fetchCotizacionesFromMongo().then((quotes) => {
-      if (!isMounted) return;
-      if (quotes && Array.isArray(quotes) && quotes.length > 0) {
-        const list: CotizacionSummary[] = quotes.map((data: any) => ({
-          id: data.id || data.firebaseId,
-          name: data.name || "Cotización sin nombre",
-          notes: data.notes || "",
-          baseCurrency: data.baseCurrency || "ARS",
-          status: data.status || (data.isFinalized ? "finalizada" : "borrador"),
-          createdAt: data.createdAt || null,
-          itemsCount: Array.isArray(data.items) ? data.items.length : 0,
-          providersCount: Array.isArray(data.providers) ? data.providers.length : 0,
-          categoria: data.categoria || "",
-          pendienteId: data.pendienteId || "",
-          pendienteTitulo: data.pendienteTitulo || ""
-        }));
-        setAllCotizaciones(list);
-      }
-    }).catch((err) => {
-      console.warn("MongoDB initial fetch warning in cotizaciones summary:", err);
-    });
-
-    if (!db) return;
-
-    // B. Listener de Firebase
-    const colRef = collection(db, "cotizaciones");
-    const q = query(colRef, orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list: CotizacionSummary[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
+    const loadQuotes = async () => {
+      // A. Consultar MongoDB primero
+      try {
+        const quotes = await fetchCotizacionesFromMongo();
+        if (!isMounted) return;
+        if (quotes && Array.isArray(quotes)) {
+          const list: CotizacionSummary[] = quotes.map((data: any) => ({
+            id: data.id || data.firebaseId,
             name: data.name || "Cotización sin nombre",
             notes: data.notes || "",
             baseCurrency: data.baseCurrency || "ARS",
@@ -434,22 +428,50 @@ export default function PendientesPage() {
             categoria: data.categoria || "",
             pendienteId: data.pendienteId || "",
             pendienteTitulo: data.pendienteTitulo || ""
-          };
-        });
-        setTimeout(() => {
+          }));
+          setAllCotizaciones(list);
+          return;
+        }
+      } catch (err) {
+        console.warn("MongoDB initial fetch warning in cotizaciones summary:", err);
+      }
+
+      // B. Fallback: Firebase solo si MongoDB falló
+      if (db) {
+        try {
+          const colRef = collection(db, "cotizaciones");
+          const q = query(colRef, orderBy("createdAt", "desc"));
+          const snapshot = await getDocs(q);
           if (!isMounted) return;
+          const list: CotizacionSummary[] = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              name: data.name || "Cotización sin nombre",
+              notes: data.notes || "",
+              baseCurrency: data.baseCurrency || "ARS",
+              status: data.status || (data.isFinalized ? "finalizada" : "borrador"),
+              createdAt: data.createdAt || null,
+              itemsCount: Array.isArray(data.items) ? data.items.length : 0,
+              providersCount: Array.isArray(data.providers) ? data.providers.length : 0,
+              categoria: data.categoria || "",
+              pendienteId: data.pendienteId || "",
+              pendienteTitulo: data.pendienteTitulo || ""
+            };
+          });
           if (list.length > 0) {
             setAllCotizaciones(list);
           }
-        }, 0);
-      },
-      (err) => {
-        console.warn("⚠️ Could not load cotizaciones from Firestore (quota/network):", err);
+        } catch (err) {
+          console.warn("⚠️ Could not load cotizaciones from Firestore fallback (quota/network):", err);
+        }
       }
-    );
+    };
+
+    loadQuotes();
+
     return () => {
       isMounted = false;
-      unsubscribe();
     };
   }, [db]);
 
@@ -464,56 +486,6 @@ export default function PendientesPage() {
       }, 0);
     }
   }, [allItems]);
-
-  // 2. Fetch General Notepad contents
-  useEffect(() => {
-    if (!db) return;
-
-    const fetchGeneralNotepad = async () => {
-      try {
-        const docRef = doc(db, "pendientes_config", "general");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setTimeout(() => {
-            if (data.content !== undefined) setGeneralNotes(data.content);
-            if (data.updatedAt && typeof data.updatedAt.toDate === "function") {
-              setGeneralLastSaved(data.updatedAt.toDate());
-            }
-          }, 0);
-        }
-      } catch (err) {
-        console.warn("Could not read general notepad from Firestore:", err);
-      }
-    };
-
-    fetchGeneralNotepad();
-  }, [db]);
-
-  // 2b. Fetch Custom Categories config in real time
-  useEffect(() => {
-    if (!db) return;
-
-    const docRef = doc(db, "pendientes_config", "categorias");
-    const unsubscribe = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (Array.isArray(data.list) && data.list.length > 0) {
-            setTimeout(() => {
-              setCustomCategories(data.list);
-            }, 0);
-          }
-        }
-      },
-      (err) => {
-        console.warn("Could not read categories config from Firestore:", err);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [db]);
 
   // Selected item sync: update editor state when selection changes
   const selectedItem = pendientes.find((p) => p.id === selectedId);

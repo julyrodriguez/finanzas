@@ -19,7 +19,7 @@ import { getFirebaseDb } from "@/lib/firebase";
 import { 
   collection, 
   query, 
-  onSnapshot, 
+  getDocs, 
   doc, 
   setDoc, 
   deleteDoc
@@ -97,88 +97,70 @@ export default function CalendarioPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 1. Initial Load of Events: MongoDB first, then Firebase listener & LocalStorage fallback
+  // 1. Initial Load of Events: MongoDB first, then Firebase fallback & LocalStorage fallback
   useEffect(() => {
     let isMounted = true;
 
-    // A. Consultar MongoDB primero (Servidor propio)
-    fetchCalendarEventsFromMongo().then((mongoEvents) => {
-      if (!isMounted) return;
-      if (mongoEvents && Array.isArray(mongoEvents) && mongoEvents.length > 0) {
-        setEvents(mongoEvents);
+    const loadEvents = async () => {
+      // A. Consultar MongoDB primero (Servidor propio)
+      try {
+        const mongoEvents = await fetchCalendarEventsFromMongo();
+        if (!isMounted) return;
+        if (mongoEvents && Array.isArray(mongoEvents)) {
+          setEvents(mongoEvents);
+          return;
+        }
+      } catch (err) {
+        console.warn("MongoDB initial fetch warning in calendario, trying fallback:", err);
       }
-    }).catch((err) => {
-      console.warn("MongoDB initial fetch warning:", err);
-    });
 
-    const db = getFirebaseDb();
-    if (!db) {
-      // LocalStorage Fallback si no hay DB
+      // B. Fallback: Firebase Firestore solo si MongoDB falló
+      const db = getFirebaseDb();
+      if (db) {
+        try {
+          const colRef = collection(db, "calendar_events");
+          const q = query(colRef);
+          const snapshot = await getDocs(q);
+          if (!isMounted) return;
+          const docs: CalendarEvent[] = snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              title: data.title || "",
+              description: data.description || "",
+              date: data.date || "",
+              startTime: data.startTime || "",
+              endTime: data.endTime || "",
+              category: data.category || "finanzas",
+            };
+          });
+
+          if (docs.length > 0) {
+            setEvents(docs);
+            syncCalendarEventsBulkToMongo(docs);
+            return;
+          }
+        } catch (error) {
+          console.warn("⚠️ Firestore loading error fallback in calendario:", error);
+        }
+      }
+
+      // C. LocalStorage Fallback si no hay DB ni servidor
       const saved = localStorage.getItem("finanzas-calendar-events");
-      if (saved) {
+      if (saved && isMounted) {
         try {
           const parsedEvents = JSON.parse(saved);
-          setTimeout(() => {
-            if (isMounted) setEvents(parsedEvents);
-          }, 0);
+          setEvents(parsedEvents);
         } catch (error) {
           console.error("Error parsing saved events:", error);
         }
       }
-      return;
-    }
+    };
 
-    // B. Listener de Firebase Firestore (sincronización en tiempo real y fallback)
-    const colRef = collection(db, "calendar_events");
-    const q = query(colRef);
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const docs: CalendarEvent[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            title: data.title || "",
-            description: data.description || "",
-            date: data.date || "",
-            startTime: data.startTime || "",
-            endTime: data.endTime || "",
-            category: data.category || "finanzas",
-          };
-        });
-
-        setTimeout(() => {
-          if (!isMounted) return;
-          if (docs.length > 0) {
-            setEvents(docs);
-            // Sincronizar en segundo plano hacia MongoDB
-            syncCalendarEventsBulkToMongo(docs);
-          }
-        }, 0);
-      },
-      (error) => {
-        console.warn("⚠️ Firestore loading error (posible cuota excedida), manteniendo datos locales/MongoDB:", error);
-        // Si no hay eventos cargados aún, intentar LocalStorage
-        const saved = localStorage.getItem("finanzas-calendar-events");
-        if (saved) {
-          try {
-            const parsedEvents = JSON.parse(saved);
-            setTimeout(() => {
-              if (isMounted) {
-                setEvents((prev) => (prev.length > 0 ? prev : parsedEvents));
-              }
-            }, 0);
-          } catch (err) {
-            console.error("Error parsing saved events on fallback:", err);
-          }
-        }
-      }
-    );
+    loadEvents();
 
     return () => {
       isMounted = false;
-      unsubscribe();
     };
   }, []);
 

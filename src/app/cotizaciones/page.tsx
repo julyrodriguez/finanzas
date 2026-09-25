@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { 
   collection, 
   addDoc, 
-  onSnapshot, 
+  getDocs, 
   updateDoc, 
   deleteDoc, 
   doc, 
@@ -264,58 +264,46 @@ export default function CotizacionesPage() {
   }, []);
 
   // Fetch History from MongoDB first, then Firebase or LocalStorage fallback
-  const loadHistory = () => {
-    setTimeout(() => setLoadingHistory(true), 0);
+  const loadHistory = useCallback(async () => {
+    setLoadingHistory(true);
 
     // 1. Consultar MongoDB primero (Servidor propio)
-    fetchCotizacionesFromMongo().then((quotes) => {
-      if (quotes && Array.isArray(quotes) && quotes.length > 0) {
+    try {
+      const quotes = await fetchCotizacionesFromMongo();
+      if (quotes && Array.isArray(quotes)) {
         setSavedQuotations(quotes);
         setLoadingHistory(false);
+        return;
       }
-    }).catch((err) => {
-      console.warn("MongoDB initial fetch warning in cotizaciones:", err);
-    });
+    } catch (err) {
+      console.warn("MongoDB initial fetch warning in cotizaciones, trying fallback:", err);
+    }
 
+    // 2. Firebase Fallback (solo si falla MongoDB)
     const db = getFirebaseDb();
     if (db) {
-      const q = query(collection(db, "cotizaciones"), orderBy("createdAt", "desc"));
-      const unsubscribe = onSnapshot(q, 
-        (snapshot) => {
-          const list: SavedQuotation[] = [];
-          snapshot.forEach((docSnap) => {
-            list.push({ id: docSnap.id, ...docSnap.data() } as SavedQuotation);
-          });
-          setTimeout(() => {
-            if (list.length > 0) {
-              setSavedQuotations(list);
-              // Sincronizar en segundo plano hacia MongoDB
-              syncCotizacionesBulkToMongo(list);
-            }
-            setLoadingHistory(false);
-          }, 0);
-        },
-        (error) => {
-          console.warn("⚠️ Error cargando cotizaciones desde Firebase (posible cuota excedida). Manteniendo datos de MongoDB:", error);
-          setTimeout(() => {
-            setSavedQuotations((prev) => {
-              if (prev.length === 0) {
-                loadLocalStorageHistory();
-              }
-              return prev;
-            });
-            setLoadingHistory(false);
-          }, 0);
+      try {
+        const q = query(collection(db, "cotizaciones"), orderBy("createdAt", "desc"));
+        const snapshot = await getDocs(q);
+        const list: SavedQuotation[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...docSnap.data() } as SavedQuotation);
+        });
+        if (list.length > 0) {
+          setSavedQuotations(list);
+          syncCotizacionesBulkToMongo(list);
+          setLoadingHistory(false);
+          return;
         }
-      );
-      return unsubscribe;
-    } else {
-      setTimeout(() => {
-        loadLocalStorageHistory();
-        setLoadingHistory(false);
-      }, 0);
+      } catch (fbErr) {
+        console.warn("⚠️ Error cargando cotizaciones desde Firebase fallback:", fbErr);
+      }
     }
-  };
+
+    // 3. LocalStorage Fallback
+    loadLocalStorageHistory();
+    setLoadingHistory(false);
+  }, []);
 
   const loadLocalStorageHistory = () => {
     try {
@@ -329,91 +317,40 @@ export default function CotizacionesPage() {
   };
 
   useEffect(() => {
-    const unsub = loadHistory();
-    return () => {
-      if (typeof unsub === "function") unsub();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbActive]);
+    loadHistory();
+  }, [loadHistory]);
 
-  // Real-time listener for categories config & MongoDB initial fetch
+  // Load categories config & pendientes from MongoDB first (no onSnapshot stream)
   useEffect(() => {
     let isMounted = true;
-    fetchPendientesFromMongo().then((data) => {
-      if (!isMounted) return;
-      if (data?.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
-        setCustomCategories(data.config.categorias);
-      }
-    }).catch(console.warn);
 
-    const db = getFirebaseDb();
-    if (!db) return;
-
-    const docRef = doc(db, "pendientes_config", "categorias");
-    const unsubscribe = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (Array.isArray(data.list)) {
-            setTimeout(() => {
-              if (isMounted) setCustomCategories(data.list);
-            }, 0);
-          }
+    const loadMetadata = async () => {
+      try {
+        const data = await fetchPendientesFromMongo();
+        if (!isMounted || !data) return;
+        if (data.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
+          setCustomCategories(data.config.categorias);
         }
-      },
-      (err) => console.warn("Could not read categories config in cotizaciones:", err)
-    );
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [dbActive]);
-
-  // Real-time listener for pendientes list (for linking and category sync) & MongoDB fetch
-  useEffect(() => {
-    let isMounted = true;
-    fetchPendientesFromMongo().then((data) => {
-      if (!isMounted) return;
-      if (data?.pendientes && Array.isArray(data.pendientes) && data.pendientes.length > 0) {
-        const list = data.pendientes.map((p: any) => ({
-          id: p.id || p.firebaseId,
-          titulo: p.titulo || "Pendiente sin título",
-          categoria: p.categoria || "",
-          cotizacionesIds: Array.isArray(p.cotizacionesIds) ? p.cotizacionesIds : []
-        }));
-        setAllPendientes(list);
+        if (data.pendientes && Array.isArray(data.pendientes) && data.pendientes.length > 0) {
+          const list = data.pendientes.map((p: any) => ({
+            id: p.id || p.firebaseId,
+            titulo: p.titulo || "Pendiente sin título",
+            categoria: p.categoria || "",
+            cotizacionesIds: Array.isArray(p.cotizacionesIds) ? p.cotizacionesIds : []
+          }));
+          setAllPendientes(list);
+        }
+      } catch (err) {
+        console.warn("MongoDB metadata fetch warning in cotizaciones:", err);
       }
-    }).catch(console.warn);
+    };
 
-    const db = getFirebaseDb();
-    if (!db) return;
+    loadMetadata();
 
-    const colRef = collection(db, "pendientes");
-    const q = query(colRef, orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            titulo: data.titulo || "Pendiente sin título",
-            categoria: data.categoria || "",
-            cotizacionesIds: Array.isArray(data.cotizacionesIds) ? data.cotizacionesIds : []
-          };
-        });
-        setTimeout(() => {
-          if (isMounted) setAllPendientes(list);
-        }, 0);
-      },
-      (err) => console.warn("Could not read pendientes in cotizaciones:", err)
-    );
     return () => {
       isMounted = false;
-      unsubscribe();
     };
-  }, [dbActive]);
+  }, []);
 
   // Distinct categories available across customCategories, quotations, and pendientes
   const allCategories = useMemo(() => {
@@ -962,23 +899,33 @@ export default function CotizacionesPage() {
       return;
     }
 
-    // 2. Fetch directly from Firestore by ID so it doesn't wait for list listener
-    const db = getFirebaseDb();
-    if (db) {
-      getDoc(doc(db, "cotizaciones", targetId))
-        .then((docSnap) => {
-          if (docSnap.exists()) {
-            const loaded = { id: docSnap.id, ...docSnap.data() } as SavedQuotation;
-            setTimeout(() => {
-              handleSelectQuote(loaded);
-            }, 0);
+    // 2. Fetch directly from MongoDB first, then Firestore fallback
+    fetchCotizacionesFromMongo()
+      .then((quotes) => {
+        if (Array.isArray(quotes)) {
+          const match = quotes.find((q: any) => q.id === targetId || q.firebaseId === targetId);
+          if (match) {
+            handleSelectQuote(match);
+            return;
           }
-        })
-        .catch((err) => {
-          console.error("Error loading cotizacion from deep link:", err);
-        });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        }
+        const db = getFirebaseDb();
+        if (db) {
+          getDoc(doc(db, "cotizaciones", targetId))
+            .then((docSnap) => {
+              if (docSnap.exists()) {
+                const loaded = { id: docSnap.id, ...docSnap.data() } as SavedQuotation;
+                handleSelectQuote(loaded);
+              }
+            })
+            .catch((err) => {
+              console.warn("Notice: could not load cotizacion from deep link via Firestore fallback:", err);
+            });
+        }
+      })
+      .catch((err) => {
+        console.warn("Error checking MongoDB for deep link quote:", err);
+      });
   }, [savedQuotations, dbActive, currentQuoteId]);
 
   // Delete saved quote from list
