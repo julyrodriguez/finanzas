@@ -403,11 +403,20 @@ export default function OrdenesDeComprasPage() {
         creadoPor: filterCreadoPor === "todos" ? undefined : filterCreadoPor,
         search: debouncedSearchQuery.trim() || undefined,
         limit: hasLoadedAllFromDb ? 0 : queryLimit + 1,
+        sort: filterEstado === "Todas" ? "numOC" : undefined,
       });
       setIsServerOffline(false);
       if (res && res.success && Array.isArray(res.ordenes)) {
         const docs: OrdenCompra[] = res.ordenes.map(parseMongoDocToOrdenCompra);
         docs.sort((a, b) => {
+          if (filterEstado === "Todas") {
+            const numA = parseInt(a.numOC, 10) || 0;
+            const numB = parseInt(b.numOC, 10) || 0;
+            if (numB !== numA) return numB - numA;
+            const timeA = getTimestampSeconds(a.createdAt);
+            const timeB = getTimestampSeconds(b.createdAt);
+            return timeB - timeA;
+          }
           const timeA = getTimestampSeconds(a.createdAt);
           const timeB = getTimestampSeconds(b.createdAt);
           if (timeB !== timeA) return timeB - timeA;
@@ -1220,7 +1229,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
     setLoadingAllDb(true);
     try {
       // Consulta directamente a nuestro servidor local (MongoDB) sin consumir lecturas de Firebase
-      const res = await fetchOrdersFromMongo({ limit: 0 });
+      const res = await fetchOrdersFromMongo({
+        limit: 0,
+        sort: filterEstado === "Todas" ? "numOC" : undefined,
+      });
       if (!res || !res.success || !Array.isArray(res.ordenes)) {
         throw new Error("Respuesta inválida del servidor");
       }
@@ -1253,6 +1265,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         });
       });
 
+      if (filterEstado === "Todas") {
+        allDocs.sort((a, b) => {
+          const numA = parseInt(a.numOC, 10) || 0;
+          const numB = parseInt(b.numOC, 10) || 0;
+          if (numB !== numA) return numB - numA;
+          const timeA = getTimestampSeconds(a.createdAt);
+          const timeB = getTimestampSeconds(b.createdAt);
+          return timeB - timeA;
+        });
+      }
+
       setOrdenes(allDocs);
       setHasLoadedAllFromDb(true);
       showToast(`¡Se cargaron ${allDocs.length} órdenes desde el servidor local!`);
@@ -1266,20 +1289,37 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
   // Combine live real-time orders with any deep search results from Firestore
   const combinedOrdenes = useMemo(() => {
-    if (dbSearchResults.length === 0) return ordenes;
-    const map = new Map<string, OrdenCompra>();
-    ordenes.forEach((o) => {
-      const key = o.id || o.numOC;
-      if (key) map.set(key, o);
-    });
-    dbSearchResults.forEach((o) => {
-      const key = o.id || o.numOC;
-      if (key && !map.has(key)) {
-        map.set(key, o);
-      }
-    });
-    return Array.from(map.values());
-  }, [ordenes, dbSearchResults]);
+    let list: OrdenCompra[];
+    if (dbSearchResults.length === 0) {
+      list = [...ordenes];
+    } else {
+      const map = new Map<string, OrdenCompra>();
+      ordenes.forEach((o) => {
+        const key = o.id || o.numOC;
+        if (key) map.set(key, o);
+      });
+      dbSearchResults.forEach((o) => {
+        const key = o.id || o.numOC;
+        if (key && !map.has(key)) {
+          map.set(key, o);
+        }
+      });
+      list = Array.from(map.values());
+    }
+
+    if (filterEstado === "Todas") {
+      list.sort((a, b) => {
+        const numA = parseInt(a.numOC, 10) || 0;
+        const numB = parseInt(b.numOC, 10) || 0;
+        if (numB !== numA) return numB - numA;
+        const timeA = getTimestampSeconds(a.createdAt);
+        const timeB = getTimestampSeconds(b.createdAt);
+        return timeB - timeA;
+      });
+    }
+
+    return list;
+  }, [ordenes, dbSearchResults, filterEstado]);
 
   // Filtered list
   const filteredOrdenes = combinedOrdenes.filter((orden) => {
