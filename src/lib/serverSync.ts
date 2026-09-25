@@ -27,7 +27,7 @@ export interface MongoQueryParams {
 /**
  * Guarda o actualiza una orden de compra en MongoDB de manera asíncrona.
  */
-export async function syncOrderToMongo(orderData: Partial<OrdenCompra> & { id?: string; firebaseId?: string; fechaOC?: string | Date }): Promise<void> {
+export async function syncOrderToMongo(orderData: Partial<OrdenCompra> & { id?: string; firebaseId?: string; fechaOC?: string | Date }): Promise<Response | void> {
   try {
     const firebaseId = orderData.id || orderData.firebaseId;
     if (!firebaseId) return;
@@ -56,33 +56,29 @@ export async function syncOrderToMongo(orderData: Partial<OrdenCompra> & { id?: 
       fechaOC,
     };
 
-    // Petición no bloqueante en segundo plano
-    fetch(API_BASE_URL, {
+    // Petición al backend local de MongoDB
+    return await fetch(API_BASE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    }).catch((err) => {
-      console.warn("⚠️ [Mongo Sync] Aviso en segundo plano:", err.message || err);
     });
-  } catch (err) {
-    console.warn("⚠️ [Mongo Sync] Error iniciando sincronización:", err);
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Sync] Aviso en sincronización:", err?.message || err);
   }
 }
 
 /**
  * Elimina una orden de compra en MongoDB cuando se borra en Firebase.
  */
-export async function deleteOrderFromMongo(orderId?: string): Promise<void> {
+export async function deleteOrderFromMongo(orderId?: string): Promise<Response | void> {
   try {
     if (!orderId) return;
 
-    fetch(`${API_BASE_URL}/${orderId}`, {
+    return await fetch(`${API_BASE_URL}/${orderId}`, {
       method: "DELETE",
-    }).catch((err) => {
-      console.warn("⚠️ [Mongo Delete] Aviso en segundo plano:", err.message || err);
     });
-  } catch (err) {
-    console.warn("⚠️ [Mongo Delete] Error iniciando eliminación:", err);
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Delete] Aviso en eliminación:", err?.message || err);
   }
 }
 

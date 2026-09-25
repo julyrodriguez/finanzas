@@ -60,6 +60,7 @@ import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrde
 import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
 import { 
   OrdenesStats, 
+  OrderStatusKey,
   getOrderStatus, 
   trackOrderStatusChange, 
   trackOrderCreated, 
@@ -216,19 +217,77 @@ export default function OrdenesDeComprasPage() {
     }, 600);
   };
 
-  // Cargar estadísticas de órdenes desde el servidor MongoDB
-  useEffect(() => {
-    fetchOrdersStatsFromMongo()
-      .then((ms) => {
-        if (ms) {
-          setServerStats({
-            ...ms,
-            updatedAt: new Date().toISOString(),
-          });
-        }
-      })
-      .catch((err) => console.warn("Aviso stats Mongo:", err));
+  // Función para refrescar estadísticas desde MongoDB
+  const refreshStatsFromMongo = useCallback(async () => {
+    try {
+      const ms = await fetchOrdersStatsFromMongo();
+      if (ms) {
+        setServerStats({
+          ...ms,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.warn("Aviso stats Mongo:", err);
+    }
   }, []);
+
+  // Actualización optimista inmediata (0ms) en la tarjeta de pendientes y contadores de estado
+  const updateStatsOptimistic = useCallback(
+    (oldStatus?: OrderStatusKey | null, newStatus?: OrderStatusKey | null) => {
+      setServerStats((prev) => {
+        if (!prev) {
+          return {
+            total: newStatus ? 1 : 0,
+            pendiente: newStatus === "pendiente" ? 1 : 0,
+            mandada: newStatus === "mandada" ? 1 : 0,
+            liberada: newStatus === "liberada" ? 1 : 0,
+            entregada: newStatus === "entregada" ? 1 : 0,
+            cancelada: newStatus === "cancelada" ? 1 : 0,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        const next = { ...prev, updatedAt: new Date().toISOString() };
+        if (!oldStatus && newStatus) {
+          // Creación de nueva orden
+          next.total = (next.total || 0) + 1;
+          next[newStatus] = (next[newStatus] || 0) + 1;
+        } else if (oldStatus && !newStatus) {
+          // Eliminación de orden
+          next.total = Math.max(0, (next.total || 0) - 1);
+          next[oldStatus] = Math.max(0, (next[oldStatus] || 0) - 1);
+        } else if (oldStatus && newStatus && oldStatus !== newStatus) {
+          // Cambio de estado
+          next[oldStatus] = Math.max(0, (next[oldStatus] || 0) - 1);
+          next[newStatus] = (next[newStatus] || 0) + 1;
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  // Cargar estadísticas iniciales, sincronizar periódicamente y al volver a enfocar la pestaña
+  useEffect(() => {
+    refreshStatsFromMongo();
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshStatsFromMongo();
+      }
+    };
+
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+    const interval = setInterval(refreshStatsFromMongo, 30000);
+
+    return () => {
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      clearInterval(interval);
+    };
+  }, [refreshStatsFromMongo]);
 
   const handleManualSyncStats = async () => {
     if (isSyncingStats) return;
@@ -687,12 +746,17 @@ export default function OrdenesDeComprasPage() {
       syncOrderToMongo({ id: editingOrden.id, ...editingOrden, ...dataToSave });
       showToast("¡Orden de compra actualizada!");
 
+      const oldStatus = getOrderStatus(editingOrden);
+      const newStatus = getOrderStatus(dataToSave);
+      if (oldStatus !== newStatus) {
+        updateStatsOptimistic(oldStatus, newStatus);
+        setTimeout(refreshStatsFromMongo, 800);
+      }
+
       if (db) {
         try {
           const docRef = doc(db, "ordenes_compra", editingOrden.id);
           await updateDoc(docRef, dataToSave);
-          const oldStatus = getOrderStatus(editingOrden);
-          const newStatus = getOrderStatus(dataToSave);
           if (oldStatus !== newStatus) {
             trackOrderStatusChange(db, oldStatus, newStatus);
           }
@@ -720,6 +784,9 @@ export default function OrdenesDeComprasPage() {
 
       const tempId = generateUniqueId();
       setOrdenes((prev) => [{ id: tempId, ...newOrden }, ...prev]);
+      
+      const newStatus = getOrderStatus(newOrden);
+      updateStatsOptimistic(null, newStatus);
       showToast("¡Orden de compra agregada!");
 
       if (db) {
@@ -736,13 +803,19 @@ export default function OrdenesDeComprasPage() {
             prev.map((item) => (item.id === tempId ? { ...item, id: docRef.id } : item))
           );
           // Sincronizar hacia MongoDB una sola vez con el ID definitivo de Firebase y fecha válida
-          syncOrderToMongo({ id: docRef.id, ...newOrden, fechaOC: now.toISOString() });
+          syncOrderToMongo({ id: docRef.id, ...newOrden, fechaOC: now.toISOString() }).then(() => {
+            setTimeout(refreshStatsFromMongo, 800);
+          });
         } catch (err) {
           console.warn("Aviso Firebase al agregar orden:", err);
-          syncOrderToMongo({ id: tempId, ...newOrden, fechaOC: now.toISOString() });
+          syncOrderToMongo({ id: tempId, ...newOrden, fechaOC: now.toISOString() }).then(() => {
+            setTimeout(refreshStatsFromMongo, 800);
+          });
         }
       } else {
-        syncOrderToMongo({ id: tempId, ...newOrden, fechaOC: now.toISOString() });
+        syncOrderToMongo({ id: tempId, ...newOrden, fechaOC: now.toISOString() }).then(() => {
+          setTimeout(refreshStatsFromMongo, 800);
+        });
       }
     }
 
@@ -821,6 +894,15 @@ export default function OrdenesDeComprasPage() {
 
   // Optimistic handler for status changes from OrderStatusMenu
   const handleStatusChange = (ordenId: string, updatedFields: Partial<OrdenCompra>) => {
+    const target = ordenes.find((item) => item.id === ordenId);
+    if (target) {
+      const oldStatus = getOrderStatus(target);
+      const newStatus = getOrderStatus({ ...target, ...updatedFields });
+      if (oldStatus !== newStatus) {
+        updateStatsOptimistic(oldStatus, newStatus);
+        setTimeout(refreshStatsFromMongo, 800);
+      }
+    }
     setOrdenes((prev) =>
       prev.map((item) => (item.id === ordenId ? { ...item, ...updatedFields } : item))
     );
@@ -840,6 +922,13 @@ export default function OrdenesDeComprasPage() {
       ? { liberada: true, mandada: false, entregada: false }
       : { liberada: false, mandada: false, entregada: false, enviado: false, firmado1: false, firmado2: false };
 
+    const oldStatus = getOrderStatus(orden);
+    const newStatus = getOrderStatus({ ...orden, ...updateData });
+    if (oldStatus !== newStatus) {
+      updateStatsOptimistic(oldStatus, newStatus);
+      setTimeout(refreshStatsFromMongo, 800);
+    }
+
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
@@ -853,8 +942,6 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
-        const oldStatus = getOrderStatus(orden);
-        const newStatus = getOrderStatus({ ...orden, ...updateData });
         trackOrderStatusChange(db, oldStatus, newStatus);
       } catch (err) {
         console.warn("Aviso Firebase al actualizar liberada:", err);
@@ -875,6 +962,13 @@ export default function OrdenesDeComprasPage() {
       ? { mandada: true, liberada: false, entregada: false }
       : { mandada: false, liberada: false, entregada: false };
 
+    const oldStatus = getOrderStatus(orden);
+    const newStatus = getOrderStatus({ ...orden, ...updateData });
+    if (oldStatus !== newStatus) {
+      updateStatsOptimistic(oldStatus, newStatus);
+      setTimeout(refreshStatsFromMongo, 800);
+    }
+
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
@@ -888,8 +982,6 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
-        const oldStatus = getOrderStatus(orden);
-        const newStatus = getOrderStatus({ ...orden, ...updateData });
         trackOrderStatusChange(db, oldStatus, newStatus);
       } catch (err) {
         console.warn("Aviso Firebase al actualizar mandada:", err);
@@ -910,6 +1002,13 @@ export default function OrdenesDeComprasPage() {
       ? { entregada: true, liberada: false, mandada: false }
       : { entregada: false, liberada: true, mandada: false };
 
+    const oldStatus = getOrderStatus(orden);
+    const newStatus = getOrderStatus({ ...orden, ...updateData });
+    if (oldStatus !== newStatus) {
+      updateStatsOptimistic(oldStatus, newStatus);
+      setTimeout(refreshStatsFromMongo, 800);
+    }
+
     setOrdenes((prev) =>
       prev.map((item) => (item.id === orden.id ? { ...item, ...updateData } : item))
     );
@@ -923,8 +1022,6 @@ export default function OrdenesDeComprasPage() {
       try {
         const docRef = doc(db, "ordenes_compra", orden.id);
         await updateDoc(docRef, updateData);
-        const oldStatus = getOrderStatus(orden);
-        const newStatus = getOrderStatus({ ...orden, ...updateData });
         trackOrderStatusChange(db, oldStatus, newStatus);
       } catch (err) {
         console.warn("Aviso Firebase al actualizar entregada:", err);
@@ -939,6 +1036,12 @@ export default function OrdenesDeComprasPage() {
     if (!confirm("¿Estás seguro de eliminar esta orden de compra?")) return;
 
     const targetOrden = ordenes.find((item) => item.id === id);
+    if (targetOrden) {
+      const delStatus = getOrderStatus(targetOrden);
+      updateStatsOptimistic(delStatus, null);
+      setTimeout(refreshStatsFromMongo, 800);
+    }
+
     setOrdenes((prev) => prev.filter((item) => item.id !== id));
     deleteOrderFromMongo(id);
     showToast("Orden eliminada");
@@ -1002,25 +1105,37 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   const handleDropLink = async (e: React.DragEvent, orden: OrdenCompra) => {
     e.preventDefault();
     if (isOrdenesUser) return;
-    const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
-    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+    const rawUrl = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+    if (!rawUrl) return;
+
+    let finalUrl = rawUrl.trim();
+    if (finalUrl && !/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    if (finalUrl && (finalUrl.startsWith("http://") || finalUrl.startsWith("https://"))) {
+      // 1. Actualización optimista inmediata en React
+      setOrdenes((prev) =>
+        prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: finalUrl } : item))
+      );
+
+      // 2. Sincronización en MongoDB (backend central)
+      if (orden.id) {
+        syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: finalUrl });
+      }
+
+      // 3. Respaldo en Firestore de forma no bloqueante con setDoc merge
       const db = getFirebaseDb();
       if (db && orden.id) {
         try {
           const docRef = doc(db, "ordenes_compra", orden.id);
-          await updateDoc(docRef, { linkSharepoint: url });
-          syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: url });
-          
-          setOrdenes((prev) =>
-            prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: url } : item))
-          );
-          
-          showToast(`¡Enlace de carpeta guardado para OC ${orden.numOC}!`);
+          await setDoc(docRef, { linkSharepoint: finalUrl }, { merge: true });
         } catch (err) {
-          console.error("Error al guardar enlace:", err);
-          showToast("Error al vincular el enlace");
+          console.warn("Aviso Firebase al sincronizar enlace:", err);
         }
       }
+
+      showToast(`¡Enlace de carpeta guardado para OC ${orden.numOC}!`);
     } else {
       showToast("Por favor suelta un enlace válido");
     }
@@ -1029,31 +1144,71 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
   // Prompt user to paste SharePoint / OneDrive link
   const handlePromptLink = async (orden: OrdenCompra) => {
     if (isOrdenesUser) return;
-    const url = prompt(`Pega el enlace de SharePoint/OneDrive para la OC ${orden.numOC}:`);
+    const currentLink = orden.linkSharepoint || "";
+    const promptMessage = currentLink 
+      ? `Modificar enlace de SharePoint/OneDrive para la OC ${orden.numOC} (deja vacío para eliminar):`
+      : `Pega el enlace de SharePoint/OneDrive para la OC ${orden.numOC}:`;
+    
+    const url = prompt(promptMessage, currentLink);
     if (url === null) return; // User cancelled
     
-    const cleanUrl = url.trim();
-    if (cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+    let cleanUrl = url.trim();
+    
+    // Si el usuario vació el campo, eliminamos el enlace
+    if (cleanUrl === "") {
+      setOrdenes((prev) =>
+        prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: "" } : item))
+      );
+      if (orden.id) {
+        syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: "" });
+      }
       const db = getFirebaseDb();
       if (db && orden.id) {
         try {
           const docRef = doc(db, "ordenes_compra", orden.id);
-          await updateDoc(docRef, { linkSharepoint: cleanUrl });
-          syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: cleanUrl });
-          
-          setOrdenes((prev) =>
-            prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: cleanUrl } : item))
-          );
-          
-          showToast(`¡Enlace guardado para OC ${orden.numOC}!`);
+          await setDoc(docRef, { linkSharepoint: "" }, { merge: true });
         } catch (err) {
-          console.error("Error al guardar enlace:", err);
-          showToast("Error al guardar el enlace");
+          console.warn("Aviso Firebase al limpiar enlace:", err);
         }
       }
-    } else if (cleanUrl) {
-      alert("Por favor, ingresa un enlace válido (debe empezar con http:// o https://)");
+      showToast(`Enlace de carpeta eliminado para OC ${orden.numOC}`);
+      return;
     }
+
+    // Normalizar URL agregando https:// si el usuario pegó el dominio directo (ej. cinehoyts.sharepoint.com/...)
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      cleanUrl = `https://${cleanUrl}`;
+    }
+
+    try {
+      new URL(cleanUrl);
+    } catch {
+      alert("Por favor, ingresa un enlace web válido (ejemplo: https://tuempresa.sharepoint.com/...)");
+      return;
+    }
+
+    // 1. Actualización optimista inmediata en React
+    setOrdenes((prev) =>
+      prev.map((item) => (item.id === orden.id ? { ...item, linkSharepoint: cleanUrl } : item))
+    );
+
+    // 2. Sincronización en MongoDB (backend central)
+    if (orden.id) {
+      syncOrderToMongo({ id: orden.id, ...orden, linkSharepoint: cleanUrl });
+    }
+
+    // 3. Respaldo en Firestore con setDoc merge para no fallar si el doc no existe todavía
+    const db = getFirebaseDb();
+    if (db && orden.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", orden.id);
+        await setDoc(docRef, { linkSharepoint: cleanUrl }, { merge: true });
+      } catch (err) {
+        console.warn("Aviso Firebase al guardar enlace:", err);
+      }
+    }
+
+    showToast(`¡Enlace guardado para OC ${orden.numOC}!`);
   };
 
   const showToast = (msg: string) => {
@@ -1758,20 +1913,29 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                                 <Copy className="w-3 h-3" />
                               </button>
                               {orden.linkSharepoint ? (
-                                <a
-                                  href={orden.linkSharepoint}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-1 rounded hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
-                                  title="Abrir carpeta vinculada"
-                                >
-                                  <FolderOpen className="w-3 h-3" />
-                                </a>
+                                <div className="inline-flex items-center gap-0.5">
+                                  <a
+                                    href={orden.linkSharepoint}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1 rounded hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-colors"
+                                    title="Abrir carpeta vinculada"
+                                  >
+                                    <FolderOpen className="w-3 h-3" />
+                                  </a>
+                                  <button
+                                    onClick={() => handlePromptLink(orden)}
+                                    className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-blue-300 transition-colors"
+                                    title="Modificar enlace de carpeta"
+                                  >
+                                    <Link2 className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
                               ) : (
                                 <button 
                                   onClick={() => handlePromptLink(orden)}
-                                  className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors"
-                                  title="Pegar enlace"
+                                  className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+                                  title="Pegar enlace de carpeta"
                                 >
                                   <Folder className="w-3 h-3" />
                                 </button>
@@ -1954,17 +2118,35 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
                         {/* Actions (Copiar & Editar) */}
                         <div className="flex items-center gap-1.5">
-                          {orden.linkSharepoint && (
-                            <a
-                              href={orden.linkSharepoint}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-1 rounded-lg border border-blue-500/30 bg-blue-500/20 text-blue-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
-                              title="Abrir carpeta vinculada"
+                          {orden.linkSharepoint ? (
+                            <div className="inline-flex items-center gap-1">
+                              <a
+                                href={orden.linkSharepoint}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 rounded-lg border border-blue-500/30 bg-blue-500/20 text-blue-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                                title="Abrir carpeta vinculada"
+                              >
+                                <FolderOpen className="w-3 h-3" />
+                                <span>Carpeta</span>
+                              </a>
+                              <button
+                                onClick={() => handlePromptLink(orden)}
+                                className="p-1 rounded-lg border border-white/10 hover:bg-white/10 text-slate-400 hover:text-blue-300 transition-colors"
+                                title="Modificar enlace de carpeta"
+                              >
+                                <Link2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handlePromptLink(orden)}
+                              className="px-2 py-1 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Pegar enlace de carpeta"
                             >
-                              <FolderOpen className="w-3 h-3" />
+                              <Folder className="w-3 h-3" />
                               <span>Carpeta</span>
-                            </a>
+                            </button>
                           )}
                           <button
                             onClick={() => handleCopy(orden)}
