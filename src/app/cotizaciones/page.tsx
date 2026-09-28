@@ -354,9 +354,24 @@ export default function CotizacionesPage() {
     };
   }, []);
 
+  // Helper to determine if a quote is a PCT or Pliego
+  const isPctPliegoQuote = (q: { name?: string; categoria?: string }) => {
+    const name = (q.name || "").trim().toUpperCase();
+    const cat = (q.categoria || "").trim().toUpperCase();
+    return (
+      name.startsWith("PCT") ||
+      name.includes("PLIEGO") ||
+      cat === "PCT/PLIEGOS" ||
+      cat === "PCT / PLIEGOS" ||
+      cat.startsWith("PCT") ||
+      cat.includes("PLIEGO")
+    );
+  };
+
   // Distinct categories available across customCategories, quotations, and pendientes
   const allCategories = useMemo(() => {
     const catsSet = new Set<string>();
+    catsSet.add("PCT/PLIEGOS");
     customCategories.forEach((c) => {
       if (c && c.trim()) catsSet.add(c.trim());
     });
@@ -443,7 +458,13 @@ export default function CotizacionesPage() {
     return savedQuotations.filter((quote) => {
       // 1. Categoria filter
       if (filterCategoria !== "todas") {
-        if (filterCategoria === "_sin_categoria_") {
+        if (
+          filterCategoria === "_pct_pliegos_" ||
+          filterCategoria.toUpperCase() === "PCT/PLIEGOS" ||
+          filterCategoria.toUpperCase() === "PCT / PLIEGOS"
+        ) {
+          if (!isPctPliegoQuote(quote)) return false;
+        } else if (filterCategoria === "_sin_categoria_") {
           if (quote.categoria && quote.categoria.trim() !== "") return false;
         } else {
           if (quote.categoria?.toLowerCase() !== filterCategoria.toLowerCase()) return false;
@@ -506,6 +527,22 @@ export default function CotizacionesPage() {
       return true;
     }).length;
   };
+
+  const pctPliegosQuoteCount = savedQuotations.filter((q) => {
+    if (!isPctPliegoQuote(q)) return false;
+    if (filterStatus !== "todos") {
+      const isFin = q.status === "finalizada" || q.isFinalized;
+      const rawStatus = q.status || (isFin ? "finalizada" : "borrador");
+      if (filterStatus === "pendientes" || filterStatus === "borrador") {
+        if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
+      } else if (filterStatus === "enviados" || filterStatus === "enviada") {
+        if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
+      } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
+        if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
+      }
+    }
+    return true;
+  }).length;
 
   const uncategorizedQuoteCount = savedQuotations.filter((q) => {
     if (q.categoria && q.categoria.trim() !== "") return false;
@@ -724,6 +761,12 @@ export default function CotizacionesPage() {
       return;
     }
 
+    let finalCategoria = quoteCategoria.trim();
+    if (!finalCategoria && quoteName.trim().toUpperCase().startsWith("PCT")) {
+      finalCategoria = "PCT/PLIEGOS";
+      setQuoteCategoria("PCT/PLIEGOS");
+    }
+
     const payload: Omit<SavedQuotation, "id"> = {
       name: quoteName,
       notes,
@@ -737,7 +780,7 @@ export default function CotizacionesPage() {
       isFinalized: status === "finalizada",
       winningProviderId: status === "finalizada" ? winningProviderId : "",
       sentAt: status === "enviada" ? sentAt : "",
-      categoria: quoteCategoria.trim(),
+      categoria: finalCategoria,
       pendienteId: quotePendienteId.trim(),
       pendienteTitulo: quotePendienteTitulo.trim(),
       attachments: attachments || []
@@ -1266,6 +1309,14 @@ export default function CotizacionesPage() {
       setNotes(quoteNotes);
     }
 
+    if (!quoteCategoria || quoteCategoria.trim() === "") {
+      const isPct = quoteName.trim().toUpperCase().startsWith("PCT") ||
+        (newAttachment?.originalName && newAttachment.originalName.trim().toUpperCase().startsWith("PCT"));
+      if (isPct) {
+        setQuoteCategoria("PCT/PLIEGOS");
+      }
+    }
+
     if (currentQuoteId) {
       // Dual Write: Mongo
       syncCotizacionToMongo({
@@ -1542,6 +1593,9 @@ export default function CotizacionesPage() {
     if (importFileName && (quoteName.startsWith("Nueva Cotización") || quoteName.startsWith("Cotización de Insumos") || !quoteName.trim())) {
       const cleanName = importFileName.replace(/\.[^/.]+$/, "");
       setQuoteName(cleanName);
+      if (cleanName.trim().toUpperCase().startsWith("PCT") && (!quoteCategoria || quoteCategoria.trim() === "")) {
+        setQuoteCategoria("PCT/PLIEGOS");
+      }
     }
 
     setHasActiveQuote(true);
@@ -2369,8 +2423,14 @@ export default function CotizacionesPage() {
               <input
                 type="text"
                 value={quoteName}
-                onChange={(e) => setQuoteName(e.target.value)}
-                placeholder="Ej. Insumos Planta Munro Q3"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuoteName(val);
+                  if (val.trim().toUpperCase().startsWith("PCT") && (!quoteCategoria || quoteCategoria.trim() === "")) {
+                    setQuoteCategoria("PCT/PLIEGOS");
+                  }
+                }}
+                placeholder="Ej. PCT 059 Palermo / Insumos Planta Munro Q3"
                 disabled={isLocked}
                 className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
@@ -4060,40 +4120,77 @@ export default function CotizacionesPage() {
                 </span>
               </button>
 
-              {/* Carpetas por cada rubro */}
-              {allCategories.map((cat) => {
-                const count = getCategoryQuoteCount(cat);
-                const isActive = filterCategoria.toLowerCase() === cat.toLowerCase();
+              {/* Botón especial PCT / Pliegos */}
+              {(() => {
+                const isPctActive =
+                  filterCategoria === "_pct_pliegos_" ||
+                  filterCategoria.toUpperCase() === "PCT/PLIEGOS" ||
+                  filterCategoria.toUpperCase() === "PCT / PLIEGOS";
 
                 return (
                   <button
-                    key={cat}
-                    onClick={() => setFilterCategoria(isActive ? "todas" : cat)}
+                    onClick={() => setFilterCategoria(isPctActive ? "todas" : "_pct_pliegos_")}
                     className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                      isActive
-                        ? "bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-indigo-950/60 border-amber-400 text-white shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40"
-                        : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                      isPctActive
+                        ? "bg-gradient-to-r from-purple-950/90 via-fuchsia-950/40 to-indigo-950/60 border-purple-400 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-400/40"
+                        : "bg-[#080c16] hover:bg-[#161026] border-purple-500/40 hover:border-purple-400/70 text-purple-300 hover:text-white"
                     }`}
-                    title={`Filtrar por ${cat}`}
+                    title="Filtrar cotizaciones de Pliegos y PCTs (nombres que empiezan con PCT o categoría asignada)"
                   >
-                    {isActive ? (
-                      <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
-                    ) : (
-                      <Folder className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 shrink-0 transition-colors" />
-                    )}
-                    <span className="font-medium whitespace-nowrap">{cat}</span>
+                    <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isPctActive ? "text-purple-300" : "text-purple-400/90 group-hover:text-purple-300"}`} />
+                    <span className="font-bold whitespace-nowrap">PCT / Pliegos</span>
                     <span
                       className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                        isActive
-                          ? "bg-amber-400/25 text-amber-200 border border-amber-400/30"
-                          : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
+                        isPctActive
+                          ? "bg-purple-500/30 text-purple-200 border border-purple-400/40"
+                          : "bg-purple-950/40 text-purple-300 border border-purple-800/40 group-hover:text-white"
                       }`}
                     >
-                      {count}
+                      {pctPliegosQuoteCount}
                     </span>
                   </button>
                 );
-              })}
+              })()}
+
+              {/* Carpetas por cada rubro */}
+              {allCategories
+                .filter((cat) => {
+                  const norm = cat.trim().toUpperCase();
+                  return norm !== "PCT/PLIEGOS" && norm !== "PCT / PLIEGOS";
+                })
+                .map((cat) => {
+                  const count = getCategoryQuoteCount(cat);
+                  const isActive = filterCategoria.toLowerCase() === cat.toLowerCase();
+
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setFilterCategoria(isActive ? "todas" : cat)}
+                      className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
+                        isActive
+                          ? "bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-indigo-950/60 border-amber-400 text-white shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40"
+                          : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                      }`}
+                      title={`Filtrar por ${cat}`}
+                    >
+                      {isActive ? (
+                        <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
+                      ) : (
+                        <Folder className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 shrink-0 transition-colors" />
+                      )}
+                      <span className="font-medium whitespace-nowrap">{cat}</span>
+                      <span
+                        className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
+                          isActive
+                            ? "bg-amber-400/25 text-amber-200 border border-amber-400/30"
+                            : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
 
               {/* Sin Rubro */}
               {uncategorizedQuoteCount > 0 && (
@@ -4269,12 +4366,20 @@ export default function CotizacionesPage() {
                             {isFinalizada && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 inline" />}
                             <span>{quote.name}</span>
                           </h4>
-                          {quote.categoria && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] font-semibold border border-amber-500/20">
-                              <Folder className="w-3 h-3 text-amber-400" />
-                              {quote.categoria}
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            {isPctPliegoQuote(quote) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 text-[10px] font-bold border border-purple-500/30">
+                                <FileSpreadsheet className="w-3 h-3 text-purple-400" />
+                                PCT / Pliego
+                              </span>
+                            )}
+                            {quote.categoria && quote.categoria.trim().toUpperCase() !== "PCT/PLIEGOS" && quote.categoria.trim().toUpperCase() !== "PCT / PLIEGOS" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] font-semibold border border-amber-500/20">
+                                <Folder className="w-3 h-3 text-amber-400" />
+                                {quote.categoria}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex flex-col gap-1 items-end shrink-0 select-none">
