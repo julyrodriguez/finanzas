@@ -4038,64 +4038,67 @@ export default function CotizacionesPage() {
           ==================================================== */}
       {activeTab === "historial" && (
         <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6 animate-fadeIn">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-white text-base">Historial de Cotizaciones</h3>
               <p className="text-xs text-gray-400">Filtrá por carpetas de rubro, estado o pendientes vinculados</p>
             </div>
 
-            <button
-              onClick={() => setIsCategoryModalOpen(true)}
-              className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer"
-            >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>+ Nueva Carpeta</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
+              {/* Filtros de Estado compactos al lado de Nueva Carpeta */}
+              <div className="inline-flex items-center p-1 bg-[#080c16] border border-white/10 rounded-xl gap-0.5">
+                {[
+                  { id: "todos", label: "Todos", count: statusCounts.todos },
+                  { id: "pendientes", label: "Pendientes", count: statusCounts.pendientes },
+                  { id: "enviados", label: "Enviados", count: statusCounts.enviados },
+                  { id: "finalizados", label: "Finalizados", count: statusCounts.finalizados },
+                ].map((tab) => {
+                  const isSelected = filterStatus === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setFilterStatus(tab.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? tab.id === "pendientes"
+                            ? "bg-amber-500/20 text-amber-300 shadow-sm border border-amber-500/40"
+                            : tab.id === "enviados"
+                              ? "bg-blue-500/20 text-blue-300 shadow-sm border border-blue-500/40"
+                              : tab.id === "finalizados"
+                                ? "bg-emerald-500/20 text-emerald-300 shadow-sm border border-emerald-500/40"
+                                : "bg-white/15 text-white shadow-sm border border-white/20"
+                          : "text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                          isSelected
+                            ? "bg-white/20 text-white"
+                            : "bg-white/5 text-gray-500"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Botón Nueva Carpeta */}
+              <button
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer shrink-0"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                <span>+ Nueva Carpeta</span>
+              </button>
+            </div>
           </div>
 
-          {/* Filtros de Estado: Todos - Pendientes - Enviados - Finalizados */}
-          <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
-            {[
-              { id: "todos", label: "Todos", count: statusCounts.todos },
-              { id: "pendientes", label: "Pendientes", count: statusCounts.pendientes },
-              { id: "enviados", label: "Enviados", count: statusCounts.enviados },
-              { id: "finalizados", label: "Finalizados", count: statusCounts.finalizados },
-            ].map((tab) => {
-              const isSelected = filterStatus === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setFilterStatus(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                    isSelected
-                      ? tab.id === "pendientes"
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/15 ring-1 ring-amber-500/30"
-                        : tab.id === "enviados"
-                          ? "bg-blue-500/20 text-blue-300 border-blue-500/50 shadow-md shadow-blue-500/15 ring-1 ring-blue-500/30"
-                          : tab.id === "finalizados"
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/15 ring-1 ring-emerald-500/30"
-                            : "bg-white/15 text-white border-white/30 shadow-md ring-1 ring-white/20"
-                      : "bg-[#080c16] text-gray-400 hover:text-gray-200 hover:bg-white/5 border-white/5"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                      isSelected
-                        ? "bg-white/20 text-white"
-                        : "bg-white/5 text-gray-400"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Mini Carpetitas Horizontales (Rubros / Categorías) */}
+          {/* Carpetitas (Rubros / Categorías) que se envuelven sin scroll horizontal */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin pt-0.5">
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
               {/* Todas las áreas */}
               <button
                 onClick={() => setFilterCategoria("todas")}
