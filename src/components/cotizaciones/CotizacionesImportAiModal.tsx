@@ -162,26 +162,56 @@ export function CotizacionesImportAiModal({
         throw new Error(resData.error || "No se pudo extraer la información del presupuesto");
       }
 
-      const extracted = resData.data;
+      const extracted = resData.data || {};
       setAttachment(resData.attachment);
-      setProviderName(targetProviderName || extracted.providerName || selectedFile.name.replace(/\.[^/.]+$/, ""));
+      const defaultProvider = selectedFile?.name ? selectedFile.name.replace(/\.[^/.]+$/, "") : "Proveedor";
+      setProviderName(targetProviderName || extracted.providerName || defaultProvider);
       setCurrency(extracted.currency === "USD" ? "USD" : "ARS");
       setNotes(extracted.notes || "");
 
-      const formattedItems: ExtractedItem[] = (extracted.items || []).map((it: any, index: number) => ({
-        id: it.id || `ext-${Date.now()}-${index}`,
-        name: it.name || `Ítem ${index + 1}`,
-        quantity: typeof it.quantity === "number" ? it.quantity : 1,
-        unit: it.unit || "U",
-        price: typeof it.price === "number" ? it.price : 0,
-        totalPrice: typeof it.totalPrice === "number" ? it.totalPrice : 0,
-        discount: typeof it.discount === "number" ? it.discount : 0,
-        specification: it.specification || "",
-        presentationName: it.presentationName || "",
-        unitsPerPresentation: typeof it.unitsPerPresentation === "number" ? it.unitsPerPresentation : 1,
-        matchedItemId: it.matchedItemId || null,
-        selected: true
-      }));
+      // Robust array extraction (handles native array, object with values, or nested items)
+      let rawItems: any[] = [];
+      if (Array.isArray(extracted.items)) {
+        rawItems = extracted.items;
+      } else if (extracted.items && typeof extracted.items === "object") {
+        rawItems = Object.values(extracted.items);
+      } else if (Array.isArray(extracted)) {
+        rawItems = extracted;
+      }
+
+      const formattedItems: ExtractedItem[] = rawItems.map((it: any, index: number) => {
+        const itemObj = (it && typeof it === "object") ? it : { name: String(it) };
+        const parsedPrice = typeof itemObj.price === "number" 
+          ? itemObj.price 
+          : parseFloat(String(itemObj.price || "").replace(/[^0-9.-]/g, "")) || 0;
+        const parsedQty = typeof itemObj.quantity === "number" 
+          ? itemObj.quantity 
+          : parseFloat(String(itemObj.quantity || "")) || 1;
+        const parsedTotal = typeof itemObj.totalPrice === "number" 
+          ? itemObj.totalPrice 
+          : (parsedPrice * parsedQty);
+        const parsedDiscount = typeof itemObj.discount === "number" 
+          ? itemObj.discount 
+          : parseFloat(String(itemObj.discount || "")) || 0;
+        const parsedUnits = typeof itemObj.unitsPerPresentation === "number" 
+          ? itemObj.unitsPerPresentation 
+          : parseFloat(String(itemObj.unitsPerPresentation || "")) || 1;
+
+        return {
+          id: itemObj.id || `ext-${Date.now()}-${index}`,
+          name: itemObj.name || `Ítem ${index + 1}`,
+          quantity: parsedQty,
+          unit: itemObj.unit || "U",
+          price: parsedPrice,
+          totalPrice: parsedTotal,
+          discount: parsedDiscount,
+          specification: itemObj.specification || "",
+          presentationName: itemObj.presentationName || "",
+          unitsPerPresentation: parsedUnits,
+          matchedItemId: itemObj.matchedItemId || null,
+          selected: true
+        };
+      });
 
       setItems(formattedItems);
     } catch (err: any) {
