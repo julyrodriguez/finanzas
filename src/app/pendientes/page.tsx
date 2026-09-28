@@ -143,6 +143,8 @@ export default function PendientesPage() {
 
   // Selection & Editor state
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editorTitle, setEditorTitle] = useState<string>("");
+  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [editorNotes, setEditorNotes] = useState<string>("");
   const [editorDescription, setEditorDescription] = useState<string>("");
   const [editorFechaLimite, setEditorFechaLimite] = useState<string>("");
@@ -493,6 +495,8 @@ export default function PendientesPage() {
   useEffect(() => {
     setTimeout(() => {
       if (selectedItem) {
+        setEditorTitle(selectedItem.titulo || "");
+        setIsEditingTitle(false);
         setEditorNotes(selectedItem.notasAdicionales || "");
         setEditorDescription(selectedItem.descripcion || "");
         setEditorFechaLimite(selectedItem.fechaLimite || "");
@@ -501,6 +505,8 @@ export default function PendientesPage() {
         const s = selectedItem.completedAt ? getTimestampSeconds(selectedItem.completedAt) : 0;
         setEditorLastSaved(s > 0 ? new Date(s * 1000) : null);
       } else {
+        setEditorTitle("");
+        setIsEditingTitle(false);
         setEditorNotes("");
         setEditorDescription("");
         setEditorFechaLimite("");
@@ -542,9 +548,15 @@ export default function PendientesPage() {
     }
   };
 
-  const handleSaveEditorNotes = async () => {
+  // Save / Rename title
+  const handleSaveTitle = async () => {
     if (!selectedId) return;
-    setSavingEditor(true);
+    const trimmed = editorTitle.trim();
+    if (!trimmed) {
+      showToast("El título no puede estar vacío", "error");
+      return;
+    }
+
     try {
       // 1. Optimistic UI update
       setAllItems((prev) =>
@@ -552,6 +564,71 @@ export default function PendientesPage() {
           item.id === selectedId
             ? {
                 ...item,
+                titulo: trimmed,
+              }
+            : item
+        )
+      );
+
+      // Sincronizar cotizaciones vinculadas si tienen este pendiente
+      setAllCotizaciones((prev) =>
+        prev.map((c) =>
+          c.pendienteId === selectedId
+            ? { ...c, pendienteTitulo: trimmed }
+            : c
+        )
+      );
+
+      // 2. Dual Write: MongoDB
+      syncPendienteToMongo({
+        id: selectedId,
+        titulo: trimmed,
+      });
+
+      const targetItem = allItems.find((p) => p.id === selectedId);
+      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
+        targetItem.cotizacionesIds.forEach((cId) => {
+          syncCotizacionToMongo({ id: cId, pendienteTitulo: trimmed });
+        });
+      }
+
+      // 3. Dual Write: Firebase
+      if (db) {
+        updateDoc(doc(db, "pendientes", selectedId), {
+          titulo: trimmed,
+          updatedAt: serverTimestamp(),
+        }).catch(console.warn);
+
+        if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
+          targetItem.cotizacionesIds.forEach((cId) => {
+            updateDoc(doc(db, "cotizaciones", cId), {
+              pendienteTitulo: trimmed,
+            }).catch(console.warn);
+          });
+        }
+      }
+
+      setIsEditingTitle(false);
+      showToast("Título actualizado correctamente", "success");
+    } catch (err) {
+      console.error("Error saving title:", err);
+      showToast("Error al actualizar título", "error");
+    }
+  };
+
+  const handleSaveEditorNotes = async () => {
+    if (!selectedId) return;
+    setSavingEditor(true);
+    const finalTitle = editorTitle.trim() || selectedItem?.titulo || "Sin título";
+
+    try {
+      // 1. Optimistic UI update
+      setAllItems((prev) =>
+        prev.map((item) =>
+          item.id === selectedId
+            ? {
+                ...item,
+                titulo: finalTitle,
                 notasAdicionales: editorNotes,
                 descripcion: editorDescription,
                 fechaLimite: editorFechaLimite || null,
@@ -561,19 +638,38 @@ export default function PendientesPage() {
         )
       );
 
+      if (finalTitle !== selectedItem?.titulo) {
+        setAllCotizaciones((prev) =>
+          prev.map((c) =>
+            c.pendienteId === selectedId
+              ? { ...c, pendienteTitulo: finalTitle }
+              : c
+          )
+        );
+      }
+
       // 2. Dual Write: MongoDB
       syncPendienteToMongo({
         id: selectedId,
+        titulo: finalTitle,
         notasAdicionales: editorNotes,
         descripcion: editorDescription,
         fechaLimite: editorFechaLimite || null,
         categoria: editorCategoria || ""
       });
 
+      const targetItem = allItems.find((p) => p.id === selectedId);
+      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0 && finalTitle !== selectedItem?.titulo) {
+        targetItem.cotizacionesIds.forEach((cId) => {
+          syncCotizacionToMongo({ id: cId, pendienteTitulo: finalTitle });
+        });
+      }
+
       // 3. Dual Write: Firebase
       if (db) {
         const docRef = doc(db, "pendientes", selectedId);
         updateDoc(docRef, {
+          titulo: finalTitle,
           notasAdicionales: editorNotes,
           descripcion: editorDescription,
           fechaLimite: editorFechaLimite || null,
@@ -582,9 +678,18 @@ export default function PendientesPage() {
         }).catch((err) => {
           console.warn("⚠️ Error guardando notas de proyecto en Firebase:", err);
         });
+
+        if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0 && finalTitle !== selectedItem?.titulo) {
+          targetItem.cotizacionesIds.forEach((cId) => {
+            updateDoc(doc(db, "cotizaciones", cId), {
+              pendienteTitulo: finalTitle,
+            }).catch(console.warn);
+          });
+        }
       }
 
       setIsEditorDirty(false);
+      setIsEditingTitle(false);
       setEditorLastSaved(new Date());
       showToast("Notas del proyecto guardadas", "success");
     } catch (err) {
@@ -2018,9 +2123,62 @@ export default function PendientesPage() {
                         </span>
                       )}
                     </div>
-                    <h2 className="text-white font-extrabold text-lg tracking-tight leading-snug">
-                      {selectedItem.titulo}
-                    </h2>
+                    {isEditingTitle ? (
+                      <div className="flex items-center gap-2 max-w-xl py-0.5">
+                        <input
+                          type="text"
+                          value={editorTitle}
+                          onChange={(e) => setEditorTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleSaveTitle();
+                            } else if (e.key === "Escape") {
+                              setIsEditingTitle(false);
+                              setEditorTitle(selectedItem.titulo || "");
+                            }
+                          }}
+                          autoFocus
+                          placeholder="Título del pendiente..."
+                          className="flex-1 bg-[#090d16] border border-emerald-500/50 rounded-xl px-3 py-1 text-sm sm:text-base font-bold text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
+                        />
+                        <button
+                          onClick={handleSaveTitle}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-sm shrink-0"
+                          title="Guardar título (Enter)"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Guardar</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsEditingTitle(false);
+                            setEditorTitle(selectedItem.titulo || "");
+                          }}
+                          className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5 transition-all cursor-pointer shrink-0"
+                          title="Cancelar (Esc)"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group/title">
+                        <h2
+                          onClick={() => setIsEditingTitle(true)}
+                          className="text-white font-extrabold text-lg tracking-tight leading-snug cursor-pointer hover:text-emerald-400 transition-colors"
+                          title="Clic para editar título"
+                        >
+                          {selectedItem.titulo || "Sin título"}
+                        </h2>
+                        <button
+                          onClick={() => setIsEditingTitle(true)}
+                          className="opacity-60 group-hover/title:opacity-100 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                          title="Editar título"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                     <div className="w-full mt-1.5 max-w-2xl flex flex-col sm:flex-row gap-3 items-stretch">
                       <div className="flex-1">
                         <textarea
