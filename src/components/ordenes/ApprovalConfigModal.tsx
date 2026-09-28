@@ -7,13 +7,16 @@ import {
   Plus, 
   Save, 
   RotateCcw, 
-  Users
+  Users,
+  Loader2
 } from "lucide-react";
 import { 
   ApprovalConfig, 
   DEFAULT_APPROVAL_CONFIG, 
   getStoredApprovalConfig, 
-  saveStoredApprovalConfig 
+  saveStoredApprovalConfig,
+  fetchApprovalConfigFromServer,
+  saveApprovalConfigToServer
 } from "@/lib/approvalConfig";
 
 interface ApprovalConfigModalProps {
@@ -118,10 +121,17 @@ export function ApprovalConfigModal({
   showToast,
 }: ApprovalConfigModalProps) {
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_APPROVAL_CONFIG);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setConfig(getStoredApprovalConfig());
+      // Sincronizar con el servidor en segundo plano
+      fetchApprovalConfigFromServer()
+        .then((cfg) => {
+          if (cfg) setConfig(cfg);
+        })
+        .catch(() => null);
     }
   }, [isOpen]);
 
@@ -150,10 +160,17 @@ export function ApprovalConfigModal({
     }
   };
 
-  const handleSave = () => {
-    saveStoredApprovalConfig(config);
+  const handleSave = async () => {
+    setSaving(true);
+    const ok = await saveApprovalConfigToServer(config);
+    setSaving(false);
     if (onConfigSaved) onConfigSaved(config);
-    if (showToast) showToast("⚙️ Firmadores y escalas guardados con éxito");
+    if (showToast) {
+      showToast(ok 
+        ? "⚙️ Firmadores y escalas guardados en el servidor MongoDB" 
+        : "⚙️ Guardado localmente (aviso: verificar conexión con servidor)"
+      );
+    }
     onClose();
   };
 
@@ -369,10 +386,15 @@ export function ApprovalConfigModal({
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
+              disabled={saving}
+              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <Save className="w-3.5 h-3.5" />
-              <span>Guardar Firmantes</span>
+              {saving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
+              <span>{saving ? "Guardando en Servidor..." : "Guardar Firmantes"}</span>
             </button>
           </div>
         </div>

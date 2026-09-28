@@ -41,7 +41,8 @@ import type { OrdenCompra, Nota } from "@/types/ordenes";
 import { 
   getStoredApprovalConfig, 
   DEFAULT_APPROVAL_CONFIG, 
-  parseMontoToNumber
+  parseMontoToNumber,
+  fetchApprovalConfigFromServer
 } from "@/lib/approvalConfig";
 import { BatchLiberateModal } from "@/components/ordenes/BatchLiberateModal";
 import { BatchSendToSignModal } from "@/components/ordenes/BatchSendToSignModal";
@@ -99,6 +100,12 @@ export default function ProcesoDeLiberacionPage() {
     } catch {
       setConfig(DEFAULT_APPROVAL_CONFIG);
     }
+
+    fetchApprovalConfigFromServer()
+      .then((cfg) => {
+        if (cfg) setConfig(cfg);
+      })
+      .catch(() => null);
 
     const handleConfigUpdate = () => {
       try {

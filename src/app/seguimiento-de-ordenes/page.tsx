@@ -41,6 +41,7 @@ import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { getOrderStatus, STATUS_CONFIG } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
+import { getStoredApprovalConfig, fetchApprovalConfigFromServer } from "@/lib/approvalConfig";
 
 interface ApprovalConfig {
   limiteNivel1: number;
@@ -120,35 +121,30 @@ export default function SeguimientoDeOrdenesPage() {
     return isNaN(val) ? 0 : val;
   };
 
-  // Load Approval Config
+  // Load Approval Config directly from Server & Local Cache (Sin Firebase)
   useEffect(() => {
-    const db = getFirebaseDb();
-    if (!db) return;
+    try {
+      setConfig(getStoredApprovalConfig());
+    } catch {
+      setConfig(DEFAULT_CONFIG);
+    }
 
-    const unsubConfig = onSnapshot(
-      doc(db, "configuracion_ordenes", "aprobaciones"),
-      (snap) => {
-        if (snap.exists()) {
-          const d = snap.data() as Partial<ApprovalConfig>;
-          setConfig({
-            limiteNivel1: d.limiteNivel1 ?? DEFAULT_CONFIG.limiteNivel1,
-            limiteNivel2: d.limiteNivel2 ?? DEFAULT_CONFIG.limiteNivel2,
-            limiteNivel3: d.limiteNivel3 ?? DEFAULT_CONFIG.limiteNivel3,
-            firmantes1Nivel1: d.firmantes1Nivel1 ?? DEFAULT_CONFIG.firmantes1Nivel1,
-            firmantes2Nivel1: d.firmantes2Nivel1 ?? DEFAULT_CONFIG.firmantes2Nivel1,
-            firmantes1Nivel2: d.firmantes1Nivel2 ?? DEFAULT_CONFIG.firmantes1Nivel2,
-            firmantes2Nivel2: d.firmantes2Nivel2 ?? DEFAULT_CONFIG.firmantes2Nivel2,
-            firmantes1Nivel3: d.firmantes1Nivel3 ?? DEFAULT_CONFIG.firmantes1Nivel3,
-            firmantes2Nivel3: d.firmantes2Nivel3 ?? DEFAULT_CONFIG.firmantes2Nivel3,
-            firmantes1Nivel4: d.firmantes1Nivel4 ?? DEFAULT_CONFIG.firmantes1Nivel4,
-            firmantes2Nivel4: d.firmantes2Nivel4 ?? DEFAULT_CONFIG.firmantes2Nivel4,
-          });
-        }
-      },
-      (err) => console.error("Error loading approval config:", err)
-    );
+    fetchApprovalConfigFromServer()
+      .then((cfg) => {
+        if (cfg) setConfig(cfg);
+      })
+      .catch(() => null);
 
-    return () => unsubConfig();
+    const handleConfigUpdate = () => {
+      try {
+        setConfig(getStoredApprovalConfig());
+      } catch {
+        setConfig(DEFAULT_CONFIG);
+      }
+    };
+
+    window.addEventListener("approval_config_updated", handleConfigUpdate);
+    return () => window.removeEventListener("approval_config_updated", handleConfigUpdate);
   }, []);
 
   const parseSeguimientoDoc = (id: string, data: Record<string, any>): OrdenCompra => ({

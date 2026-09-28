@@ -63,12 +63,17 @@ export const DEFAULT_APPROVAL_CONFIG: ApprovalConfig = {
 };
 
 const STORAGE_KEY = "finanzas_approval_config_v4";
+export const APPROVAL_CONFIG_API_URL = "https://apivacas.jariel.com.ar/api/ordenes/approval-config";
 
 export function getStoredApprovalConfig(): ApprovalConfig {
   if (typeof window === "undefined") return DEFAULT_APPROVAL_CONFIG;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_APPROVAL_CONFIG;
+    if (!raw) {
+      // Intentar cargar en segundo plano desde el servidor
+      fetchApprovalConfigFromServer().catch(() => null);
+      return DEFAULT_APPROVAL_CONFIG;
+    }
     const parsed = JSON.parse(raw);
     return {
       ...DEFAULT_APPROVAL_CONFIG,
@@ -98,14 +103,89 @@ export function getStoredApprovalConfig(): ApprovalConfig {
   }
 }
 
-export function saveStoredApprovalConfig(config: ApprovalConfig): void {
-  if (typeof window === "undefined") return;
+/**
+ * Consulta la configuración de aprobaciones directamente desde el servidor local MongoDB.
+ */
+export async function fetchApprovalConfigFromServer(): Promise<ApprovalConfig> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    window.dispatchEvent(new Event("approval_config_updated"));
+    const res = await fetch(APPROVAL_CONFIG_API_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data && data.success && data.config) {
+      const cfg: ApprovalConfig = {
+        ...DEFAULT_APPROVAL_CONFIG,
+        ...data.config,
+        limiteNivel1: Number(data.config.limiteNivel1) || DEFAULT_APPROVAL_CONFIG.limiteNivel1,
+        limiteNivel2: Number(data.config.limiteNivel2) || DEFAULT_APPROVAL_CONFIG.limiteNivel2,
+        limiteNivel3: Number(data.config.limiteNivel3) || DEFAULT_APPROVAL_CONFIG.limiteNivel3,
+        firmantes1Nivel1: Array.isArray(data.config.firmantes1Nivel1) && data.config.firmantes1Nivel1.length > 0
+          ? data.config.firmantes1Nivel1 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel1,
+        firmantes2Nivel1: Array.isArray(data.config.firmantes2Nivel1) && data.config.firmantes2Nivel1.length > 0
+          ? data.config.firmantes2Nivel1 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel1,
+        firmantes1Nivel2: Array.isArray(data.config.firmantes1Nivel2) && data.config.firmantes1Nivel2.length > 0
+          ? data.config.firmantes1Nivel2 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel2,
+        firmantes2Nivel2: Array.isArray(data.config.firmantes2Nivel2) && data.config.firmantes2Nivel2.length > 0
+          ? data.config.firmantes2Nivel2 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel2,
+        firmantes1Nivel3: Array.isArray(data.config.firmantes1Nivel3) && data.config.firmantes1Nivel3.length > 0
+          ? data.config.firmantes1Nivel3 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel3,
+        firmantes2Nivel3: Array.isArray(data.config.firmantes2Nivel3) && data.config.firmantes2Nivel3.length > 0
+          ? data.config.firmantes2Nivel3 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel3,
+        firmantes1Nivel4: Array.isArray(data.config.firmantes1Nivel4) && data.config.firmantes1Nivel4.length > 0
+          ? data.config.firmantes1Nivel4 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel4,
+        firmantes2Nivel4: Array.isArray(data.config.firmantes2Nivel4) && data.config.firmantes2Nivel4.length > 0
+          ? data.config.firmantes2Nivel4 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel4,
+      };
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+        window.dispatchEvent(new Event("approval_config_updated"));
+      }
+      return cfg;
+    }
   } catch (err) {
-    console.error("Error saving approval config:", err);
+    console.warn("⚠️ [ApprovalConfig] Aviso al consultar configuración en el servidor:", err);
   }
+  return getStoredApprovalConfig();
+}
+
+/**
+ * Guarda la configuración de aprobaciones en el servidor MongoDB y en caché local.
+ */
+export async function saveApprovalConfigToServer(config: ApprovalConfig, updatedBy?: string): Promise<boolean> {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      window.dispatchEvent(new Event("approval_config_updated"));
+    } catch (err) {
+      console.error("Error guardando en caché local:", err);
+    }
+  }
+
+  try {
+    const res = await fetch(APPROVAL_CONFIG_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...config,
+        updatedBy: updatedBy || "Usuario"
+      }),
+    });
+    if (res.ok) {
+      console.log("✅ [ApprovalConfig] Guardado exitosamente en el servidor MongoDB");
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error("❌ [ApprovalConfig] Error al guardar en el servidor MongoDB:", err);
+    return false;
+  }
+}
+
+export function saveStoredApprovalConfig(config: ApprovalConfig): void {
+  // Guarda en caché local inmediatamente y sincroniza con el servidor en segundo plano
+  saveApprovalConfigToServer(config).catch((err) => {
+    console.warn("Aviso en sincronización en segundo plano con el servidor:", err);
+  });
 }
 
 export function cleanName(name: string): string {
