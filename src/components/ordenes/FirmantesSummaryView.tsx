@@ -6,7 +6,6 @@ import {
   Check, 
   UserCheck, 
   AlertCircle, 
-  Send, 
   Clock, 
   Eye, 
   Search, 
@@ -26,7 +25,6 @@ interface FirmantesSummaryViewProps {
   config: ApprovalConfig;
   onSelectOrden: (orden: OrdenCompra) => void;
   showToast: (msg: string) => void;
-  onOpenBatchSend?: () => void;
 }
 
 interface SignerGroup {
@@ -46,7 +44,6 @@ export function FirmantesSummaryView({
   config,
   onSelectOrden,
   showToast,
-  onOpenBatchSend,
 }: FirmantesSummaryViewProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -150,13 +147,23 @@ export function FirmantesSummaryView({
   }, [ordenes, config]);
 
   // Copy formatting function as requested:
-  // "ejemplo Pablo: ( espacio para abajo) OC xxxxxx monto xxxxx y asi para abajo con cada uno"
+  // "ejemplo Pablo: ( espacio para abajo) OC xxxxxx monto xxxxx proveedor: xxxxxx"
   const generateSignerCopyText = (name: string, orders: OrdenCompra[]) => {
     const lines = orders.map((ord) => {
       const numMonto = parseMontoToNumber(ord.monto);
-      return `OC ${ord.numOC} monto $ ${numMonto.toLocaleString("es-AR")}`;
+      const prov = ord.razonSocial?.trim() || "Sin proveedor";
+      return `OC ${ord.numOC} monto $ ${numMonto.toLocaleString("es-AR")} proveedor: ${prov}`;
     });
     return `${name}:\n${lines.join("\n")}`;
+  };
+
+  const generateUnsentCopyText = (items: UnsentOrderInfo[]) => {
+    const lines = items.map((item) => {
+      const numMonto = parseMontoToNumber(item.order.monto);
+      const prov = item.order.razonSocial?.trim() || "Sin proveedor";
+      return `OC ${item.order.numOC} monto $ ${numMonto.toLocaleString("es-AR")} proveedor: ${prov}`;
+    });
+    return `Sin Enviar:\n${lines.join("\n")}`;
   };
 
   const handleCopySigner = (name: string, orders: OrdenCompra[]) => {
@@ -168,11 +175,7 @@ export function FirmantesSummaryView({
   };
 
   const handleCopyUnsent = () => {
-    const lines = unsentItems.map((item) => {
-      const numMonto = parseMontoToNumber(item.order.monto);
-      return `OC ${item.order.numOC} monto $ ${numMonto.toLocaleString("es-AR")}`;
-    });
-    const text = `Sin Enviar:\n${lines.join("\n")}`;
+    const text = generateUnsentCopyText(unsentItems);
     navigator.clipboard.writeText(text);
     setCopiedKey("sin_enviar");
     setTimeout(() => setCopiedKey(null), 2000);
@@ -187,11 +190,7 @@ export function FirmantesSummaryView({
     }
 
     if (unsentItems.length > 0) {
-      const unsentLines = unsentItems.map((item) => {
-        const numMonto = parseMontoToNumber(item.order.monto);
-        return `OC ${item.order.numOC} monto $ ${numMonto.toLocaleString("es-AR")}`;
-      });
-      sections.push(`Sin Enviar:\n${unsentLines.join("\n")}`);
+      sections.push(generateUnsentCopyText(unsentItems));
     }
 
     const fullText = sections.join("\n\n");
@@ -275,17 +274,6 @@ export function FirmantesSummaryView({
                   <Copy className="w-4 h-4 text-emerald-200" />
                 )}
                 <span>Copiar Todo el Reporte</span>
-              </button>
-            )}
-
-            {onOpenBatchSend && (
-              <button
-                onClick={onOpenBatchSend}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs transition-all border border-slate-700 flex items-center gap-2 cursor-pointer"
-                title="Marcar lote como enviado a firmar"
-              >
-                <Send className="w-3.5 h-3.5 text-blue-400" />
-                <span>Despachar Lote</span>
               </button>
             )}
           </div>

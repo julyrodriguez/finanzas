@@ -1204,7 +1204,6 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             config={config}
             onSelectOrden={(orden) => setActiveNotesOrden(orden)}
             showToast={showToast}
-            onOpenBatchSend={() => setIsBatchSendOpen(true)}
           />
         )}
 
