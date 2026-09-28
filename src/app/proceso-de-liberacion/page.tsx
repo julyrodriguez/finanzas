@@ -34,7 +34,8 @@ import {
   Sparkles, 
   ArrowUpRight, 
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  Users
 } from "lucide-react";
 import type { OrdenCompra, Nota } from "@/types/ordenes";
 import { 
@@ -46,6 +47,7 @@ import { BatchLiberateModal } from "@/components/ordenes/BatchLiberateModal";
 import { BatchSendToSignModal } from "@/components/ordenes/BatchSendToSignModal";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { ApprovalConfigModal } from "@/components/ordenes/ApprovalConfigModal";
+import { FirmantesSummaryView } from "@/components/ordenes/FirmantesSummaryView";
 import { useAuth } from "@/context/AuthContext";
 
 type StatusFilterType = 
@@ -62,6 +64,9 @@ export default function ProcesoDeLiberacionPage() {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Sub-apartado navigation: "ordenes" (Vista principal) or "firmantes" (Resumen por firmante y sin enviar)
+  const [activeSubTab, setActiveSubTab] = useState<"ordenes" | "firmantes">("ordenes");
 
   // View Mode: Cards or Compact Table
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
@@ -506,8 +511,45 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         </div>
 
         {/* ========================================================
-            2. INTERACTIVE KPI METRIC CARDS (Filter Toggles)
+            SUB-APARTADO NAVIGATION TABS
             ======================================================== */}
+        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+          <button
+            onClick={() => setActiveSubTab("ordenes")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+              activeSubTab === "ordenes"
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 border border-blue-400/30"
+                : "bg-[#0f1422] text-slate-400 hover:text-white hover:bg-slate-800/80 border border-white/5"
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span>Órdenes en Proceso</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-black/30 text-white/90">
+              {stats.totalCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab("firmantes")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+              activeSubTab === "firmantes"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/30"
+                : "bg-[#0f1422] text-slate-400 hover:text-white hover:bg-slate-800/80 border border-white/5"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Resumen por Firmante</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              Cards & Copiado
+            </span>
+          </button>
+        </div>
+
+        {activeSubTab === "ordenes" ? (
+          <>
+            {/* ========================================================
+                2. INTERACTIVE KPI METRIC CARDS (Filter Toggles)
+                ======================================================== */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           
           {/* Card: Todas */}
@@ -1154,6 +1196,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               );
             })}
           </div>
+        )}
+          </>
+        ) : (
+          <FirmantesSummaryView
+            ordenes={ordenes}
+            config={config}
+            onSelectOrden={(orden) => setActiveNotesOrden(orden)}
+            showToast={showToast}
+            onOpenBatchSend={() => setIsBatchSendOpen(true)}
+          />
         )}
 
       </div>
