@@ -64,6 +64,8 @@ import {
   Paintbrush,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Bot,
   Sparkles,
   Paperclip,
@@ -1722,6 +1724,19 @@ export default function CotizacionesPage() {
     });
   };
 
+  // Move providers order in comparative matrix and cards
+  const moveProvider = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= providers.length) return;
+    setProviders(prev => {
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+  };
+
   // Helper formatting values
   const formatCurrencyValue = (val: number, curr: "ARS" | "USD" = baseCurrency) => {
     if (curr === "ARS") {
@@ -2797,10 +2812,10 @@ export default function CotizacionesPage() {
                   }}
                   disabled={isLocked}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  title="Subir un presupuesto en PDF o correo EML para que la IA extraiga los productos y precios automáticamente"
+                  title="Subir un presupuesto en PDF, planilla Excel o correo EML para que la IA extraiga los productos y precios automáticamente"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                  <span>Nuevo Proveedor desde PDF (IA)</span>
+                  <span>Nuevo Proveedor con IA (PDF / Excel / EML)</span>
                 </button>
 
                 <button
@@ -2817,7 +2832,7 @@ export default function CotizacionesPage() {
 
             {/* Responsive grid of Provider quote cards */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              {providers.map((provider) => {
+              {providers.map((provider, pIdx) => {
                 const isMinimized = Boolean(minimizedProviders[provider.id]);
                 const totalData = providerTotals.find((t) => t.providerId === provider.id);
                 const providerAtts = attachments.filter((a) => a.providerId === provider.id);
@@ -2838,6 +2853,26 @@ export default function CotizacionesPage() {
                           >
                             <ChevronDown className="w-4 h-4 text-emerald-400" />
                           </button>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={pIdx === 0}
+                              onClick={() => moveProvider(pIdx, -1)}
+                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                              title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pIdx === providers.length - 1}
+                              onClick={() => moveProvider(pIdx, 1)}
+                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                              title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <span className="font-bold text-white text-base truncate" title={provider.name}>
                             {provider.name}
                           </span>
@@ -2854,19 +2889,19 @@ export default function CotizacionesPage() {
                             }}
                             disabled={isLocked}
                             className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
-                            title="Subir PDF o presupuesto para autocompletar precios con IA en este proveedor"
+                            title="Subir PDF, Excel o presupuesto para autocompletar precios con IA en este proveedor"
                           >
                             <Sparkles className="w-3 h-3 text-yellow-300" />
                             <span className="hidden sm:inline">Cargar con IA</span>
                           </button>
 
-                          {/* Botón rápido para adjuntar PDF/EML */}
+                          {/* Botón rápido para adjuntar PDF/Excel/EML */}
                           <label
                             className="flex items-center gap-1 px-2.5 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg text-xs font-semibold transition-all border border-white/10 cursor-pointer"
-                            title="Adjuntar PDF o correo EML a este proveedor"
+                            title="Adjuntar PDF, Excel o correo EML a este proveedor"
                           >
                             <Upload className="w-3 h-3" />
-                            <span className="hidden sm:inline">Adjuntar PDF/EML</span>
+                            <span className="hidden sm:inline">Adjuntar archivo</span>
                             <input
                               type="file"
                               accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
@@ -2914,6 +2949,7 @@ export default function CotizacionesPage() {
                               {providerAtts.map((att) => {
                                 const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
                                 const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
+                                const isExcel = att.filename.endsWith(".xlsx") || att.filename.endsWith(".xls") || att.filename.endsWith(".csv") || att.mimeType.includes("spreadsheet") || att.mimeType.includes("excel");
                                 return (
                                   <a
                                     key={att.id}
@@ -2927,6 +2963,8 @@ export default function CotizacionesPage() {
                                       <Mail className="w-3 h-3 text-blue-400 shrink-0" />
                                     ) : isPdf ? (
                                       <FileText className="w-3 h-3 text-red-400 shrink-0" />
+                                    ) : isExcel ? (
+                                      <FileSpreadsheet className="w-3 h-3 text-emerald-400 shrink-0" />
                                     ) : (
                                       <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
                                     )}
@@ -2963,6 +3001,26 @@ export default function CotizacionesPage() {
                       {/* Provider Card Header */}
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-white/5">
                         <div className="flex items-center gap-2 flex-1 min-w-[180px]">
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={pIdx === 0}
+                              onClick={() => moveProvider(pIdx, -1)}
+                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                              title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pIdx === providers.length - 1}
+                              onClick={() => moveProvider(pIdx, 1)}
+                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                              title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <input
                             type="text"
                             value={provider.name}
@@ -2993,13 +3051,13 @@ export default function CotizacionesPage() {
                             <span>Cargar con IA</span>
                           </button>
 
-                          {/* Botón para adjuntar PDF / EML al lado del nombre */}
+                          {/* Botón para adjuntar archivo al lado del nombre */}
                           <label
                             className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-semibold transition-all border border-white/10 cursor-pointer"
-                            title="Adjuntar PDF o correo EML a este proveedor"
+                            title="Adjuntar PDF, Excel o correo EML a este proveedor"
                           >
                             <Upload className="w-3.5 h-3.5" />
-                            <span>Adjuntar PDF / EML</span>
+                            <span>Adjuntar archivo</span>
                             <input
                               type="file"
                               accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
@@ -3251,11 +3309,11 @@ export default function CotizacionesPage() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-400 flex items-center gap-1.5">
                         <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
-                        Presupuestos / Mails ({attachments.filter(a => a.providerId === provider.id).length})
+                        Presupuestos / Archivos ({attachments.filter(a => a.providerId === provider.id).length})
                       </span>
                       <label className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 cursor-pointer">
                         <Upload className="w-3 h-3" />
-                        Subir PDF / EML
+                        Subir archivo
                         <input
                           type="file"
                           accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
@@ -3279,6 +3337,7 @@ export default function CotizacionesPage() {
                           .map((att) => {
                             const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
                             const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
+                            const isExcel = att.filename.endsWith(".xlsx") || att.filename.endsWith(".xls") || att.filename.endsWith(".csv") || att.mimeType.includes("spreadsheet") || att.mimeType.includes("excel");
                             return (
                               <div
                                 key={att.id}
@@ -3288,6 +3347,8 @@ export default function CotizacionesPage() {
                                   <Mail className="w-3 h-3 text-blue-400 shrink-0" />
                                 ) : isPdf ? (
                                   <FileText className="w-3 h-3 text-red-400 shrink-0" />
+                                ) : isExcel ? (
+                                  <FileSpreadsheet className="w-3 h-3 text-emerald-400 shrink-0" />
                                 ) : (
                                   <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
                                 )}
@@ -3441,9 +3502,31 @@ export default function CotizacionesPage() {
                   <tr>
                     <th className="p-4 rounded-tl-xl text-left min-w-[200px] left-0 sticky bg-[#101725] z-20 border-r border-white/10" rowSpan={2}>Nombre del Ítem</th>
                     <th className="p-4 text-center min-w-[100px]" rowSpan={2}>Cantidad</th>
-                    {providers.map(prov => (
-                      <th key={prov.id} className="p-3 text-center border-l border-white/10" colSpan={2}>
-                        {prov.name}
+                    {providers.map((prov, pIdx) => (
+                      <th key={prov.id} className="p-2.5 text-center border-l border-white/10 min-w-[200px]" colSpan={2}>
+                        <div className="flex items-center justify-between gap-1.5 px-1">
+                          <button
+                            type="button"
+                            disabled={pIdx === 0}
+                            onClick={() => moveProvider(pIdx, -1)}
+                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
+                            title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="font-bold text-white text-xs truncate max-w-[150px] tracking-wide" title={prov.name}>
+                            {prov.name || `Proveedor ${pIdx + 1}`}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={pIdx === providers.length - 1}
+                            onClick={() => moveProvider(pIdx, 1)}
+                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
+                            title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </th>
                     ))}
                   </tr>
@@ -3651,7 +3734,7 @@ export default function CotizacionesPage() {
             <div className="block md:hidden bg-[#101725]/40 border border-white/5 p-4 rounded-2xl space-y-3 mb-6">
               <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resumen de Totales Generales</h4>
               <div className="space-y-2">
-                {providerTotals.map(totalData => {
+                {providerTotals.map((totalData, pIdx) => {
                   const hasARS = totalData.totalARS > 0;
                   const hasUSD = totalData.totalUSD > 0;
                   const isCheapest = highlightMode === "company" 
@@ -3667,18 +3750,40 @@ export default function CotizacionesPage() {
                           : "bg-[#111827]/40 border-white/5 text-gray-300"
                       }`}
                     >
-                      <div className="flex flex-col min-w-0 pr-2">
-                        <span className="font-bold text-xs flex items-center gap-1.5">
-                          {totalData.providerName}
-                          {isCheapest && (
-                            <span className="text-[8px] bg-emerald-500 text-white font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
-                              Mejor Opción
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-[10px] text-gray-500">
-                          Cotizado: {totalData.itemsQuotedCount} de {items.length} ítems
-                        </span>
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={pIdx === 0}
+                            onClick={() => moveProvider(pIdx, -1)}
+                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                            title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pIdx === providers.length - 1}
+                            onClick={() => moveProvider(pIdx, 1)}
+                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                            title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-xs flex items-center gap-1.5 truncate">
+                            {totalData.providerName}
+                            {isCheapest && (
+                              <span className="text-[8px] bg-emerald-500 text-white font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
+                                Mejor Opción
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-gray-500">
+                            Cotizado: {totalData.itemsQuotedCount} de {items.length} ítems
+                          </span>
+                        </div>
                       </div>
                       <div className="text-right font-mono font-bold text-xs shrink-0">
                         {hasARS && (

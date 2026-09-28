@@ -15,9 +15,14 @@ import {
   Package,
   Plus,
   ArrowRight,
-  Info
+  Info,
+  FileSpreadsheet,
+  Layers,
+  ListOrdered
 } from "lucide-react";
 import { QuoteAttachment } from "./CotizacionesAiChatModal";
+
+export type ExtractionMode = "general" | "detailed";
 
 export interface ExtractedItem {
   id: string;
@@ -78,6 +83,11 @@ export function CotizacionesImportAiModal({
   onConfirmImport
 }: CotizacionesImportAiModalProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [extractionMode, setExtractionMode] = useState<ExtractionMode>("general");
+  const [cachedResults, setCachedResults] = useState<{
+    general?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; attachment?: QuoteAttachment };
+    detailed?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; attachment?: QuoteAttachment };
+  }>({});
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +113,7 @@ export function CotizacionesImportAiModal({
     setNotes("");
     setItems([]);
     setIsSubmitting(false);
+    setCachedResults({});
   };
 
   const handleClose = () => {
@@ -113,7 +124,7 @@ export function CotizacionesImportAiModal({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      await processSelectedFile(selectedFile);
+      await processFileWithMode(selectedFile, extractionMode);
     }
   };
 
@@ -121,36 +132,68 @@ export function CotizacionesImportAiModal({
     e.preventDefault();
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
-      await processSelectedFile(droppedFile);
+      await processFileWithMode(droppedFile, extractionMode);
     }
   };
 
-  const processSelectedFile = async (selectedFile: File) => {
-    setFile(selectedFile);
+  const processFileWithMode = async (
+    targetFile: File | null,
+    mode: ExtractionMode,
+    currentAttachment?: QuoteAttachment | null
+  ) => {
+    // 1. Si ya tenemos cacheado el resultado de este modo, cambiamos al instante sin request de red
+    if (cachedResults[mode]) {
+      const cached = cachedResults[mode]!;
+      setItems(cached.items);
+      setProviderName(targetProviderName || cached.providerName);
+      setCurrency(cached.currency);
+      setNotes(cached.notes);
+      if (cached.attachment) setAttachment(cached.attachment);
+      setExtractionMode(mode);
+      return;
+    }
+
+    if (targetFile) setFile(targetFile);
+    setExtractionMode(mode);
     setIsAnalyzing(true);
     setError(null);
 
     try {
-      const formData = new FormData();
       const targetQuoteId = cotizacionId || "temp_" + Date.now();
-      formData.append("cotizacionId", targetQuoteId);
-      if (targetProviderId) {
-        formData.append("providerId", targetProviderId);
-      }
-      if (targetProviderName) {
-        formData.append("providerName", targetProviderName);
-      }
-      if (existingItems.length > 0) {
-        formData.append("existingItems", JSON.stringify(existingItems));
-      }
-      formData.append("file", selectedFile);
-
       const baseUrl = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
-      const apiEndpoint = `${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}`;
-      const res = await fetch(apiEndpoint, {
-        method: "POST",
-        body: formData
-      });
+
+      let res: Response;
+      if (targetFile) {
+        const formData = new FormData();
+        formData.append("cotizacionId", targetQuoteId);
+        formData.append("extractionMode", mode);
+        if (targetProviderId) formData.append("providerId", targetProviderId);
+        if (targetProviderName) formData.append("providerName", targetProviderName);
+        if (existingItems.length > 0) formData.append("existingItems", JSON.stringify(existingItems));
+        formData.append("file", targetFile);
+
+        res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}`, {
+          method: "POST",
+          body: formData
+        });
+      } else if (currentAttachment || attachment) {
+        const att = currentAttachment || attachment!;
+        res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cotizacionId: targetQuoteId,
+            extractionMode: mode,
+            attachment: att,
+            providerId: targetProviderId,
+            providerName: targetProviderName,
+            existingItems
+          })
+        });
+      } else {
+        setIsAnalyzing(false);
+        return;
+      }
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -163,13 +206,19 @@ export function CotizacionesImportAiModal({
       }
 
       const extracted = resData.data || {};
-      setAttachment(resData.attachment);
-      const defaultProvider = selectedFile?.name ? selectedFile.name.replace(/\.[^/.]+$/, "") : "Proveedor";
-      setProviderName(targetProviderName || extracted.providerName || defaultProvider);
-      setCurrency(extracted.currency === "USD" ? "USD" : "ARS");
-      setNotes(extracted.notes || "");
+      const finalAttachment = resData.attachment || currentAttachment || attachment;
+      if (finalAttachment) setAttachment(finalAttachment);
 
-      // Robust array extraction (handles native array, object with values, or nested items)
+      const defaultProvider = targetFile?.name ? targetFile.name.replace(/\.[^/.]+$/, "") : "Proveedor";
+      const finalProviderName = targetProviderName || extracted.providerName || defaultProvider;
+      const finalCurrency: "ARS" | "USD" = extracted.currency === "USD" ? "USD" : "ARS";
+      const finalNotes = extracted.notes || "";
+
+      setProviderName(finalProviderName);
+      setCurrency(finalCurrency);
+      setNotes(finalNotes);
+
+      // Extracción robusta de items (array o diccionario)
       let rawItems: any[] = [];
       if (Array.isArray(extracted.items)) {
         rawItems = extracted.items;
@@ -181,20 +230,20 @@ export function CotizacionesImportAiModal({
 
       const formattedItems: ExtractedItem[] = rawItems.map((it: any, index: number) => {
         const itemObj = (it && typeof it === "object") ? it : { name: String(it) };
-        const parsedPrice = typeof itemObj.price === "number" 
-          ? itemObj.price 
+        const parsedPrice = typeof itemObj.price === "number"
+          ? itemObj.price
           : parseFloat(String(itemObj.price || "").replace(/[^0-9.-]/g, "")) || 0;
-        const parsedQty = typeof itemObj.quantity === "number" 
-          ? itemObj.quantity 
-          : parseFloat(String(itemObj.quantity || "")) || 1;
-        const parsedTotal = typeof itemObj.totalPrice === "number" 
-          ? itemObj.totalPrice 
-          : (parsedPrice * parsedQty);
-        const parsedDiscount = typeof itemObj.discount === "number" 
-          ? itemObj.discount 
+        const parsedQty = mode === "general"
+          ? 1
+          : (typeof itemObj.quantity === "number" ? itemObj.quantity : parseFloat(String(itemObj.quantity || "")) || 1);
+        const parsedTotal = typeof itemObj.totalPrice === "number"
+          ? itemObj.totalPrice
+          : (mode === "general" ? parsedPrice : (parsedPrice * parsedQty));
+        const parsedDiscount = typeof itemObj.discount === "number"
+          ? itemObj.discount
           : parseFloat(String(itemObj.discount || "")) || 0;
-        const parsedUnits = typeof itemObj.unitsPerPresentation === "number" 
-          ? itemObj.unitsPerPresentation 
+        const parsedUnits = typeof itemObj.unitsPerPresentation === "number"
+          ? itemObj.unitsPerPresentation
           : parseFloat(String(itemObj.unitsPerPresentation || "")) || 1;
 
         return {
@@ -214,6 +263,18 @@ export function CotizacionesImportAiModal({
       });
 
       setItems(formattedItems);
+
+      // Guardar en caché para permitir alternar modos instantáneamente
+      setCachedResults((prev) => ({
+        ...prev,
+        [mode]: {
+          items: formattedItems,
+          providerName: finalProviderName,
+          currency: finalCurrency,
+          notes: finalNotes,
+          attachment: finalAttachment
+        }
+      }));
     } catch (err: any) {
       console.error("Error analizando documento:", err);
       const msg = err.message || "";
@@ -242,7 +303,19 @@ export function CotizacionesImportAiModal({
 
   const handleUpdateItemField = (index: number, field: keyof ExtractedItem, value: any) => {
     setItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const updated = { ...item, [field]: value };
+        if (field === "price" && extractionMode === "general") {
+          updated.totalPrice = value;
+          updated.quantity = 1;
+        } else if (field === "price") {
+          updated.totalPrice = (Number(value) || 0) * (Number(updated.quantity) || 1);
+        } else if (field === "quantity" && extractionMode !== "general") {
+          updated.totalPrice = (Number(updated.price) || 0) * (Number(value) || 1);
+        }
+        return updated;
+      })
     );
   };
 
@@ -321,6 +394,73 @@ export function CotizacionesImportAiModal({
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {/* Mode Selector before upload */}
+          {!attachment && !isAnalyzing && (
+            <div className="bg-[#101726]/80 border border-white/10 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-emerald-400" />
+                  ¿Cómo querés importar los ítems del pliego o presupuesto?
+                </span>
+                <span className="text-[11px] text-gray-400 hidden sm:inline">
+                  Podés alternar entre ambos modos después de leer el archivo
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setExtractionMode("general")}
+                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    extractionMode === "general"
+                      ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm shadow-emerald-500/10"
+                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${extractionMode === "general" ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-gray-400"}`}>
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <span className={`text-xs font-bold ${extractionMode === "general" ? "text-emerald-300" : "text-white"}`}>
+                        Solo Rubros Generales
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Recomendado
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Consolida por capítulos de pliego (ej: Planta Baja, 1° Piso, Baños) con <strong>Cantidad = 1</strong> y el <strong>Total acumulado</strong> para que quede conciso.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExtractionMode("detailed")}
+                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    extractionMode === "detailed"
+                      ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm shadow-emerald-500/10"
+                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${extractionMode === "detailed" ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-gray-400"}`}>
+                        <ListOrdered className="w-4 h-4" />
+                      </div>
+                      <span className={`text-xs font-bold ${extractionMode === "detailed" ? "text-emerald-300" : "text-white"}`}>
+                        Detallado por Subítems
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Extrae cada renglón individualmente (ej: 1.1, 1.2, 2.1) con sus unidades (M2, ML, UN) y sus precios finales de renglón.
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* File Upload / Status area */}
           {!attachment && !isAnalyzing && (
             <div
@@ -343,7 +483,7 @@ export function CotizacionesImportAiModal({
                 Arrastrá o seleccioná el presupuesto del proveedor
               </h3>
               <p className="text-xs text-gray-400 max-w-md mx-auto mb-4">
-                Soporta <strong>PDF</strong>, emails comerciales <strong>.EML</strong> o imágenes de listas de precios (PNG, JPG).
+                Soporta <strong>PDF</strong>, planillas <strong>Excel (.xlsx, .xls)</strong>, correos <strong>.EML</strong> (incluyendo Excels o PDFs adjuntos dentro del correo) o imágenes de listas de precios.
               </p>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-500/20">
                 <Sparkles className="w-3.5 h-3.5" />
@@ -362,9 +502,9 @@ export function CotizacionesImportAiModal({
                 </div>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">Leyendo presupuesto con IA...</h3>
+                <h3 className="text-base font-semibold text-white">Leyendo presupuesto o correo con IA...</h3>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
-                  Extrayendo nombre del proveedor, moneda, ítems cotizados, unidades, descripciones y precios.
+                  Extrayendo nombre del proveedor, moneda, ítems cotizados, unidades, descripciones y precios desde el documento o planilla adjunta.
                 </p>
               </div>
             </div>
@@ -401,6 +541,8 @@ export function CotizacionesImportAiModal({
                       <FileText className="w-4 h-4 text-red-400" />
                     ) : attachment.filename.endsWith(".eml") ? (
                       <Mail className="w-4 h-4 text-blue-400" />
+                    ) : attachment.filename.endsWith(".xlsx") || attachment.filename.endsWith(".xls") || attachment.filename.endsWith(".csv") ? (
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                     ) : (
                       <FileText className="w-4 h-4 text-emerald-400" />
                     )}
@@ -478,24 +620,54 @@ export function CotizacionesImportAiModal({
 
               {/* Extracted Items Section */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Package className="w-4 h-4 text-emerald-400" />
                     <h3 className="text-sm font-bold text-white">
-                      Ítems Extraídos ({items.length})
+                      {extractionMode === "general" ? "Rubros Generales" : "Ítems Detallados"} ({items.length})
                     </h3>
                     <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                       {selectedCount} seleccionados
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleToggleSelectAll}
-                    className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
-                  >
-                    {items.every((it) => it.selected) ? "Desmarcar todos" : "Seleccionar todos"}
-                  </button>
+                  {/* Mode switcher pills directly in results */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex items-center bg-[#070b13] p-1 rounded-xl border border-white/10 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => processFileWithMode(file, "general", attachment)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                          extractionMode === "general"
+                            ? "bg-emerald-500 text-white shadow-sm font-semibold"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        Rubros Generales
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => processFileWithMode(file, "detailed", attachment)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                          extractionMode === "detailed"
+                            ? "bg-emerald-500 text-white shadow-sm font-semibold"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <ListOrdered className="w-3.5 h-3.5" />
+                        Subítems Detallados
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleSelectAll}
+                      className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer ml-1"
+                    >
+                      {items.every((it) => it.selected) ? "Desmarcar todos" : "Seleccionar todos"}
+                    </button>
+                  </div>
                 </div>
 
                 {items.length === 0 ? (
@@ -547,13 +719,17 @@ export function CotizacionesImportAiModal({
                                       onChange={(e) =>
                                         handleUpdateItemField(index, "price", parseFloat(e.target.value) || 0)
                                       }
-                                      className="w-24 bg-transparent text-sm font-bold font-mono text-emerald-400 focus:outline-none"
+                                      className="w-28 bg-transparent text-sm font-bold font-mono text-emerald-400 focus:outline-none"
                                       placeholder="0"
                                     />
                                   </div>
 
-                                  <div className="text-[11px] text-gray-400 bg-white/5 px-2 py-1 rounded-lg border border-white/5">
-                                    {item.quantity} {item.unit}
+                                  <div className="text-[11px] text-gray-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 flex items-center gap-1.5">
+                                    {extractionMode === "general" ? (
+                                      <span className="text-emerald-400 font-semibold font-mono">1 {item.unit} • Total</span>
+                                    ) : (
+                                      <span>{item.quantity} {item.unit}</span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -638,8 +814,8 @@ export function CotizacionesImportAiModal({
                   <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
                   <span>
                     {targetProviderId
-                      ? `Aplicar a ${providerName} (${selectedCount} ítems)`
-                      : `Crear Proveedor con ${selectedCount} ítems`}
+                      ? `Aplicar a ${providerName} (${selectedCount} ${extractionMode === "general" ? "rubros generales" : "ítems"})`
+                      : `Crear Proveedor con ${selectedCount} ${extractionMode === "general" ? "rubros generales" : "ítems"}`}
                   </span>
                 </>
               )}

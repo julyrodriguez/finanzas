@@ -20,7 +20,8 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  FileSpreadsheet
 } from "lucide-react";
 
 export interface QuoteAttachment {
@@ -656,12 +657,13 @@ export function CotizacionesAiChatModal({
                 <div className="mt-2 pt-2 border-t border-white/5 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                   {attachments.length === 0 ? (
                     <p className="text-[11px] text-gray-500 italic py-1">
-                      No hay archivos cargados. Podés subir presupuestos en PDF o correos .eml.
+                      No hay archivos cargados. Podés subir presupuestos en PDF, planillas Excel o correos .eml.
                     </p>
                   ) : (
                     attachments.map((att) => {
                       const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
                       const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
+                      const isExcel = att.filename.endsWith(".xlsx") || att.filename.endsWith(".xls") || att.filename.endsWith(".csv") || att.mimeType.includes("spreadsheet") || att.mimeType.includes("excel");
                       return (
                         <div
                           key={att.id}
@@ -671,6 +673,8 @@ export function CotizacionesAiChatModal({
                             <Mail className="w-3 h-3 text-blue-400 shrink-0" />
                           ) : isPdf ? (
                             <FileText className="w-3 h-3 text-red-400 shrink-0" />
+                          ) : isExcel ? (
+                            <FileSpreadsheet className="w-3 h-3 text-emerald-400 shrink-0" />
                           ) : (
                             <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
                           )}
@@ -717,7 +721,7 @@ export function CotizacionesAiChatModal({
                   type="button"
                   onClick={() => sendMessage("Volvé a leer todos los archivos y documentos originales de la cotización y comparalos a fondo")}
                   className="underline hover:text-emerald-200 ml-2 shrink-0 cursor-pointer font-medium"
-                  title="Forzar lectura cruda de todos los PDFs y correos"
+                  title="Forzar lectura cruda de todos los PDFs, Excels y correos"
                 >
                   Volver a leer archivos
                 </button>
