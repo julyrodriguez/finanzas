@@ -219,6 +219,8 @@ export function CotizacionesImportAiModal({
       const msg = err.message || "";
       if (msg.includes("503") || msg.includes("high demand") || msg.includes("Service Unavailable")) {
         setError("Los servidores de Google Gemini están experimentando alta demanda temporal (Error 503). Por favor reintentá en unos segundos.");
+      } else if (msg.includes("524") || msg.includes("timeout") || msg.includes("Timeout")) {
+        setError("El procesamiento tardó más de lo habitual debido a la saturación de los servidores de IA. Por favor reintentá en unos instantes.");
       } else {
         setError(msg || "Error al leer el documento con IA");
       }
