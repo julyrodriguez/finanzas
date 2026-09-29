@@ -75,7 +75,8 @@ import {
   Trophy,
   Send,
   XCircle,
-  Clock
+  Clock,
+  Loader2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
@@ -243,6 +244,8 @@ export default function CotizacionesPage() {
   const [excludedItemIds, setExcludedItemIds] = useState<string[]>([]);
   // Excluded providers from comparison / calculations / copy / export
   const [excludedProviderIds, setExcludedProviderIds] = useState<string[]>([]);
+  // Tracking direct file upload per provider
+  const [uploadingProviderId, setUploadingProviderId] = useState<string | null>(null);
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -1076,7 +1079,11 @@ export default function CotizacionesPage() {
         throw new Error(data.error || "No se pudo procesar el archivo");
       }
 
-      const newAtt: QuoteAttachment = data.attachment;
+      const newAtt: QuoteAttachment = {
+        ...data.attachment,
+        providerId: providerId || data.attachment?.providerId,
+        providerName: providerName || data.attachment?.providerName
+      };
       const updated = [...attachments, newAtt];
       setAttachments(updated);
 
@@ -1098,7 +1105,11 @@ export default function CotizacionesPage() {
         }
       }
 
-      showToast(`Archivo "${file.name}" cargado exitosamente`);
+      showToast(
+        providerName
+          ? `Archivo "${file.name}" adjuntado a ${providerName}`
+          : `Archivo "${file.name}" cargado exitosamente`
+      );
     } catch (err: any) {
       console.error("Error subiendo archivo:", err);
       showToast(`Error al subir: ${err.message}`, "error");
@@ -1323,11 +1334,19 @@ export default function CotizacionesPage() {
       }
     }
 
-    showToast(
-      targetProviderId
-        ? `Precios cargados con éxito para "${providerName}" (${selectedItems.length} ítems)`
-        : `Proveedor "${providerName}" creado con éxito (${selectedItems.length} ítems)`
-    );
+    if (selectedItems.length === 0) {
+      showToast(
+        targetProviderId
+          ? `Archivo "${newAttachment.originalName || "presupuesto"}" adjuntado a "${providerName}" (sin modificar ítems)`
+          : `Proveedor "${providerName}" creado con archivo adjunto`
+      );
+    } else {
+      showToast(
+        targetProviderId
+          ? `Precios cargados con éxito para "${providerName}" (${selectedItems.length} ítems)`
+          : `Proveedor "${providerName}" creado con éxito (${selectedItems.length} ítems)`
+      );
+    }
   };
 
   // -----------------------------------------------------
@@ -2990,6 +3009,43 @@ export default function CotizacionesPage() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2 shrink-0">
+                        {/* Direct File Attachment button (Sin autocargar items) */}
+                        <label
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                            uploadingProviderId === prov.id
+                              ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                              : "bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]"
+                          }`}
+                          title="Adjuntar archivo (PDF, presupuesto, etc.) a este proveedor sin autocargar ni modificar ítems"
+                        >
+                          {uploadingProviderId === prov.id ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                              <span className="hidden sm:inline">Subiendo...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
+                              <span className="hidden sm:inline">Adjuntar</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.doc,.docx,.txt"
+                            className="hidden"
+                            disabled={isLocked || uploadingProviderId === prov.id}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                setUploadingProviderId(prov.id);
+                                await handleUploadAttachment(file, prov.id, prov.name);
+                                setUploadingProviderId(null);
+                                e.target.value = "";
+                              }
+                            }}
+                          />
+                        </label>
+
                         {/* AI Import shortcut */}
                         <button
                           type="button"
@@ -3031,6 +3087,71 @@ export default function CotizacionesPage() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Provider Attached Files Bar */}
+                    {(() => {
+                      const provAttachments = attachments.filter(
+                        (a) => a.providerId === prov.id || (a.providerName && a.providerName.toLowerCase() === prov.name.toLowerCase())
+                      );
+                      if (provAttachments.length === 0) return null;
+
+                      return (
+                        <div className="px-4 sm:px-5 py-2.5 bg-[#080b15]/90 border-b border-white/[0.04] flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 shrink-0">
+                            <Paperclip className="w-3 h-3 text-indigo-400" />
+                            <span>Archivos adjuntos ({provAttachments.length}):</span>
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {provAttachments.map((att) => {
+                              const isPdf = att.filename.endsWith(".pdf") || att.mimeType?.includes("pdf");
+                              const isExcel = att.filename.endsWith(".xlsx") || att.filename.endsWith(".xls") || att.filename.endsWith(".csv") || att.mimeType?.includes("spreadsheet") || att.mimeType?.includes("excel");
+                              const isEml = att.filename.endsWith(".eml") || att.mimeType?.includes("rfc822");
+
+                              return (
+                                <div
+                                  key={att.id}
+                                  className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.06] text-xs text-slate-200 transition-colors group"
+                                >
+                                  <a
+                                    href={att.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors"
+                                    title={`Abrir archivo: ${att.originalName}`}
+                                  >
+                                    {isPdf ? (
+                                      <FileText className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                    ) : isExcel ? (
+                                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                    ) : isEml ? (
+                                      <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                                    ) : (
+                                      <Paperclip className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                    )}
+                                    <span className="font-semibold truncate max-w-[130px] sm:max-w-[180px]">
+                                      {att.originalName}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      ({(att.size / 1024).toFixed(0)} KB)
+                                    </span>
+                                    <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-indigo-400 shrink-0" />
+                                  </a>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteAttachment(att)}
+                                    className="p-0.5 text-slate-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                                    title="Eliminar archivo adjunto"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Provider Items Pricing Body */}
                     {!isMinimized && (
@@ -3424,6 +3545,9 @@ export default function CotizacionesPage() {
                     {providers.map((prov, pIdx) => {
                       const isExcluded = excludedProviderIds.includes(prov.id);
                       const isCompanyWinner = !isExcluded && highlightMode === "company" && prov.id === cheapestProviderId;
+                      const provAttachments = attachments.filter(
+                        (a) => a.providerId === prov.id || (a.providerName && a.providerName.toLowerCase() === prov.name.toLowerCase())
+                      );
                       return (
                         <th
                           key={prov.id}
@@ -3476,15 +3600,35 @@ export default function CotizacionesPage() {
                             </button>
                           </div>
 
-                          {isExcluded ? (
-                            <span className="inline-block text-[9px] font-semibold text-rose-400/90 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
-                              Excluido de copia y total
-                            </span>
-                          ) : isCompanyWinner ? (
-                            <span className="inline-block text-[9px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded tracking-wider">
-                              ★ Más Conveniente
-                            </span>
-                          ) : null}
+                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                            {isExcluded ? (
+                              <span className="inline-block text-[9px] font-semibold text-rose-400/90 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
+                                Excluido de copia y total
+                              </span>
+                            ) : isCompanyWinner ? (
+                              <span className="inline-block text-[9px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded tracking-wider">
+                                ★ Más Conveniente
+                              </span>
+                            ) : null}
+
+                            {provAttachments.length > 0 && (
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                {provAttachments.map((att) => (
+                                  <a
+                                    key={att.id}
+                                    href={att.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[9px] font-semibold text-indigo-300 hover:text-white bg-indigo-500/15 hover:bg-indigo-500/30 border border-indigo-500/30 px-1.5 py-0.5 rounded-md transition-colors"
+                                    title={`Abrir archivo adjunto: ${att.originalName}`}
+                                  >
+                                    <Paperclip className="w-2.5 h-2.5 text-indigo-400" />
+                                    <span className="truncate max-w-[85px]">{att.originalName}</span>
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </th>
                       );
                     })}

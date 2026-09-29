@@ -18,7 +18,8 @@ import {
   Info,
   FileSpreadsheet,
   Layers,
-  ListOrdered
+  ListOrdered,
+  Paperclip
 } from "lucide-react";
 import { QuoteAttachment } from "./CotizacionesAiChatModal";
 
@@ -317,6 +318,29 @@ export function CotizacionesImportAiModal({
         return updated;
       })
     );
+  };
+
+  const handleAttachOnly = async () => {
+    if (!attachment) return;
+    setIsSubmitting(true);
+    try {
+      const importPromise = onConfirmImport({
+        providerName: providerName.trim() || targetProviderName || "Proveedor",
+        currency,
+        notes,
+        attachment,
+        targetProviderId,
+        selectedItems: []
+      });
+      handleClose();
+      Promise.resolve(importPromise).catch((err) => {
+        console.warn("Aviso al guardar archivo adjunto:", err);
+      });
+    } catch (err: any) {
+      setError(err.message || "Error al adjuntar el archivo");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleConfirm = async () => {
@@ -788,7 +812,7 @@ export function CotizacionesImportAiModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/10 bg-[#101726]/90 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 border-t border-white/10 bg-[#101726]/90 shrink-0">
           <button
             type="button"
             onClick={handleClose}
@@ -798,28 +822,42 @@ export function CotizacionesImportAiModal({
           </button>
 
           {attachment && !isAnalyzing && (
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={isSubmitting || selectedCount === 0}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Importando...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                  <span>
-                    {targetProviderId
-                      ? `Aplicar a ${providerName} (${selectedCount} ${extractionMode === "general" ? "rubros generales" : "ítems"})`
-                      : `Crear Proveedor con ${selectedCount} ${extractionMode === "general" ? "rubros generales" : "ítems"}`}
-                  </span>
-                </>
-              )}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Option to only attach file without autocargando items */}
+              <button
+                type="button"
+                onClick={handleAttachOnly}
+                disabled={isSubmitting}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white border border-white/[0.1] rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm"
+                title="Adjunta el archivo al proveedor sin agregar ni modificar ningún ítem"
+              >
+                <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Solo Adjuntar Archivo (Sin cargar ítems)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={isSubmitting || selectedCount === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Importando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                    <span>
+                      {targetProviderId
+                        ? `Cargar ${selectedCount} ítems a ${providerName}`
+                        : `Crear con ${selectedCount} ítems`}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </div>
