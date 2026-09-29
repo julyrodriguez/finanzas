@@ -72,7 +72,10 @@ import {
   Paperclip,
   Mail,
   FileText,
-  Trophy
+  Trophy,
+  Send,
+  XCircle,
+  Clock
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
@@ -3671,28 +3674,30 @@ export default function CotizacionesPage() {
           {/* Search & Status Filters */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             {/* Status pills */}
-            <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-xl self-start">
+            <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-xl self-start flex-wrap gap-0.5">
               {(
                 [
-                  { id: "pendientes", label: "Borradores", count: statusCounts.pendientes },
-                  { id: "enviadas", label: "Enviadas", count: statusCounts.enviados },
-                  { id: "finalizadas", label: "Finalizadas", count: statusCounts.finalizados },
-                  { id: "todas", label: "Todas", count: statusCounts.todos },
+                  { id: "pendientes", label: "Borradores", count: statusCounts.pendientes, activeClass: "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/25", dot: "bg-amber-400" },
+                  { id: "enviadas", label: "Enviadas", count: statusCounts.enviados, activeClass: "bg-sky-500 text-white font-bold shadow-md shadow-sky-500/30", dot: "bg-sky-300" },
+                  { id: "finalizadas", label: "Finalizadas", count: statusCounts.finalizados, activeClass: "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/30", dot: "bg-emerald-300" },
+                  { id: "todas", label: "Todas", count: statusCounts.todos, activeClass: "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30", dot: "bg-indigo-300" },
                 ] as const
-              ).map((st) => (
-                <button
-                  key={st.id}
-                  onClick={() => setFilterStatus(st.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                    filterStatus === st.id
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <span>{st.label}</span>
-                  <span className="text-[10px] ml-1.5 opacity-80 tabular-nums">({st.count})</span>
-                </button>
-              ))}
+              ).map((st) => {
+                const isSel = filterStatus === st.id;
+                return (
+                  <button
+                    key={st.id}
+                    onClick={() => setFilterStatus(st.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                      isSel ? st.activeClass : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {isSel && <span className={`w-1.5 h-1.5 rounded-full ${st.dot} animate-pulse`} />}
+                    <span>{st.label}</span>
+                    <span className="text-[10px] ml-0.5 opacity-80 tabular-nums font-mono">({st.count})</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Search input & only linked toggle */}
@@ -3770,6 +3775,62 @@ export default function CotizacionesPage() {
                   const qStatus = quote.status || (quote.isFinalized ? "finalizada" : "borrador");
                   const winningProv = quote.providers?.find((p) => p.id === quote.winningProviderId);
 
+                  const theme = (() => {
+                    if (qStatus === "finalizada") {
+                      return {
+                        border: "border-emerald-500/40 hover:border-emerald-400/80 shadow-emerald-950/30",
+                        bg: "bg-gradient-to-b from-emerald-950/35 via-[#0d1222]/95 to-[#090d18]/95",
+                        accentBar: "bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500",
+                        badge: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 font-extrabold shadow-sm shadow-emerald-500/10",
+                        badgeDot: "bg-emerald-400",
+                        icon: CheckCircle2,
+                        label: "Finalizada",
+                        titleHover: "hover:text-emerald-300",
+                        openBtn: "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30",
+                      };
+                    }
+                    if (qStatus === "enviada") {
+                      return {
+                        border: "border-sky-500/40 hover:border-sky-400/80 shadow-sky-950/30",
+                        bg: "bg-gradient-to-b from-sky-950/35 via-[#0d1222]/95 to-[#090d18]/95",
+                        accentBar: "bg-gradient-to-r from-sky-400 via-blue-400 to-sky-500",
+                        badge: "bg-sky-500/20 border-sky-500/40 text-sky-300 font-extrabold shadow-sm shadow-sky-500/10",
+                        badgeDot: "bg-sky-400",
+                        icon: Send,
+                        label: "Enviada",
+                        titleHover: "hover:text-sky-300",
+                        openBtn: "bg-sky-600 hover:bg-sky-500 text-white shadow-md shadow-sky-600/30",
+                      };
+                    }
+                    if (qStatus === "cancelada") {
+                      return {
+                        border: "border-rose-500/40 hover:border-rose-400/80 shadow-rose-950/30 opacity-80 hover:opacity-100",
+                        bg: "bg-gradient-to-b from-rose-950/35 via-[#0d1222]/95 to-[#090d18]/95",
+                        accentBar: "bg-gradient-to-r from-rose-400 via-red-500 to-rose-600",
+                        badge: "bg-rose-500/20 border-rose-500/40 text-rose-300 font-extrabold shadow-sm shadow-rose-500/10",
+                        badgeDot: "bg-rose-400",
+                        icon: XCircle,
+                        label: "Cancelada",
+                        titleHover: "hover:text-rose-300",
+                        openBtn: "bg-rose-600/80 hover:bg-rose-600 text-white",
+                      };
+                    }
+                    // Borrador / Pendiente
+                    return {
+                      border: "border-amber-500/25 hover:border-amber-500/50 shadow-amber-950/15",
+                      bg: "bg-gradient-to-b from-amber-950/20 via-[#0d1222]/95 to-[#090d18]/95",
+                      accentBar: "bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500",
+                      badge: "bg-amber-500/15 border-amber-500/30 text-amber-300 font-bold",
+                      badgeDot: "bg-amber-400",
+                      icon: Clock,
+                      label: "Borrador",
+                      titleHover: "hover:text-amber-300",
+                      openBtn: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30",
+                    };
+                  })();
+
+                  const StatusIcon = theme.icon;
+
                   return (
                     <motion.div
                       key={quote.id || quote.name}
@@ -3779,24 +3840,21 @@ export default function CotizacionesPage() {
                       exit={{ opacity: 0, scale: 0.96 }}
                       transition={{ duration: 0.22, ease: EASE_OUT }}
                       whileHover={{ y: -3 }}
-                      className="group relative flex flex-col justify-between p-5 rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] hover:border-white/[0.18] shadow-2xl backdrop-blur-xl transition-all duration-200"
+                      className={`group relative flex flex-col justify-between p-5 rounded-3xl border shadow-2xl backdrop-blur-xl transition-all duration-200 overflow-hidden ${theme.border} ${theme.bg}`}
                     >
+                      {/* Barra superior de acento coloreada */}
+                      <div className={`h-1 w-full rounded-full mb-3.5 ${theme.accentBar}`} />
+
                       <div className="space-y-3">
                         {/* Header: Status & Category */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                                qStatus === "finalizada"
-                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                                  : qStatus === "enviada"
-                                  ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
-                                  : qStatus === "cancelada"
-                                  ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
-                                  : "bg-amber-500/15 border-amber-500/30 text-amber-300"
-                              }`}
+                              className={`inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${theme.badge}`}
                             >
-                              {qStatus}
+                              <span className={`w-1.5 h-1.5 rounded-full ${theme.badgeDot} ${qStatus === "enviada" ? "animate-pulse" : ""}`} />
+                              <StatusIcon className="w-3 h-3" />
+                              <span>{theme.label}</span>
                             </span>
                             {quote.categoria && (
                               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
@@ -3812,7 +3870,7 @@ export default function CotizacionesPage() {
                         <div className="space-y-1">
                           <h3
                             onClick={() => handleSelectQuote(quote)}
-                            className="text-sm font-bold text-white tracking-tight cursor-pointer hover:text-indigo-300 transition-colors leading-snug"
+                            className={`text-sm font-bold text-white tracking-tight cursor-pointer ${theme.titleHover} transition-colors leading-snug`}
                           >
                             {quote.name}
                           </h3>
@@ -3864,7 +3922,7 @@ export default function CotizacionesPage() {
                           <motion.button
                             whileTap={{ scale: 0.94 }}
                             onClick={() => handleSelectQuote(quote)}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[11px] font-bold text-white transition-colors cursor-pointer"
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${theme.openBtn}`}
                           >
                             Abrir Editor
                           </motion.button>
