@@ -1,64 +1,46 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import {
   collection,
   doc,
-  addDoc,
+  getDocs,
+  setDoc,
   updateDoc,
   deleteDoc,
-  getDocs,
-  query,
-  orderBy,
   serverTimestamp,
-  setDoc,
-  getDoc,
-  Timestamp
+  Timestamp,
 } from "firebase/firestore";
 import {
   fetchPendientesFromMongo,
   syncPendienteToMongo,
-  syncPendientesBulkToMongo,
   deletePendienteFromMongo,
-  syncPendienteConfigToMongo,
-  fetchCotizacionesFromMongo,
-  syncCotizacionToMongo,
 } from "@/lib/serverSync";
 import {
   Plus,
   Trash2,
-  Save,
-  CheckCircle2,
-  Circle,
-  FileText,
+  Check,
+  Search,
+  X,
+  AlertCircle,
   Clock,
   Sparkles,
-  Search,
-  AlertCircle,
-  Check,
-  StickyNote,
-  X,
-  ListTodo,
-  AlertTriangle,
+  Flame,
+  CheckCircle2,
+  Circle,
+  Edit3,
+  Calendar,
+  Layers,
+  ArrowUpRight,
   RefreshCw,
-  Edit2,
-  Flag,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  Folders,
-  Calculator,
-  Link2,
-  ExternalLink,
-  Unlink
 } from "lucide-react";
 
-const generateUniqueId = () => {
-  return Date.now().toString() + Math.random().toString(36).substring(2, 9);
-};
+// Emil Kowalski animation curves
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
 export function getTimestampSeconds(val: any): number {
   if (!val) return 0;
@@ -81,31 +63,15 @@ export function getTimestampSeconds(val: any): number {
   return 0;
 }
 
-// Interfaces
-interface Etapa {
+export interface Etapa {
   id: string;
   titulo: string;
   completado: boolean;
-  esFinal?: boolean;
   completedAt?: string | null;
   createdAt?: string | null;
 }
 
-export interface CotizacionSummary {
-  id: string;
-  name: string;
-  notes?: string;
-  baseCurrency?: "ARS" | "USD";
-  status?: string;
-  createdAt?: { seconds: number; nanoseconds: number } | string | null;
-  itemsCount?: number;
-  providersCount?: number;
-  categoria?: string;
-  pendienteId?: string;
-  pendienteTitulo?: string;
-}
-
-interface Pendiente {
+export interface Pendiente {
   id: string;
   titulo: string;
   descripcion: string;
@@ -115,80 +81,130 @@ interface Pendiente {
   creadoPor: string;
   createdAt: Timestamp | null;
   completedAt: Timestamp | null;
-  notasAdicionales: string;
+  notasAdicionales?: string;
   etapas?: Etapa[];
   fechaLimite?: string | null;
   cotizacionesIds?: string[];
+}
+
+interface ToastInfo {
+  id: string;
+  text: string;
+  type: "success" | "error" | "info";
+}
+
+// Circular progress indicator with SVG animated stroke
+function CircularProgressRing({
+  completed,
+  total,
+  size = 44,
+  strokeWidth = 3.5,
+  showLabel = true,
+}: {
+  completed: number;
+  total: number;
+  size?: number;
+  strokeWidth?: number;
+  showLabel?: boolean;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const strokeDashoffset = circumference - (percent / 100) * circumference;
+  const isAllDone = total > 0 && completed === total;
+
+  return (
+    <div
+      className="relative inline-flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <svg
+        className="w-full h-full -rotate-90 transform"
+        viewBox={`0 0 ${size} ${size}`}
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255, 255, 255, 0.08)"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={isAllDone ? "#10b981" : "#6366f1"}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          fill="none"
+          style={{
+            strokeDasharray: circumference,
+            strokeDashoffset,
+            transition:
+              "stroke-dashoffset 350ms cubic-bezier(0.23, 1, 0.32, 1), stroke 250ms ease",
+          }}
+        />
+      </svg>
+      {showLabel && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          {isAllDone ? (
+            <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
+          ) : (
+            <span className="text-[10px] font-bold text-white tracking-tight tabular-nums">
+              {percent}%
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function PendientesPage() {
   const db = getFirebaseDb();
   const { user } = useAuth();
 
-  // State lists
-  const [allItems, setAllItems] = useState<Pendiente[]>([]);
-  const [completedLimit, setCompletedLimit] = useState<number>(10);
+  // State
+  const [items, setItems] = useState<Pendiente[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cotizaciones linking state
-  const [allCotizaciones, setAllCotizaciones] = useState<CotizacionSummary[]>([]);
-  const [isLinkCotizacionModalOpen, setIsLinkCotizacionModalOpen] = useState<boolean>(false);
-  const [searchCotizacionTerm, setSearchCotizacionTerm] = useState<string>("");
+  // Filter & Search
+  const [filterStatus, setFilterStatus] = useState<"pendientes" | "completados" | "todos">("pendientes");
+  const [filterPriority, setFilterPriority] = useState<"todas" | "alta" | "media" | "baja">("todas");
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // General Notepad (for when no project is selected)
-  const [generalNotes, setGeneralNotes] = useState<string>("");
-  const [savingGeneral, setSavingGeneral] = useState<boolean>(false);
-  const [generalLastSaved, setGeneralLastSaved] = useState<Date | null>(null);
+  // Modals
+  const [editingItem, setEditingItem] = useState<Pendiente | null>(null);
+  const [isNewModalOpen, setIsNewModalOpen] = useState<boolean>(false);
 
-  // Selection & Editor state
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editorTitle, setEditorTitle] = useState<string>("");
-  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
-  const [editorNotes, setEditorNotes] = useState<string>("");
-  const [editorDescription, setEditorDescription] = useState<string>("");
-  const [editorFechaLimite, setEditorFechaLimite] = useState<string>("");
-  const [isEditorDirty, setIsEditorDirty] = useState<boolean>(false);
-  const [savingEditor, setSavingEditor] = useState<boolean>(false);
-  const [editorLastSaved, setEditorLastSaved] = useState<Date | null>(null);
-
-  // Stepper / Etapas state
-  const [insertingAtIndex, setInsertingAtIndex] = useState<number | null>(null);
-  const [newStepTitle, setNewStepTitle] = useState<string>("");
-
-  // Filters & Search
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [filterEstado, setFilterEstado] = useState<"todos" | "pendientes" | "completados">("pendientes");
-  const [filterPrioridad, setFilterPrioridad] = useState<"todas" | "alta" | "media" | "baja">("todas");
-  const [filterCategoria, setFilterCategoria] = useState<string>("todas");
-
-  // Category management modal & state
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
-  const [newCategoryModalInput, setNewCategoryModalInput] = useState<string>("");
-
-  // Editor category state
-  const [editorCategoria, setEditorCategoria] = useState<string>("");
-
-  // New Item Modal
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  // New item form state
   const [newTitle, setNewTitle] = useState<string>("");
   const [newDescription, setNewDescription] = useState<string>("");
   const [newPriority, setNewPriority] = useState<"alta" | "media" | "baja">("media");
-  const [newCategoria, setNewCategoria] = useState<string>("");
-  const [showInlineNewCatModal, setShowInlineNewCatModal] = useState<boolean>(false);
-  const [inlineNewCatName, setInlineNewCatName] = useState<string>("");
-  const [newFechaLimite, setNewFechaLimite] = useState<string>("");
-  const [isAdding, setIsAdding] = useState<boolean>(false);
+  const [newInitialSteps, setNewInitialSteps] = useState<string[]>([]);
+  const [stepInputVal, setStepInputVal] = useState<string>("");
+  const [isSubmittingNew, setIsSubmittingNew] = useState<boolean>(false);
 
-  // Success Toast
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "info" | "error" } | null>(null);
+  // Edit modal draft state
+  const [editTitle, setEditTitle] = useState<string>("");
+  const [editDescription, setEditDescription] = useState<string>("");
+  const [editPriority, setEditPriority] = useState<"alta" | "media" | "baja">("media");
+  const [editEtapas, setEditEtapas] = useState<Etapa[]>([]);
+  const [editNewStepTitle, setEditNewStepTitle] = useState<string>("");
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
 
-  // Toast Helper
-  const showToast = (text: string, type: "success" | "info" | "error" = "success") => {
-    setToastMessage({ text, type });
-    setTimeout(() => setToastMessage(null), 3500);
-  };
+  // Toasts
+  const [toasts, setToasts] = useState<ToastInfo[]>([]);
+
+  const addToast = useCallback((text: string, type: "success" | "error" | "info" = "success") => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 6);
+    setToasts((prev) => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3200);
+  }, []);
 
   const getCleanUsername = () => {
     if (!user) return "Usuario";
@@ -197,2742 +213,1202 @@ export default function PendientesPage() {
     return "Usuario";
   };
 
-  const isSearching = searchTerm.trim() !== "";
-
-  // Split and sort in memory to avoid Firestore composite index errors
-  const pendingItems = useMemo(() => {
-    return allItems.filter(item => !item.completado);
-  }, [allItems]);
-
-  const completedItemsAll = useMemo(() => {
-    const list = allItems.filter(item => item.completado);
-    const sorted = [...list];
-    sorted.sort((a, b) => {
-      const timeA = a.completedAt ? getTimestampSeconds(a.completedAt) : getTimestampSeconds(a.createdAt);
-      const timeB = b.completedAt ? getTimestampSeconds(b.completedAt) : getTimestampSeconds(b.createdAt);
-      return timeB - timeA;
-    });
-    return sorted;
-  }, [allItems]);
-
-  const completedItems = useMemo(() => {
-    return completedItemsAll.slice(0, completedLimit);
-  }, [completedItemsAll, completedLimit]);
-
-  const hasMoreCompleted = useMemo(() => {
-    return completedItemsAll.length > completedLimit;
-  }, [completedItemsAll, completedLimit]);
-
-  // Combine pending and completed items depending on filterEstado
-  const pendientes = useMemo(() => {
-    let list: Pendiente[] = [];
-    if (filterEstado === "todos") {
-      const activeCompleted = isSearching ? completedItemsAll : completedItems;
-      list = [...pendingItems, ...activeCompleted];
-    } else if (filterEstado === "pendientes") {
-      list = pendingItems;
-    } else {
-      list = isSearching ? completedItemsAll : completedItems;
-    }
-    
-    // Sort by priority: alta (0) > media (1) > baja (2). If same priority, sort by createdAt desc.
-    const priorityOrder = { alta: 0, media: 1, baja: 2 };
-    const sorted = [...list];
-    sorted.sort((a, b) => {
-      const ordA = priorityOrder[a.prioridad] ?? 1;
-      const ordB = priorityOrder[b.prioridad] ?? 1;
-      if (ordA !== ordB) {
-        return ordA - ordB;
-      }
-      const timeA = getTimestampSeconds(a.createdAt);
-      const timeB = getTimestampSeconds(b.createdAt);
-      return timeB - timeA;
-    });
-    
-    return sorted;
-  }, [pendingItems, completedItems, completedItemsAll, filterEstado, isSearching]);
-
-  // Distinct categories created by user or in existing items (no hardcoded defaults)
-  const allCategories = useMemo(() => {
-    const catsSet = new Set<string>();
-    customCategories.forEach((c) => {
-      if (c && c.trim()) catsSet.add(c.trim());
-    });
-    allItems.forEach((item) => {
-      if (item.categoria && item.categoria.trim()) {
-        catsSet.add(item.categoria.trim());
-      }
-    });
-    return Array.from(catsSet).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  }, [customCategories, allItems]);
-
-  // Category counts based on current status filter
-  const getCategoryCount = (catName: string) => {
-    const source =
-      filterEstado === "todos"
-        ? allItems
-        : filterEstado === "pendientes"
-        ? pendingItems
-        : completedItemsAll;
-    return source.filter((p) => p.categoria?.toLowerCase() === catName.toLowerCase()).length;
-  };
-
-  const uncategorizedCount = useMemo(() => {
-    const source =
-      filterEstado === "todos"
-        ? allItems
-        : filterEstado === "pendientes"
-        ? pendingItems
-        : completedItemsAll;
-    return source.filter((p) => !p.categoria || p.categoria.trim() === "").length;
-  }, [allItems, pendingItems, completedItemsAll, filterEstado]);
-
-  const totalFolderCount =
-    filterEstado === "todos"
-      ? allItems.length
-      : filterEstado === "pendientes"
-      ? pendingItems.length
-      : completedItemsAll.length;
-
-  // 1. Initial Load of Pendientes & Config: MongoDB first, then Firebase fallback
+  // Load items on mount
   useEffect(() => {
     let isMounted = true;
 
-    const loadData = async () => {
-      // A. Consultar MongoDB primero (Servidor propio)
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+
       try {
-        const data = await fetchPendientesFromMongo();
-        if (!isMounted) return;
-        if (data) {
-          if (Array.isArray(data.pendientes)) {
-            setAllItems(data.pendientes);
-          }
-          if (data.config?.general?.content !== undefined) {
-            setGeneralNotes(data.config.general.content);
-            if (data.config.general.updatedAt) {
-              setGeneralLastSaved(new Date(data.config.general.updatedAt));
-            }
-          }
-          if (data.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
-            setCustomCategories(data.config.categorias);
-          }
+        // 1. Try MongoDB first
+        const mongoRes = await fetchPendientesFromMongo();
+        if (isMounted && mongoRes?.pendientes && Array.isArray(mongoRes.pendientes) && mongoRes.pendientes.length > 0) {
+          setItems(mongoRes.pendientes as Pendiente[]);
           setLoading(false);
-          setError(null);
           return;
         }
-      } catch (err) {
-        console.warn("MongoDB initial fetch warning in pendientes, trying Firebase fallback:", err);
+      } catch (mongoErr) {
+        console.warn("MongoDB fetch skipped or failed, falling back to Firebase:", mongoErr);
       }
 
-      // B. Fallback: Firebase Firestore solo si MongoDB falló
-      if (db) {
-        try {
-          const colRef = collection(db, "pendientes");
-          const q = query(colRef, orderBy("createdAt", "desc"));
-          const snapshot = await getDocs(q);
-          if (!isMounted) return;
-          const list: Pendiente[] = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return {
-              id: docSnap.id,
-              titulo: data.titulo || "",
-              descripcion: data.descripcion || "",
-              prioridad: data.prioridad || "media",
-              categoria: data.categoria || "",
-              completado: Boolean(data.completado),
-              creadoPor: data.creadoPor || "Usuario",
-              createdAt: data.createdAt || null,
-              completedAt: data.completedAt || null,
-              notasAdicionales: data.notasAdicionales || "",
-              etapas: data.etapas || [],
-              fechaLimite: data.fechaLimite || null,
-              cotizacionesIds: Array.isArray(data.cotizacionesIds) ? data.cotizacionesIds : []
-            };
-          });
-
-          if (list.length > 0) {
-            setAllItems(list);
-            syncPendientesBulkToMongo(list);
-          }
-
-          // Cargar notas generales de fallback
-          try {
-            const noteDoc = await getDoc(doc(db, "pendientes_config", "general"));
-            if (noteDoc.exists() && isMounted) {
-              const noteData = noteDoc.data();
-              if (noteData.content !== undefined) setGeneralNotes(noteData.content);
-              if (noteData.updatedAt && typeof noteData.updatedAt.toDate === "function") {
-                setGeneralLastSaved(noteData.updatedAt.toDate());
-              }
-            }
-          } catch (e) {
-            console.warn("Fallback notepad read failed:", e);
-          }
-
-          // Cargar categorias de fallback
-          try {
-            const catDoc = await getDoc(doc(db, "pendientes_config", "categorias"));
-            if (catDoc.exists() && isMounted) {
-              const catData = catDoc.data();
-              if (Array.isArray(catData.list) && catData.list.length > 0) {
-                setCustomCategories(catData.list);
-              }
-            }
-          } catch (e) {
-            console.warn("Fallback categories read failed:", e);
-          }
-
-          setLoading(false);
-          setError(null);
+      // 2. Firebase Fallback
+      try {
+        if (!db) {
+          if (isMounted) setLoading(false);
           return;
-        } catch (fbErr) {
-          console.warn("⚠️ Error Firestore fallback en pendientes (posible cuota excedida):", fbErr);
         }
-      }
-
-      if (isMounted) {
-        setLoading(false);
-        setAllItems((prev) => {
-          if (prev.length === 0) {
-            setError("No se pudieron cargar los pendientes del servidor.");
-          }
-          return prev;
+        const colRef = collection(db, "pendientes");
+        const snapshot = await getDocs(colRef);
+        const fbItems: Pendiente[] = [];
+        snapshot.forEach((d) => {
+          fbItems.push({ id: d.id, ...d.data() } as Pendiente);
         });
+        if (isMounted) {
+          setItems(fbItems);
+        }
+      } catch (fbErr: any) {
+        console.error("Error loading pendientes:", fbErr);
+        if (isMounted) {
+          setError("No se pudieron cargar los pendientes. Verifica la conexión.");
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    };
+    }
 
     loadData();
-
     return () => {
       isMounted = false;
     };
   }, [db]);
 
-  // 1b. Fetch Cotizaciones list: MongoDB first, then Firebase fallback
-  useEffect(() => {
-    let isMounted = true;
+  // Derived counts
+  const pendingCount = useMemo(() => items.filter((i) => !i.completado).length, [items]);
+  const completedCount = useMemo(() => items.filter((i) => i.completado).length, [items]);
+  const totalCount = items.length;
 
-    const loadQuotes = async () => {
-      // A. Consultar MongoDB primero
-      try {
-        const quotes = await fetchCotizacionesFromMongo();
-        if (!isMounted) return;
-        if (quotes && Array.isArray(quotes)) {
-          const list: CotizacionSummary[] = quotes.map((data: any) => ({
-            id: data.id || data.firebaseId,
-            name: data.name || "Cotización sin nombre",
-            notes: data.notes || "",
-            baseCurrency: data.baseCurrency || "ARS",
-            status: data.status || (data.isFinalized ? "finalizada" : "borrador"),
-            createdAt: data.createdAt || null,
-            itemsCount: Array.isArray(data.items) ? data.items.length : 0,
-            providersCount: Array.isArray(data.providers) ? data.providers.length : 0,
-            categoria: data.categoria || "",
-            pendienteId: data.pendienteId || "",
-            pendienteTitulo: data.pendienteTitulo || ""
-          }));
-          setAllCotizaciones(list);
-          return;
-        }
-      } catch (err) {
-        console.warn("MongoDB initial fetch warning in cotizaciones summary:", err);
-      }
+  // Filtered & sorted items
+  const filteredItems = useMemo(() => {
+    let list = items;
 
-      // B. Fallback: Firebase solo si MongoDB falló
-      if (db) {
-        try {
-          const colRef = collection(db, "cotizaciones");
-          const q = query(colRef, orderBy("createdAt", "desc"));
-          const snapshot = await getDocs(q);
-          if (!isMounted) return;
-          const list: CotizacionSummary[] = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return {
-              id: docSnap.id,
-              name: data.name || "Cotización sin nombre",
-              notes: data.notes || "",
-              baseCurrency: data.baseCurrency || "ARS",
-              status: data.status || (data.isFinalized ? "finalizada" : "borrador"),
-              createdAt: data.createdAt || null,
-              itemsCount: Array.isArray(data.items) ? data.items.length : 0,
-              providersCount: Array.isArray(data.providers) ? data.providers.length : 0,
-              categoria: data.categoria || "",
-              pendienteId: data.pendienteId || "",
-              pendienteTitulo: data.pendienteTitulo || ""
-            };
-          });
-          if (list.length > 0) {
-            setAllCotizaciones(list);
-          }
-        } catch (err) {
-          console.warn("⚠️ Could not load cotizaciones from Firestore fallback (quota/network):", err);
-        }
-      }
-    };
-
-    loadQuotes();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [db]);
-
-  // 1c. Deep-link: select pendiente from URL param ?id=...
-  useEffect(() => {
-    if (typeof window === "undefined" || allItems.length === 0) return;
-    const params = new URLSearchParams(window.location.search);
-    const targetId = params.get("id");
-    if (targetId && allItems.some((item) => item.id === targetId)) {
-      setTimeout(() => {
-        setSelectedId(targetId);
-      }, 0);
-    }
-  }, [allItems]);
-
-  // Selected item sync: update editor state when selection changes
-  const selectedItem = pendientes.find((p) => p.id === selectedId);
-
-  useEffect(() => {
-    setTimeout(() => {
-      if (selectedItem) {
-        setEditorTitle(selectedItem.titulo || "");
-        setIsEditingTitle(false);
-        setEditorNotes(selectedItem.notasAdicionales || "");
-        setEditorDescription(selectedItem.descripcion || "");
-        setEditorFechaLimite(selectedItem.fechaLimite || "");
-        setEditorCategoria(selectedItem.categoria || "");
-        setIsEditorDirty(false);
-        const s = selectedItem.completedAt ? getTimestampSeconds(selectedItem.completedAt) : 0;
-        setEditorLastSaved(s > 0 ? new Date(s * 1000) : null);
-      } else {
-        setEditorTitle("");
-        setIsEditingTitle(false);
-        setEditorNotes("");
-        setEditorDescription("");
-        setEditorFechaLimite("");
-        setEditorCategoria("");
-        setIsEditorDirty(false);
-      }
-    }, 0);
-  }, [selectedId, selectedItem]);
-
-  // 3. Save general notes to Mongo & Firestore
-  const handleSaveGeneralNotes = async () => {
-    setSavingGeneral(true);
-    try {
-      // 1. Dual Write: Servidor propio MongoDB
-      syncPendienteConfigToMongo("general", {
-        content: generalNotes,
-        updatedBy: getCleanUsername()
-      });
-
-      // 2. Dual Write: Firebase Firestore (no bloqueante)
-      if (db) {
-        const docRef = doc(db, "pendientes_config", "general");
-        setDoc(docRef, {
-          content: generalNotes,
-          updatedAt: serverTimestamp(),
-          updatedBy: getCleanUsername()
-        }, { merge: true }).catch((err) => {
-          console.warn("⚠️ Error guardando bloc general en Firebase (cuota):", err);
-        });
-      }
-      
-      setGeneralLastSaved(new Date());
-      showToast("Bloc general guardado correctamente", "success");
-    } catch (err) {
-      console.error("Error saving general notes:", err);
-      showToast("Error al guardar notas generales", "error");
-    } finally {
-      setSavingGeneral(false);
-    }
-  };
-
-  // Save / Rename title
-  const handleSaveTitle = async () => {
-    if (!selectedId) return;
-    const trimmed = editorTitle.trim();
-    if (!trimmed) {
-      showToast("El título no puede estar vacío", "error");
-      return;
+    if (filterStatus === "pendientes") {
+      list = list.filter((i) => !i.completado);
+    } else if (filterStatus === "completados") {
+      list = list.filter((i) => i.completado);
     }
 
-    try {
-      // 1. Optimistic UI update
-      setAllItems((prev) =>
-        prev.map((item) =>
-          item.id === selectedId
-            ? {
-                ...item,
-                titulo: trimmed,
-              }
-            : item
-        )
+    if (filterPriority !== "todas") {
+      list = list.filter((i) => i.prioridad === filterPriority);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (i) =>
+          i.titulo.toLowerCase().includes(q) ||
+          i.descripcion?.toLowerCase().includes(q) ||
+          i.etapas?.some((e) => e.titulo.toLowerCase().includes(q))
       );
-
-      // Sincronizar cotizaciones vinculadas si tienen este pendiente
-      setAllCotizaciones((prev) =>
-        prev.map((c) =>
-          c.pendienteId === selectedId
-            ? { ...c, pendienteTitulo: trimmed }
-            : c
-        )
-      );
-
-      // 2. Dual Write: MongoDB
-      syncPendienteToMongo({
-        id: selectedId,
-        titulo: trimmed,
-      });
-
-      const targetItem = allItems.find((p) => p.id === selectedId);
-      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
-        targetItem.cotizacionesIds.forEach((cId) => {
-          syncCotizacionToMongo({ id: cId, pendienteTitulo: trimmed });
-        });
-      }
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", selectedId), {
-          titulo: trimmed,
-          updatedAt: serverTimestamp(),
-        }).catch(console.warn);
-
-        if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
-          targetItem.cotizacionesIds.forEach((cId) => {
-            updateDoc(doc(db, "cotizaciones", cId), {
-              pendienteTitulo: trimmed,
-            }).catch(console.warn);
-          });
-        }
-      }
-
-      setIsEditingTitle(false);
-      showToast("Título actualizado correctamente", "success");
-    } catch (err) {
-      console.error("Error saving title:", err);
-      showToast("Error al actualizar título", "error");
     }
+
+    // Sort: priority (alta > media > baja), then date descending
+    const pWeight = { alta: 0, media: 1, baja: 2 };
+    return [...list].sort((a, b) => {
+      const wa = pWeight[a.prioridad] ?? 1;
+      const wb = pWeight[b.prioridad] ?? 1;
+      if (wa !== wb) return wa - wb;
+      return getTimestampSeconds(b.createdAt) - getTimestampSeconds(a.createdAt);
+    });
+  }, [items, filterStatus, filterPriority, searchQuery]);
+
+  // Handle open edit modal
+  const openEditModal = (item: Pendiente) => {
+    setEditingItem(item);
+    setEditTitle(item.titulo || "");
+    setEditDescription(item.descripcion || "");
+    setEditPriority(item.prioridad || "media");
+    setEditEtapas(item.etapas ? JSON.parse(JSON.stringify(item.etapas)) : []);
+    setEditNewStepTitle("");
   };
 
-  const handleSaveEditorNotes = async () => {
-    if (!selectedId) return;
-    setSavingEditor(true);
-    const finalTitle = editorTitle.trim() || selectedItem?.titulo || "Sin título";
-
-    try {
-      // 1. Optimistic UI update
-      setAllItems((prev) =>
-        prev.map((item) =>
-          item.id === selectedId
-            ? {
-                ...item,
-                titulo: finalTitle,
-                notasAdicionales: editorNotes,
-                descripcion: editorDescription,
-                fechaLimite: editorFechaLimite || null,
-                categoria: editorCategoria || ""
-              }
-            : item
-        )
-      );
-
-      if (finalTitle !== selectedItem?.titulo) {
-        setAllCotizaciones((prev) =>
-          prev.map((c) =>
-            c.pendienteId === selectedId
-              ? { ...c, pendienteTitulo: finalTitle }
-              : c
-          )
-        );
-      }
-
-      // 2. Dual Write: MongoDB
-      syncPendienteToMongo({
-        id: selectedId,
-        titulo: finalTitle,
-        notasAdicionales: editorNotes,
-        descripcion: editorDescription,
-        fechaLimite: editorFechaLimite || null,
-        categoria: editorCategoria || ""
-      });
-
-      const targetItem = allItems.find((p) => p.id === selectedId);
-      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0 && finalTitle !== selectedItem?.titulo) {
-        targetItem.cotizacionesIds.forEach((cId) => {
-          syncCotizacionToMongo({ id: cId, pendienteTitulo: finalTitle });
-        });
-      }
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        const docRef = doc(db, "pendientes", selectedId);
-        updateDoc(docRef, {
-          titulo: finalTitle,
-          notasAdicionales: editorNotes,
-          descripcion: editorDescription,
-          fechaLimite: editorFechaLimite || null,
-          categoria: editorCategoria || "",
-          updatedAt: serverTimestamp()
-        }).catch((err) => {
-          console.warn("⚠️ Error guardando notas de proyecto en Firebase:", err);
-        });
-
-        if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0 && finalTitle !== selectedItem?.titulo) {
-          targetItem.cotizacionesIds.forEach((cId) => {
-            updateDoc(doc(db, "cotizaciones", cId), {
-              pendienteTitulo: finalTitle,
-            }).catch(console.warn);
-          });
-        }
-      }
-
-      setIsEditorDirty(false);
-      setIsEditingTitle(false);
-      setEditorLastSaved(new Date());
-      showToast("Notas del proyecto guardadas", "success");
-    } catch (err) {
-      console.error("Error saving project notes:", err);
-      showToast("Error al guardar notas de proyecto", "error");
-    } finally {
-      setSavingEditor(false);
-    }
+  const closeEditModal = () => {
+    setEditingItem(null);
   };
 
-  // Category management functions
-  const handleAddCategory = async (catName: string) => {
-    const trimmed = catName.trim();
-    if (!trimmed) {
-      showToast("El nombre de la carpeta no puede estar vacío", "error");
-      return;
-    }
-    const exists = allCategories.some((c) => c.toLowerCase() === trimmed.toLowerCase());
-    if (exists) {
-      showToast(`La carpeta "${trimmed}" ya existe`, "info");
-      return;
-    }
-    const updated = [...customCategories, trimmed];
-    setCustomCategories(updated);
+  // Toggle pendiente completion
+  const handleTogglePendiente = async (id: string, currentStatus: boolean, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
 
-    // Dual Write: Mongo
-    syncPendienteConfigToMongo("categorias", { list: updated });
+    const newStatus = !currentStatus;
+    const nowIso = new Date().toISOString();
 
-    // Dual Write: Firebase
-    if (db) {
-      const docRef = doc(db, "pendientes_config", "categorias");
-      setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true }).catch((err) => {
-        console.warn("⚠️ Error guardando carpeta en Firebase:", err);
-      });
-    }
-
-    showToast(`Carpeta "${trimmed}" creada con éxito`, "success");
-  };
-
-  const handleDeleteCategory = async (catName: string) => {
-    const affectedItems = allItems.filter(
-      (item) => item.categoria?.toLowerCase() === catName.toLowerCase()
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          completado: newStatus,
+          completedAt: newStatus ? (Timestamp.now() as any) : null,
+        };
+      })
     );
 
-    if (affectedItems.length > 0) {
-      const confirmMsg = `La carpeta "${catName}" tiene ${affectedItems.length} pendiente(s) asociado(s).\n¿Deseas eliminarla de todas formas? Los pendientes quedarán sin rubro.`;
-      if (!confirm(confirmMsg)) {
-        return;
+    addToast(newStatus ? "Pendiente completado" : "Pendiente reabierto", "info");
+
+    try {
+      const updatedFields: any = {
+        completado: newStatus,
+        completedAt: newStatus ? serverTimestamp() : null,
+      };
+
+      if (db) {
+        await updateDoc(doc(db, "pendientes", id), updatedFields);
       }
-    } else {
-      if (!confirm(`¿Eliminar la carpeta "${catName}"?`)) {
-        return;
-      }
+      await syncPendienteToMongo({ id, ...updatedFields });
+    } catch (err) {
+      console.error("Error updating completion status:", err);
+      addToast("Error al guardar estado en el servidor", "error");
     }
+  };
 
-    const updated = customCategories.filter((c) => c.toLowerCase() !== catName.toLowerCase());
-    setCustomCategories(updated);
+  // Toggle an individual step on a card
+  const handleToggleCardStep = async (pendienteId: string, etapaId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
 
-    if (filterCategoria.toLowerCase() === catName.toLowerCase()) {
-      setFilterCategoria("todas");
-    }
+    const parent = items.find((i) => i.id === pendienteId);
+    if (!parent || !parent.etapas) return;
 
-    // 1. Optimistic items update
-    if (affectedItems.length > 0) {
-      setAllItems((prev) =>
-        prev.map((item) =>
-          item.categoria?.toLowerCase() === catName.toLowerCase() ? { ...item, categoria: "" } : item
-        )
-      );
-    }
-
-    // 2. Dual Write: Mongo
-    syncPendienteConfigToMongo("categorias", { list: updated });
-    affectedItems.forEach((item) => {
-      syncPendienteToMongo({ id: item.id, categoria: "" });
+    const updatedEtapas = parent.etapas.map((step) => {
+      if (step.id !== etapaId) return step;
+      return {
+        ...step,
+        completado: !step.completado,
+        completedAt: !step.completado ? new Date().toISOString() : null,
+      };
     });
 
-    // 3. Dual Write: Firebase
-    if (db) {
-      const docRef = doc(db, "pendientes_config", "categorias");
-      setDoc(docRef, { list: updated, updatedAt: serverTimestamp() }, { merge: true }).catch(console.warn);
+    // Check if all steps are now completed
+    const allDone = updatedEtapas.length > 0 && updatedEtapas.every((s) => s.completado);
 
-      affectedItems.forEach((item) => {
-        updateDoc(doc(db, "pendientes", item.id), { categoria: "" }).catch(console.warn);
-      });
-    }
-
-    showToast(`Carpeta "${catName}" eliminada`, "info");
-  };
-
-  const handleChangeCategory = async (id: string, newCategory: string) => {
-    const trimmedCat = newCategory.trim();
-
-    // 1. Optimistic update
-    setAllItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, categoria: trimmedCat } : item))
+    setItems((prev) =>
+      prev.map((p) => {
+        if (p.id !== pendienteId) return p;
+        return {
+          ...p,
+          etapas: updatedEtapas,
+          completado: allDone ? true : p.completado,
+        };
+      })
     );
-    setEditorCategoria(trimmedCat);
 
-    // 2. Dual Write: Mongo
-    syncPendienteToMongo({ id, categoria: trimmedCat });
+    addToast(allDone ? "¡Todos los pasos completados!" : "Paso actualizado", "success");
 
-    // Sync category with any linked cotizaciones
-    const targetItem = allItems.find((p) => p.id === id);
-    if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
-      targetItem.cotizacionesIds.forEach((cId) => {
-        syncCotizacionToMongo({ id: cId, categoria: trimmedCat });
-      });
-    }
-
-    // 3. Dual Write: Firebase
-    if (db) {
-      updateDoc(doc(db, "pendientes", id), { categoria: trimmedCat }).catch(console.warn);
-      if (targetItem?.cotizacionesIds && targetItem.cotizacionesIds.length > 0) {
-        targetItem.cotizacionesIds.forEach((cId) => {
-          updateDoc(doc(db, "cotizaciones", cId), { categoria: trimmedCat }).catch(console.warn);
-        });
-      }
-    }
-
-    showToast(trimmedCat ? `Rubro asignado: ${trimmedCat}` : "Rubro removido", "info");
-  };
-
-  const handleLinkCotizacion = async (pendienteId: string, cotizacionId: string) => {
     try {
-      const targetPendiente = allItems.find((p) => p.id === pendienteId);
-      const targetCotizacion = allCotizaciones.find((c) => c.id === cotizacionId);
-      if (!targetPendiente || !targetCotizacion) return;
-
-      const currentIds = targetPendiente.cotizacionesIds || [];
-      if (currentIds.includes(cotizacionId)) {
-        showToast("La cotización ya está vinculada a este pendiente", "info");
-        return;
+      const payload: any = { etapas: updatedEtapas };
+      if (allDone && !parent.completado) {
+        payload.completado = true;
+        payload.completedAt = serverTimestamp();
       }
 
-      const updatedIds = [...currentIds, cotizacionId];
-
-      // 1. Optimistic update
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === pendienteId ? { ...p, cotizacionesIds: updatedIds } : p))
-      );
-      setAllCotizaciones((prev) =>
-        prev.map((c) =>
-          c.id === cotizacionId
-            ? {
-                ...c,
-                pendienteId: targetPendiente.id,
-                pendienteTitulo: targetPendiente.titulo,
-                categoria: targetPendiente.categoria || ""
-              }
-            : c
-        )
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id: pendienteId, cotizacionesIds: updatedIds });
-      syncCotizacionToMongo({
-        id: cotizacionId,
-        pendienteId: targetPendiente.id,
-        pendienteTitulo: targetPendiente.titulo,
-        categoria: targetPendiente.categoria || ""
-      });
-
-      // 3. Dual Write: Firebase
       if (db) {
-        updateDoc(doc(db, "pendientes", pendienteId), { cotizacionesIds: updatedIds }).catch(console.warn);
-        updateDoc(doc(db, "cotizaciones", cotizacionId), {
-          pendienteId: targetPendiente.id,
-          pendienteTitulo: targetPendiente.titulo,
-          categoria: targetPendiente.categoria || ""
-        }).catch(console.warn);
+        await updateDoc(doc(db, "pendientes", pendienteId), payload);
       }
-
-      showToast(`Cotización vinculada con el rubro "${targetPendiente.categoria || "Sin rubro"}"`, "success");
+      await syncPendienteToMongo({ id: pendienteId, ...payload });
     } catch (err) {
-      console.error("Error linking cotizacion:", err);
-      showToast("Error al vincular cotización", "error");
+      console.error("Error updating step:", err);
     }
   };
 
-  const handleUnlinkCotizacion = async (pendienteId: string, cotizacionId: string) => {
+  // Delete a pendiente
+  const handleDeletePendiente = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    if (!confirm("¿Deseas eliminar este pendiente definitivamente?")) return;
+
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    if (editingItem?.id === id) {
+      closeEditModal();
+    }
+    addToast("Pendiente eliminado", "info");
+
     try {
-      const targetPendiente = allItems.find((p) => p.id === pendienteId);
-      if (!targetPendiente) return;
-
-      const currentIds = targetPendiente.cotizacionesIds || [];
-      const updatedIds = currentIds.filter((id) => id !== cotizacionId);
-
-      // 1. Optimistic update
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === pendienteId ? { ...p, cotizacionesIds: updatedIds } : p))
-      );
-      setAllCotizaciones((prev) =>
-        prev.map((c) => (c.id === cotizacionId ? { ...c, pendienteId: "", pendienteTitulo: "" } : c))
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id: pendienteId, cotizacionesIds: updatedIds });
-      syncCotizacionToMongo({ id: cotizacionId, pendienteId: "", pendienteTitulo: "" });
-
-      // 3. Dual Write: Firebase
       if (db) {
-        updateDoc(doc(db, "pendientes", pendienteId), { cotizacionesIds: updatedIds }).catch(console.warn);
-        updateDoc(doc(db, "cotizaciones", cotizacionId), {
-          pendienteId: "",
-          pendienteTitulo: ""
-        }).catch(console.warn);
+        await deleteDoc(doc(db, "pendientes", id));
       }
-
-      showToast("Cotización desvinculada", "info");
+      await deletePendienteFromMongo(id);
     } catch (err) {
-      console.error("Error unlinking cotizacion:", err);
-      showToast("Error al desvincular cotización", "error");
+      console.error("Error deleting pendiente:", err);
+      addToast("Error al eliminar del servidor", "error");
     }
   };
 
-  const filteredCotizacionesForModal = useMemo(() => {
-    if (!searchCotizacionTerm.trim()) return allCotizaciones;
-    const term = searchCotizacionTerm.toLowerCase();
-    return allCotizaciones.filter(
-      (c) =>
-        c.name.toLowerCase().includes(term) ||
-        (c.notes && c.notes.toLowerCase().includes(term)) ||
-        (c.status && c.status.toLowerCase().includes(term)) ||
-        (c.categoria && c.categoria.toLowerCase().includes(term))
-    );
-  }, [allCotizaciones, searchCotizacionTerm]);
+  // Add a step in edit modal
+  const handleAddEditStep = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const title = editNewStepTitle.trim();
+    if (!title) return;
 
-  const handleInsertEtapa = async (index: number) => {
-    if (!selectedId || !newStepTitle.trim()) return;
-    try {
-      const newStep: Etapa = {
-        id: "etapa-" + generateUniqueId(),
-        titulo: newStepTitle.trim(),
-        completado: false,
-        createdAt: new Date().toISOString(),
-        completedAt: null
-      };
-      
-      const currentEtapas = selectedItem?.etapas || [];
-      const updated = [...currentEtapas];
-      updated.splice(index, 0, newStep);
+    const newEtapa: Etapa = {
+      id: "step-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+      titulo: title,
+      completado: false,
+      createdAt: new Date().toISOString(),
+    };
 
-      // 1. Optimistic UI
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id: selectedId, etapas: updated });
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
-      }
-
-      setInsertingAtIndex(null);
-      setNewStepTitle("");
-      showToast("Etapa agregada", "success");
-    } catch (err) {
-      console.error("Error inserting stage:", err);
-      showToast("Error al agregar etapa", "error");
-    }
+    setEditEtapas((prev) => [...prev, newEtapa]);
+    setEditNewStepTitle("");
   };
 
-  const handleToggleEtapa = async (stepId: string, currentCompletado: boolean) => {
-    if (!selectedId) return;
-    try {
-      const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.map((step) => {
-        if (step.id === stepId) {
-          const nextCompletado = !currentCompletado;
-          return {
-            ...step,
-            completado: nextCompletado,
-            completedAt: nextCompletado ? new Date().toISOString() : null
-          };
-        }
-        return step;
-      });
-
-      // 1. Optimistic UI
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id: selectedId, etapas: updated });
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
-      }
-    } catch (err) {
-      console.error("Error toggling stage:", err);
-      showToast("Error al actualizar etapa", "error");
-    }
-  };
-
-  const handleSetEtapaFinal = async (stepId: string) => {
-    if (!selectedId) return;
-    try {
-      const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.map((step) => ({
-        ...step,
-        esFinal: step.id === stepId ? !step.esFinal : false
-      }));
-
-      // 1. Optimistic UI
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id: selectedId, etapas: updated });
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
-      }
-
-      showToast("Etapa final establecida", "success");
-    } catch (err) {
-      console.error("Error setting final stage:", err);
-      showToast("Error al definir etapa final", "error");
-    }
-  };
-
-  const handleDeleteEtapa = async (stepId: string) => {
-    if (!selectedId) return;
-    try {
-      const currentEtapas = selectedItem?.etapas || [];
-      const updated = currentEtapas.filter((step) => step.id !== stepId);
-
-      // 1. Optimistic UI
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === selectedId ? { ...p, etapas: updated } : p))
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id: selectedId, etapas: updated });
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", selectedId), { etapas: updated }).catch(console.warn);
-      }
-
-      showToast("Etapa eliminada", "info");
-    } catch (err) {
-      console.error("Error deleting stage:", err);
-      showToast("Error al eliminar etapa", "error");
-    }
-  };
-
-  const renderInsertionLine = (index: number) => {
-    const isInsertingHere = insertingAtIndex === index;
-
-    if (isInsertingHere) {
-      return (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleInsertEtapa(index);
-          }}
-          className="flex items-center gap-1.5 py-1 px-2.5 bg-white/5 rounded-xl border border-white/10 my-1 animate-fade-in"
-        >
-          <input
-            type="text"
-            placeholder="Nombre de la etapa..."
-            value={newStepTitle}
-            onChange={(e) => setNewStepTitle(e.target.value)}
-            className="flex-1 bg-transparent text-xs text-white placeholder-gray-500 focus:outline-none py-0.5"
-            autoFocus
-          />
-          <button
-            type="submit"
-            className="px-2 py-0.5 rounded bg-emerald-500 text-[10px] font-bold text-white hover:bg-emerald-400"
-          >
-            Insertar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setInsertingAtIndex(null);
-              setNewStepTitle("");
-            }}
-            className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-semibold text-gray-400 hover:text-white"
-          >
-            Cancelar
-          </button>
-        </form>
-      );
-    }
-
-    return (
-      <div className="group/line flex items-center justify-center h-4.5 relative my-0.5">
-        <div className="absolute inset-x-0 h-px bg-white/5 group-hover/line:bg-emerald-500/20 transition-colors" />
-        <button
-          onClick={() => {
-            setInsertingAtIndex(index);
-            setNewStepTitle("");
-          }}
-          className="z-10 w-5 h-5 rounded-full bg-[#0d131f] border border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-gray-400 hover:text-emerald-400 flex items-center justify-center opacity-40 group-hover/line:opacity-100 transition-all scale-90 hover:scale-100 cursor-pointer"
-          title="Insertar etapa aquí"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      </div>
+  // Toggle step inside edit modal
+  const handleToggleEditModalStep = (stepId: string) => {
+    setEditEtapas((prev) =>
+      prev.map((s) => {
+        if (s.id !== stepId) return s;
+        return {
+          ...s,
+          completado: !s.completado,
+          completedAt: !s.completado ? new Date().toISOString() : null,
+        };
+      })
     );
   };
 
-  const handleAddPendiente = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) {
-      showToast("Por favor, introduce un título descriptivo", "error");
+  // Remove step in edit modal
+  const handleRemoveEditStep = (stepId: string) => {
+    setEditEtapas((prev) => prev.filter((s) => s.id !== stepId));
+  };
+
+  // Save changes from edit modal
+  const handleSaveEditModal = async () => {
+    if (!editingItem) return;
+    if (!editTitle.trim()) {
+      addToast("El título no puede estar vacío", "error");
       return;
     }
 
-    setIsAdding(true);
+    setIsSavingEdit(true);
+
+    const allStepsDone = editEtapas.length > 0 && editEtapas.every((s) => s.completado);
+    const shouldComplete = allStepsDone || editingItem.completado;
+
+    const updatedData: Partial<Pendiente> = {
+      titulo: editTitle.trim(),
+      descripcion: editDescription.trim(),
+      prioridad: editPriority,
+      etapas: editEtapas,
+      completado: shouldComplete,
+      completedAt: shouldComplete ? (Timestamp.now() as any) : null,
+    };
+
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== editingItem.id) return i;
+        return { ...i, ...updatedData };
+      })
+    );
+
     try {
-      const generatedId = (db ? doc(collection(db, "pendientes")).id : null) || `pen-${Date.now()}`;
-      const newPendienteItem: Pendiente = {
-        id: generatedId,
-        titulo: newTitle.trim(),
-        descripcion: newDescription.trim(),
-        prioridad: newPriority,
-        categoria: newCategoria.trim(),
-        completado: false,
-        creadoPor: getCleanUsername(),
-        createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any,
-        completedAt: null,
-        notasAdicionales: "",
-        etapas: [],
-        fechaLimite: newFechaLimite || null,
-        cotizacionesIds: []
+      const fbPayload: any = {
+        ...updatedData,
+        completedAt: shouldComplete ? serverTimestamp() : null,
       };
 
-      // 1. Optimistic UI
-      setAllItems((prev) => [newPendienteItem, ...prev]);
-      setSelectedId(generatedId);
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo(newPendienteItem);
-
-      // 3. Dual Write: Firebase
       if (db) {
-        setDoc(doc(db, "pendientes", generatedId), {
-          titulo: newPendienteItem.titulo,
-          descripcion: newPendienteItem.descripcion,
-          prioridad: newPendienteItem.prioridad,
-          categoria: newPendienteItem.categoria,
-          completado: false,
-          creadoPor: newPendienteItem.creadoPor,
+        await updateDoc(doc(db, "pendientes", editingItem.id), fbPayload);
+      }
+      await syncPendienteToMongo({ id: editingItem.id, ...updatedData });
+
+      addToast("Cambios guardados con éxito", "success");
+      closeEditModal();
+    } catch (err) {
+      console.error("Error saving edit:", err);
+      addToast("Error al guardar cambios", "error");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Add a step in New Modal draft
+  const handleAddNewDraftStep = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!stepInputVal.trim()) return;
+    setNewInitialSteps((prev) => [...prev, stepInputVal.trim()]);
+    setStepInputVal("");
+  };
+
+  // Submit New Pendiente
+  const handleCreatePendiente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) {
+      addToast("Ingresa un título para el pendiente", "error");
+      return;
+    }
+
+    setIsSubmittingNew(true);
+
+    const generatedId = (db ? doc(collection(db, "pendientes")).id : null) || `pen-${Date.now()}`;
+    const initialEtapas: Etapa[] = newInitialSteps.map((st, idx) => ({
+      id: `step-${Date.now()}-${idx}`,
+      titulo: st,
+      completado: false,
+      createdAt: new Date().toISOString(),
+    }));
+
+    const newObj: Pendiente = {
+      id: generatedId,
+      titulo: newTitle.trim(),
+      descripcion: newDescription.trim(),
+      prioridad: newPriority,
+      completado: false,
+      creadoPor: getCleanUsername(),
+      createdAt: Timestamp.now(),
+      completedAt: null,
+      etapas: initialEtapas,
+    };
+
+    setItems((prev) => [newObj, ...prev]);
+
+    try {
+      if (db) {
+        await setDoc(doc(db, "pendientes", generatedId), {
+          ...newObj,
           createdAt: serverTimestamp(),
-          completedAt: null,
-          notasAdicionales: "",
-          fechaLimite: newFechaLimite || null
-        }).catch((err) => {
-          console.warn("⚠️ Error al crear pendiente en Firebase (cuota o red):", err);
         });
       }
+      await syncPendienteToMongo(newObj);
 
-      // Reset form
+      addToast("Pendiente creado exitosamente", "success");
+      setIsNewModalOpen(false);
       setNewTitle("");
       setNewDescription("");
       setNewPriority("media");
-      setNewCategoria("");
-      setShowInlineNewCatModal(false);
-      setInlineNewCatName("");
-      setNewFechaLimite("");
-      setIsModalOpen(false);
-
-      showToast("Proyecto pendiente creado", "success");
+      setNewInitialSteps([]);
+      setStepInputVal("");
     } catch (err) {
-      console.error("Error adding pendiente:", err);
-      showToast("Error al crear pendiente", "error");
+      console.error("Error creating pendiente:", err);
+      addToast("Error al guardar en el servidor", "error");
     } finally {
-      setIsAdding(false);
+      setIsSubmittingNew(false);
     }
   };
 
-  // 6. Toggle completado status
-  const handleToggleCompletado = async (id: string, currentStatus: boolean) => {
-    try {
-      const isCompleting = !currentStatus;
-      const completedAtObj = isCompleting
-        ? ({ seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as any)
-        : null;
-
-      // 1. Optimistic UI
-      setAllItems((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, completado: isCompleting, completedAt: completedAtObj } : p
-        )
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({
-        id,
-        completado: isCompleting,
-        completedAt: isCompleting ? new Date().toISOString() : null
-      });
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", id), {
-          completado: isCompleting,
-          completedAt: isCompleting ? serverTimestamp() : null
-        }).catch((err) => {
-          console.warn("⚠️ Error cambiando estado completado en Firebase:", err);
-        });
-      }
-
-      showToast(
-        isCompleting ? "¡Proyecto marcado como terminado! 🎉" : "Proyecto reabierto",
-        isCompleting ? "success" : "info"
-      );
-    } catch (err) {
-      console.error("Error toggling completion:", err);
-      showToast("Error al cambiar estado", "error");
-    }
-  };
-
-  // 7. Change priority directly
-  const handleChangePriority = async (id: string, newPriority: "alta" | "media" | "baja") => {
-    try {
-      // 1. Optimistic UI
-      setAllItems((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, prioridad: newPriority } : p))
-      );
-
-      // 2. Dual Write: Mongo
-      syncPendienteToMongo({ id, prioridad: newPriority });
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        updateDoc(doc(db, "pendientes", id), { prioridad: newPriority }).catch((err) => {
-          console.warn("⚠️ Error cambiando prioridad en Firebase:", err);
-        });
-      }
-
-      showToast(`Prioridad cambiada a ${newPriority}`, "info");
-    } catch (err) {
-      console.error("Error updating priority:", err);
-      showToast("Error al cambiar prioridad", "error");
-    }
-  };
-
-  // 8. Delete Pendiente
-  const handleDeletePendiente = async (id: string) => {
-    if (!confirm("¿Estás seguro de que quieres eliminar este pendiente? Se borrarán también todas sus notas.")) {
-      return;
-    }
-
-    try {
-      // 1. Optimistic UI
-      setAllItems((prev) => prev.filter((p) => p.id !== id));
-      if (selectedId === id) {
-        setSelectedId(null);
-      }
-
-      // 2. Dual Write: Mongo
-      deletePendienteFromMongo(id);
-
-      // 3. Dual Write: Firebase
-      if (db) {
-        deleteDoc(doc(db, "pendientes", id)).catch((err) => {
-          console.warn("⚠️ Error borrando pendiente en Firebase:", err);
-        });
-      }
-
-      showToast("Proyecto pendiente eliminado", "info");
-    } catch (err) {
-      console.error("Error deleting pendiente:", err);
-      showToast("Error al eliminar", "error");
-    }
-  };
-
-  // Filters computation
-  const filteredPendientes = pendientes.filter((p) => {
-    const matchSearch =
-      p.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.categoria && p.categoria.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchEstado =
-      filterEstado === "todos"
-        ? true
-        : filterEstado === "completados"
-        ? p.completado === true
-        : p.completado === false;
-
-    const matchPrioridad =
-      filterPrioridad === "todas" ? true : p.prioridad === filterPrioridad;
-
-    const matchCategoria =
-      filterCategoria === "todas"
-        ? true
-        : filterCategoria === "_sin_categoria_"
-        ? !p.categoria || p.categoria.trim() === ""
-        : p.categoria?.toLowerCase() === filterCategoria.toLowerCase();
-
-    return matchSearch && matchEstado && matchPrioridad && matchCategoria;
-  });
-
-  const pendingCount = pendientes.filter((p) => !p.completado).length;
-  const completedCount = pendientes.filter((p) => p.completado).length;
-
-  const priorityStyles = {
+  const priorityMeta = {
     alta: {
-      border: "border-rose-500/30 hover:border-rose-500/50",
-      badge: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+      label: "Alta",
       dot: "bg-rose-500",
-      bg: "from-rose-500/5 to-transparent"
+      badge: "bg-rose-500/10 text-rose-300 border-rose-500/20",
+      accent: "#f43f5e",
     },
     media: {
-      border: "border-amber-500/30 hover:border-amber-500/50",
-      badge: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-      dot: "bg-amber-500",
-      bg: "from-amber-500/5 to-transparent"
+      label: "Media",
+      dot: "bg-amber-400",
+      badge: "bg-amber-500/10 text-amber-300 border-amber-500/20",
+      accent: "#fbbf24",
     },
     baja: {
-      border: "border-sky-500/30 hover:border-sky-500/50",
-      badge: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-      dot: "bg-sky-500",
-      bg: "from-sky-500/5 to-transparent"
-    }
+      label: "Baja",
+      dot: "bg-emerald-400",
+      badge: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+      accent: "#10b981",
+    },
   };
 
-  const itemsToRender = selectedId
-    ? (selectedId === "general" ? [] : filteredPendientes.filter((p) => p.id === selectedId))
-    : filteredPendientes;
-
   return (
-    <AppLayout
-      title="Pendientes"
-      subtitle="Organizador y notas de proyectos corporativos pendientes"
-    >
-      {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 animate-bounce-short">
-          <div
-            className={`flex items-center gap-3 px-4.5 py-3 rounded-2xl border shadow-xl backdrop-blur-md transition-all duration-300 ${
-              toastMessage.type === "success"
-                ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
-                : toastMessage.type === "error"
-                ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
-                : "bg-sky-500/15 border-sky-500/30 text-sky-300"
-            }`}
-          >
-            {toastMessage.type === "success" && <CheckCircle2 className="w-5 h-5" />}
-            {toastMessage.type === "error" && <AlertTriangle className="w-5 h-5" />}
-            {toastMessage.type === "info" && <Sparkles className="w-5 h-5" />}
-            <span className="text-sm font-medium">{toastMessage.text}</span>
+    <AppLayout title="Pendientes" subtitle="Organizador de tareas, proyectos y pasos de trabajo">
+      {/* Toast notifications container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence mode="popLayout">
+          {toasts.map((t) => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, y: 12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-white/10 bg-[#0d121f]/90 shadow-2xl backdrop-blur-md text-xs font-medium text-white"
+            >
+              {t.type === "success" && <Check className="w-4 h-4 text-emerald-400" />}
+              {t.type === "error" && <AlertCircle className="w-4 h-4 text-rose-400" />}
+              {t.type === "info" && <Sparkles className="w-4 h-4 text-indigo-400" />}
+              <span>{t.text}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      <div className="max-w-7xl mx-auto space-y-6 pb-16">
+        {/* TOP BAR / DASHBOARD HEADER */}
+        <section className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-3xl bg-[#0d1220]/80 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                Flujo de Pendientes
+              </h1>
+              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                {pendingCount} activos
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Control circular de etapas, seguimiento y cumplimiento de tareas.
+            </p>
           </div>
-        </div>
-      )}
 
-      {/* Main Grid: Left sidebar of items, Right workspace notepad */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-12rem)] items-stretch">
-        
-        {/* LEFT COLUMN: List of Pendientes */}
-        <section className={`flex flex-col gap-4 transition-all duration-300 ${
-          selectedId !== null
-            ? "lg:col-span-5 xl:col-span-5"
-            : "col-span-12"
-        }`}>
-          
-          {/* Header Stats & Action */}
-          {selectedId === null ? (
-            <div className="glass-card p-5 sm:p-6 border border-white/10 rounded-3xl flex flex-col gap-4 shadow-2xl bg-[#0d1322]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="p-3 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shadow-lg shadow-indigo-500/15">
-                    <ListTodo className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                      Bitácora de Pendientes
-                    </h2>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 flex-wrap">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        {pendingCount} activos
-                      </span>
-                      <span className="text-slate-600">•</span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-700/50 text-slate-300 border border-slate-600/40 text-[11px] font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                        {completedCount} terminados
-                      </span>
-                    </div>
-                  </div>
-                </div>
+          <div className="flex items-center gap-3">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setIsNewModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-violet-600 text-white font-semibold text-xs shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/35 border border-white/10 cursor-pointer transition-shadow"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Nuevo Pendiente</span>
+            </motion.button>
+          </div>
+        </section>
 
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <button
-                    onClick={() => setSelectedId("general")}
-                    className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold border transition-all bg-[#080d18] border-white/10 hover:bg-white/5 text-slate-200 hover:text-white shadow-sm cursor-pointer"
-                    title="Abrir bloc de notas general"
-                  >
-                    <StickyNote className="w-4 h-4 text-indigo-400" />
-                    <span>Bloc General</span>
-                  </button>
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Nuevo Pendiente</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Mini Carpetitas por Área / Rubro */}
-              <div className="pt-2 border-t border-slate-800/80 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Folders className="w-4 h-4 text-amber-400" />
-                    <span className="text-xs font-bold text-slate-200">
-                      Carpetas por Área / Rubro
-                    </span>
-                    {filterCategoria !== "todas" && (
-                      <button
-                        onClick={() => setFilterCategoria("todas")}
-                        className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 ml-1 hover:underline cursor-pointer"
-                      >
-                        (Ver todas)
-                      </button>
-                    )}
-                  </div>
-                  
-                  <button
-                    onClick={() => setIsCategoryModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 transition-all cursor-pointer shadow-sm"
-                    title="Crear o administrar carpetas"
-                  >
-                    <FolderPlus className="w-3.5 h-3.5" />
-                    <span>+ Nueva Carpeta</span>
-                  </button>
-                </div>
-
-                {/* Horizontal scroll of mini folders */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-thin pt-0.5">
-                  {/* Folder: Todos */}
-                  <button
-                    onClick={() => setFilterCategoria("todas")}
-                    className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                      filterCategoria === "todas"
-                        ? "bg-gradient-to-r from-indigo-950/90 via-[#151d38] to-indigo-900/70 border-indigo-500 text-white shadow-md shadow-indigo-500/20 ring-1 ring-indigo-500/40"
-                        : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
-                    }`}
-                  >
-                    <Folders className={`w-4 h-4 shrink-0 ${filterCategoria === "todas" ? "text-indigo-300" : "text-indigo-400/80 group-hover:text-indigo-300"}`} />
-                    <span className="font-medium whitespace-nowrap">Todas las áreas</span>
-                    <span
-                      className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                        filterCategoria === "todas"
-                          ? "bg-indigo-500/30 text-indigo-200 border border-indigo-500/40"
-                          : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
-                      }`}
-                    >
-                      {totalFolderCount}
-                    </span>
-                  </button>
-
-                  {/* Folders for each category */}
-                  {allCategories.map((cat) => {
-                    const count = getCategoryCount(cat);
-                    const isActive = filterCategoria.toLowerCase() === cat.toLowerCase();
-
-                    return (
-                      <button
-                        key={cat}
-                        onClick={() => setFilterCategoria(isActive ? "todas" : cat)}
-                        className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                          isActive
-                            ? "bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-indigo-950/60 border-amber-400 text-white shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40"
-                            : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
-                        }`}
-                        title={`Filtrar por ${cat}`}
-                      >
-                        {isActive ? (
-                          <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
-                        ) : (
-                          <Folder className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 shrink-0 transition-colors" />
-                        )}
-                        <span className="font-medium whitespace-nowrap">{cat}</span>
-                        <span
-                          className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                            isActive
-                              ? "bg-amber-400/25 text-amber-200 border border-amber-400/30"
-                              : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
-                          }`}
-                        >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-
-                  {/* Sin Categoría / Rubro (if any exist) */}
-                  {uncategorizedCount > 0 && (
-                    <button
-                      onClick={() =>
-                        setFilterCategoria(filterCategoria === "_sin_categoria_" ? "todas" : "_sin_categoria_")
-                      }
-                      className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                        filterCategoria === "_sin_categoria_"
-                          ? "bg-gradient-to-r from-slate-800/90 to-slate-900 border-slate-400 text-white shadow-md ring-1 ring-slate-400/30"
-                          : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-400 hover:text-slate-200"
-                      }`}
-                      title="Pendientes sin rubro asignado"
-                    >
-                      <Folder className="w-4 h-4 text-slate-500 shrink-0" />
-                      <span className="font-medium whitespace-nowrap">Sin rubro</span>
-                      <span
-                        className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                          filterCategoria === "_sin_categoria_"
-                            ? "bg-slate-700 text-slate-200 border border-slate-600"
-                            : "bg-slate-800 text-slate-500 border border-slate-700/60"
-                        }`}
-                      >
-                        {uncategorizedCount}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Quick Segmented Filters & Search Bar */}
-              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 pt-1">
-                {/* Status Segment */}
-                <div className="inline-flex items-center p-1 bg-[#080d18] rounded-xl border border-white/10 text-xs shadow-inner">
-                  <button
-                    onClick={() => setFilterEstado("pendientes")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
-                      filterEstado === "pendientes"
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Pendientes ({pendingCount})
-                  </button>
-                  <button
-                    onClick={() => setFilterEstado("completados")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
-                      filterEstado === "completados"
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Terminados ({completedCount})
-                  </button>
-                  <button
-                    onClick={() => setFilterEstado("todos")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
-                      filterEstado === "todos"
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                        : "text-slate-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Todos
-                  </button>
-                </div>
-
-                {/* Search Input */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por título, detalle o autor..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-[#080d18] border border-white/10 rounded-xl py-2 pl-9 pr-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors shadow-inner"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Priority Selector */}
-                <select
-                  value={filterPrioridad}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterPrioridad(e.target.value as "todas" | "alta" | "media" | "baja")}
-                  className="bg-[#080d18] border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors shadow-inner cursor-pointer"
-                >
-                  <option value="todas" className="bg-[#0b0f19]">Prioridad: Todas</option>
-                  <option value="alta" className="bg-[#0b0f19]">Alta</option>
-                  <option value="media" className="bg-[#0b0f19]">Media</option>
-                  <option value="baja" className="bg-[#0b0f19]">Baja</option>
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div className="glass-card p-3 border border-white/10 rounded-2xl flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <h2 className="text-white font-bold text-xs flex items-center gap-1.5">
-                  <ListTodo className="w-4 h-4 text-emerald-400" />
-                  {selectedId === "general" ? "Bloc General" : "Modo Edición"}
-                </h2>
+        {/* CONTROLS: Segmented Tabs & Search */}
+        <section className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Segmented Filter Pills with Motion layoutId */}
+          <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.08] rounded-xl self-start">
+            {(
+              [
+                { id: "pendientes", label: "En Curso", count: pendingCount },
+                { id: "completados", label: "Completados", count: completedCount },
+                { id: "todos", label: "Todos", count: totalCount },
+              ] as const
+            ).map((tab) => {
+              const isActive = filterStatus === tab.id;
+              return (
                 <button
-                  onClick={() => setSelectedId(null)}
-                  className="px-2.5 py-1 rounded-xl text-[11px] font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+                  key={tab.id}
+                  onClick={() => setFilterStatus(tab.id)}
+                  className={`relative px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors duration-150 ${
+                    isActive ? "text-white" : "text-slate-400 hover:text-slate-200"
+                  }`}
                 >
-                  Volver a la Lista
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Items List */}
-          <div className={
-            selectedId !== null
-              ? "flex-initial flex flex-col gap-1.5"
-              : "flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5 overflow-y-auto max-h-[calc(100vh-16rem)] pr-1 scrollbar-thin"
-          }>
-            {loading ? (
-              <div className="glass-card p-8 text-center flex flex-col items-center justify-center gap-3">
-                <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
-                <p className="text-xs text-gray-400">Cargando bitácora de pendientes...</p>
-              </div>
-            ) : error ? (
-              <div className="glass-card p-6 border-rose-500/20 text-center flex flex-col items-center justify-center gap-2">
-                <AlertCircle className="w-7 h-7 text-rose-400" />
-                <p className="text-xs text-rose-300 font-medium">{error}</p>
-              </div>
-            ) : filteredPendientes.length === 0 ? (
-              <div className="glass-card p-10 text-center flex flex-col items-center justify-center gap-3 border border-dashed border-white/10">
-                <StickyNote className="w-8 h-8 text-gray-600" />
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-300 font-semibold">No se encontraron pendientes</p>
-                  <p className="text-[11px] text-gray-500 max-w-[220px] mx-auto">
-                    {filterCategoria !== "todas"
-                      ? `No hay pendientes en la carpeta "${filterCategoria === "_sin_categoria_" ? "Sin rubro" : filterCategoria}".`
-                      : filterEstado === "pendientes" 
-                      ? "¡Excelente! No tienes tareas sin resolver."
-                      : "Crea tu primer pendiente con el botón 'Nuevo'."}
-                  </p>
-                  {filterCategoria !== "todas" && (
-                    <button
-                      onClick={() => setFilterCategoria("todas")}
-                      className="mt-2 text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                    >
-                      Ver todas las áreas
-                    </button>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeFilterTab"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                      className="absolute inset-0 bg-indigo-600 rounded-lg shadow-md shadow-indigo-600/30"
+                    />
                   )}
-                </div>
-              </div>
-            ) : (
-              itemsToRender.map((item) => {
-                const isSelected = item.id === selectedId;
-                const style = priorityStyles[item.prioridad] || priorityStyles.media;
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    {tab.label}
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-white/[0.05] text-slate-400"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search & Priority Selector */}
+          <div className="flex items-center gap-2.5 flex-1 max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar por título o paso..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#090d18] border border-white/[0.08] focus:border-indigo-500 rounded-xl py-1.5 pl-9 pr-8 text-xs text-white placeholder-slate-500 outline-none transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value as any)}
+              className="bg-[#090d18] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-xs font-medium text-slate-300 outline-none cursor-pointer focus:border-indigo-500"
+            >
+              <option value="todas">Prioridad: Todas</option>
+              <option value="alta">Alta</option>
+              <option value="media">Media</option>
+              <option value="baja">Baja</option>
+            </select>
+          </div>
+        </section>
+
+        {/* ITEMS GRID */}
+        {loading ? (
+          <div className="p-16 text-center flex flex-col items-center justify-center gap-3">
+            <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
+            <p className="text-xs text-slate-400">Cargando tus tareas pendientes...</p>
+          </div>
+        ) : error ? (
+          <div className="p-8 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-center flex flex-col items-center justify-center gap-2">
+            <AlertCircle className="w-6 h-6 text-rose-400" />
+            <p className="text-xs text-rose-300 font-medium">{error}</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="p-14 text-center rounded-3xl bg-[#090d18]/50 border border-dashed border-white/[0.08] flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-slate-500">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-slate-200">
+                No hay pendientes en esta vista
+              </h3>
+              <p className="text-xs text-slate-500 max-w-xs">
+                {filterStatus === "pendientes"
+                  ? "¡Genial! No tienes tareas sin resolver en este momento."
+                  : "No se encontraron tareas con los filtros actuales."}
+              </p>
+            </div>
+            {filterStatus === "pendientes" && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setIsNewModalOpen(true)}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-white border border-white/[0.08] cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Crear nuevo</span>
+              </motion.button>
+            )}
+          </div>
+        ) : (
+          <motion.div
+            layout
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
+            <AnimatePresence mode="popLayout">
+              {filteredItems.map((item) => {
+                const etapas = item.etapas || [];
+                const completedStepsCount = etapas.filter((e) => e.completado).length;
+                const totalSteps = etapas.length;
+                const pInfo = priorityMeta[item.prioridad] || priorityMeta.media;
 
                 return (
-                  <div
+                  <motion.div
                     key={item.id}
-                    onClick={() => setSelectedId(isSelected ? null : item.id)}
-                    className={`group relative flex flex-col p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer ${
-                      isSelected
-                        ? "bg-[#141b2e] border-indigo-500/60 shadow-xl shadow-indigo-500/10 ring-1 ring-indigo-500/40"
-                        : "bg-[#0c1220] hover:bg-[#12192c] border-white/10 hover:border-slate-600 shadow-md"
+                    layout
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.22, ease: EASE_OUT }}
+                    whileHover={{ y: -2 }}
+                    className={`group relative flex flex-col justify-between p-5 rounded-2xl border transition-all duration-200 ${
+                      item.completado
+                        ? "bg-[#0c101a]/60 border-white/[0.06] opacity-75 hover:opacity-100"
+                        : "bg-[#0d1222] border-white/[0.08] hover:border-white/[0.18] shadow-lg shadow-black/30"
                     }`}
                   >
-                    {/* Glowing side accent */}
-                    <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl ${style.dot}`} />
-
-                    {/* Card Content */}
-                    <div className="pl-1.5 flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0 space-y-1">
-                        
-                        {/* Title & Priority Badge & Category Badge */}
-                        <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="space-y-3.5">
+                      {/* Card Header: Priority & Quick Complete */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
                           <span
-                            className={`text-[8.5px] uppercase tracking-wider font-bold px-1.5 py-0 rounded-full border ${style.badge}`}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${pInfo.badge}`}
                           >
-                            {item.prioridad}
+                            <span className={`w-1.5 h-1.5 rounded-full ${pInfo.dot}`} />
+                            {pInfo.label}
                           </span>
-                          {item.categoria && (
-                            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1">
-                              <Folder className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-                              <span className="truncate max-w-[110px]">{item.categoria}</span>
-                            </span>
-                          )}
-                          {item.cotizacionesIds && item.cotizacionesIds.length > 0 && (
-                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
-                              <Calculator className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                              <span>{item.cotizacionesIds.length} {item.cotizacionesIds.length === 1 ? "cotiz." : "cotiz."}</span>
-                            </span>
-                          )}
                           {item.completado && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                              <Check className="w-2.5 h-2.5" /> Terminado
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Listo
                             </span>
                           )}
                         </div>
 
-                        {/* Title Text */}
-                        <h3
-                          className={`text-xs font-semibold leading-relaxed transition-all truncate ${
+                        {/* Circular complete button */}
+                        <motion.button
+                          whileTap={{ scale: 0.88 }}
+                          onClick={(e) => handleTogglePendiente(item.id, item.completado, e)}
+                          title={item.completado ? "Reabrir pendiente" : "Marcar como terminado"}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all cursor-pointer ${
                             item.completado
-                              ? "text-gray-500 line-through"
-                              : isSelected
-                              ? "text-white text-sm"
-                              : "text-gray-200 group-hover:text-white"
+                              ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/30"
+                              : "bg-white/[0.04] border-white/[0.12] hover:border-emerald-400/50 text-slate-400 hover:text-emerald-400"
+                          }`}
+                        >
+                          {item.completado ? (
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          ) : (
+                            <Circle className="w-3.5 h-3.5 stroke-[2]" />
+                          )}
+                        </motion.button>
+                      </div>
+
+                      {/* Title & Description */}
+                      <div className="space-y-1">
+                        <h3
+                          onClick={() => openEditModal(item)}
+                          className={`text-sm font-bold text-white tracking-tight cursor-pointer hover:text-indigo-300 transition-colors leading-snug ${
+                            item.completado ? "line-through text-slate-400" : ""
                           }`}
                         >
                           {item.titulo}
                         </h3>
-
-                        {/* Description Snippet */}
-                        {item.descripcion && (
-                          <p className="text-[10px] text-gray-400 line-clamp-1 leading-relaxed">
+                        {item.descripcion ? (
+                          <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
                             {item.descripcion}
                           </p>
-                        )}
-
-                        {/* Date Limit / Invoice Deadline Info */}
-                        {item.fechaLimite && (
-                          (() => {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            const limitDate = new Date(item.fechaLimite + "T00:00:00");
-                            const isOverdue = limitDate < today;
-                            const formattedDate = limitDate.toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
-
-                            return (
-                              <div className={`mt-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-semibold border ${
-                                item.completado
-                                  ? "bg-white/5 border-white/5 text-gray-500"
-                                  : isOverdue
-                                  ? "bg-rose-500/10 border-rose-500/20 text-rose-400 animate-pulse"
-                                  : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                              }`}>
-                                {isOverdue ? (
-                                  <AlertCircle className="w-3 h-3 shrink-0" />
-                                ) : (
-                                  <Clock className="w-3 h-3 shrink-0" />
-                                )}
-                                <span className="truncate">
-                                  {isOverdue 
-                                    ? `Plazo vencido (${formattedDate})` 
-                                    : `Recibiendo hasta: ${formattedDate}`}
-                                </span>
-                              </div>
-                            );
-                          })()
-                        )}
-
-                        {/* Meta Info */}
-                        <div className="flex items-center justify-between gap-2.5 pt-0.5 text-[9px] text-gray-500">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="flex items-center gap-1 shrink-0">
-                              <Clock className="w-2.5 h-2.5 text-gray-600" />
-                              {(() => {
-                                const s = getTimestampSeconds(item.createdAt);
-                                return s > 0 ? new Date(s * 1000).toLocaleDateString("es-AR") : "Reciente";
-                              })()}
-                            </span>
-                            <span className="truncate">Por: {item.creadoPor}</span>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            {item.etapas && item.etapas.some(e => e.esFinal && e.completado) && (
-                              <span className="flex items-center gap-0.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 px-1 py-0.2 rounded text-[7.5px] font-extrabold uppercase">
-                                <Flag className="w-2.5 h-2.5" /> Meta
-                              </span>
-                            )}
-                            {item.etapas && item.etapas.length > 0 && (
-                              <span className="flex items-center gap-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1 py-0.2 rounded text-[8px] font-bold">
-                                {item.etapas.filter(e => e.completado).length}/{item.etapas.length} pasos
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Tiny progress bar */}
-                        {item.etapas && item.etapas.length > 0 && (
-                          <div className="w-full bg-white/5 rounded-full h-1 mt-1.5 overflow-hidden">
-                            <div 
-                              className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-500"
-                              style={{ width: `${(item.etapas.filter(e => e.completado).length / item.etapas.length) * 100}%` }}
-                            />
-                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-600 italic">Sin descripción</p>
                         )}
                       </div>
 
-                      {/* Right actions inside card (Checkmark toggle, Edit & Delete) */}
-                      <div className="flex flex-col items-center justify-between h-full gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
-                        
-                        {/* Circle checkbox */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleCompletado(item.id, item.completado);
-                          }}
-                          className={`p-1.5 rounded-lg border transition-all ${
-                            item.completado
-                              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
-                              : "bg-white/5 border-white/10 hover:border-emerald-500/40 text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/5"
-                          }`}
-                          title={item.completado ? "Reabrir proyecto" : "Marcar como terminado"}
-                        >
-                          {item.completado ? (
-                            <CheckCircle2 className="w-4 h-4" />
-                          ) : (
-                            <Circle className="w-4 h-4" />
-                          )}
-                        </button>
+                      {/* CIRCULAR STEPS PIPELINE (on card) */}
+                      {totalSteps > 0 ? (
+                        <div className="pt-2 border-t border-white/[0.05] space-y-2">
+                          <div className="flex items-center justify-between text-[11px] text-slate-400">
+                            <span className="font-semibold text-slate-300">
+                              Pasos del pendiente
+                            </span>
+                            <span className="tabular-nums font-bold text-indigo-400">
+                              {completedStepsCount}/{totalSteps}
+                            </span>
+                          </div>
 
-                        {/* Edit button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(isSelected ? null : item.id);
-                          }}
-                          className={`p-1.5 rounded-lg border transition-all ${
-                            isSelected
-                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                              : "bg-white/5 border-white/10 hover:border-emerald-500/30 text-gray-400 hover:text-emerald-400"
-                          }`}
-                          title="Editar notas y detalles"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                          {/* Interconnected Circular Step Nodes */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                            {etapas.map((step, sIdx) => {
+                              const isStepDone = step.completado;
+                              return (
+                                <div key={step.id} className="flex items-center gap-1.5 shrink-0">
+                                  {/* Step Circular Node */}
+                                  <motion.button
+                                    whileTap={{ scale: 0.85 }}
+                                    onClick={(e) => handleToggleCardStep(item.id, step.id, e)}
+                                    title={`Paso ${sIdx + 1}: ${step.titulo} (${
+                                      isStepDone ? "Completado" : "Pendiente"
+                                    })`}
+                                    className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all cursor-pointer ${
+                                      isStepDone
+                                        ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-sm"
+                                        : "bg-white/[0.04] border-white/[0.12] text-slate-400 hover:border-indigo-400 hover:text-white"
+                                    }`}
+                                  >
+                                    {isStepDone ? (
+                                      <Check className="w-3 h-3 stroke-[3]" />
+                                    ) : (
+                                      <span>{sIdx + 1}</span>
+                                    )}
+                                  </motion.button>
 
-                        {/* Delete button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeletePendiente(item.id);
-                          }}
-                          className="p-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/25 transition-all"
+                                  {/* Connecting line */}
+                                  {sIdx < totalSteps - 1 && (
+                                    <div
+                                      className={`w-3.5 h-[2px] rounded-full transition-colors ${
+                                        isStepDone ? "bg-emerald-500/70" : "bg-white/[0.08]"
+                                      }`}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="pt-2 border-t border-white/[0.05] flex items-center gap-2 text-[11px] text-slate-500">
+                          <Circle className="w-3 h-3 text-slate-600" />
+                          <span>Sin pasos definidos</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card Footer Actions */}
+                    <div className="pt-3.5 mt-3.5 border-t border-white/[0.06] flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <CircularProgressRing
+                          completed={completedStepsCount}
+                          total={totalSteps}
+                          size={28}
+                          strokeWidth={2.5}
+                          showLabel={false}
+                        />
+                        <span className="text-[10px] text-slate-500">
+                          {totalSteps > 0
+                            ? `${Math.round((completedStepsCount / totalSteps) * 100)}% completado`
+                            : "0% completado"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <motion.button
+                          whileTap={{ scale: 0.94 }}
+                          onClick={() => openEditModal(item)}
+                          className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-[11px] font-semibold text-slate-300 hover:text-white border border-white/[0.06] transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit3 className="w-3 h-3 text-indigo-400" />
+                          <span>Editar</span>
+                        </motion.button>
+
+                        <motion.button
+                          whileTap={{ scale: 0.92 }}
+                          onClick={(e) => handleDeletePendiente(item.id, e)}
                           title="Eliminar pendiente"
+                          className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        </motion.button>
                       </div>
-
                     </div>
-                  </div>
+                  </motion.div>
                 );
-              })
-            )}
+              })}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </div>
 
-            {/* Cargar más terminadas */}
-            {hasMoreCompleted && !isSearching && (filterEstado === "completados" || filterEstado === "todos") && (
-              <div className="col-span-full flex justify-center py-2">
-                <button
-                  onClick={() => setCompletedLimit((prev) => prev + 10)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-emerald-500/5"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Cargar más terminadas
-                </button>
-              </div>
-            )}
-          </div>
+      {/* ============================================================
+          EDIT PENDIENTE MODAL (FOCUSED ON CIRCULAR STEPS & DESCRIPTION)
+          ============================================================ */}
+      <AnimatePresence>
+        {editingItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={closeEditModal}
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            />
 
-          {/* Stepper map: only in edit mode (selectedItem is defined) */}
-          {selectedId !== null && selectedId !== "general" && selectedItem && (
-            <div className="glass-card p-4 border border-white/10 rounded-2xl flex flex-col gap-2.5 bg-[#090d16]/10 animate-fade-in mt-1 flex-1 min-h-[300px] max-h-[500px]">
-              <div className="flex items-center justify-between pb-1.5 border-b border-white/5">
-                <h3 className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-                  <ListTodo className="w-4 h-4 text-emerald-400" />
-                  <span>Mapa de Etapas</span>
-                </h3>
-                {selectedItem.etapas && selectedItem.etapas.length > 0 && (
-                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10">
-                    {selectedItem.etapas.filter(e => e.completado).length}/{selectedItem.etapas.length}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-0.5 overflow-y-auto pr-1 scrollbar-thin flex-1">
-                {/* Render insertion line at index 0 */}
-                {renderInsertionLine(0)}
-
-                {(!selectedItem.etapas || selectedItem.etapas.length === 0) ? (
-                  <div className="text-center py-4 bg-[#090d16]/20 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-2">
-                    <span className="text-[10px] text-gray-500 leading-normal px-2">Sin etapas definidas.</span>
-                    {insertingAtIndex === 0 ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleInsertEtapa(0);
-                        }}
-                        className="flex items-center gap-1 w-full py-0.5 px-2 bg-[#090d16] rounded-lg border border-white/10 animate-fade-in"
-                      >
-                        <input
-                          type="text"
-                          placeholder="Etapa inicial..."
-                          value={newStepTitle}
-                          onChange={(e) => setNewStepTitle(e.target.value)}
-                          className="flex-1 bg-transparent text-[10px] text-white placeholder-gray-600 focus:outline-none py-0.5"
-                          autoFocus
-                        />
-                        <button
-                          type="submit"
-                          className="px-1.5 py-0.5 rounded bg-emerald-500 text-[9px] font-bold text-white hover:bg-emerald-400"
-                        >
-                          Ok
-                        </button>
-                      </form>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setInsertingAtIndex(0);
-                          setNewStepTitle("");
-                        }}
-                        className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/20 text-[9px] font-semibold flex items-center gap-1 transition-all"
-                      >
-                        <Plus className="w-2.5 h-2.5" /> Crear Etapa Inicial
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  (() => {
-                    const etapasList = selectedItem.etapas || [];
-                    const activeStepIndex = etapasList.findIndex(e => !e.completado);
-                    return etapasList.map((step, idx) => {
-                      const isActive = idx === activeStepIndex;
-                      return (
-                        <div key={step.id} className="relative">
-                          {/* Vertical timeline line segment */}
-                          {idx < etapasList.length - 1 && (
-                            <div className="absolute left-[13px] top-[26px] bottom-0 w-[1px] bg-white/10 z-0" />
-                          )}
-                          
-                          {/* Step card */}
-                          <div className={`flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-xl border transition-all duration-500 z-10 relative ${
-                            step.completado
-                              ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-300/70"
-                              : isActive
-                              ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.08)] ring-1 ring-emerald-500/20"
-                              : "bg-[#090d16]/30 border-white/5 text-gray-300"
-                          } ${step.esFinal ? "border-amber-500/25 shadow-[0_0_8px_rgba(245,158,11,0.03)]" : ""}`}>
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              
-                              {/* Status Icon / Pulsing indicator */}
-                              <div className="relative shrink-0 flex items-center justify-center">
-                                <button
-                                  onClick={() => handleToggleEtapa(step.id, step.completado)}
-                                  className={`p-0.5 rounded-md border transition-all ${
-                                    step.completado
-                                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
-                                      : "bg-white/5 border-white/10 hover:border-emerald-500/40 text-gray-500 hover:text-emerald-400"
-                                  }`}
-                                >
-                                  {step.completado ? <Check className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full bg-white/5" />}
-                                </button>
-                                {isActive && !step.completado && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping absolute -top-0.5 -right-0.5" />
-                                )}
-                              </div>
-
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <span className={`text-[11px] font-medium flex flex-wrap items-center gap-1.5 whitespace-normal break-words ${step.completado ? "italic text-emerald-400/90" : ""}`}>
-                                  {step.titulo}
-                                  {step.esFinal && (
-                                    <span className="flex items-center gap-0.5 text-[7px] font-extrabold text-amber-400 bg-amber-500/10 px-1 py-0 rounded border border-amber-500/20 uppercase tracking-wide shrink-0">
-                                      <Flag className="w-2 h-2" /> Final
-                                    </span>
-                                  )}
-                                </span>
-                                {(step.createdAt || step.completado) && (
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[9px] font-medium text-gray-500">
-                                    {step.createdAt && (
-                                      <span>
-                                        Creado: {new Date(step.createdAt).toLocaleDateString("es-AR")}
-                                      </span>
-                                    )}
-                                    {step.createdAt && step.completado && <span>•</span>}
-                                    {step.completado && (
-                                      <span className="text-emerald-300 font-semibold">
-                                        {step.completedAt ? (
-                                          (() => {
-                                            try {
-                                              const dateObj = typeof step.completedAt === "string"
-                                                ? new Date(step.completedAt)
-                                                : (step.completedAt && typeof step.completedAt === "object" && "toDate" in step.completedAt && typeof (step.completedAt as { toDate?: unknown }).toDate === "function")
-                                                ? (step.completedAt as { toDate: () => Date }).toDate()
-                                                : new Date(step.completedAt);
-                                              return `Hecho: ${dateObj.toLocaleDateString("es-AR")}`;
-                                            } catch {
-                                              return "Hecho (fecha inválida)";
-                                            }
-                                          })()
-                                        ) : (
-                                          "Hecho (sin fecha registrada)"
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1 shrink-0 opacity-40 hover:opacity-100 transition-opacity">
-                              {/* Toggle final stage button */}
-                              <button
-                                  onClick={() => handleSetEtapaFinal(step.id)}
-                                  className={`p-0.5 rounded bg-white/5 border transition-all ${
-                                    step.esFinal
-                                      ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
-                                      : "border-white/5 text-gray-500 hover:text-amber-400"
-                                  }`}
-                                  title={step.esFinal ? "Desmarcar como etapa final" : "Marcar como etapa final"}
-                              >
-                                <Flag className="w-2.5 h-2.5" />
-                              </button>
-
-                              <button
-                                onClick={() => handleDeleteEtapa(step.id)}
-                                className="p-0.5 rounded bg-white/5 border border-white/5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                                title="Eliminar etapa"
-                              >
-                                <Trash2 className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Render insertion line at index idx + 1 */}
-                          {renderInsertionLine(idx + 1)}
-                        </div>
-                      );
-                    });
-                  })()
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* RIGHT COLUMN: Notepad Editor Workspace */}
-        {selectedId !== null && (
-          <section className="lg:col-span-7 xl:col-span-7 flex flex-col animate-fade-in">
-            
-            {selectedId === "general" ? (
-              /* GENERAL NOTEPAD */
-              <div className="glass-card border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden transition-all duration-300">
-                
-                {/* Notepad Header */}
-                <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h2 className="text-white font-extrabold text-base flex items-center gap-2">
-                      <StickyNote className="w-5 h-5 text-emerald-400" />
-                      Bloc de Notas Rápido / Notero General
-                    </h2>
-                    <p className="text-xs text-gray-400">
-                      Espacio compartido para anotaciones rápidas, links temporales y recordatorios globales.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Textarea Workspace */}
-                <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30">
-                  <textarea
-                    value={generalNotes}
-                    onChange={(e) => setGeneralNotes(e.target.value)}
-                    placeholder="Utiliza este bloc de notas general para plasmar recordatorios rápidos, ideas o pegar textos que necesites tener a mano mientras trabajas en los proyectos..."
-                    className="w-full flex-1 bg-[#090d16]/50 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none transition-all resize-none leading-relaxed font-mono shadow-inner min-h-[300px]"
-                  />
-                </div>
-
-                {/* Notepad Footer */}
-                <div className="p-4 border-t border-white/10 bg-[#0d131f]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                    {generalLastSaved ? (
+            {/* Modal Dialog */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="relative w-full max-w-xl max-h-[90vh] bg-[#0d1222] border border-white/[0.1] rounded-3xl shadow-2xl overflow-hidden flex flex-col z-10"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between gap-3 bg-[#0a0e1a]/80">
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      const newStatus = !editingItem.completado;
+                      setEditingItem({ ...editingItem, completado: newStatus });
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-colors cursor-pointer ${
+                      editingItem.completado
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                    }`}
+                  >
+                    {editingItem.completado ? (
                       <>
-                        <span>Último guardado:</span>
-                        <span className="font-medium text-gray-400">
-                          {generalLastSaved.toLocaleTimeString("es-AR")} - {generalLastSaved.toLocaleDateString("es-AR")}
-                        </span>
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        <span>Completado</span>
                       </>
                     ) : (
-                      <span>Bloc de notas en la nube. Escribe y pulsa guardar.</span>
+                      <>
+                        <Circle className="w-3 h-3 stroke-[2]" />
+                        <span>En Curso</span>
+                      </>
                     )}
-                  </div>
+                  </motion.button>
 
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <button
-                      onClick={() => setSelectedId(null)}
-                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
-                    >
-                      Cerrar Bloc
-                    </button>
-                    <button
-                      onClick={handleSaveGeneralNotes}
-                      disabled={savingGeneral}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-500/10 active:scale-95 transition-all"
-                    >
-                      {savingGeneral ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Save className="w-3.5 h-3.5" />
-                      )}
-                      Guardar Bloc General
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ) : selectedItem ? (
-              /* PROJECT NOTEPAD */
-              <div className="glass-card border border-white/10 rounded-2xl flex flex-col flex-1 overflow-hidden transition-all duration-300">
-                
-                {/* Notepad Header */}
-                <div className="p-5 border-b border-white/10 bg-[#0d131f]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase ${priorityStyles[selectedItem.prioridad]?.badge}`}>
-                        Prioridad {selectedItem.prioridad}
-                      </span>
-                      {selectedItem.categoria && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1">
-                          <Folder className="w-2.5 h-2.5 text-amber-400" />
-                          {selectedItem.categoria}
-                        </span>
-                      )}
-                      {selectedItem.completado ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
-                          Terminado
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1 animate-pulse">
-                          Pendiente
-                        </span>
-                      )}
-                    </div>
-                    {isEditingTitle ? (
-                      <div className="flex items-center gap-2 max-w-xl py-0.5">
-                        <input
-                          type="text"
-                          value={editorTitle}
-                          onChange={(e) => setEditorTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleSaveTitle();
-                            } else if (e.key === "Escape") {
-                              setIsEditingTitle(false);
-                              setEditorTitle(selectedItem.titulo || "");
-                            }
-                          }}
-                          autoFocus
-                          placeholder="Título del pendiente..."
-                          className="flex-1 bg-[#090d16] border border-emerald-500/50 rounded-xl px-3 py-1 text-sm sm:text-base font-bold text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
-                        />
-                        <button
-                          onClick={handleSaveTitle}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-semibold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-sm shrink-0"
-                          title="Guardar título (Enter)"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Guardar</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsEditingTitle(false);
-                            setEditorTitle(selectedItem.titulo || "");
-                          }}
-                          className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5 transition-all cursor-pointer shrink-0"
-                          title="Cancelar (Esc)"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 group/title">
-                        <h2
-                          onClick={() => setIsEditingTitle(true)}
-                          className="text-white font-extrabold text-lg tracking-tight leading-snug cursor-pointer hover:text-emerald-400 transition-colors"
-                          title="Clic para editar título"
-                        >
-                          {selectedItem.titulo || "Sin título"}
-                        </h2>
-                        <button
-                          onClick={() => setIsEditingTitle(true)}
-                          className="opacity-60 group-hover/title:opacity-100 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-                          title="Editar título"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                    <div className="w-full mt-1.5 max-w-2xl flex flex-col sm:flex-row gap-3 items-stretch">
-                      <div className="flex-1">
-                        <textarea
-                          value={editorDescription}
-                          onChange={(e) => {
-                            setEditorDescription(e.target.value);
-                            setIsEditorDirty(true);
-                          }}
-                          placeholder="Descripción breve del pendiente (puedes editarla aquí)..."
-                          className="w-full bg-[#090d16]/30 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none transition-all resize-none leading-relaxed h-14"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5 shrink-0 justify-center">
-                        <label className="text-[10px] font-bold text-gray-400 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Plazo de Recepción</span>
-                        </label>
-                        <input
-                          type="date"
-                          value={editorFechaLimite}
-                          onChange={(e) => {
-                            setEditorFechaLimite(e.target.value);
-                            setIsEditorDirty(true);
-                          }}
-                          className="bg-[#090d16] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-2 text-[10px] text-gray-500 shrink-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Toggle status directly from header */}
-                      <button
-                        onClick={() => handleToggleCompletado(selectedItem.id, selectedItem.completado)}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                          selectedItem.completado
-                            ? "bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
-                            : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
-                        }`}
-                      >
-                        {selectedItem.completado ? (
-                          <>Reabrir</>
-                        ) : (
-                          <>
-                            <Check className="w-3.5 h-3.5" /> Terminar
-                          </>
-                        )}
-                      </button>
-                      
-                      {/* Change Priority dropdown directly in header */}
-                      <select
-                        value={selectedItem.prioridad}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangePriority(selectedItem.id, e.target.value as "alta" | "media" | "baja")}
-                        className="bg-[#090d16] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-emerald-500/50 cursor-pointer"
-                        title="Cambiar prioridad"
-                      >
-                        <option value="alta">Alta</option>
-                        <option value="media">Media</option>
-                        <option value="baja">Baja</option>
-                      </select>
-
-                      {/* Change Category dropdown */}
-                      <div className="flex items-center gap-1.5 bg-[#090d16] border border-white/10 rounded-xl px-2 py-1 text-xs">
-                        <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <select
-                          value={selectedItem.categoria || ""}
-                          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangeCategory(selectedItem.id, e.target.value)}
-                          className="bg-transparent text-xs text-gray-200 focus:outline-none cursor-pointer max-w-[110px] truncate"
-                          title="Cambiar rubro / área"
-                        >
-                          <option value="" className="bg-[#0b0f19]">(Sin rubro)</option>
-                          {allCategories.map((cat) => (
-                            <option key={cat} value={cat} className="bg-[#0b0f19]">
-                              {cat}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <span className="mt-1">Creado por {selectedItem.creadoPor}</span>
-                </div>
-              </div>
-
-              {/* Cotizaciones Vinculadas */}
-              <div className="mx-5 mt-4 p-3.5 bg-[#090d16]/70 border border-white/10 rounded-2xl flex flex-col gap-2.5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calculator className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-gray-200">
-                      Cotizaciones Vinculadas
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
-                      {selectedItem.cotizacionesIds?.length || 0}
-                    </span>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsLinkCotizacionModalOpen(true);
-                      setSearchCotizacionTerm("");
-                    }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 transition-all cursor-pointer shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Vincular Cotización</span>
-                  </button>
-                </div>
-
-                {/* List of linked cotizaciones */}
-                {(!selectedItem.cotizacionesIds || selectedItem.cotizacionesIds.length === 0) ? (
-                  <div className="text-center py-3 bg-[#080c16]/50 rounded-xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-1">
-                    <p className="text-[11px] text-gray-500">
-                      No hay cotizaciones vinculadas a este pendiente.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsLinkCotizacionModalOpen(true);
-                        setSearchCotizacionTerm("");
-                      }}
-                      className="text-[11px] font-semibold text-emerald-400 hover:underline flex items-center gap-1 mt-0.5 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" /> Buscar y vincular cotización existente
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {selectedItem.cotizacionesIds.map((cId) => {
-                      const cotiz = allCotizaciones.find((c) => c.id === cId);
+                  {/* Priority selector pill */}
+                  <div className="inline-flex p-0.5 bg-[#070a14] rounded-lg border border-white/[0.06]">
+                    {(["alta", "media", "baja"] as const).map((p) => {
+                      const isSel = editPriority === p;
                       return (
-                        <div
-                          key={cId}
-                          onClick={() => window.open(`/cotizaciones?id=${cId}`, "_blank")}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-[#0e1424] border border-white/10 hover:border-emerald-500/40 hover:bg-[#121a30] transition-all gap-2 cursor-pointer group/quote"
-                          title="Abrir cotización en el editor"
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setEditPriority(p)}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                            isSel
+                              ? p === "alta"
+                                ? "bg-rose-500 text-white shadow-sm"
+                                : p === "media"
+                                ? "bg-amber-500 text-slate-950 shadow-sm"
+                                : "bg-emerald-500 text-slate-950 shadow-sm"
+                              : "text-slate-400 hover:text-white"
+                          }`}
                         >
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-semibold text-white group-hover/quote:text-emerald-300 transition-colors truncate max-w-[170px]" title={cotiz?.name || cId}>
-                                {cotiz?.name || "Cotización " + cId.substring(0, 6)}
-                              </span>
-                              {cotiz?.status && (
-                                <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
-                                  cotiz.status === "finalizada"
-                                    ? "bg-emerald-500 text-slate-950 font-black border border-emerald-400 shadow-sm"
-                                    : cotiz.status === "enviada"
-                                    ? "bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                                    : "bg-slate-700/50 text-slate-300 border border-slate-600/30"
-                                }`}>
-                                  {cotiz.status}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-gray-400 flex items-center gap-2">
-                              <span>{cotiz?.itemsCount || 0} ítems</span>
-                              <span>•</span>
-                              <span>{cotiz?.providersCount || 0} provs</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1 shrink-0">
-                            <a
-                              href={`/cotizaciones?id=${cId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 transition-colors"
-                              title="Abrir en Cotizaciones"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUnlinkCotizacion(selectedItem.id, cId);
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-rose-500/15 text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
-                              title="Desvincular cotización"
-                            >
-                              <Unlink className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
+                          {p}
+                        </button>
                       );
                     })}
                   </div>
-                )}
-              </div>
-
-              {/* Textarea Workspace */}
-                <div className="flex-1 flex flex-col p-5 bg-[#090d16]/30 relative">
-                  <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
-                    <label htmlFor="project-notepad" className="font-semibold flex items-center gap-1.5 text-gray-300">
-                      <FileText className="w-4 h-4 text-emerald-400" />
-                      Bitácora de Notas / Notepad de Trabajo
-                    </label>
-                    {isEditorDirty && (
-                      <span className="text-amber-400 text-[10px] font-medium flex items-center gap-1 animate-pulse">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Cambios sin guardar
-                      </span>
-                    )}
-                  </div>
-
-                  <textarea
-                    id="project-notepad"
-                    value={editorNotes}
-                    onChange={(e) => {
-                      setEditorNotes(e.target.value);
-                      setIsEditorDirty(true);
-                    }}
-                    placeholder="Escribe notas de reuniones, llamadas, bitácoras de avance, tareas pendientes del proyecto, etc..."
-                    className="w-full flex-1 bg-[#090d16]/50 border border-white/5 hover:border-white/10 focus:border-emerald-500/40 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none transition-all resize-none leading-relaxed font-sans shadow-inner min-h-[300px]"
-                  />
                 </div>
 
-                {/* Notepad Footer */}
-                <div className="p-4 border-t border-white/10 bg-[#0d131f]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                    {editorLastSaved ? (
-                      <>
-                        <span>Notas guardadas el:</span>
-                        <span className="font-medium text-gray-400">
-                          {editorLastSaved.toLocaleTimeString("es-AR")}
-                        </span>
-                      </>
-                    ) : (
-                      <span>Escribe arriba y presiona Guardar.</span>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <button
-                      onClick={() => setSelectedId(null)}
-                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
-                    >
-                      Cerrar Bloc
-                    </button>
-                    <button
-                      onClick={handleSaveEditorNotes}
-                      disabled={savingEditor}
-                      className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg active:scale-95 transition-all ${
-                        isEditorDirty
-                          ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-emerald-500/10"
-                          : "bg-white/10 text-gray-400 cursor-not-allowed border border-white/5"
-                      }`}
-                    >
-                      {savingEditor ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Save className="w-3.5 h-3.5" />
-                      )}
-                      Guardar Notas
-                    </button>
-                  </div>
-                </div>
-
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  onClick={closeEditModal}
+                  className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </motion.button>
               </div>
-            ) : null}
-          </section>
-        )}
 
-      </div>
-
-      {/* MODAL: Nuevo Proyecto Pendiente */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-opacity">
-          <div className="glass-card w-full max-w-lg border border-white/15 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-250">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-white/10 bg-[#0d131f] flex items-center justify-between">
-              <div className="space-y-1">
-                <h3 className="text-white font-bold text-base flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-emerald-400" />
-                  Nuevo Proyecto Pendiente
-                </h3>
-                <p className="text-xs text-gray-400">Añade una bitácora para hacer seguimiento de un asunto no resuelto.</p>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleAddPendiente}>
-              <div className="p-6 space-y-4">
-                
-                {/* Title */}
-                <div className="space-y-1.5">
-                  <label htmlFor="new-title" className="text-xs font-semibold text-gray-300">
-                    Título del Proyecto / Asunto *
+              {/* Scrollable Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 scrollbar-thin">
+                {/* 1. TÍTULO */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Título del Asunto
                   </label>
                   <input
-                    id="new-title"
                     type="text"
-                    required
-                    placeholder="Ej. Conciliación de saldos Hoyts 2026"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Título del asunto..."
+                    className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-sm font-semibold text-white placeholder-slate-600 outline-none transition-colors"
                   />
                 </div>
 
-                {/* Description */}
-                <div className="space-y-1.5">
-                  <label htmlFor="new-description" className="text-xs font-semibold text-gray-300">
-                    Descripción Breve
+                {/* 2. DESCRIPCIÓN */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Descripción
                   </label>
                   <textarea
-                    id="new-description"
                     rows={3}
-                    placeholder="Describe de qué se trata y qué falta resolver..."
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors resize-none"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Escribe una breve descripción del asunto a resolver..."
+                    className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-600 outline-none transition-colors resize-none leading-relaxed"
                   />
                 </div>
 
-                {/* Rubro / Área / Categoría */}
-                <div className="space-y-1.5">
+                {/* 3. PASOS CIRCULARES */}
+                <div className="space-y-3 pt-2 border-t border-white/[0.08]">
+                  {/* Stepper Header with Circular Gauge */}
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                      <Folder className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Rubro / Área</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowInlineNewCatModal(!showInlineNewCatModal);
-                        setInlineNewCatName("");
-                      }}
-                      className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                    >
-                      {showInlineNewCatModal ? "Elegir de la lista" : "+ Crear nuevo rubro"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <CircularProgressRing
+                        completed={editEtapas.filter((e) => e.completado).length}
+                        total={editEtapas.length}
+                        size={48}
+                        strokeWidth={4}
+                      />
+                      <div>
+                        <h4 className="text-xs font-bold text-white tracking-tight">
+                          Pasos del Pendiente
+                        </h4>
+                        <p className="text-[11px] text-slate-400">
+                          {editEtapas.filter((e) => e.completado).length} de {editEtapas.length}{" "}
+                          pasos completados
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  {showInlineNewCatModal ? (
-                    <div className="flex gap-2">
+                  {/* Circular Step List */}
+                  <div className="space-y-2 pt-1">
+                    <AnimatePresence mode="popLayout">
+                      {editEtapas.length === 0 ? (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="p-5 rounded-2xl bg-white/[0.02] border border-dashed border-white/[0.08] text-center text-xs text-slate-500"
+                        >
+                          Aún no has agregado pasos. Añade el primer paso abajo.
+                        </motion.div>
+                      ) : (
+                        editEtapas.map((step, idx) => {
+                          const isDone = step.completado;
+                          return (
+                            <motion.div
+                              key={step.id}
+                              layout
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              transition={{ duration: 0.18, ease: EASE_OUT }}
+                              className="group flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#080b15] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {/* Circular step toggle button */}
+                                <motion.button
+                                  type="button"
+                                  whileTap={{ scale: 0.88 }}
+                                  onClick={() => handleToggleEditModalStep(step.id)}
+                                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
+                                    isDone
+                                      ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20"
+                                      : "bg-white/[0.04] border-white/[0.12] hover:border-indigo-400 text-slate-400 hover:text-white"
+                                  }`}
+                                >
+                                  {isDone ? (
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  ) : (
+                                    <span className="text-[11px] font-bold">{idx + 1}</span>
+                                  )}
+                                </motion.button>
+
+                                {/* Step title editable inline */}
+                                <input
+                                  type="text"
+                                  value={step.titulo}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditEtapas((prev) =>
+                                      prev.map((s) =>
+                                        s.id === step.id ? { ...s, titulo: val } : s
+                                      )
+                                    );
+                                  }}
+                                  className={`flex-1 bg-transparent text-xs text-white outline-none ${
+                                    isDone ? "line-through text-slate-500" : ""
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Remove step */}
+                              <motion.button
+                                type="button"
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => handleRemoveEditStep(step.id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </motion.button>
+                            </motion.div>
+                          );
+                        })
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Add Step Input */}
+                  <form onSubmit={handleAddEditStep} className="flex items-center gap-2 pt-1">
+                    <div className="relative flex-1">
                       <input
                         type="text"
-                        placeholder="Nombre del nuevo rubro (ej. Legales, Marketing)..."
-                        value={inlineNewCatName}
-                        onChange={(e) => setInlineNewCatName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            if (inlineNewCatName.trim()) {
-                              handleAddCategory(inlineNewCatName.trim());
-                              setNewCategoria(inlineNewCatName.trim());
-                              setShowInlineNewCatModal(false);
-                            }
-                          }
-                        }}
-                        className="flex-1 bg-[#090d16] border border-emerald-500/40 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors"
-                        autoFocus
+                        placeholder="Escribe un nuevo paso..."
+                        value={editNewStepTitle}
+                        onChange={(e) => setEditNewStepTitle(e.target.value)}
+                        className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-colors"
                       />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (inlineNewCatName.trim()) {
-                            handleAddCategory(inlineNewCatName.trim());
-                            setNewCategoria(inlineNewCatName.trim());
-                            setShowInlineNewCatModal(false);
-                          }
-                        }}
-                        className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-xs font-bold text-white rounded-xl transition-all cursor-pointer"
-                      >
-                        Agregar
-                      </button>
                     </div>
-                  ) : (
-                    <select
-                      value={newCategoria}
-                      onChange={(e) => {
-                        if (e.target.value === "__NEW__") {
-                          setShowInlineNewCatModal(true);
-                          setInlineNewCatName("");
-                        } else {
-                          setNewCategoria(e.target.value);
-                        }
-                      }}
-                      className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500/50 transition-colors cursor-pointer"
+                    <motion.button
+                      type="submit"
+                      whileTap={{ scale: 0.94 }}
+                      disabled={!editNewStepTitle.trim()}
+                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-xs font-semibold text-white transition-colors flex items-center gap-1 cursor-pointer shrink-0"
                     >
-                      <option value="">(Sin rubro asignado / General)</option>
-                      {allCategories.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                      <option value="__NEW__">+ Crear nuevo rubro...</option>
-                    </select>
-                  )}
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Añadir</span>
+                    </motion.button>
+                  </form>
                 </div>
-
-                {/* Fecha Límite */}
-                <div className="space-y-1.5">
-                  <label htmlFor="new-fecha-limite" className="text-xs font-semibold text-gray-300">
-                    Fecha Límite / Plazo de Recepción (Opcional)
-                  </label>
-                  <input
-                    id="new-fecha-limite"
-                    type="date"
-                    value={newFechaLimite}
-                    onChange={(e) => setNewFechaLimite(e.target.value)}
-                    className="w-full bg-[#090d16] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                  />
-                </div>
-
-                {/* Priority Selection */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300 block">
-                    Prioridad Inicial
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewPriority("alta")}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                        newPriority === "alta"
-                          ? "bg-rose-500/15 border-rose-500 text-rose-400"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Alta
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewPriority("media")}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                        newPriority === "media"
-                          ? "bg-amber-500/15 border-amber-500 text-amber-400"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Media
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewPriority("baja")}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                        newPriority === "baja"
-                          ? "bg-sky-500/15 border-sky-500 text-sky-400"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      Baja
-                    </button>
-                  </div>
-                </div>
-
               </div>
 
-              {/* Modal Actions */}
-              <div className="px-6 py-4.5 bg-[#0d131f]/50 border-t border-white/10 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-white/[0.08] bg-[#0a0e1a]/80 flex items-center justify-between gap-3">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleDeletePendiente(editingItem.id)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors cursor-pointer"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isAdding}
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-500/15 active:scale-95 transition-all"
-                >
-                  {isAdding ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Plus className="w-3.5 h-3.5" />
-                  )}
-                  Crear Pendiente
-                </button>
+                  Eliminar
+                </motion.button>
+
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={closeEditModal}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleSaveEditModal}
+                    disabled={isSavingEdit}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 shadow-md shadow-indigo-600/25 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSavingEdit ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Guardar Cambios</span>
+                  </motion.button>
+                </div>
               </div>
-
-            </form>
-
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {/* MODAL: Gestión de Carpetas / Rubros */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm transition-opacity">
-          <div className="glass-card w-full max-w-md border border-white/15 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-250 bg-[#0e1322]">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-white/10 bg-[#0d131f] flex items-center justify-between">
-              <div className="space-y-1">
-                <h3 className="text-white font-bold text-base flex items-center gap-2">
-                  <FolderPlus className="w-5 h-5 text-amber-400" />
-                  Carpetas y Rubros
+      {/* ============================================================
+          NEW PENDIENTE MODAL (CLEAN & MINIMAL)
+          ============================================================ */}
+      <AnimatePresence>
+        {isNewModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={() => setIsNewModalOpen(false)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="relative w-full max-w-lg bg-[#0d1222] border border-white/[0.1] rounded-3xl shadow-2xl overflow-hidden flex flex-col z-10"
+            >
+              <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#0a0e1a]/80">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-indigo-400 stroke-[2.5]" />
+                  <span>Nuevo Pendiente</span>
                 </h3>
-                <p className="text-xs text-gray-400">
-                  Crea y organiza las áreas de tus proyectos pendientes.
-                </p>
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => setIsNewModalOpen(false)}
+                  className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </motion.button>
               </div>
-              <button
-                onClick={() => {
-                  setIsCategoryModalOpen(false);
-                  setNewCategoryModalInput("");
-                }}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            {/* Modal Content */}
-            <div className="p-6 space-y-5">
-              
-              {/* Create new category */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (newCategoryModalInput.trim()) {
-                    handleAddCategory(newCategoryModalInput.trim());
-                    setNewCategoryModalInput("");
-                  }
-                }}
-                className="space-y-2"
-              >
-                <label className="text-xs font-semibold text-gray-300 block">
-                  Crear nueva carpeta / rubro
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Folder className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400/70" />
+              <form onSubmit={handleCreatePendiente}>
+                <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto scrollbar-thin">
+                  {/* Title */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Título *
+                    </label>
                     <input
                       type="text"
-                      placeholder="Ej. Legales, Logística, Marketing..."
-                      value={newCategoryModalInput}
-                      onChange={(e) => setNewCategoryModalInput(e.target.value)}
-                      className="w-full bg-[#090d16] border border-white/10 rounded-xl py-2.5 pl-9 pr-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                      required
+                      placeholder="Ej. Revisión y autorización de fondos..."
+                      value={newTitle}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs font-semibold text-white placeholder-slate-600 outline-none transition-colors"
                       autoFocus
                     />
                   </div>
-                  <button
-                    type="submit"
-                    disabled={!newCategoryModalInput.trim()}
-                    className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-white rounded-xl shadow-md transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Agregar</span>
-                  </button>
-                </div>
-              </form>
 
-              {/* Existing categories list */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-300 block">
-                  Carpetas existentes ({allCategories.length})
-                </label>
-                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                  {allCategories.length === 0 ? (
-                    <p className="text-xs text-gray-500 text-center py-4">
-                      No hay carpetas creadas todavía.
-                    </p>
-                  ) : (
-                    allCategories.map((cat) => {
-                      const count = allItems.filter(
-                        (p) => p.categoria?.toLowerCase() === cat.toLowerCase()
-                      ).length;
+                  {/* Description */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Descripción
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Breve detalle de la tarea..."
+                      value={newDescription}
+                      onChange={(e) => setNewDescription(e.target.value)}
+                      className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 outline-none transition-colors resize-none leading-relaxed"
+                    />
+                  </div>
 
-                      return (
-                        <div
-                          key={cat}
-                          className="flex items-center justify-between p-2.5 bg-[#090d16]/70 border border-white/5 rounded-xl hover:border-white/10 transition-colors"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Folder className="w-4 h-4 text-amber-400 shrink-0" />
-                            <span className="text-xs font-medium text-gray-200 truncate">
-                              {cat}
-                            </span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] font-bold text-gray-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
-                              {count} {count === 1 ? "pendiente" : "pendientes"}
-                            </span>
+                  {/* Priority */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Prioridad
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["baja", "media", "alta"] as const).map((p) => {
+                        const isSel = newPriority === p;
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setNewPriority(p)}
+                            className={`py-1.5 px-3 rounded-xl text-xs font-bold uppercase border transition-all cursor-pointer ${
+                              isSel
+                                ? p === "alta"
+                                  ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                  : p === "media"
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                  : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                : "bg-[#080b15] border-white/[0.06] text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Initial Steps Creator */}
+                  <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                      <span>Pasos Iniciales (Opcional)</span>
+                      <span className="text-slate-500 tabular-nums">
+                        {newInitialSteps.length} pasos
+                      </span>
+                    </label>
+
+                    {newInitialSteps.length > 0 && (
+                      <div className="space-y-1.5">
+                        {newInitialSteps.map((st, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[#080b15] border border-white/[0.06] text-xs text-white"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold">
+                                {idx + 1}
+                              </span>
+                              <span>{st}</span>
+                            </div>
                             <button
                               type="button"
-                              onClick={() => handleDeleteCategory(cat)}
-                              className="p-1.5 rounded-lg hover:bg-rose-500/15 text-gray-400 hover:text-rose-400 transition-colors cursor-pointer"
-                              title={`Eliminar carpeta "${cat}"`}
+                              onClick={() =>
+                                setNewInitialSteps((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="text-slate-500 hover:text-rose-400 p-0.5"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Modal Actions */}
-            <div className="px-6 py-4 bg-[#0d131f]/50 border-t border-white/10 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCategoryModalOpen(false);
-                  setNewCategoryModalInput("");
-                }}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Buscar y Vincular Cotización */}
-      {isLinkCotizacionModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="glass-card w-full max-w-lg border border-white/15 rounded-3xl overflow-hidden shadow-2xl bg-[#0e1322] flex flex-col max-h-[85vh]">
-            
-            {/* Header */}
-            <div className="px-6 py-4.5 border-b border-white/10 bg-[#0d131f] flex items-center justify-between">
-              <div className="space-y-0.5">
-                <h3 className="text-white font-bold text-base flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-emerald-400" />
-                  Vincular Cotización
-                </h3>
-                <p className="text-xs text-gray-400 truncate max-w-sm">
-                  Pendiente: <span className="text-white font-semibold">{selectedItem.titulo}</span>
-                </p>
-              </div>
-              <button
-                onClick={() => setIsLinkCotizacionModalOpen(false)}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Search Bar */}
-            <div className="p-4 border-b border-white/5 bg-[#090d16]/60">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar cotización por nombre o notas..."
-                  value={searchCotizacionTerm}
-                  onChange={(e) => setSearchCotizacionTerm(e.target.value)}
-                  className="w-full bg-[#080c16] border border-slate-700 rounded-xl py-2 pl-9 pr-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Results List */}
-            <div className="p-4 overflow-y-auto space-y-2 flex-1 scrollbar-thin">
-              {filteredCotizacionesForModal.length === 0 ? (
-                <div className="py-8 text-center text-xs text-gray-500 space-y-2">
-                  <Calculator className="w-8 h-8 mx-auto text-gray-600" />
-                  <p>No se encontraron cotizaciones coincidentes.</p>
-                </div>
-              ) : (
-                filteredCotizacionesForModal.map((cotiz) => {
-                  const isAlreadyLinked = selectedItem.cotizacionesIds?.includes(cotiz.id);
-                  const isLinkedToOther = cotiz.pendienteId && cotiz.pendienteId !== selectedItem.id;
-
-                  return (
-                    <div
-                      key={cotiz.id}
-                      className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
-                        isAlreadyLinked
-                          ? "bg-emerald-950/20 border-emerald-500/30 ring-1 ring-emerald-500/20"
-                          : "bg-[#090d16] border-white/5 hover:border-white/15"
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="text-xs font-bold text-white truncate">
-                            {cotiz.name}
-                          </h4>
-                          {cotiz.status && (
-                            <span className="text-[8.5px] font-bold px-1.5 py-0.2 rounded-full uppercase bg-white/5 text-gray-300 border border-white/10">
-                              {cotiz.status}
-                            </span>
-                          )}
-                          {cotiz.categoria && (
-                            <span className="text-[8.5px] font-semibold px-1.5 py-0.2 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-0.5">
-                              <Folder className="w-2 h-2" />
-                              {cotiz.categoria}
-                            </span>
-                          )}
-                        </div>
-                        {isLinkedToOther && (
-                          <p className="text-[10px] text-amber-400/80">
-                            Vinculada actualmente a: &quot;{cotiz.pendienteTitulo}&quot;
-                          </p>
-                        )}
-                        <div className="text-[10px] text-gray-400 flex items-center gap-2">
-                          <span>{cotiz.itemsCount} ítems</span>
-                          <span>•</span>
-                          <span>{cotiz.providersCount} provs</span>
-                        </div>
+                        ))}
                       </div>
+                    )}
 
-                      <div className="shrink-0">
-                        {isAlreadyLinked ? (
-                          <button
-                            type="button"
-                            onClick={() => handleUnlinkCotizacion(selectedItem.id, cotiz.id)}
-                            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
-                          >
-                            <Unlink className="w-3.5 h-3.5" />
-                            <span>Desvincular</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleLinkCotizacion(selectedItem.id, cotiz.id)}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 shadow-md transition-all cursor-pointer"
-                          >
-                            <Link2 className="w-3.5 h-3.5" />
-                            <span>Vincular</span>
-                          </button>
-                        )}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Escribe un paso y presiona Enter..."
+                        value={stepInputVal}
+                        onChange={(e) => setStepInputVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddNewDraftStep();
+                          }
+                        }}
+                        className="flex-1 bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddNewDraftStep()}
+                        className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      >
+                        Añadir
+                      </button>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  </div>
+                </div>
 
-            {/* Footer */}
-            <div className="px-6 py-3.5 bg-[#0d131f]/60 border-t border-white/10 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsLinkCotizacionModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                Listo
-              </button>
-            </div>
-
+                <div className="px-6 py-4 border-t border-white/[0.08] bg-[#0a0e1a]/80 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsNewModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    type="submit"
+                    disabled={isSubmittingNew || !newTitle.trim()}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 shadow-md shadow-indigo-600/25 transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    {isSubmittingNew ? "Creando..." : "Crear Pendiente"}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
-
+        )}
+      </AnimatePresence>
     </AppLayout>
   );
 }
