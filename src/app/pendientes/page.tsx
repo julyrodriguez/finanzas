@@ -37,6 +37,7 @@ import {
   Layers,
   ArrowUpRight,
   RefreshCw,
+  ChevronDown,
 } from "lucide-react";
 
 // Emil Kowalski animation curves
@@ -61,6 +62,31 @@ export function getTimestampSeconds(val: any): number {
     return isNaN(d.getTime()) ? 0 : Math.floor(d.getTime() / 1000);
   }
   return 0;
+}
+
+export function formatStepDate(val: any): string {
+  if (!val) return "";
+  let date: Date | null = null;
+  if (typeof val === "object" && val !== null) {
+    if ("seconds" in val && typeof (val as any).seconds === "number") {
+      date = new Date((val as any).seconds * 1000);
+    } else if ("toDate" in val && typeof (val as any).toDate === "function") {
+      date = (val as any).toDate();
+    } else if (val instanceof Date) {
+      date = val;
+    }
+  } else if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) date = d;
+  }
+
+  if (!date) return "";
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const mins = String(date.getMinutes()).padStart(2, "0");
+  return `${day}/${month} ${hours}:${mins} hs`;
 }
 
 export interface Etapa {
@@ -183,7 +209,7 @@ export default function PendientesPage() {
   const [newTitle, setNewTitle] = useState<string>("");
   const [newDescription, setNewDescription] = useState<string>("");
   const [newPriority, setNewPriority] = useState<"alta" | "media" | "baja">("media");
-  const [newInitialSteps, setNewInitialSteps] = useState<string[]>([]);
+  const [newInitialSteps, setNewInitialSteps] = useState<{ id: string; titulo: string; createdAt: string }[]>([]);
   const [stepInputVal, setStepInputVal] = useState<string>("");
   const [isSubmittingNew, setIsSubmittingNew] = useState<boolean>(false);
 
@@ -194,6 +220,18 @@ export default function PendientesPage() {
   const [editEtapas, setEditEtapas] = useState<Etapa[]>([]);
   const [editNewStepTitle, setEditNewStepTitle] = useState<string>("");
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  // Server connection status & step expand tracking
+  const [isServerConnected, setIsServerConnected] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [expandedStepsMap, setExpandedStepsMap] = useState<Record<string, boolean>>({});
+
+  const toggleExpandSteps = (itemId: string) => {
+    setExpandedStepsMap((prev) => ({
+      ...prev,
+      [itemId]: !prev[itemId],
+    }));
+  };
 
   // Toasts
   const [toasts, setToasts] = useState<ToastInfo[]>([]);
@@ -213,56 +251,59 @@ export default function PendientesPage() {
     return "Usuario";
   };
 
-  // Load items on mount
-  useEffect(() => {
-    let isMounted = true;
+  // Load items from server (MongoDB primary, Firebase fallback)
+  const loadData = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
+    else setLoading(true);
+    setError(null);
 
-    async function loadData() {
-      setLoading(true);
-      setError(null);
+    let loadedFromMongo = false;
 
-      try {
-        // 1. Try MongoDB first
-        const mongoRes = await fetchPendientesFromMongo();
-        if (isMounted && mongoRes?.pendientes && Array.isArray(mongoRes.pendientes) && mongoRes.pendientes.length > 0) {
-          setItems(mongoRes.pendientes as Pendiente[]);
-          setLoading(false);
-          return;
+    // 1. Intentar cargar directamente del servidor MongoDB
+    try {
+      const mongoRes = await fetchPendientesFromMongo();
+      if (mongoRes && Array.isArray(mongoRes.pendientes)) {
+        setItems(mongoRes.pendientes as Pendiente[]);
+        setIsServerConnected(true);
+        loadedFromMongo = true;
+        if (isManualRefresh) {
+          addToast("Pendientes recargados desde el servidor", "success");
         }
-      } catch (mongoErr) {
-        console.warn("MongoDB fetch skipped or failed, falling back to Firebase:", mongoErr);
       }
+    } catch (mongoErr) {
+      console.warn("MongoDB fetch falló, probando Firebase:", mongoErr);
+      setIsServerConnected(false);
+    }
 
-      // 2. Firebase Fallback
+    // 2. Si MongoDB falló, respaldo con Firebase
+    if (!loadedFromMongo) {
       try {
-        if (!db) {
-          if (isMounted) setLoading(false);
-          return;
-        }
-        const colRef = collection(db, "pendientes");
-        const snapshot = await getDocs(colRef);
-        const fbItems: Pendiente[] = [];
-        snapshot.forEach((d) => {
-          fbItems.push({ id: d.id, ...d.data() } as Pendiente);
-        });
-        if (isMounted) {
+        if (db) {
+          const colRef = collection(db, "pendientes");
+          const snapshot = await getDocs(colRef);
+          const fbItems: Pendiente[] = [];
+          snapshot.forEach((d) => {
+            fbItems.push({ id: d.id, ...d.data() } as Pendiente);
+          });
           setItems(fbItems);
+          if (isManualRefresh) {
+            addToast("Cargado desde Firebase (servidor no disponible)", "info");
+          }
         }
       } catch (fbErr: any) {
         console.error("Error loading pendientes:", fbErr);
-        if (isMounted) {
-          setError("No se pudieron cargar los pendientes. Verifica la conexión.");
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+        setError("No se pudieron cargar los pendientes. Verifica la conexión.");
       }
     }
 
+    setLoading(false);
+    setIsRefreshing(false);
+  }, [db, addToast]);
+
+  // Load on mount
+  useEffect(() => {
     loadData();
-    return () => {
-      isMounted = false;
-    };
-  }, [db]);
+  }, [loadData]);
 
   // Derived counts
   const pendingCount = useMemo(() => items.filter((i) => !i.completado).length, [items]);
@@ -340,13 +381,23 @@ export default function PendientesPage() {
     try {
       const updatedFields: any = {
         completado: newStatus,
-        completedAt: newStatus ? serverTimestamp() : null,
+        completedAt: newStatus ? nowIso : null,
       };
 
-      if (db) {
-        await updateDoc(doc(db, "pendientes", id), updatedFields);
-      }
+      // 1. Guardar primero en MongoDB del servidor
       await syncPendienteToMongo({ id, ...updatedFields });
+
+      // 2. Firebase de respaldo no bloqueante
+      if (db) {
+        try {
+          await updateDoc(doc(db, "pendientes", id), {
+            completado: newStatus,
+            completedAt: newStatus ? serverTimestamp() : null,
+          });
+        } catch (fbErr) {
+          console.warn("⚠️ Firebase toggle skipped:", fbErr);
+        }
+      }
     } catch (err) {
       console.error("Error updating completion status:", err);
       addToast("Error al guardar estado en el servidor", "error");
@@ -354,18 +405,21 @@ export default function PendientesPage() {
   };
 
   // Toggle an individual step on a card
-  const handleToggleCardStep = async (pendienteId: string, etapaId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleToggleCardStep = async (pendienteId: string, etapaId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
 
     const parent = items.find((i) => i.id === pendienteId);
     if (!parent || !parent.etapas) return;
 
+    const nowIso = new Date().toISOString();
     const updatedEtapas = parent.etapas.map((step) => {
       if (step.id !== etapaId) return step;
+      const willBeCompleted = !step.completado;
       return {
         ...step,
-        completado: !step.completado,
-        completedAt: !step.completado ? new Date().toISOString() : null,
+        completado: willBeCompleted,
+        createdAt: step.createdAt || nowIso,
+        completedAt: willBeCompleted ? nowIso : null,
       };
     });
 
@@ -379,19 +433,30 @@ export default function PendientesPage() {
       })
     );
 
+    const targetStep = updatedEtapas.find((s) => s.id === etapaId);
     const allStepsFinished = updatedEtapas.length > 0 && updatedEtapas.every((s) => s.completado);
     addToast(
-      allStepsFinished ? "Todos los pasos completados" : "Paso actualizado",
+      allStepsFinished
+        ? "¡Todos los pasos completados!"
+        : targetStep?.completado
+        ? `Paso completado (${formatStepDate(nowIso)})`
+        : "Paso marcado como pendiente",
       "success"
     );
 
     try {
       const payload: any = { etapas: updatedEtapas };
-
-      if (db) {
-        await updateDoc(doc(db, "pendientes", pendienteId), payload);
-      }
+      // 1. Guardar primero en MongoDB del servidor
       await syncPendienteToMongo({ id: pendienteId, ...payload });
+
+      // 2. Firebase de respaldo no bloqueante
+      if (db) {
+        try {
+          await updateDoc(doc(db, "pendientes", pendienteId), payload);
+        } catch (fbErr) {
+          console.warn("⚠️ Firebase step toggle skipped:", fbErr);
+        }
+      }
     } catch (err) {
       console.error("Error updating step:", err);
     }
@@ -410,10 +475,17 @@ export default function PendientesPage() {
     addToast("Pendiente eliminado", "info");
 
     try {
-      if (db) {
-        await deleteDoc(doc(db, "pendientes", id));
-      }
+      // 1. Eliminar de MongoDB
       await deletePendienteFromMongo(id);
+
+      // 2. Eliminar de Firebase no bloqueante
+      if (db) {
+        try {
+          await deleteDoc(doc(db, "pendientes", id));
+        } catch (fbErr) {
+          console.warn("⚠️ Firebase delete skipped:", fbErr);
+        }
+      }
     } catch (err) {
       console.error("Error deleting pendiente:", err);
       addToast("Error al eliminar del servidor", "error");
@@ -431,6 +503,7 @@ export default function PendientesPage() {
       titulo: title,
       completado: false,
       createdAt: new Date().toISOString(),
+      completedAt: null,
     };
 
     setEditEtapas((prev) => [...prev, newEtapa]);
@@ -439,13 +512,16 @@ export default function PendientesPage() {
 
   // Toggle step inside edit modal
   const handleToggleEditModalStep = (stepId: string) => {
+    const nowIso = new Date().toISOString();
     setEditEtapas((prev) =>
       prev.map((s) => {
         if (s.id !== stepId) return s;
+        const willBeCompleted = !s.completado;
         return {
           ...s,
-          completado: !s.completado,
-          completedAt: !s.completado ? new Date().toISOString() : null,
+          completado: willBeCompleted,
+          createdAt: s.createdAt || nowIso,
+          completedAt: willBeCompleted ? nowIso : null,
         };
       })
     );
@@ -468,11 +544,20 @@ export default function PendientesPage() {
 
     const isCompleted = editingItem.completado;
 
+    // Asegurar que cada etapa tenga su fecha de creación registrada
+    const nowIso = new Date().toISOString();
+    const sanitizedEtapas: Etapa[] = editEtapas.map((et, idx) => ({
+      ...et,
+      id: et.id || `step-${Date.now()}-${idx}`,
+      createdAt: et.createdAt || nowIso,
+      completedAt: et.completado ? (et.completedAt || nowIso) : null,
+    }));
+
     const updatedData: Partial<Pendiente> = {
       titulo: editTitle.trim(),
       descripcion: editDescription.trim(),
       prioridad: editPriority,
-      etapas: editEtapas,
+      etapas: sanitizedEtapas,
       completado: isCompleted,
       completedAt: isCompleted ? (editingItem.completedAt || (Timestamp.now() as any)) : null,
     };
@@ -485,17 +570,27 @@ export default function PendientesPage() {
     );
 
     try {
-      const fbPayload: any = {
-        ...updatedData,
-        completedAt: isCompleted ? (editingItem.completedAt || serverTimestamp()) : null,
-      };
+      // 1. Guardar primero en MongoDB del servidor
+      const mongoSaved = await syncPendienteToMongo({ id: editingItem.id, ...updatedData });
 
+      // 2. Firebase de respaldo no bloqueante
       if (db) {
-        await updateDoc(doc(db, "pendientes", editingItem.id), fbPayload);
+        try {
+          const fbPayload: any = {
+            ...updatedData,
+            completedAt: isCompleted ? (editingItem.completedAt || serverTimestamp()) : null,
+          };
+          await updateDoc(doc(db, "pendientes", editingItem.id), fbPayload);
+        } catch (fbErr) {
+          console.warn("⚠️ Firebase edit skipped:", fbErr);
+        }
       }
-      await syncPendienteToMongo({ id: editingItem.id, ...updatedData });
 
-      addToast("Cambios guardados con éxito", "success");
+      if (mongoSaved) {
+        addToast("Cambios guardados en el servidor", "success");
+      } else {
+        addToast("Cambios guardados localmente", "info");
+      }
       closeEditModal();
     } catch (err) {
       console.error("Error saving edit:", err);
@@ -509,7 +604,14 @@ export default function PendientesPage() {
   const handleAddNewDraftStep = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!stepInputVal.trim()) return;
-    setNewInitialSteps((prev) => [...prev, stepInputVal.trim()]);
+    setNewInitialSteps((prev) => [
+      ...prev,
+      {
+        id: "step-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+        titulo: stepInputVal.trim(),
+        createdAt: new Date().toISOString(),
+      },
+    ]);
     setStepInputVal("");
   };
 
@@ -525,10 +627,11 @@ export default function PendientesPage() {
 
     const generatedId = (db ? doc(collection(db, "pendientes")).id : null) || `pen-${Date.now()}`;
     const initialEtapas: Etapa[] = newInitialSteps.map((st, idx) => ({
-      id: `step-${Date.now()}-${idx}`,
-      titulo: st,
+      id: st.id || `step-${Date.now()}-${idx}`,
+      titulo: st.titulo,
       completado: false,
-      createdAt: new Date().toISOString(),
+      createdAt: st.createdAt || new Date().toISOString(),
+      completedAt: null,
     }));
 
     const newObj: Pendiente = {
@@ -546,15 +649,27 @@ export default function PendientesPage() {
     setItems((prev) => [newObj, ...prev]);
 
     try {
-      if (db) {
-        await setDoc(doc(db, "pendientes", generatedId), {
-          ...newObj,
-          createdAt: serverTimestamp(),
-        });
-      }
-      await syncPendienteToMongo(newObj);
+      // 1. Guardar primero en el servidor MongoDB del usuario
+      const mongoSaved = await syncPendienteToMongo(newObj);
 
-      addToast("Pendiente creado exitosamente", "success");
+      // 2. Firebase de respaldo no bloqueante
+      if (db) {
+        try {
+          await setDoc(doc(db, "pendientes", generatedId), {
+            ...newObj,
+            createdAt: serverTimestamp(),
+          });
+        } catch (fbErr) {
+          console.warn("⚠️ Firebase save skipped:", fbErr);
+        }
+      }
+
+      if (mongoSaved) {
+        addToast("Pendiente guardado en el servidor", "success");
+      } else {
+        addToast("Pendiente guardado localmente", "info");
+      }
+
       setIsNewModalOpen(false);
       setNewTitle("");
       setNewDescription("");
@@ -563,7 +678,7 @@ export default function PendientesPage() {
       setStepInputVal("");
     } catch (err) {
       console.error("Error creating pendiente:", err);
-      addToast("Error al guardar en el servidor", "error");
+      addToast("Error al guardar pendiente", "error");
     } finally {
       setIsSubmittingNew(false);
     }
@@ -631,7 +746,23 @@ export default function PendientesPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Recargar Servidor button */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => loadData(true)}
+              disabled={isRefreshing}
+              title="Recargar pendientes directamente desde tu servidor"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-slate-300 hover:text-white border border-white/[0.08] text-xs font-semibold cursor-pointer transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-400 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Recargar Servidor</span>
+              <span
+                className={`w-2 h-2 rounded-full ${isServerConnected ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`}
+                title={isServerConnected ? "Servidor conectado" : "Modo local / reconectando"}
+              />
+            </motion.button>
+
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => setIsNewModalOpen(true)}
@@ -842,29 +973,50 @@ export default function PendientesPage() {
 
                       {/* CIRCULAR STEPS PIPELINE (on card) */}
                       {totalSteps > 0 ? (
-                        <div className="pt-2 border-t border-white/[0.05] space-y-2">
+                        <div className="pt-2 border-t border-white/[0.05] space-y-2.5">
                           <div className="flex items-center justify-between text-[11px] text-slate-400">
                             <span className="font-semibold text-slate-300">
                               Pasos del pendiente
                             </span>
-                            <span className="tabular-nums font-bold text-indigo-400">
-                              {completedStepsCount}/{totalSteps}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="tabular-nums font-bold text-indigo-400">
+                                {completedStepsCount}/{totalSteps}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpandSteps(item.id);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                              >
+                                <span>{expandedStepsMap[item.id] ? "Ocultar" : "Ver fechas"}</span>
+                                <ChevronDown
+                                  className={`w-3 h-3 transition-transform duration-200 ${
+                                    expandedStepsMap[item.id] ? "rotate-180" : ""
+                                  }`}
+                                />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Interconnected Circular Step Nodes */}
                           <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
                             {etapas.map((step, sIdx) => {
                               const isStepDone = step.completado;
+                              const createdLabel = step.createdAt ? formatStepDate(step.createdAt) : "";
+                              const completedLabel = step.completedAt ? formatStepDate(step.completedAt) : "";
+                              const tooltip = `Paso ${sIdx + 1}: ${step.titulo}${
+                                createdLabel ? `\n📅 Creado: ${createdLabel}` : ""
+                              }${completedLabel ? `\n✓ Completado: ${completedLabel}` : ""}`;
+
                               return (
                                 <div key={step.id} className="flex items-center gap-1.5 shrink-0">
                                   {/* Step Circular Node */}
                                   <motion.button
                                     whileTap={{ scale: 0.85 }}
                                     onClick={(e) => handleToggleCardStep(item.id, step.id, e)}
-                                    title={`Paso ${sIdx + 1}: ${step.titulo} (${
-                                      isStepDone ? "Completado" : "Pendiente"
-                                    })`}
+                                    title={tooltip}
                                     className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all cursor-pointer ${
                                       isStepDone
                                         ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-sm"
@@ -890,6 +1042,89 @@ export default function PendientesPage() {
                               );
                             })}
                           </div>
+
+                          {/* Expandable Step List with registered dates */}
+                          {expandedStepsMap[item.id] ? (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2, ease: EASE_OUT }}
+                              className="space-y-1.5 pt-1"
+                            >
+                              {etapas.map((step, sIdx) => {
+                                const isStepDone = step.completado;
+                                return (
+                                  <div
+                                    key={step.id}
+                                    onClick={(e) => handleToggleCardStep(item.id, step.id, e)}
+                                    className="flex items-start gap-2 p-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.04] cursor-pointer transition-colors"
+                                  >
+                                    <div className="pt-0.5 shrink-0">
+                                      <div
+                                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold border ${
+                                          isStepDone
+                                            ? "bg-emerald-500 border-emerald-400 text-slate-950"
+                                            : "bg-white/[0.04] border-white/[0.12] text-slate-400"
+                                        }`}
+                                      >
+                                        {isStepDone ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : sIdx + 1}
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p
+                                        className={`text-xs leading-snug ${
+                                          isStepDone
+                                            ? "line-through text-slate-400"
+                                            : "text-slate-200 font-medium"
+                                        }`}
+                                      >
+                                        {step.titulo}
+                                      </p>
+                                      <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px]">
+                                        {step.createdAt && (
+                                          <span className="flex items-center gap-1 text-slate-400">
+                                            <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                            <span>Creado: {formatStepDate(step.createdAt)}</span>
+                                          </span>
+                                        )}
+                                        {isStepDone && step.completedAt && (
+                                          <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                                            <CheckCircle2 className="w-2.5 h-2.5" />
+                                            <span>Listo: {formatStepDate(step.completedAt)}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </motion.div>
+                          ) : (
+                            /* Compact preview of current active step */
+                            (() => {
+                              const activeStep = etapas.find((s) => !s.completado) || etapas[etapas.length - 1];
+                              if (!activeStep) return null;
+                              return (
+                                <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.04] text-[11px]">
+                                  <div className="flex items-center gap-1.5 truncate text-slate-300 min-w-0">
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                        activeStep.completado ? "bg-emerald-400" : "bg-indigo-400"
+                                      }`}
+                                    />
+                                    <span className="truncate">{activeStep.titulo}</span>
+                                  </div>
+                                  {activeStep.createdAt && (
+                                    <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-1">
+                                      <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                      {formatStepDate(activeStep.createdAt)}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          )}
                         </div>
                       ) : (
                         <div className="pt-2 border-t border-white/[0.05] flex items-center gap-2 text-[11px] text-slate-500">
@@ -1106,54 +1341,75 @@ export default function PendientesPage() {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.95 }}
                               transition={{ duration: 0.18, ease: EASE_OUT }}
-                              className="group flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#080b15] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+                              className="group flex flex-col p-3 rounded-2xl bg-[#080b15] border border-white/[0.06] hover:border-white/[0.12] transition-colors gap-2"
                             >
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {/* Circular step toggle button */}
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  {/* Circular step toggle button */}
+                                  <motion.button
+                                    type="button"
+                                    whileTap={{ scale: 0.88 }}
+                                    onClick={() => handleToggleEditModalStep(step.id)}
+                                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
+                                      isDone
+                                        ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20"
+                                        : "bg-white/[0.04] border-white/[0.12] hover:border-indigo-400 text-slate-400 hover:text-white"
+                                    }`}
+                                  >
+                                    {isDone ? (
+                                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    ) : (
+                                      <span className="text-[11px] font-bold">{idx + 1}</span>
+                                    )}
+                                  </motion.button>
+
+                                  {/* Step title editable inline */}
+                                  <input
+                                    type="text"
+                                    value={step.titulo}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditEtapas((prev) =>
+                                        prev.map((s) =>
+                                          s.id === step.id ? { ...s, titulo: val } : s
+                                        )
+                                      );
+                                    }}
+                                    className={`flex-1 bg-transparent text-xs text-white outline-none font-medium ${
+                                      isDone ? "line-through text-slate-500" : ""
+                                    }`}
+                                  />
+                                </div>
+
+                                {/* Remove step */}
                                 <motion.button
                                   type="button"
-                                  whileTap={{ scale: 0.88 }}
-                                  onClick={() => handleToggleEditModalStep(step.id)}
-                                  className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
-                                    isDone
-                                      ? "bg-emerald-500 border-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20"
-                                      : "bg-white/[0.04] border-white/[0.12] hover:border-indigo-400 text-slate-400 hover:text-white"
-                                  }`}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleRemoveEditStep(step.id)}
+                                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity cursor-pointer"
                                 >
-                                  {isDone ? (
-                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                  ) : (
-                                    <span className="text-[11px] font-bold">{idx + 1}</span>
-                                  )}
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </motion.button>
-
-                                {/* Step title editable inline */}
-                                <input
-                                  type="text"
-                                  value={step.titulo}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setEditEtapas((prev) =>
-                                      prev.map((s) =>
-                                        s.id === step.id ? { ...s, titulo: val } : s
-                                      )
-                                    );
-                                  }}
-                                  className={`flex-1 bg-transparent text-xs text-white outline-none ${
-                                    isDone ? "line-through text-slate-500" : ""
-                                  }`}
-                                />
                               </div>
 
-                              {/* Remove step */}
-                              <motion.button
-                                type="button"
-                                whileTap={{ scale: 0.9 }}
-                                onClick={() => handleRemoveEditStep(step.id)}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </motion.button>
+                              {/* Registered Date Details */}
+                              <div className="flex flex-wrap items-center gap-3 pl-10 text-[10px]">
+                                {step.createdAt ? (
+                                  <span className="flex items-center gap-1 text-slate-400">
+                                    <Clock className="w-3 h-3 text-slate-500" />
+                                    <span>Creado: <strong className="text-slate-300 font-medium">{formatStepDate(step.createdAt)}</strong></span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500 italic">Fecha de inicio registrada al guardar</span>
+                                )}
+
+                                {isDone && step.completedAt && (
+                                  <span className="flex items-center gap-1 text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    <span>Listo: {formatStepDate(step.completedAt)}</span>
+                                  </span>
+                                )}
+                              </div>
                             </motion.div>
                           );
                         })
@@ -1334,21 +1590,25 @@ export default function PendientesPage() {
                       <div className="space-y-1.5">
                         {newInitialSteps.map((st, idx) => (
                           <div
-                            key={idx}
+                            key={st.id || idx}
                             className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[#080b15] border border-white/[0.06] text-xs text-white"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold shrink-0">
                                 {idx + 1}
                               </span>
-                              <span>{st}</span>
+                              <span className="truncate font-medium">{st.titulo}</span>
+                              <span className="text-[10px] text-slate-400 shrink-0 flex items-center gap-1 ml-auto">
+                                <Clock className="w-2.5 h-2.5 text-slate-500" />
+                                <span>{formatStepDate(st.createdAt)}</span>
+                              </span>
                             </div>
                             <button
                               type="button"
                               onClick={() =>
                                 setNewInitialSteps((prev) => prev.filter((_, i) => i !== idx))
                               }
-                              className="text-slate-500 hover:text-rose-400 p-0.5"
+                              className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer ml-1"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>

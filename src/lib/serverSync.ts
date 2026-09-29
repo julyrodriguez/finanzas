@@ -439,43 +439,54 @@ export async function fetchPendientesFromMongo(): Promise<{
   }
 }
 
-export async function syncPendienteToMongo(item: any): Promise<void> {
+export async function syncPendienteToMongo(item: any): Promise<boolean> {
   try {
     const firebaseId = item.id || item.firebaseId;
-    if (!firebaseId) return;
+    if (!firebaseId) return false;
 
-    await fetch(PENDIENTES_API_URL, {
+    const res = await fetch(PENDIENTES_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...item, firebaseId }),
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn("⚠️ [Mongo Pendiente Sync] Error status:", res.status, errText);
+      return false;
+    }
+    return true;
   } catch (err: any) {
     console.warn("⚠️ [Mongo Pendiente Sync] Error:", err?.message || err);
+    return false;
   }
 }
 
-export async function syncPendientesBulkToMongo(items: any[]): Promise<void> {
+export async function syncPendientesBulkToMongo(items: any[]): Promise<boolean> {
   try {
-    if (!items || items.length === 0) return;
+    if (!items || items.length === 0) return true;
     const formatted = items.map((p) => ({ ...p, firebaseId: p.id || p.firebaseId }));
-    await fetch(`${PENDIENTES_API_URL}/bulk`, {
+    const res = await fetch(`${PENDIENTES_API_URL}/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pendientes: formatted }),
     });
+    return res.ok;
   } catch (err: any) {
     console.warn("⚠️ [Mongo Pendientes Bulk] Error:", err?.message || err);
+    return false;
   }
 }
 
-export async function deletePendienteFromMongo(id: string): Promise<void> {
+export async function deletePendienteFromMongo(id: string): Promise<boolean> {
   try {
-    if (!id) return;
-    await fetch(`${PENDIENTES_API_URL}/${id}`, {
+    if (!id) return false;
+    const res = await fetch(`${PENDIENTES_API_URL}/${id}`, {
       method: "DELETE",
     });
+    return res.ok;
   } catch (err: any) {
     console.warn("⚠️ [Mongo Pendiente Delete] Error:", err?.message || err);
+    return false;
   }
 }
 
