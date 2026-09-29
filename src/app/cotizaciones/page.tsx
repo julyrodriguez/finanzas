@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
@@ -70,11 +71,14 @@ import {
   Sparkles,
   Paperclip,
   Mail,
-  FileText
+  FileText,
+  Trophy
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
 import { CotizacionesImportAiModal } from "@/components/cotizaciones/CotizacionesImportAiModal";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
 // Types definition
 interface Item {
@@ -2279,147 +2283,190 @@ export default function CotizacionesPage() {
   };
 
   return (
-    <AppLayout title="Cotizaciones" subtitle="Compará proveedores, manejá unidades de medida y monedas integradas">
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl border backdrop-blur-md transition-all duration-300 transform translate-y-0 ${
-          toast.type === "success" 
-            ? "bg-emerald-950/80 text-emerald-200 border-emerald-500/30" 
-            : toast.type === "error" 
-              ? "bg-red-950/80 text-red-200 border-red-500/30" 
-              : "bg-blue-950/80 text-blue-200 border-blue-500/30"
-        }`}>
-          {toast.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
-          {toast.type === "error" && <AlertCircle className="w-5 h-5 text-red-400" />}
-          {toast.type === "info" && <Info className="w-5 h-5 text-blue-400" />}
-          <span className="text-sm font-semibold">{toast.message}</span>
-        </div>
-      )}
+    <AppLayout title="Cotizaciones" subtitle="Comparativa inteligente de proveedores, unidades y monedas integradas">
+      {/* Toast Notification Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence mode="popLayout">
+          {toast && (
+            <motion.div
+              key={toast.message}
+              initial={{ opacity: 0, y: 12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="pointer-events-auto flex items-center gap-2.5 px-4.5 py-3 rounded-2xl border shadow-2xl backdrop-blur-md text-xs font-semibold text-white bg-[#0d121f]/95 border-white/10"
+            >
+              {toast.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+              {toast.type === "error" && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+              {toast.type === "info" && <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />}
+              <span>{toast.message}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* Main Grid: Control Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-8">
-        {/* Navigation Tabs */}
-        <div className="flex p-1 bg-[#101725] border border-white/5 rounded-2xl overflow-x-auto max-w-full whitespace-nowrap shrink-0">
+      {/* Control Bar / Navigation Dock */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6 p-2.5 rounded-3xl bg-[#0d1222]/80 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+        {/* Navigation Tabs with Motion layoutId */}
+        <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-2xl overflow-x-auto max-w-full whitespace-nowrap shrink-0">
           <button
             onClick={() => {
               setActiveTab("historial");
               setCurrentQuoteId(null);
               setHasActiveQuote(false);
             }}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${
-              activeTab === "historial"
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+            className={`relative flex items-center gap-2 px-4.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors duration-150 ${
+              activeTab === "historial" ? "text-white" : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            <FolderOpen className="w-4 h-4" />
-            Mis Cotizaciones
-            {savedQuotations.length > 0 && (
-              <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
-                {savedQuotations.length}
-              </span>
+            {activeTab === "historial" && (
+              <motion.div
+                layoutId="activeCotizacionesTab"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30"
+              />
             )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span>Mis Cotizaciones</span>
+              {savedQuotations.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-white/20 text-white">
+                  {savedQuotations.length}
+                </span>
+              )}
+            </span>
           </button>
+
           <button
             disabled={!hasActiveQuote}
             onClick={() => hasActiveQuote && setActiveTab("editor")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${
-              !hasActiveQuote 
-                ? "text-gray-600 cursor-not-allowed opacity-50"
+            className={`relative flex items-center gap-2 px-4.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 ${
+              !hasActiveQuote
+                ? "text-slate-600 cursor-not-allowed opacity-40"
                 : activeTab === "editor"
-                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                ? "text-white cursor-pointer"
+                : "text-slate-400 hover:text-slate-200 cursor-pointer"
             }`}
             title={!hasActiveQuote ? "Abrí o creá una cotización para editar" : ""}
           >
-            <Calculator className="w-4 h-4" />
-            Editor
+            {hasActiveQuote && activeTab === "editor" && (
+              <motion.div
+                layoutId="activeCotizacionesTab"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30"
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <Calculator className="w-3.5 h-3.5" />
+              <span>Editor de Precios</span>
+            </span>
           </button>
+
           <button
             disabled={!hasActiveQuote}
             onClick={() => hasActiveQuote && setActiveTab("comparador")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shrink-0 ${
-              !hasActiveQuote 
-                ? "text-gray-600 cursor-not-allowed opacity-50"
+            className={`relative flex items-center gap-2 px-4.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 ${
+              !hasActiveQuote
+                ? "text-slate-600 cursor-not-allowed opacity-40"
                 : activeTab === "comparador"
-                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                ? "text-white cursor-pointer"
+                : "text-slate-400 hover:text-slate-200 cursor-pointer"
             }`}
             title={!hasActiveQuote ? "Abrí o creá una cotización para ver la matriz" : ""}
           >
-            <Scale className="w-4 h-4" />
-            Matriz Comparativa
-            {hasActiveQuote && providers.length > 0 && (
-              <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">
-                {providers.length}
-              </span>
+            {hasActiveQuote && activeTab === "comparador" && (
+              <motion.div
+                layoutId="activeCotizacionesTab"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30"
+              />
             )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5" />
+              <span>Matriz Comparativa</span>
+              {hasActiveQuote && providers.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-white/20 text-white">
+                  {providers.length}
+                </span>
+              )}
+            </span>
           </button>
         </div>
 
         {/* Global Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3">
-          <button
+        <div className="flex flex-wrap items-center gap-2.5">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={handleNewQuotation}
-            className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 hover:text-white rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer transition-shadow"
           >
-            Nueva Cotización
-          </button>
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Nueva Cotización</span>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => {
-              if (!hasActiveQuote) {
-                handleNewQuotation();
-              }
+              if (!hasActiveQuote) handleNewQuotation();
               setIsImportModalOpen(true);
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-semibold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white/[0.05] hover:bg-white/[0.09] text-slate-200 hover:text-white border border-white/[0.08] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
             title="Importar matriz desde archivo Excel o celdas copiadas"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            Importar Excel / Copiar
-          </button>
-          
+            <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Importar Excel</span>
+          </motion.button>
+
           {hasActiveQuote && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.97 }}
               onClick={handleSaveQuotation}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-sm font-bold transition-all animate-fadeIn cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
             >
-              <Save className="w-4 h-4" />
-              Guardar Cambios
-            </button>
+              <Save className="w-3.5 h-3.5" />
+              <span>Guardar</span>
+            </motion.button>
           )}
 
           {hasActiveQuote && (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.97 }}
               onClick={() => setIsAiChatOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-sm font-bold transition-all shadow-md shadow-emerald-500/10 cursor-pointer animate-fadeIn"
-              title="Abrir chat con IA para analizar y comparar presupuestos y correos de proveedores"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+              title="Abrir chat con IA para analizar y comparar presupuestos"
             >
-              <Bot className="w-4 h-4 text-emerald-400" />
+              <Bot className="w-3.5 h-3.5 text-indigo-400" />
               <span>Chat IA</span>
               {attachments.length > 0 && (
-                <span className="bg-emerald-500/30 text-emerald-200 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                  {attachments.length} {attachments.length === 1 ? "archivo" : "archivos"}
+                <span className="bg-indigo-500/30 text-indigo-200 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {attachments.length}
                 </span>
               )}
-            </button>
+            </motion.button>
           )}
 
-          {/* Database indicator */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 text-[11px] text-gray-400">
-            <span className={`w-2 h-2 rounded-full ${dbActive ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
-            {dbActive ? "Sincronizado Nube" : "Almacenamiento Local"}
+          {/* Sync indicator */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-slate-400">
+            <span className={`w-1.5 h-1.5 rounded-full ${dbActive ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+            <span>{dbActive ? "Sincronizado" : "Local"}</span>
           </div>
         </div>
       </div>
 
-      {/* Quote Meta Information */}
+      {/* Active Quote Meta Information Card */}
       {hasActiveQuote && (
-        <div className="glass-card rounded-3xl p-6 mb-8 border border-white/5 animate-fadeIn">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nombre del Presupuesto / Proyecto</label>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: EASE_OUT }}
+          className="rounded-3xl p-6 mb-6 bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl space-y-4"
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            {/* Title */}
+            <div className="lg:col-span-5 space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Nombre del Presupuesto / Proyecto
+              </label>
               <input
                 type="text"
                 value={quoteName}
@@ -2432,344 +2479,319 @@ export default function CotizacionesPage() {
                 }}
                 placeholder="Ej. PCT 059 Palermo / Insumos Planta Munro Q3"
                 disabled={isLocked}
-                className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-slate-600 outline-none transition-colors disabled:opacity-50"
               />
             </div>
 
-            <div className="col-span-1 lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {/* Exchange Rate Input */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                  TC Mayorista
-                  <span className="text-[10px] text-gray-500">(1 USD a ARS)</span>
+            {/* Quick Metrics Grid */}
+            <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* TC Mayorista */}
+              <div className="space-y-1 bg-[#080b15] p-2.5 rounded-xl border border-white/[0.06]">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
+                  TC Mayorista (ARS)
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-semibold">$</span>
+                <div className="relative flex items-center">
+                  <span className="text-slate-500 text-xs font-bold mr-1">$</span>
                   <input
                     type="number"
                     value={exchangeRate || ""}
                     onChange={(e) => setExchangeRate(Math.max(1, parseFloat(e.target.value) || 0))}
                     placeholder="1400"
                     disabled={isLocked}
-                    className="w-full bg-[#111827]/60 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-transparent text-xs font-mono font-bold text-white outline-none disabled:opacity-50"
                   />
                 </div>
               </div>
 
-              {/* Base Comparison Currency Selection */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Moneda Base</label>
+              {/* Base Currency */}
+              <div className="space-y-1 bg-[#080b15] p-2.5 rounded-xl border border-white/[0.06]">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Moneda Base
+                </label>
                 <select
                   value={baseCurrency}
                   onChange={(e) => setBaseCurrency(e.target.value as "ARS" | "USD")}
                   disabled={isLocked}
-                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50"
                 >
-                  <option value="ARS">Pesos Argentinos ($)</option>
-                  <option value="USD">Dólares (USD)</option>
+                  <option value="ARS" className="bg-[#0b0f19]">Pesos (ARS)</option>
+                  <option value="USD" className="bg-[#0b0f19]">Dólares (USD)</option>
                 </select>
               </div>
 
-              {/* Pricing Mode Option */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                  Lotes Enteros
-                  <span title="Activar para calcular precios finales en base a cajas/packs enteros en vez de fracciones." className="cursor-help flex items-center">
-                    <HelpCircle className="w-3 h-3 text-gray-500 hover:text-gray-300" />
+              {/* Lotes Enteros */}
+              <div className="space-y-1 bg-[#080b15] p-2.5 rounded-xl border border-white/[0.06]">
+                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                  <span>Cálculo</span>
+                  <span title="Activar para calcular precios finales en base a cajas/packs enteros en vez de fracciones." className="cursor-help">
+                    <HelpCircle className="w-2.5 h-2.5 text-slate-500" />
                   </span>
                 </label>
                 <select
                   value={useRealLots ? "real" : "fraction"}
                   onChange={(e) => setUseRealLots(e.target.value === "real")}
                   disabled={isLocked}
-                  className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50"
                 >
-                  <option value="fraction">Fraccional (Exacto)</option>
-                  <option value="real">Lotes Completos (Compra Real)</option>
+                  <option value="fraction" className="bg-[#0b0f19]">Fraccional</option>
+                  <option value="real" className="bg-[#0b0f19]">Lotes Reales</option>
                 </select>
               </div>
 
-              {/* Total Items Info */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">Resumen Ítems</label>
-                <div className="bg-[#111827]/40 border border-white/5 rounded-xl px-3 py-2.5 flex items-center justify-between text-xs text-gray-300 h-[42px]">
-                  <span>Ítems: <b>{items.length}</b></span>
-                  <span>Prov: <b>{providers.length}</b></span>
-                </div>
+              {/* Items & Provs Count */}
+              <div className="space-y-1 bg-[#080b15] p-2.5 rounded-xl border border-white/[0.06] flex flex-col justify-center">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Resumen</span>
+                <span className="text-xs font-bold text-white tabular-nums">
+                  {items.length} ítems • {providers.length} provs
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Notes Field */}
-          <div className="mt-4 space-y-1">
-            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Notas o Descripción</label>
+          {/* Notes */}
+          <div className="space-y-1">
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Comentarios sobre requerimientos de entrega, plazos de pago, etc."
+              placeholder="Notas generales, plazos de entrega, condiciones de pago..."
               rows={1}
               disabled={isLocked}
-              className="w-full bg-[#111827]/60 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-y min-h-[40px] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-slate-300 placeholder-slate-600 outline-none transition-colors resize-y min-h-[36px] disabled:opacity-50"
             />
           </div>
 
-          {/* Rubro / Categoría y Vinculación con Pendientes */}
-          <div className="mt-4 pt-4 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Rubro & Pendientes & Estado */}
+          <div className="pt-3 border-t border-white/[0.06] grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
             {/* Rubro / Categoría */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Folder className="w-3.5 h-3.5 text-amber-400" />
-                  Rubro / Categoría
-                </label>
-                {quotePendienteId && quoteCategoria && (
-                  <span className="text-[11px] text-amber-400/90 flex items-center gap-1 font-medium">
-                    <Link2 className="w-3 h-3" /> Heredado de pendiente
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={quoteCategoria}
-                  onChange={(e) => setQuoteCategoria(e.target.value)}
-                  disabled={isLocked}
-                  className="flex-1 bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">Sin rubro / Sin categoría</option>
-                  {allCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryModalOpen(true)}
-                  className="p-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl border border-white/10 transition-colors cursor-pointer"
-                  title="Crear nueva carpeta/rubro"
-                >
-                  <FolderPlus className="w-4 h-4" />
-                </button>
-              </div>
+            <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+              <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <select
+                value={quoteCategoria}
+                onChange={(e) => setQuoteCategoria(e.target.value)}
+                disabled={isLocked}
+                className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50"
+              >
+                <option value="" className="bg-[#0b0f19]">(Sin rubro / área)</option>
+                {allCategories.map((cat) => (
+                  <option key={cat} value={cat} className="bg-[#0b0f19]">{cat}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="text-slate-400 hover:text-white p-0.5"
+                title="Nueva carpeta"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {/* Pendiente Vinculado */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <ListTodo className="w-3.5 h-3.5 text-indigo-400" />
-                  Vincular a Pendiente
-                </label>
-                {quotePendienteId && (
-                  <a
-                    href={`/pendientes?id=${quotePendienteId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 hover:underline"
-                    title="Ver este pendiente en una nueva pestaña"
-                  >
-                    Ver pendiente <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={quotePendienteId}
-                  onChange={(e) => handleLinkPendiente(e.target.value)}
-                  disabled={isLocked}
-                  className="flex-1 bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+              <ListTodo className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <select
+                value={quotePendienteId}
+                onChange={(e) => handleLinkPendiente(e.target.value)}
+                disabled={isLocked}
+                className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50 truncate"
+              >
+                <option value="" className="bg-[#0b0f19]">(Sin pendiente vinculado)</option>
+                {allPendientes.map((pend) => (
+                  <option key={pend.id} value={pend.id} className="bg-[#0b0f19]">
+                    {pend.titulo}
+                  </option>
+                ))}
+              </select>
+              {quotePendienteId && (
+                <button
+                  type="button"
+                  onClick={() => handleLinkPendiente("")}
+                  className="text-rose-400 hover:text-rose-300 p-0.5"
+                  title="Desvincular"
                 >
-                  <option value="">Ningún pendiente vinculado</option>
-                  {allPendientes.map((pend) => (
-                    <option key={pend.id} value={pend.id}>
-                      {pend.titulo} {pend.categoria ? `[${pend.categoria}]` : ""}
-                    </option>
-                  ))}
-                </select>
-                {quotePendienteId && (
-                  <button
-                    type="button"
-                    onClick={() => handleLinkPendiente("")}
-                    disabled={isLocked}
-                    className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-colors cursor-pointer"
-                    title="Desvincular pendiente"
-                  >
-                    <Unlink className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+                  <Unlink className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          </div>
 
-          {/* Estado de la Cotización y Proveedor Ganador */}
-          <div className="mt-4 pt-4 border-t border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
-                Estado de la Cotización:
-              </label>
+            {/* Estado */}
+            <div className="flex items-center justify-between sm:justify-end gap-2">
               <select
                 value={status}
                 onChange={(e) => {
-                  const newStatus = e.target.value as "borrador" | "enviada" | "finalizada" | "cancelada";
+                  const newStatus = e.target.value as any;
                   setStatus(newStatus);
-                  if (newStatus !== "finalizada") {
-                    setWinningProviderId("");
-                  } else if (providers.length > 0 && !winningProviderId) {
-                    setWinningProviderId(providers[0].id);
-                  }
+                  if (newStatus !== "finalizada") setWinningProviderId("");
+                  else if (providers.length > 0 && !winningProviderId) setWinningProviderId(providers[0].id);
                   if (newStatus === "enviada" && !sentAt) {
                     const today = new Date();
-                    const yyyy = today.getFullYear();
-                    const mm = String(today.getMonth() + 1).padStart(2, '0');
-                    const dd = String(today.getDate()).padStart(2, '0');
-                    setSentAt(`${yyyy}-${mm}-${dd}`);
+                    setSentAt(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`);
                   }
                 }}
-                className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border outline-none cursor-pointer ${
+                  status === "finalizada"
+                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                    : status === "enviada"
+                    ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
+                    : status === "cancelada"
+                    ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                    : "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                }`}
               >
-                <option value="borrador">Borrador (Abierta)</option>
-                <option value="enviada">Enviada (Cerrada para edición)</option>
-                <option value="finalizada">Finalizada (Cerrada y adjudicada)</option>
-                <option value="cancelada">Cancelada (Cerrada)</option>
+                <option value="borrador" className="bg-[#0b0f19]">Borrador (Abierta)</option>
+                <option value="enviada" className="bg-[#0b0f19]">Enviada (Cerrada)</option>
+                <option value="finalizada" className="bg-[#0b0f19]">Finalizada (Adjudicada)</option>
+                <option value="cancelada" className="bg-[#0b0f19]">Cancelada</option>
               </select>
-            </div>
 
-            {status === "finalizada" && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 animate-fadeIn w-full md:w-auto">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
-                  Proveedor Ganador:
-                </label>
+              {status === "finalizada" && (
                 <select
                   value={winningProviderId}
                   onChange={(e) => setWinningProviderId(e.target.value)}
-                  className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 outline-none cursor-pointer"
                 >
-                  <option value="">Seleccionar Ganador...</option>
+                  <option value="" className="bg-[#0b0f19]">Elegir Ganador...</option>
                   {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
+                    <option key={p.id} value={p.id} className="bg-[#0b0f19]">{p.name}</option>
                   ))}
                 </select>
-              </div>
-            )}
-
-            {status === "enviada" && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 animate-fadeIn w-full md:w-auto">
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
-                  Fecha de Envío:
-                </label>
-                <input
-                  type="date"
-                  value={sentAt}
-                  onChange={(e) => setSentAt(e.target.value)}
-                  className="w-full sm:w-auto bg-[#111827]/60 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* ====================================================
+      {/* ============================================================
           TAB CONTENT: EDITOR DE COTIZACIÓN
-          ==================================================== */}
+          ============================================================ */}
       {activeTab === "editor" && (
-        <div className="space-y-8 animate-fadeIn">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: EASE_OUT }}
+          className="space-y-6"
+        >
           {/* Section 1: Target Items Configuration */}
-          <div className="glass-card rounded-3xl p-6 border border-white/5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <div className="rounded-3xl p-6 bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-indigo-400">
                   <Layers className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">1. Ítems a presupuestar</h3>
-                  <p className="text-xs text-gray-400">Configurá los insumos y la cantidad base que necesitás</p>
+                  <h3 className="font-bold text-white text-sm">1. Ítems Requeridos</h3>
+                  <p className="text-xs text-slate-400">Insumos y cantidades base solicitadas</p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => setIsImportModalOpen(true)}
                   disabled={isLocked}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-200 border border-white/10 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  title="Importar ítems, proveedores y precios desde Excel"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/[0.08] rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                  Importar Excel / Copiar
-                </button>
-                <button
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Importar Excel</span>
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleAddItem}
                   disabled={isLocked}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors shadow-md disabled:opacity-40 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  Añadir Ítem
-                </button>
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Añadir Ítem</span>
+                </motion.button>
               </div>
             </div>
 
-            {/* Desktop View Table */}
+            {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/5">
-                  <tr>
-                    <th className="p-4 rounded-l-xl">Nombre del Ítem / Insumo</th>
-                    <th className="p-4">Unidad de Medida Base</th>
-                    <th className="p-4">Cantidad Requerida</th>
-                    <th className="p-4 w-16 rounded-r-xl text-center">Acciones</th>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <th className="py-2.5 px-3 w-16 text-center">Orden</th>
+                    <th className="py-2.5 px-3">Nombre del Ítem / Insumo</th>
+                    <th className="py-2.5 px-3 w-56">Unidad Base</th>
+                    <th className="py-2.5 px-3 w-48">Cantidad</th>
+                    <th className="py-2.5 px-3 w-16 text-center">Acción</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
-                  {items.map((item) => (
-                    <tr key={item.id} className="hover:bg-white/[0.01] transition-colors">
-                      <td className="p-4">
+                <tbody className="divide-y divide-white/[0.04]">
+                  {items.map((item, idx) => (
+                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors group">
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => moveItem(idx, -1)}
+                            disabled={isLocked || idx === 0}
+                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer"
+                            title="Subir"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveItem(idx, 1)}
+                            disabled={isLocked || idx === items.length - 1}
+                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer"
+                            title="Bajar"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
                         <input
                           type="text"
                           value={item.name}
                           onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
-                          placeholder="Ej. Resma A4, Café en Grano, Azúcar..."
+                          placeholder="Ej. Resma A4, Café en Grano..."
                           disabled={isLocked}
-                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none transition-colors disabled:opacity-50"
                         />
                       </td>
-                      <td className="p-4 w-60">
+                      <td className="py-2.5 px-3">
                         <select
                           value={item.baseUnit}
                           onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
                           disabled={isLocked}
-                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs text-white outline-none cursor-pointer disabled:opacity-50"
                         >
-                          {DEFAULT_UNITS.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          {DEFAULT_UNITS.map((opt) => (
+                            <option key={opt.value} value={opt.value} className="bg-[#0b0f19]">
+                              {opt.label}
+                            </option>
                           ))}
                         </select>
                       </td>
-                      <td className="p-4 w-52">
-                        <div className="relative">
+                      <td className="py-2.5 px-3">
+                        <div className="relative flex items-center">
                           <input
                             type="number"
                             value={item.targetQuantity || ""}
                             onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
                             placeholder="Cantidad"
                             disabled={isLocked}
-                            className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl pl-3 pr-10 py-1.5 text-xs font-mono font-bold text-white outline-none disabled:opacity-50"
                           />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500">
+                          <span className="absolute right-2.5 text-[10px] font-bold text-slate-500 pointer-events-none">
                             {item.baseUnit}
                           </span>
                         </div>
                       </td>
-                      <td className="p-4 text-center">
-                        <button
+                      <td className="py-2.5 px-3 text-center">
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
                           onClick={() => handleDeleteItem(item.id)}
                           disabled={isLocked || items.length === 1}
-                          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-20 cursor-pointer"
                           title="Eliminar ítem"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </motion.button>
                       </td>
                     </tr>
                   ))}
@@ -2778,61 +2800,68 @@ export default function CotizacionesPage() {
             </div>
 
             {/* Mobile View Cards */}
-            <div className="block md:hidden space-y-4">
-              {items.map((item) => (
-                <div key={item.id} className="p-4 bg-[#111827]/40 border border-white/5 rounded-2xl space-y-3">
-                  <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Configuración de Ítem</span>
+            <div className="block md:hidden space-y-3">
+              {items.map((item, idx) => (
+                <div key={item.id} className="p-3.5 bg-[#080b15] border border-white/[0.06] rounded-2xl space-y-2.5">
+                  <div className="flex justify-between items-center pb-2 border-b border-white/[0.06]">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-bold text-slate-400">Ítem #{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => moveItem(idx, -1)}
+                        disabled={isLocked || idx === 0}
+                        className="p-1 text-slate-500 disabled:opacity-20"
+                      >
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveItem(idx, 1)}
+                        disabled={isLocked || idx === items.length - 1}
+                        className="p-1 text-slate-500 disabled:opacity-20"
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
                     <button
                       onClick={() => handleDeleteItem(item.id)}
                       disabled={isLocked || items.length === 1}
-                      className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Eliminar ítem"
+                      className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-20"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 font-semibold uppercase">Nombre del Insumo</label>
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
-                      placeholder="Ej. Resma A4, Café en Grano..."
+
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
+                    placeholder="Nombre del insumo..."
+                    disabled={isLocked}
+                    className="w-full bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-white outline-none"
+                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={item.baseUnit}
+                      onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
                       disabled={isLocked}
-                      className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
+                      className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-xs text-white outline-none"
+                    >
+                      {DEFAULT_UNITS.map((opt) => (
+                        <option key={opt.value} value={opt.value} className="bg-[#0b0f19]">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={item.targetQuantity || ""}
+                      onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
+                      placeholder="Cantidad"
+                      disabled={isLocked}
+                      className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-white outline-none"
                     />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-gray-400 font-semibold uppercase">U. Medida</label>
-                      <select
-                        value={item.baseUnit}
-                        onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
-                        disabled={isLocked}
-                        className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
-                      >
-                        {DEFAULT_UNITS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-gray-400 font-semibold uppercase">Cantidad</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={item.targetQuantity || ""}
-                          onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
-                          placeholder="Cantidad"
-                          disabled={isLocked}
-                          className="w-full bg-[#111827]/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono disabled:opacity-50"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-gray-500">
-                          {item.baseUnit}
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -2840,2115 +2869,1293 @@ export default function CotizacionesPage() {
           </div>
 
           {/* Section 2: Providers and Quotes Editing */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
                   <Calculator className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">2. Precios por Proveedor</h3>
-                  <p className="text-xs text-gray-400">Cargá las cotizaciones de los proveedores para cada ítem</p>
+                  <h3 className="font-bold text-white text-sm">2. Precios por Proveedor</h3>
+                  <p className="text-xs text-slate-400">
+                    Cargá valores unitarios o por lote/pack para cada empresa
+                  </p>
                 </div>
               </div>
-              
-              <div className="flex flex-wrap items-center gap-2">
+
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleMinimizeAllProviders}
-                  className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-semibold transition-colors border border-white/10 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-xs font-semibold text-slate-300 hover:text-white border border-white/[0.08] transition-colors cursor-pointer"
                 >
                   {providers.length > 0 && providers.every((p) => minimizedProviders[p.id])
-                    ? "Expandir todas"
-                    : "Minimizar todas"}
+                    ? "Expandir Todos"
+                    : "Colapsar Todos"}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportAiTargetProviderId(undefined);
-                    setImportAiTargetProviderName(undefined);
-                    setIsImportAiModalOpen(true);
-                  }}
-                  disabled={isLocked}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  title="Subir un presupuesto en PDF, planilla Excel o correo EML para que la IA extraiga los productos y precios automáticamente"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                  <span>Nuevo Proveedor con IA (PDF / Excel / EML)</span>
-                </button>
-
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleAddProvider}
                   disabled={isLocked}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-gray-200 rounded-xl text-xs font-bold transition-colors border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  title="Añadir proveedor vacío de forma manual"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 disabled:opacity-40 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Añadir Manual</span>
-                </button>
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Añadir Proveedor</span>
+                </motion.button>
               </div>
             </div>
 
-            {/* Responsive grid of Provider quote cards */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              {providers.map((provider, pIdx) => {
-                const isMinimized = Boolean(minimizedProviders[provider.id]);
-                const totalData = providerTotals.find((t) => t.providerId === provider.id);
-                const providerAtts = attachments.filter((a) => a.providerId === provider.id);
-
-                if (isMinimized) {
-                  return (
-                    <div
-                      key={provider.id}
-                      className="glass-card rounded-2xl p-4 border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between gap-3 bg-[#0d1422]/80 shadow-md"
-                    >
-                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/5">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <button
-                            type="button"
-                            onClick={() => toggleMinimizeProvider(provider.id)}
-                            className="p-1 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
-                            title="Expandir tarjeta"
-                          >
-                            <ChevronDown className="w-4 h-4 text-emerald-400" />
-                          </button>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              type="button"
-                              disabled={pIdx === 0}
-                              onClick={() => moveProvider(pIdx, -1)}
-                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                              title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={pIdx === providers.length - 1}
-                              onClick={() => moveProvider(pIdx, 1)}
-                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                              title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <span className="font-bold text-white text-base truncate" title={provider.name}>
-                            {provider.name}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {/* Botón rápido para autocompletar con IA */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setImportAiTargetProviderId(provider.id);
-                              setImportAiTargetProviderName(provider.name);
-                              setIsImportAiModalOpen(true);
-                            }}
-                            disabled={isLocked}
-                            className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-lg text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
-                            title="Subir PDF, Excel o presupuesto para autocompletar precios con IA en este proveedor"
-                          >
-                            <Sparkles className="w-3 h-3 text-yellow-300" />
-                            <span className="hidden sm:inline">Cargar con IA</span>
-                          </button>
-
-                          {/* Botón rápido para adjuntar PDF/Excel/EML */}
-                          <label
-                            className="flex items-center gap-1 px-2.5 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg text-xs font-semibold transition-all border border-white/10 cursor-pointer"
-                            title="Adjuntar PDF, Excel o correo EML a este proveedor"
-                          >
-                            <Upload className="w-3 h-3" />
-                            <span className="hidden sm:inline">Adjuntar archivo</span>
-                            <input
-                              type="file"
-                              accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
-                              className="hidden"
-                              disabled={isLocked}
-                              onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f) {
-                                  handleUploadAttachment(f, provider.id, provider.name);
-                                  e.target.value = "";
-                                }
-                              }}
-                            />
-                          </label>
-
-                          <button
-                            type="button"
-                            onClick={() => toggleMinimizeProvider(provider.id)}
-                            className="px-2.5 py-1 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 cursor-pointer"
-                            title="Expandir para ver y editar detalles"
-                          >
-                            Ver detalle
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProvider(provider.id)}
-                            disabled={isLocked}
-                            className="p-1 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                            title="Eliminar este proveedor"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Resumen: Archivos adjuntos y Total */}
-                      <div className="flex items-center justify-between gap-4 pt-1">
-                        {/* Archivos adjuntos del proveedor */}
-                        <div className="min-w-0 flex-1">
-                          {providerAtts.length === 0 ? (
-                            <span className="text-xs text-gray-500 italic">Sin archivos adjuntos</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {providerAtts.map((att) => {
-                                const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
-                                const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
-                                const isExcel = att.filename.endsWith(".xlsx") || att.filename.endsWith(".xls") || att.filename.endsWith(".csv") || att.mimeType.includes("spreadsheet") || att.mimeType.includes("excel");
-                                return (
-                                  <a
-                                    key={att.id}
-                                    href={att.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#121927] hover:bg-[#182337] border border-white/10 rounded-lg text-xs text-gray-200 hover:text-emerald-300 transition-colors truncate max-w-[200px]"
-                                    title={`Abrir archivo: ${att.originalName}`}
-                                  >
-                                    {isEml ? (
-                                      <Mail className="w-3 h-3 text-blue-400 shrink-0" />
-                                    ) : isPdf ? (
-                                      <FileText className="w-3 h-3 text-red-400 shrink-0" />
-                                    ) : isExcel ? (
-                                      <FileSpreadsheet className="w-3 h-3 text-emerald-400 shrink-0" />
-                                    ) : (
-                                      <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
-                                    )}
-                                    <span className="truncate">{att.originalName}</span>
-                                    <ExternalLink className="w-2.5 h-2.5 text-gray-400 shrink-0" />
-                                  </a>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Total estimado */}
-                        <div className="text-right shrink-0">
-                          <span className="text-[10px] text-gray-400 font-bold block uppercase">TOTAL ESTIMADO</span>
-                          {totalData ? (
-                            <span className="text-base font-black font-mono text-white">
-                              {totalData.totalUSD > 0
-                                ? formatCurrencyValue(totalData.totalUSD, "USD")
-                                : formatCurrencyValue(totalData.totalARS, "ARS")}
-                            </span>
-                          ) : (
-                            <span className="text-base font-black font-mono text-white">$0</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
+            {/* Providers List Accordion */}
+            <div className="space-y-4">
+              {providers.map((prov, pIdx) => {
+                const totalData = providerTotals.find((t) => t.providerId === prov.id);
+                const isMinimized = minimizedProviders[prov.id];
 
                 return (
-                  <div key={provider.id} className="glass-card rounded-3xl p-6 border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
-                    <div>
-                      {/* Provider Card Header */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-white/5">
-                        <div className="flex items-center gap-2 flex-1 min-w-[180px]">
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              type="button"
-                              disabled={pIdx === 0}
-                              onClick={() => moveProvider(pIdx, -1)}
-                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                              title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
-                            >
-                              <ChevronLeft className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={pIdx === providers.length - 1}
-                              onClick={() => moveProvider(pIdx, 1)}
-                              className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                              title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
-                            >
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            value={provider.name}
-                            onChange={(e) => {
-                              const name = e.target.value;
-                              setProviders(providers.map(p => p.id === provider.id ? { ...p, name } : p));
-                            }}
-                            disabled={isLocked}
-                            className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none font-bold text-white text-base py-1 px-2 rounded -ml-2 transition-all w-full disabled:opacity-50"
-                            placeholder="Nombre del Proveedor"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {/* Botón para autocompletar con IA */}
+                  <div
+                    key={prov.id}
+                    className="rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-200"
+                  >
+                    {/* Provider Header Bar */}
+                    <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0a0e1a]/80 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        {/* Move provider order */}
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
-                            onClick={() => {
-                              setImportAiTargetProviderId(provider.id);
-                              setImportAiTargetProviderName(provider.name);
-                              setIsImportAiModalOpen(true);
-                            }}
-                            disabled={isLocked}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 rounded-xl text-xs font-semibold transition-all border border-emerald-500/20 cursor-pointer"
-                            title="Subir PDF o presupuesto para autocompletar precios con IA en este proveedor"
+                            onClick={() => moveProvider(pIdx, -1)}
+                            disabled={isLocked || pIdx === 0}
+                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer"
+                            title="Mover a la izquierda"
                           >
-                            <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-                            <span>Cargar con IA</span>
+                            <ChevronLeft className="w-4 h-4" />
                           </button>
-
-                          {/* Botón para adjuntar archivo al lado del nombre */}
-                          <label
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-xs font-semibold transition-all border border-white/10 cursor-pointer"
-                            title="Adjuntar PDF, Excel o correo EML a este proveedor"
-                          >
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>Adjuntar archivo</span>
-                            <input
-                              type="file"
-                              accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
-                              className="hidden"
-                              disabled={isLocked}
-                              onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f) {
-                                  handleUploadAttachment(f, provider.id, provider.name);
-                                  e.target.value = "";
-                                }
-                              }}
-                            />
-                          </label>
-
-                          {/* Botón Minimizar */}
                           <button
                             type="button"
-                            onClick={() => toggleMinimizeProvider(provider.id)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-colors border border-white/10 cursor-pointer"
-                            title="Minimizar esta tarjeta"
+                            onClick={() => moveProvider(pIdx, 1)}
+                            disabled={isLocked || pIdx === providers.length - 1}
+                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer"
+                            title="Mover a la derecha"
                           >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                            <span>Minimizar</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProvider(provider.id)}
-                            disabled={isLocked}
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-colors border border-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                            title="Eliminar este proveedor"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Eliminar</span>
+                            <ChevronRight className="w-4 h-4" />
                           </button>
                         </div>
-                      </div>
 
-                    {/* Quotation entries for each item */}
-                    <div className="space-y-6">
-                      {items.map((item) => {
-                        const quote = provider.quotes[item.id] || {
-                          currency: "ARS",
-                          presentationType: "base",
-                          presentationName: "",
-                          unitsPerPresentation: 1,
-                          price: 0,
-                          discount: 0
-                        };
-
-                        return (
-                          <div key={item.id} className="p-4 rounded-2xl bg-[#111827]/40 border border-white/5 space-y-3">
-                            {/* Item name and presentation type selection */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <span className="font-semibold text-sm text-emerald-300 truncate max-w-[200px]">
-                                {item.name || "Ítem sin nombre"}
-                                <span className="text-xs text-gray-500 font-normal ml-1">
-                                  (Req: {item.targetQuantity} {item.baseUnit})
-                                </span>
-                              </span>
-
-                              {/* Presentation Mode Selector */}
-                              <div className="flex bg-[#101725] p-0.5 rounded-lg border border-white/5 text-[11px]">
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateQuote(provider.id, item.id, "presentationType", "base")}
-                                  disabled={isLocked}
-                                  className={`px-2.5 py-1 rounded font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    quote.presentationType === "base"
-                                      ? "bg-emerald-500 text-white font-bold"
-                                      : "text-gray-400 hover:text-gray-200"
-                                  }`}
-                                >
-                                  Por {item.baseUnit}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateQuote(provider.id, item.id, "presentationType", "package")}
-                                  disabled={isLocked}
-                                  className={`px-2.5 py-1 rounded font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    quote.presentationType === "package"
-                                      ? "bg-emerald-500 text-white font-bold"
-                                      : "text-gray-400 hover:text-gray-200"
-                                  }`}
-                                >
-                                  Por Lote / Pack
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Presentation Config Details */}
-                            {quote.presentationType === "package" && (
-                              <div className="grid grid-cols-2 gap-3 p-3 bg-[#101725]/60 rounded-xl border border-white/5">
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-gray-400 font-semibold uppercase">Nombre Lote</label>
-                                  <input
-                                    type="text"
-                                    value={quote.presentationName}
-                                    onChange={(e) => handleUpdateQuote(provider.id, item.id, "presentationName", e.target.value)}
-                                    placeholder="Ej. Caja x12"
-                                    disabled={isLocked}
-                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none disabled:opacity-50"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label className="text-[10px] text-gray-400 font-semibold uppercase">Cantidad del Lote ({item.baseUnit})</label>
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    value={quote.unitsPerPresentation || ""}
-                                    onChange={(e) => handleUpdateQuote(provider.id, item.id, "unitsPerPresentation", e.target.value)}
-                                    onWheel={(e) => e.currentTarget.blur()}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    placeholder="Ej. 12"
-                                    disabled={isLocked}
-                                    className="w-full bg-[#111827]/80 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Financial Inputs: Price, Currency, Discount */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              {/* Price */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] text-gray-400 font-semibold uppercase">
-                                  {quote.presentationType === "package" ? "Precio de Lote" : `Precio por ${item.baseUnit}`}
-                                </label>
-                                <div className="relative">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs">
-                                    {quote.currency === "ARS" ? "$" : "USD"}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    value={quote.price || ""}
-                                    onChange={(e) => handleUpdateQuote(provider.id, item.id, "price", e.target.value)}
-                                    onWheel={(e) => e.currentTarget.blur()}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    placeholder="0.00"
-                                    disabled={isLocked}
-                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Currency */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] text-gray-400 font-semibold uppercase">Moneda</label>
-                                <select
-                                  value={quote.currency}
-                                  onChange={(e) => handleUpdateQuote(provider.id, item.id, "currency", e.target.value)}
-                                  disabled={isLocked}
-                                  className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 h-[30px] disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <option value="ARS">Pesos ($)</option>
-                                  <option value="USD">Dólares (USD)</option>
-                                </select>
-                              </div>
-
-                              {/* Discount */}
-                              <div className="space-y-1">
-                                <label className="text-[10px] text-gray-400 font-semibold uppercase">Descuento (%)</label>
-                                <div className="relative">
-                                  <input
-                                    type="number"
-                                    value={quote.discount || ""}
-                                    onChange={(e) => handleUpdateQuote(provider.id, item.id, "discount", e.target.value)}
-                                    onWheel={(e) => e.currentTarget.blur()}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    placeholder="0"
-                                    disabled={isLocked}
-                                    className="w-full bg-[#111827]/60 border border-white/10 rounded-lg pl-2.5 pr-6 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                  />
-                                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-[10px] font-semibold">%</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Specification / Model Field */}
-                            <div className="mt-3 space-y-1">
-                              <label className="text-[10px] text-gray-400 font-semibold uppercase block">
-                                Especificación / Modelo / Marca (Opcional)
-                              </label>
-                              <input
-                                type="text"
-                                value={quote.specification || ""}
-                                onChange={(e) => handleUpdateQuote(provider.id, item.id, "specification", e.target.value)}
-                                placeholder="ej. Marca Philips, 12V, Color Calido, etc."
-                                disabled={isLocked}
-                                className="w-full bg-[#111827]/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </div>
-
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Summary for this provider inside card */}
-                  <div className="mt-6 pt-4 border-t border-white/5 bg-[#101725]/30 p-3 rounded-2xl">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-400 font-bold">TOTAL ESTIMADO:</span>
-                      <div className="text-right space-y-0.5">
-                        {(() => {
-                          const totalData = providerTotals.find(t => t.providerId === provider.id);
-                          if (!totalData) return <span className="text-base font-black font-mono text-white">$0</span>;
-
-                          const hasARS = totalData.totalARS > 0;
-                          const hasUSD = totalData.totalUSD > 0;
-
-                          return (
-                            <>
-                              {(hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) && (
-                                <p className="text-base font-black font-mono text-white">
-                                  {formatCurrencyValue(totalData.totalARS, "ARS")}
-                                </p>
-                              )}
-                              {(hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) && (
-                                <p className="text-base font-black font-mono text-emerald-400">
-                                  {formatCurrencyValue(totalData.totalUSD, "USD")}
-                                </p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-right text-gray-500 mt-1">
-                      {useRealLots ? "(Cajas enteras)" : "(Fracción exacta)"}
-                    </p>
-                  </div>
-
-                  {/* Provider Attachments (.pdf, .eml, etc.) */}
-                  <div className="mt-4 pt-3 border-t border-white/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-gray-400 flex items-center gap-1.5">
-                        <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
-                        Presupuestos / Archivos ({attachments.filter(a => a.providerId === provider.id).length})
-                      </span>
-                      <label className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors border border-emerald-500/20 cursor-pointer">
-                        <Upload className="w-3 h-3" />
-                        Subir archivo
+                        {/* Provider Name Input */}
                         <input
-                          type="file"
-                          accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.txt"
-                          className="hidden"
-                          disabled={isLocked}
+                          type="text"
+                          value={prov.name}
                           onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) {
-                              handleUploadAttachment(f, provider.id, provider.name);
-                              e.target.value = "";
-                            }
+                            const val = e.target.value;
+                            setProviders((prev) =>
+                              prev.map((p) => (p.id === prov.id ? { ...p, name: val } : p))
+                            );
                           }}
+                          placeholder="Nombre del Proveedor..."
+                          disabled={isLocked}
+                          className="flex-1 max-w-sm bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-white outline-none transition-colors disabled:opacity-50"
                         />
-                      </label>
+
+                        {/* Computed Total Badge */}
+                        {totalData && (
+                          <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono font-bold text-emerald-300 shrink-0">
+                            {totalData.totalARS > 0 && (
+                              <span>{formatCurrencyValue(totalData.totalARS, "ARS")}</span>
+                            )}
+                            {totalData.totalARS > 0 && totalData.totalUSD > 0 && (
+                              <span className="text-slate-500">•</span>
+                            )}
+                            {totalData.totalUSD > 0 && (
+                              <span className="text-emerald-400">
+                                {formatCurrencyValue(totalData.totalUSD, "USD")}
+                              </span>
+                            )}
+                            {totalData.totalARS === 0 && totalData.totalUSD === 0 && (
+                              <span className="text-slate-500">Sin precios</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* AI Import shortcut */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImportAiTargetProviderId(prov.id);
+                            setImportAiTargetProviderName(prov.name);
+                            setIsImportAiModalOpen(true);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 text-xs font-semibold transition-colors cursor-pointer"
+                          title="Importar presupuesto PDF con IA"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                          <span className="hidden sm:inline">Importar IA</span>
+                        </button>
+
+                        {/* Minimize toggle */}
+                        <button
+                          type="button"
+                          onClick={() => toggleMinimizeProvider(prov.id)}
+                          className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                          title={isMinimized ? "Expandir" : "Colapsar"}
+                        >
+                          {isMinimized ? (
+                            <ChevronDown className="w-4 h-4" />
+                          ) : (
+                            <ChevronUp className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        {/* Delete provider */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProvider(prov.id)}
+                          disabled={isLocked || providers.length === 1}
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-20 cursor-pointer"
+                          title="Eliminar proveedor"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    {attachments.filter(a => a.providerId === provider.id).length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {attachments
-                          .filter(a => a.providerId === provider.id)
-                          .map((att) => {
-                            const isEml = att.filename.endsWith(".eml") || att.mimeType.includes("rfc822");
-                            const isPdf = att.filename.endsWith(".pdf") || att.mimeType.includes("pdf");
-                            const isExcel = att.filename.endsWith(".xlsx") || att.filename.endsWith(".xls") || att.filename.endsWith(".csv") || att.mimeType.includes("spreadsheet") || att.mimeType.includes("excel");
+                    {/* Provider Items Pricing Body */}
+                    {!isMinimized && (
+                      <div className="p-4 sm:p-5 space-y-3">
+                        <div className="grid grid-cols-1 gap-3">
+                          {items.map((item) => {
+                            const quote = prov.quotes[item.id] || {
+                              currency: "ARS",
+                              presentationType: "base",
+                              presentationName: "",
+                              unitsPerPresentation: 1,
+                              price: 0,
+                              discount: 0,
+                            };
+                            const calc = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+                            const totalCost = calculateTotalCost(
+                              quote,
+                              item.targetQuantity,
+                              exchangeRate,
+                              baseCurrency,
+                              useRealLots
+                            );
+
                             return (
                               <div
-                                key={att.id}
-                                className="flex items-center gap-1.5 px-2.5 py-1 bg-[#101726] border border-white/10 rounded-lg text-[11px] text-gray-300 group"
+                                key={item.id}
+                                className="p-3.5 rounded-2xl bg-[#080b15] border border-white/[0.06] hover:border-white/[0.12] transition-colors grid grid-cols-1 lg:grid-cols-12 gap-3 items-center"
                               >
-                                {isEml ? (
-                                  <Mail className="w-3 h-3 text-blue-400 shrink-0" />
-                                ) : isPdf ? (
-                                  <FileText className="w-3 h-3 text-red-400 shrink-0" />
-                                ) : isExcel ? (
-                                  <FileSpreadsheet className="w-3 h-3 text-emerald-400 shrink-0" />
-                                ) : (
-                                  <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
-                                )}
-                                <span className="truncate max-w-[130px]" title={att.originalName}>
-                                  {att.originalName}
-                                </span>
-                                <a
-                                  href={att.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-gray-400 hover:text-emerald-400 p-0.5"
-                                  title="Ver/Descargar archivo"
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                </a>
-                                {!isLocked && (
+                                {/* Item label */}
+                                <div className="lg:col-span-3 space-y-0.5">
+                                  <h4 className="text-xs font-bold text-white truncate" title={item.name}>
+                                    {item.name || "Ítem sin nombre"}
+                                  </h4>
+                                  <span className="text-[10px] text-slate-400 tabular-nums">
+                                    Objetivo: {item.targetQuantity} {item.baseUnit}
+                                  </span>
+                                </div>
+
+                                {/* Price & Currency */}
+                                <div className="lg:col-span-3 flex items-center gap-2">
+                                  <div className="relative flex-1">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">
+                                      {quote.currency === "ARS" ? "$" : "USD"}
+                                    </span>
+                                    <input
+                                      type="number"
+                                      value={quote.price || ""}
+                                      onChange={(e) =>
+                                        handleUpdateQuote(
+                                          prov.id,
+                                          item.id,
+                                          "price",
+                                          parseFloat(e.target.value) || 0
+                                        )
+                                      }
+                                      placeholder="0.00"
+                                      disabled={isLocked}
+                                      className="w-full bg-[#0a0e1a] border border-white/[0.08] focus:border-indigo-500 rounded-xl pl-7 pr-2.5 py-1.5 text-xs font-mono font-bold text-white outline-none disabled:opacity-50"
+                                    />
+                                  </div>
                                   <button
-                                    onClick={() => handleDeleteAttachment(att)}
-                                    className="text-gray-500 hover:text-red-400 p-0.5 ml-0.5"
-                                    title="Eliminar archivo"
+                                    type="button"
+                                    disabled={isLocked}
+                                    onClick={() =>
+                                      handleUpdateQuote(
+                                        prov.id,
+                                        item.id,
+                                        "currency",
+                                        quote.currency === "ARS" ? "USD" : "ARS"
+                                      )
+                                    }
+                                    className={`px-2 py-1.5 rounded-xl text-[10px] font-bold uppercase border transition-colors cursor-pointer shrink-0 ${
+                                      quote.currency === "USD"
+                                        ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                                        : "bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+                                    }`}
                                   >
-                                    <Trash2 className="w-3 h-3" />
+                                    {quote.currency}
                                   </button>
-                                )}
+                                </div>
+
+                                {/* Presentation (Base vs Package) */}
+                                <div className="lg:col-span-3 flex items-center gap-2">
+                                  <select
+                                    value={quote.presentationType}
+                                    onChange={(e) =>
+                                      handleUpdateQuote(
+                                        prov.id,
+                                        item.id,
+                                        "presentationType",
+                                        e.target.value as any
+                                      )
+                                    }
+                                    disabled={isLocked}
+                                    className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer"
+                                  >
+                                    <option value="base" className="bg-[#0b0f19]">U. Base</option>
+                                    <option value="package" className="bg-[#0b0f19]">Lote / Pack</option>
+                                  </select>
+
+                                  {quote.presentationType === "package" && (
+                                    <div className="flex items-center gap-1 flex-1">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={quote.unitsPerPresentation || ""}
+                                        onChange={(e) =>
+                                          handleUpdateQuote(
+                                            prov.id,
+                                            item.id,
+                                            "unitsPerPresentation",
+                                            Math.max(1, parseFloat(e.target.value) || 1)
+                                          )
+                                        }
+                                        placeholder="Cant"
+                                        disabled={isLocked}
+                                        className="w-16 bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2 py-1.5 text-xs font-mono text-white outline-none"
+                                        title="Unidades por pack"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={quote.presentationName || ""}
+                                        onChange={(e) =>
+                                          handleUpdateQuote(
+                                            prov.id,
+                                            item.id,
+                                            "presentationName",
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder="Caja x5..."
+                                        disabled={isLocked}
+                                        className="flex-1 bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2 py-1.5 text-xs text-white outline-none"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Discount & Calculated Total */}
+                                <div className="lg:col-span-3 flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500 font-bold">%Desc</span>
+                                    <input
+                                      type="number"
+                                      value={quote.discount || ""}
+                                      onChange={(e) =>
+                                        handleUpdateQuote(
+                                          prov.id,
+                                          item.id,
+                                          "discount",
+                                          parseFloat(e.target.value) || 0
+                                        )
+                                      }
+                                      placeholder="0"
+                                      disabled={isLocked}
+                                      className="w-14 bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2 py-1.5 text-xs font-mono text-white outline-none"
+                                    />
+                                  </div>
+
+                                  <div className="text-right">
+                                    <div className="text-xs font-bold text-white tabular-nums">
+                                      {quote.price > 0
+                                        ? formatCurrencyValue(totalCost.totalBaseCurrency, baseCurrency)
+                                        : "-"}
+                                    </div>
+                                    {quote.price > 0 && (
+                                      <div className="text-[10px] text-slate-400 tabular-nums">
+                                        Unit: {formatCurrencyValue(calc.trueUnitRateBaseCurrency, baseCurrency)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             );
                           })}
+                        </div>
                       </div>
                     )}
-                  </div>
-                </div>
-              );
-            })}
-            </div>
-
-            {/* CTA to comparison matrix */}
-            <div className="flex justify-center pt-4">
-              <button
-                onClick={() => {
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                  setActiveTab("comparador");
-                }}
-                className="flex items-center gap-2 px-6 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-bold shadow-lg shadow-emerald-500/25 transition-all transform hover:-translate-y-0.5"
-              >
-                Comparar Ofertas y ver Ganador
-                <ArrowRight className="w-4 h-4 animate-pulse" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ====================================================
-          TAB CONTENT: MATRIZ COMPARATIVA (CUADRO DE PRECIOS)
-          ==================================================== */}
-      {activeTab === "comparador" && (
-        <div className="space-y-8 animate-fadeIn">
-          {/* Side-by-Side Detailed Matrix Table */}
-          <div className="glass-card rounded-3xl p-6 border border-white/5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                  <FileSpreadsheet className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">Cuadro Comparativo de Precios</h3>
-                  <p className="text-xs text-gray-400">Diseño simple tipo planilla Excel para análisis detallado</p>
-                </div>
-              </div>
-
-              {/* Matrix Actions */}
-              <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full sm:w-auto">
-                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap sm:gap-3">
-                  <button
-                    onClick={handleExportImage}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    Exportar Imagen
-                  </button>
-                  <button
-                    onClick={handleCopyExcelFormat}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#101725] hover:bg-[#101725]/80 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    Copiar Excel
-                  </button>
-                  <button
-                    onClick={() => setConvertCurrencies(!convertCurrencies)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border text-center ${
-                      convertCurrencies
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    Divisas: {convertCurrencies ? "Conversión" : "Original"}
-                  </button>
-                  <button
-                    onClick={() => setUseRealLots(!useRealLots)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border text-center ${
-                      useRealLots
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    Lotes: {useRealLots ? "Enteros" : "Fracción"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setHighlightMode(prev => {
-                        if (prev === "none") return "company";
-                        if (prev === "company") return "item";
-                        if (prev === "item") return "strongpoint";
-                        return "none";
-                      });
-                    }}
-                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border text-center ${
-                      highlightMode !== "none"
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
-                        : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10"
-                    }`}
-                    title="Alternar resaltado: Ninguno / Por Empresa / Por Ítem / Punto Fuerte (Ítem más barato de cada empresa)"
-                  >
-                    <Paintbrush className="w-3.5 h-3.5" />
-                    Pintar:{" "}
-                    {highlightMode === "none"
-                      ? "Ninguno"
-                      : highlightMode === "company"
-                        ? "Por Empresa"
-                        : highlightMode === "item"
-                          ? "Por Ítem"
-                          : "Punto Fuerte"}
-                  </button>
-                </div>
-                <div className="flex items-center justify-center sm:justify-start gap-3 text-xs text-gray-400 font-medium py-1 sm:py-0">
-                  <span>TC: 1 USD = ${exchangeRate} ARS</span>
-                  {convertCurrencies && (
-                    <>
-                      <span>•</span>
-                      <span className="uppercase">{baseCurrency}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-             {/* Desktop View: Spreadsheet Table */}
-             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-300 border-collapse">
-                <thead className="bg-[#101725] text-gray-400 text-xs font-semibold uppercase border-b border-white/10">
-                  <tr>
-                    <th className="p-4 rounded-tl-xl text-left min-w-[200px] left-0 sticky bg-[#101725] z-20 border-r border-white/10" rowSpan={2}>Nombre del Ítem</th>
-                    <th className="p-4 text-center min-w-[100px]" rowSpan={2}>Cantidad</th>
-                    {providers.map((prov, pIdx) => (
-                      <th key={prov.id} className="p-2.5 text-center border-l border-white/10 min-w-[200px]" colSpan={2}>
-                        <div className="flex items-center justify-between gap-1.5 px-1">
-                          <button
-                            type="button"
-                            disabled={pIdx === 0}
-                            onClick={() => moveProvider(pIdx, -1)}
-                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
-                            title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
-                          >
-                            <ChevronLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="font-bold text-white text-xs truncate max-w-[150px] tracking-wide" title={prov.name}>
-                            {prov.name || `Proveedor ${pIdx + 1}`}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={pIdx === providers.length - 1}
-                            onClick={() => moveProvider(pIdx, 1)}
-                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
-                            title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                  <tr className="bg-[#101725]/60 text-[10px] text-gray-400 font-bold border-b border-white/5">
-                    {providers.map(prov => (
-                      <Fragment key={prov.id}>
-                        <th className="p-2.5 text-center border-l border-white/10 font-bold">Unitario</th>
-                        <th className="p-2.5 text-center border-l border-white/5 font-bold">Total</th>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {items.map((item, idx) => {
-                    const isExcluded = excludedItemIds.includes(item.id);
-                    return (
-                    <tr key={item.id} className={`group transition-all align-middle border-b border-white/5 ${
-                      isExcluded 
-                        ? "opacity-35 grayscale bg-white/[0.002]" 
-                        : "hover:bg-white/[0.01]"
-                    }`}>
-                      {/* Item column with checkbox and reorder buttons */}
-                      <td className="p-3 max-w-[280px] left-0 sticky bg-[#0c121e] group-hover:bg-[#141b2a] transition-colors z-10 border-r border-white/10">
-                        <div className="flex items-center gap-2.5">
-                          <input
-                            type="checkbox"
-                            checked={!isExcluded}
-                            onChange={() => toggleItemInclusion(item.id)}
-                            className="w-4 h-4 rounded border-gray-600 bg-[#101725] text-emerald-500 focus:ring-emerald-500/20 cursor-pointer accent-emerald-500 shrink-0"
-                            title={isExcluded ? "Clic para incluir ítem en el cálculo" : "Clic para excluir ítem del cálculo"}
-                          />
-                          <div className="flex flex-col gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              disabled={idx === 0}
-                              onClick={() => moveItem(idx, -1)}
-                              className="p-0.5 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors"
-                              title="Mover ítem arriba"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === items.length - 1}
-                              onClick={() => moveItem(idx, 1)}
-                              className="p-0.5 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded hover:bg-white/10 transition-colors"
-                              title="Mover ítem abajo"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          <span className={`font-bold text-sm truncate ${isExcluded ? "line-through text-gray-500" : "text-white"}`} title={item.name}>
-                            {item.name || "Ítem sin nombre"}
-                          </span>
-                        </div>
-                      </td>
-                      {/* Quantity column */}
-                      <td className={`p-4 text-center font-mono text-xs whitespace-nowrap ${isExcluded ? "line-through text-gray-600" : "text-gray-300"}`}>
-                        {item.targetQuantity} {item.baseUnit}
-                      </td>
-
-                      {/* Providers values for this item */}
-                      {providers.map(prov => {
-                        const quote = prov.quotes[item.id];
-                        const hasQuote = quote && quote.price > 0;
-                        
-                        if (!hasQuote) {
-                          return (
-                            <Fragment key={prov.id}>
-                              <td className="p-4 text-center text-gray-500 font-mono border-l border-white/10">-</td>
-                              <td className="p-4 text-center text-gray-500 font-mono border-l border-white/5 bg-black/5">-</td>
-                            </Fragment>
-                          );
-                        }
-
-                        // Calculations
-                        const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-                        const { totalBaseCurrency, totalRawCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
-
-                        const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
-                        const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
-
-                        const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
-                        const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
-
-                        const isCheapestItem = !isExcluded && highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-                        const isStrongPoint = !isExcluded && highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
-                        const isCellHighlighted = isCheapestItem || isStrongPoint;
-
-                        return (
-                          <Fragment key={prov.id}>
-                            {/* Price Unit */}
-                            <td className={`p-4 border-l border-white/10 text-center align-middle font-mono text-xs ${isExcluded ? "line-through text-gray-600" : "text-gray-200"}`}>
-                              <div className="space-y-0.5">
-                                <span>{formatCurrencyValue(displayUnitCost, displayUnitCurrency)}</span>
-                                {convertCurrencies && quote.currency !== baseCurrency && (
-                                  <span className="text-[9px] text-gray-400 block">
-                                    ({quote.currency === "ARS" ? "$" : "USD"}
-                                    {trueUnitRateRaw.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            {/* Price Total */}
-                            <td className={`p-4 border-l text-center align-middle font-mono text-xs transition-colors ${
-                              isCellHighlighted
-                                ? "border-emerald-500/30 bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/30 text-emerald-300"
-                                : isExcluded 
-                                  ? "border-white/5 text-gray-600 bg-transparent line-through" 
-                                  : "border-white/5 text-gray-200 bg-white/[0.01]"
-                            }`}>
-                              <div className="space-y-0.5">
-                                <span className={`font-bold ${isCellHighlighted ? "text-emerald-400 font-extrabold" : isExcluded ? "text-gray-600" : "text-white"}`}>
-                                  {formatCurrencyValue(displayTotalCost, displayTotalCurrency)}
-                                </span>
-                                {isCheapestItem && (
-                                  <span className="inline-block text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded mt-0.5">
-                                    Mejor precio
-                                  </span>
-                                )}
-                                {isStrongPoint && (
-                                  <span className="inline-block text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded mt-0.5">
-                                    Punto Fuerte
-                                  </span>
-                                )}
-                                {quote.presentationType === "package" && (
-                                  <span className="text-[9px] text-gray-400 block font-normal leading-tight">
-                                    {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
-                                  </span>
-                                )}
-                                {quote.discount > 0 && (
-                                  <span className="text-red-400 text-[9px] font-bold block">
-                                    -{quote.discount}%
-                                  </span>
-                                )}
-                                {quote.specification && (
-                                  <span className="text-[9px] text-gray-400 block font-semibold italic bg-white/5 px-1.5 py-0.5 rounded mt-1 border border-white/5 max-w-[130px] mx-auto truncate" title={quote.specification}>
-                                    {quote.specification}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          </Fragment>
-                        );
-                      })}
-                    </tr>
-                    );
-                  })}
-
-                  {/* SUMMARY TOTAL ROW */}
-                  <tr className="bg-[#101725]/60 font-bold border-t-2 border-white/10">
-                    <td className="p-4 rounded-bl-xl text-left font-black text-white text-xs uppercase tracking-wider left-0 sticky bg-[#101725] z-10 border-r border-white/10">
-                      TOTAL GENERAL
-                    </td>
-                    <td className="p-4 text-center text-[10px] text-gray-400 font-normal">
-                      -
-                    </td>
-
-                    {providers.map(prov => {
-                      const totalData = providerTotals.find(t => t.providerId === prov.id);
-                      if (!totalData) return null;
-
-                      const hasARS = totalData.totalARS > 0;
-                      const hasUSD = totalData.totalUSD > 0;
-                      const isCompanyWinner = highlightMode === "company" && prov.id === cheapestProviderId;
-
-                      return (
-                        <Fragment key={prov.id}>
-                          {/* Unit price total (empty column) */}
-                          <td className="p-4 text-center border-l border-white/10 text-gray-500 font-normal">-</td>
-                          {/* Total price sum */}
-                          <td className={`p-4 text-center border-l font-mono text-xs font-semibold transition-colors ${
-                            isCompanyWinner
-                              ? "border-emerald-500/40 bg-emerald-950/40 ring-1 ring-inset ring-emerald-500/40 text-emerald-300"
-                              : "border-white/5 bg-[#101725]/80 text-white"
-                          }`}>
-                            <div className="space-y-1">
-                              {isCompanyWinner && (
-                                <span className="inline-block px-1.5 py-0.5 mb-1 text-[8px] font-black uppercase tracking-wider bg-emerald-500 text-black rounded">
-                                  Mejor Opción
-                                </span>
-                              )}
-                              {(hasARS || (!hasARS && !hasUSD && baseCurrency === "ARS")) && (
-                                <p className={`font-bold whitespace-nowrap ${isCompanyWinner ? "text-emerald-300" : "text-white"}`}>
-                                  {formatCurrencyValue(totalData.totalARS, "ARS")}
-                                </p>
-                              )}
-                              {(hasUSD || (!hasARS && !hasUSD && baseCurrency === "USD")) && (
-                                <p className="font-bold text-emerald-400 whitespace-nowrap">
-                                  {formatCurrencyValue(totalData.totalUSD, "USD")}
-                                </p>
-                              )}
-
-                            </div>
-                          </td>
-                        </Fragment>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile View: Totals Summary per Provider */}
-            <div className="block md:hidden bg-[#101725]/40 border border-white/5 p-4 rounded-2xl space-y-3 mb-6">
-              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resumen de Totales Generales</h4>
-              <div className="space-y-2">
-                {providerTotals.map((totalData, pIdx) => {
-                  const hasARS = totalData.totalARS > 0;
-                  const hasUSD = totalData.totalUSD > 0;
-                  const isCheapest = highlightMode === "company" 
-                    ? (totalData.providerId === cheapestProviderId)
-                    : false;
-
-                  return (
-                    <div 
-                      key={totalData.providerId} 
-                      className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
-                        isCheapest 
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-white font-semibold ring-1 ring-emerald-500/30" 
-                          : "bg-[#111827]/40 border-white/5 text-gray-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0 pr-2">
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            disabled={pIdx === 0}
-                            onClick={() => moveProvider(pIdx, -1)}
-                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                            title={pIdx === 0 ? "Primer proveedor (no se puede mover más a la izquierda)" : "Mover proveedor a la izquierda"}
-                          >
-                            <ChevronLeft className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={pIdx === providers.length - 1}
-                            onClick={() => moveProvider(pIdx, 1)}
-                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors cursor-pointer disabled:cursor-not-allowed"
-                            title={pIdx === providers.length - 1 ? "Último proveedor (no se puede mover más a la derecha)" : "Mover proveedor a la derecha"}
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-xs flex items-center gap-1.5 truncate">
-                            {totalData.providerName}
-                            {isCheapest && (
-                              <span className="text-[8px] bg-emerald-500 text-white font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
-                                Mejor Opción
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-[10px] text-gray-500">
-                            Cotizado: {totalData.itemsQuotedCount} de {items.length} ítems
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right font-mono font-bold text-xs shrink-0">
-                        {hasARS && (
-                          <p className={isCheapest ? "text-emerald-300" : "text-white"}>
-                            {formatCurrencyValue(totalData.totalARS, "ARS")}
-                          </p>
-                        )}
-                        {hasUSD && (
-                          <p className="text-emerald-400">
-                            {formatCurrencyValue(totalData.totalUSD, "USD")}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Mobile View: Detailed Matrix Cards */}
-            <div className="block md:hidden space-y-4">
-              {items.map((item, idx) => {
-                const itemComparisons = providers.map(prov => {
-                  const quote = prov.quotes[item.id];
-                  const hasQuote = quote && quote.price > 0;
-                  
-                  if (!hasQuote) return { 
-                    prov, 
-                    hasQuote: false, 
-                    trueUnitRateBaseCurrency: Infinity, 
-                    totalBaseCurrency: Infinity,
-                    quote: null as QuoteDetail | null,
-                    displayUnitCost: 0,
-                    displayUnitCurrency: baseCurrency,
-                    displayTotalCost: 0,
-                    displayTotalCurrency: baseCurrency,
-                    presentationsCount: 0
-                  };
-
-                  const { trueUnitRateRaw, trueUnitRateBaseCurrency } = getCalculatedPrices(quote, exchangeRate, baseCurrency);
-                  const { totalBaseCurrency, totalRawCurrency, presentationsCount } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
-
-                  const displayUnitCost = convertCurrencies ? trueUnitRateBaseCurrency : trueUnitRateRaw;
-                  const displayUnitCurrency = convertCurrencies ? baseCurrency : quote.currency;
-
-                  const displayTotalCost = convertCurrencies ? totalBaseCurrency : totalRawCurrency;
-                  const displayTotalCurrency = convertCurrencies ? baseCurrency : quote.currency;
-
-                  return {
-                    prov,
-                    hasQuote: true,
-                    quote,
-                    trueUnitRateBaseCurrency,
-                    totalBaseCurrency,
-                    displayUnitCost,
-                    displayUnitCurrency,
-                    displayTotalCost,
-                    displayTotalCurrency,
-                    presentationsCount
-                  };
-                });
-                
-                const isExcluded = excludedItemIds.includes(item.id);
-                
-                return (
-                  <div key={item.id} className={`p-4 bg-[#111827]/40 border rounded-2xl space-y-3 transition-all ${
-                    isExcluded ? "opacity-40 grayscale border-dashed border-white/10" : "border-white/5"
-                  }`}>
-                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={!isExcluded}
-                          onChange={() => toggleItemInclusion(item.id)}
-                          className="w-4 h-4 rounded border-gray-600 bg-[#101725] text-emerald-500 focus:ring-emerald-500/20 cursor-pointer accent-emerald-500 shrink-0"
-                          title={isExcluded ? "Incluir ítem en el cálculo" : "Excluir ítem del cálculo"}
-                        />
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            disabled={idx === 0}
-                            onClick={() => moveItem(idx, -1)}
-                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors"
-                            title="Mover ítem arriba"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={idx === items.length - 1}
-                            onClick={() => moveItem(idx, 1)}
-                            className="p-1 text-gray-400 hover:text-emerald-400 disabled:opacity-20 disabled:hover:text-gray-400 rounded bg-white/5 transition-colors"
-                            title="Mover ítem abajo"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <span className={`font-bold text-xs truncate max-w-[170px] ${isExcluded ? "line-through text-gray-500" : "text-white"}`} title={item.name}>
-                          {item.name || "Ítem sin nombre"}
-                        </span>
-                      </div>
-                      <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-lg border whitespace-nowrap ${
-                        isExcluded 
-                          ? "bg-white/5 text-gray-500 border-white/5 line-through" 
-                          : "text-emerald-300 bg-emerald-500/10 border-emerald-500/20"
-                      }`}>
-                        {item.targetQuantity} {item.baseUnit}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      {itemComparisons.map(({ prov, hasQuote, quote, displayUnitCost, displayUnitCurrency, displayTotalCost, displayTotalCurrency, presentationsCount }) => {
-                        const isCheapestItem = !isExcluded && highlightMode === "item" && (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
-                        const isStrongPoint = !isExcluded && highlightMode === "strongpoint" && (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
-                        const isCompanyWinner = !isExcluded && highlightMode === "company" && (prov.id === cheapestProviderId);
-                        const isCheapest = isCheapestItem || isStrongPoint || isCompanyWinner;
-                        
-                        return (
-                          <div 
-                            key={prov.id}
-                            className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                              isCheapest 
-                                ? "bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/30" 
-                                : "bg-black/25 border-white/5"
-                            }`}
-                          >
-                            <div className="flex flex-col min-w-0 pr-2">
-                              <span className="font-semibold text-white flex items-center gap-1.5">
-                                {prov.name}
-                                {isCheapest && (
-                                  <span className="text-[8px] bg-emerald-500 text-black px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold">
-                                    {isCompanyWinner ? "Mejor Opción" : isStrongPoint ? "Punto Fuerte" : "Mejor Precio"}
-                                  </span>
-                                )}
-                              </span>
-                              {hasQuote && quote ? (
-                                <div className="text-[10px] text-gray-500 mt-0.5 space-y-0.5">
-                                  <p>
-                                    U: {formatCurrencyValue(displayUnitCost, displayUnitCurrency)}
-                                    {convertCurrencies && quote.currency !== baseCurrency && (
-                                      <span className="text-[9px] text-gray-600 ml-1">
-                                        ({quote.currency === "ARS" ? "$" : "USD"} {quote.price / (quote.unitsPerPresentation || 1)})
-                                      </span>
-                                    )}
-                                  </p>
-                                  {quote.presentationType === "package" && (
-                                    <p className="leading-tight">
-                                      {quote.presentationName || `Lote x${quote.unitsPerPresentation}`} (x{presentationsCount.toFixed(useRealLots ? 0 : 1)})
-                                    </p>
-                                  )}
-                                  {quote.specification && (
-                                    <p className="italic text-[9px] text-gray-400 max-w-[150px] truncate" title={quote.specification}>
-                                      Obs: {quote.specification}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-gray-600 mt-0.5">No cotizado</span>
-                              )}
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              {hasQuote ? (
-                                <div className="space-y-0.5 font-mono">
-                                  <p className="font-bold text-white text-xs">
-                                    {formatCurrencyValue(displayTotalCost, displayTotalCurrency)}
-                                  </p>
-                                  {quote && quote.discount > 0 && (
-                                    <span className="text-[9px] text-red-400 font-bold block">
-                                      -{quote.discount}%
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-600 font-mono">-</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* ====================================================
-          TAB CONTENT: HISTORIAL DE COTIZACIONES
-          ==================================================== */}
-      {activeTab === "historial" && (
-        <div className="glass-card rounded-3xl p-6 border border-white/5 space-y-6 animate-fadeIn">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-white text-base">Historial de Cotizaciones</h3>
-              <p className="text-xs text-gray-400">Filtrá por carpetas de rubro, estado o pendientes vinculados</p>
-            </div>
+      {/* ============================================================
+          TAB CONTENT: MATRIZ COMPARATIVA
+          ============================================================ */}
+      {activeTab === "comparador" && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: EASE_OUT }}
+          className="space-y-6"
+        >
+          {/* Winner Spotlight Banner */}
+          {providers.length > 0 && cheapestProviderId && (
+            (() => {
+              const bestProv = providers.find((p) => p.id === cheapestProviderId);
+              const bestCostData = providerCostComparisons.find((c) => c.providerId === cheapestProviderId);
+              const secondBest = providerCostComparisons[1];
+              const savings =
+                secondBest && bestCostData
+                  ? secondBest.totalBC - bestCostData.totalBC
+                  : 0;
+              const savingsPct =
+                secondBest && secondBest.totalBC > 0
+                  ? Math.round((savings / secondBest.totalBC) * 100)
+                  : 0;
 
-            <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
-              {/* Filtros de Estado compactos al lado de Nueva Carpeta */}
-              <div className="inline-flex items-center p-1 bg-[#080c16] border border-white/10 rounded-xl gap-0.5">
-                {[
-                  { id: "todos", label: "Todos", count: statusCounts.todos },
-                  { id: "pendientes", label: "Pendientes", count: statusCounts.pendientes },
-                  { id: "enviados", label: "Enviados", count: statusCounts.enviados },
-                  { id: "finalizados", label: "Finalizados", count: statusCounts.finalizados },
-                ].map((tab) => {
-                  const isSelected = filterStatus === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setFilterStatus(tab.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        isSelected
-                          ? tab.id === "pendientes"
-                            ? "bg-amber-500/20 text-amber-300 shadow-sm border border-amber-500/40"
-                            : tab.id === "enviados"
-                              ? "bg-blue-500/20 text-blue-300 shadow-sm border border-blue-500/40"
-                              : tab.id === "finalizados"
-                                ? "bg-emerald-500/20 text-emerald-300 shadow-sm border border-emerald-500/40"
-                                : "bg-white/15 text-white shadow-sm border border-white/20"
-                          : "text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent"
-                      }`}
-                    >
-                      <span>{tab.label}</span>
-                      <span
-                        className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          isSelected
-                            ? "bg-white/20 text-white"
-                            : "bg-white/5 text-gray-500"
-                        }`}
+              return (
+                <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/30 shadow-2xl backdrop-blur-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 to-emerald-400 text-slate-950 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                        <Trophy className="w-6 h-6 stroke-[2.5]" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                          Opción Más Conveniente
+                        </span>
+                        <h3 className="text-lg font-black text-white tracking-tight">
+                          {bestProv?.name || "Proveedor Destacado"}
+                        </h3>
+                        <p className="text-xs text-slate-300">
+                          Total General:{" "}
+                          <span className="font-bold font-mono text-emerald-300">
+                            {formatCurrencyValue(bestCostData?.totalBC || 0, baseCurrency)}
+                          </span>
+                          {savings > 0 && (
+                            <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                              (Ahorro estimado de {formatCurrencyValue(savings, baseCurrency)} • {savingsPct}%)
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {status !== "finalizada" && bestProv && (
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          setStatus("finalizada");
+                          setWinningProviderId(bestProv.id);
+                          showToast(`Adjudicado a ${bestProv.name}`, "success");
+                        }}
+                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/25 cursor-pointer transition-colors"
                       >
-                        {tab.count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                        Adjudicar a este Proveedor
+                      </motion.button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
+          )}
 
-              {/* Botón Nueva Carpeta */}
-              <button
-                onClick={() => setIsCategoryModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5 hover:bg-emerald-500/15 text-emerald-400 hover:text-emerald-300 transition-all cursor-pointer shrink-0"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-                <span>+ Nueva Carpeta</span>
-              </button>
+          {/* Matrix Toolbar & Filters */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+            {/* Highlight Options */}
+            <div className="flex flex-wrap items-center gap-1 bg-[#080b15] p-1 rounded-2xl border border-white/[0.06]">
+              <span className="text-[10px] font-bold text-slate-500 uppercase px-2">Destacar:</span>
+              {(
+                [
+                  { id: "none", label: "Ninguno" },
+                  { id: "company", label: "Ganador Global" },
+                  { id: "item", label: "Mejor por Ítem" },
+                  { id: "strongpoint", label: "Punto Fuerte" },
+                ] as const
+              ).map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => setHighlightMode(mode.id)}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
+                    highlightMode === mode.id
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
             </div>
-          </div>
 
-          {/* Carpetitas (Rubros / Categorías) que se envuelven sin scroll horizontal */}
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              {/* Todas las áreas */}
+            {/* Currency toggle and export buttons */}
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setFilterCategoria("todas")}
-                className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                  filterCategoria === "todas"
-                    ? "bg-gradient-to-r from-indigo-950/90 via-[#151d38] to-indigo-900/70 border-indigo-500 text-white shadow-md shadow-indigo-500/20 ring-1 ring-indigo-500/40"
-                    : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
+                type="button"
+                onClick={() => setConvertCurrencies(!convertCurrencies)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+                  convertCurrencies
+                    ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+                    : "bg-white/[0.04] border-white/[0.08] text-slate-400 hover:text-white"
                 }`}
               >
-                <Folders className={`w-4 h-4 shrink-0 ${filterCategoria === "todas" ? "text-indigo-300" : "text-indigo-400/80 group-hover:text-indigo-300"}`} />
-                <span className="font-medium whitespace-nowrap">Todas las áreas</span>
-                <span
-                  className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                    filterCategoria === "todas"
-                      ? "bg-indigo-500/30 text-indigo-200 border border-indigo-500/40"
-                      : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
-                  }`}
-                >
-                  {filterStatus === "todos"
-                    ? savedQuotations.length
-                    : (statusCounts[filterStatus as keyof typeof statusCounts] ?? savedQuotations.length)}
-                </span>
+                {convertCurrencies ? "Convertido a Moneda Base" : "Moneda Original"}
               </button>
 
-              {/* Botón especial PCT / Pliegos */}
-              {(() => {
-                const isPctActive =
-                  filterCategoria === "_pct_pliegos_" ||
-                  filterCategoria.toUpperCase() === "PCT/PLIEGOS" ||
-                  filterCategoria.toUpperCase() === "PCT / PLIEGOS";
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleCopyExcelFormat}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/[0.08] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                title="Copiar tabla para pegar en Excel o Google Sheets"
+              >
+                <Clipboard className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Copiar Tabla</span>
+              </motion.button>
 
-                return (
-                  <button
-                    onClick={() => setFilterCategoria(isPctActive ? "todas" : "_pct_pliegos_")}
-                    className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                      isPctActive
-                        ? "bg-gradient-to-r from-purple-950/90 via-fuchsia-950/40 to-indigo-950/60 border-purple-400 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-400/40"
-                        : "bg-[#080c16] hover:bg-[#161026] border-purple-500/40 hover:border-purple-400/70 text-purple-300 hover:text-white"
-                    }`}
-                    title="Filtrar cotizaciones de Pliegos y PCTs (nombres que empiezan con PCT o categoría asignada)"
-                  >
-                    <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isPctActive ? "text-purple-300" : "text-purple-400/90 group-hover:text-purple-300"}`} />
-                    <span className="font-bold whitespace-nowrap">PCT / Pliegos</span>
-                    <span
-                      className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                        isPctActive
-                          ? "bg-purple-500/30 text-purple-200 border border-purple-400/40"
-                          : "bg-purple-950/40 text-purple-300 border border-purple-800/40 group-hover:text-white"
-                      }`}
-                    >
-                      {pctPliegosQuoteCount}
-                    </span>
-                  </button>
-                );
-              })()}
-
-              {/* Carpetas por cada rubro */}
-              {allCategories
-                .filter((cat) => {
-                  const norm = cat.trim().toUpperCase();
-                  return norm !== "PCT/PLIEGOS" && norm !== "PCT / PLIEGOS";
-                })
-                .map((cat) => {
-                  const count = getCategoryQuoteCount(cat);
-                  const isActive = filterCategoria.toLowerCase() === cat.toLowerCase();
-
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setFilterCategoria(isActive ? "todas" : cat)}
-                      className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                        isActive
-                          ? "bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-indigo-950/60 border-amber-400 text-white shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40"
-                          : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-300 hover:text-white"
-                      }`}
-                      title={`Filtrar por ${cat}`}
-                    >
-                      {isActive ? (
-                        <FolderOpen className="w-4 h-4 text-amber-400 shrink-0" />
-                      ) : (
-                        <Folder className="w-4 h-4 text-amber-400/70 group-hover:text-amber-400 shrink-0 transition-colors" />
-                      )}
-                      <span className="font-medium whitespace-nowrap">{cat}</span>
-                      <span
-                        className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                          isActive
-                            ? "bg-amber-400/25 text-amber-200 border border-amber-400/30"
-                            : "bg-slate-800 text-slate-400 border border-slate-700/60 group-hover:text-slate-200"
-                        }`}
-                      >
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-
-              {/* Sin Rubro */}
-              {uncategorizedQuoteCount > 0 && (
-                <button
-                  onClick={() =>
-                    setFilterCategoria(filterCategoria === "_sin_categoria_" ? "todas" : "_sin_categoria_")
-                  }
-                  className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer border shrink-0 ${
-                    filterCategoria === "_sin_categoria_"
-                      ? "bg-gradient-to-r from-slate-800/90 to-slate-900 border-slate-400 text-white shadow-md ring-1 ring-slate-400/30"
-                      : "bg-[#080c16] hover:bg-[#12192c] border-slate-700/80 hover:border-slate-600 text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Cotizaciones sin rubro asignado"
-                >
-                  <Folder className="w-4 h-4 text-slate-500 shrink-0" />
-                  <span className="font-medium whitespace-nowrap">Sin rubro</span>
-                  <span
-                    className={`px-1.5 py-0.2 text-[10px] font-bold rounded-md shrink-0 ${
-                      filterCategoria === "_sin_categoria_"
-                        ? "bg-slate-700 text-slate-200 border border-slate-600"
-                        : "bg-slate-800 text-slate-500 border border-slate-700/60"
-                    }`}
-                  >
-                    {uncategorizedQuoteCount}
-                  </span>
-                </button>
-              )}
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleExportImage}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/[0.08] rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                title="Generar imagen PNG de alta resolución"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Generar Imagen</span>
+              </motion.button>
             </div>
           </div>
 
-          {/* Barra de Búsqueda y Subfiltros */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[#080c16]/70 border border-white/5">
-            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-              {/* Buscador */}
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          {/* The Matrix Table */}
+          <div className="rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl overflow-hidden">
+            <div className="overflow-x-auto max-h-[70vh] scrollbar-thin">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 bg-[#0a0e1a] z-20 border-b border-white/[0.08]">
+                  <tr>
+                    <th className="py-3 px-4 font-bold text-slate-300 sticky left-0 bg-[#0a0e1a] z-30 min-w-[200px]">
+                      Ítem / Insumo
+                    </th>
+                    <th className="py-3 px-3 font-bold text-slate-400 text-center w-24">
+                      Cantidad
+                    </th>
+                    {providers.map((prov) => {
+                      const isCompanyWinner = highlightMode === "company" && prov.id === cheapestProviderId;
+                      return (
+                        <th
+                          key={prov.id}
+                          colSpan={2}
+                          className={`py-3 px-4 text-center border-l border-white/[0.06] ${
+                            isCompanyWinner ? "bg-emerald-500/10 text-emerald-300" : "text-white"
+                          }`}
+                        >
+                          <div className="font-bold truncate max-w-[220px] mx-auto">{prov.name}</div>
+                          {isCompanyWinner && (
+                            <span className="text-[9px] font-bold text-emerald-400 tracking-wider">
+                              ★ Más Conveniente
+                            </span>
+                          )}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                  <tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-[#080b15]">
+                    <th className="py-1 px-4 sticky left-0 bg-[#080b15] z-30"></th>
+                    <th className="py-1 px-3 text-center"></th>
+                    {providers.map((prov) => (
+                      <Fragment key={prov.id}>
+                        <th className="py-1.5 px-3 text-center border-l border-white/[0.06]">Unitario</th>
+                        <th className="py-1.5 px-3 text-center">Total</th>
+                      </Fragment>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-white/[0.04]">
+                  {items.map((item) => {
+                    const isExcluded = excludedItemIds.includes(item.id);
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-white/[0.02] transition-colors ${
+                          isExcluded ? "opacity-40" : ""
+                        }`}
+                      >
+                        <td className="py-3 px-4 sticky left-0 bg-[#0d1222] z-10 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!isExcluded}
+                            onChange={() => toggleItemInclusion(item.id)}
+                            className="rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                            title="Incluir / Excluir del total"
+                          />
+                          <span className="font-semibold text-white truncate max-w-[180px]">
+                            {item.name || "Ítem sin nombre"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center tabular-nums text-slate-400 font-mono">
+                          {item.targetQuantity} {item.baseUnit}
+                        </td>
+
+                        {providers.map((prov) => {
+                          const quote = prov.quotes[item.id];
+                          const hasQuote = quote && quote.price > 0;
+
+                          if (!hasQuote) {
+                            return (
+                              <Fragment key={prov.id}>
+                                <td className="py-3 px-3 text-center text-slate-600 border-l border-white/[0.04]">-</td>
+                                <td className="py-3 px-3 text-center text-slate-600">-</td>
+                              </Fragment>
+                            );
+                          }
+
+                          const calc = getCalculatedPrices(quote, exchangeRate, baseCurrency);
+                          const total = calculateTotalCost(
+                            quote,
+                            item.targetQuantity,
+                            exchangeRate,
+                            baseCurrency,
+                            useRealLots
+                          );
+
+                          const isItemWinner =
+                            highlightMode === "item" &&
+                            (cheapestProvidersPerItem[item.id]?.includes(prov.id) ?? false);
+                          const isStrongPoint =
+                            highlightMode === "strongpoint" &&
+                            (strongestItemPerProvider[prov.id]?.includes(item.id) ?? false);
+                          const isHighlighted = isItemWinner || isStrongPoint;
+
+                          const displayUnit = convertCurrencies
+                            ? calc.trueUnitRateBaseCurrency
+                            : calc.trueUnitRateRaw;
+                          const displayUnitCurr = convertCurrencies ? baseCurrency : quote.currency;
+
+                          const displayTotal = convertCurrencies
+                            ? total.totalBaseCurrency
+                            : total.totalRawCurrency;
+                          const displayTotalCurr = convertCurrencies ? baseCurrency : quote.currency;
+
+                          return (
+                            <Fragment key={prov.id}>
+                              <td className="py-3 px-3 text-center font-mono text-slate-300 border-l border-white/[0.04]">
+                                <div>{formatCurrencyValue(displayUnit, displayUnitCurr)}</div>
+                                {quote.presentationType === "package" && (
+                                  <div className="text-[10px] text-slate-500">
+                                    {quote.presentationName || `x${quote.unitsPerPresentation}`}
+                                  </div>
+                                )}
+                              </td>
+                              <td
+                                className={`py-3 px-3 text-center font-mono font-bold tabular-nums ${
+                                  isHighlighted
+                                    ? "bg-emerald-500/15 text-emerald-300"
+                                    : "text-white"
+                                }`}
+                              >
+                                <div>{formatCurrencyValue(displayTotal, displayTotalCurr)}</div>
+                                {isItemWinner && (
+                                  <span className="text-[8px] font-bold text-emerald-400 bg-emerald-500/20 px-1 py-0.2 rounded">
+                                    ★ Mejor
+                                  </span>
+                                )}
+                                {isStrongPoint && (
+                                  <span className="text-[8px] font-bold text-indigo-400 bg-indigo-500/20 px-1 py-0.2 rounded">
+                                    ★ Fortaleza
+                                  </span>
+                                )}
+                              </td>
+                            </Fragment>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+
+                {/* Footer Totals Row */}
+                <tfoot className="sticky bottom-0 bg-[#0a0e1a] border-t-2 border-white/[0.1] font-bold z-20">
+                  <tr>
+                    <td className="py-3.5 px-4 sticky left-0 bg-[#0a0e1a] z-30 text-white font-black uppercase tracking-wider">
+                      TOTAL GENERAL
+                    </td>
+                    <td className="py-3.5 px-3 text-center text-slate-500">-</td>
+                    {providers.map((prov) => {
+                      const totalData = providerTotals.find((t) => t.providerId === prov.id);
+                      const isCompanyWinner =
+                        highlightMode === "company" && prov.id === cheapestProviderId;
+
+                      if (!totalData) {
+                        return (
+                          <Fragment key={prov.id}>
+                            <td className="py-3.5 px-3 text-center text-slate-600 border-l border-white/[0.06]">-</td>
+                            <td className="py-3.5 px-3 text-center text-slate-600">-</td>
+                          </Fragment>
+                        );
+                      }
+
+                      return (
+                        <Fragment key={prov.id}>
+                          <td className="py-3.5 px-3 text-center text-slate-500 border-l border-white/[0.06]">-</td>
+                          <td
+                            className={`py-3.5 px-3 text-center font-mono font-black text-sm tabular-nums ${
+                              isCompanyWinner
+                                ? "bg-emerald-500/20 text-emerald-300 shadow-inner"
+                                : "text-white"
+                            }`}
+                          >
+                            <div>{formatCurrencyValue(totalData.totalARS, "ARS")}</div>
+                            {totalData.totalUSD > 0 && (
+                              <div className="text-xs text-emerald-400">
+                                {formatCurrencyValue(totalData.totalUSD, "USD")}
+                              </div>
+                            )}
+                          </td>
+                        </Fragment>
+                      );
+                    })}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ============================================================
+          TAB CONTENT: HISTORIAL ("MIS COTIZACIONES")
+          ============================================================ */}
+      {activeTab === "historial" && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: EASE_OUT }}
+          className="space-y-6"
+        >
+          {/* Carpetas / Rubros Horizontal Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              onClick={() => setFilterCategoria("todas")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
+                filterCategoria === "todas"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
+              }`}
+            >
+              <Folders className="w-3.5 h-3.5" />
+              <span>Todas las Carpetas</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold tabular-nums">
+                {savedQuotations.length}
+              </span>
+            </button>
+
+            {allCategories.map((cat) => {
+              const count = getCategoryQuoteCount(cat);
+              const isSel = filterCategoria.toLowerCase() === cat.toLowerCase();
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setFilterCategoria(cat)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
+                    isSel
+                      ? "bg-amber-500 text-slate-950 font-bold shadow-sm"
+                      : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
+                  }`}
+                >
+                  <Folder className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{cat}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 font-bold tabular-nums">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* PCT/PLIEGOS */}
+            <button
+              onClick={() => setFilterCategoria("PCT/PLIEGOS")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
+                filterCategoria === "PCT/PLIEGOS"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
+              }`}
+            >
+              <Folder className="w-3.5 h-3.5 text-indigo-400" />
+              <span>PCT/PLIEGOS</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 font-bold tabular-nums">
+                {pctPliegosQuoteCount}
+              </span>
+            </button>
+
+            {/* Sin rubro */}
+            <button
+              onClick={() => setFilterCategoria("_sin_categoria_")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
+                filterCategoria === "_sin_categoria_"
+                  ? "bg-slate-700 text-white shadow-sm"
+                  : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
+              }`}
+            >
+              <span>Sin Carpeta</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 font-bold tabular-nums">
+                {uncategorizedQuoteCount}
+              </span>
+            </button>
+
+            {/* Manage categories button */}
+            <button
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Gestionar carpetas"
+            >
+              <FolderPlus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Search & Status Filters */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            {/* Status pills */}
+            <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-xl self-start">
+              {(
+                [
+                  { id: "pendientes", label: "Borradores", count: statusCounts.pendientes },
+                  { id: "enviadas", label: "Enviadas", count: statusCounts.enviados },
+                  { id: "finalizadas", label: "Finalizadas", count: statusCounts.finalizados },
+                  { id: "todas", label: "Todas", count: statusCounts.todos },
+                ] as const
+              ).map((st) => (
+                <button
+                  key={st.id}
+                  onClick={() => setFilterStatus(st.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    filterStatus === st.id
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <span>{st.label}</span>
+                  <span className="text-[10px] ml-1.5 opacity-80 tabular-nums">({st.count})</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Search input & only linked toggle */}
+            <div className="flex items-center gap-2.5 flex-1 max-w-md">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                 <input
                   type="text"
+                  placeholder="Buscar por nombre, nota o autor..."
                   value={searchHistory}
                   onChange={(e) => setSearchHistory(e.target.value)}
-                  placeholder="Buscar por nombre, nota, rubro o ítem..."
-                  className="w-full bg-[#111827]/80 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full bg-[#090d18] border border-white/[0.08] focus:border-indigo-500 rounded-xl py-1.5 pl-9 pr-8 text-xs text-white placeholder-slate-500 outline-none transition-colors"
                 />
                 {searchHistory && (
                   <button
                     onClick={() => setSearchHistory("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* Filtro por estado */}
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-[#111827]/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
-              >
-                <option value="todos">Todos los estados</option>
-                <option value="pendientes">Pendientes</option>
-                <option value="enviados">Enviados</option>
-                <option value="finalizados">Finalizados</option>
-              </select>
-
-              {/* Solo vinculadas toggle */}
-              <button
-                type="button"
-                onClick={() => setFilterOnlyLinked(!filterOnlyLinked)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                  filterOnlyLinked
-                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm shadow-indigo-500/10"
-                    : "bg-[#111827]/60 border-white/10 text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                <Link2 className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Solo vinculadas</span>
-              </button>
+              <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none shrink-0">
+                <input
+                  type="checkbox"
+                  checked={filterOnlyLinked}
+                  onChange={(e) => setFilterOnlyLinked(e.target.checked)}
+                  className="rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500"
+                />
+                <span>Vinculadas</span>
+              </label>
             </div>
-
-            {/* Botón limpiar filtros */}
-            {(filterCategoria !== "todas" || filterStatus !== "pendientes" || filterOnlyLinked || searchHistory.trim()) && (
-              <button
-                onClick={() => {
-                  setFilterCategoria("todas");
-                  setFilterStatus("pendientes");
-                  setFilterOnlyLinked(false);
-                  setSearchHistory("");
-                }}
-                className="px-3 py-1.5 text-xs text-gray-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 shrink-0 cursor-pointer"
-              >
-                Limpiar filtros
-              </button>
-            )}
           </div>
 
+          {/* Quotations Grid */}
           {loadingHistory ? (
-            <div className="flex items-center justify-center py-12">
-              <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+            <div className="p-16 text-center flex flex-col items-center justify-center gap-3">
+              <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
+              <p className="text-xs text-slate-400">Cargando tus cotizaciones...</p>
+            </div>
+          ) : filteredQuotations.length === 0 ? (
+            <div className="p-14 text-center rounded-3xl bg-[#090d18]/50 border border-dashed border-white/[0.08] flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-slate-500">
+                <Calculator className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-slate-200">
+                  No se encontraron cotizaciones
+                </h3>
+                <p className="text-xs text-slate-500 max-w-xs">
+                  Creá tu primera cotización para comparar insumos y proveedores con inteligencia.
+                </p>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleNewQuotation}
+                className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-md cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Nueva Cotización</span>
+              </motion.button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {/* Card de Crear Nueva Cotización */}
-              <div
-                onClick={handleNewQuotation}
-                className="p-5 rounded-2xl border border-dashed border-white/10 hover:border-emerald-500/40 bg-[#111827]/10 hover:bg-emerald-950/5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
-              >
-                <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                  <Plus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors text-sm">
-                    Nueva Cotización
-                  </h4>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Crea un presupuesto comparativo en blanco
-                  </p>
-                </div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
+              <AnimatePresence mode="popLayout">
+                {filteredQuotations.map((quote) => {
+                  const quoteDate = quote.createdAt
+                    ? new Date(
+                        typeof quote.createdAt === "object" && "seconds" in quote.createdAt
+                          ? quote.createdAt.seconds * 1000
+                          : quote.createdAt
+                      ).toLocaleDateString("es-AR")
+                    : "-";
+                  const qStatus = quote.status || "borrador";
+                  const winningProv = quote.providers?.find((p) => p.id === quote.winningProviderId);
 
-              {/* Card de Importar Cotización desde Excel */}
-              <div
-                onClick={() => {
-                  handleNewQuotation();
-                  setIsImportModalOpen(true);
-                }}
-                className="p-5 rounded-2xl border border-dashed border-emerald-500/20 hover:border-emerald-500/50 bg-[#111827]/10 hover:bg-emerald-950/10 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
-              >
-                <div className="h-10 w-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                  <FileSpreadsheet className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors text-sm">
-                    Importar desde Excel
-                  </h4>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Carga rápida por archivo .xlsx o pegando celdas
-                  </p>
-                </div>
-              </div>
-
-              {filteredQuotations.length > 0 && filteredQuotations.map((quote) => {
-                const date = (() => {
-                  const s = getTimestampSeconds(quote.createdAt);
-                  return s > 0 ? new Date(s * 1000).toLocaleString("es-AR") : "Fecha desconocida";
-                })();
-
-                const isCurrent = currentQuoteId === quote.id;
-
-                const winningProvider = quote.providers?.find(p => p.id === quote.winningProviderId);
-                const isFinalizada = quote.status === "finalizada" || quote.isFinalized;
-
-                return (
-                  <div
-                    key={quote.id}
-                    onClick={() => handleSelectQuote(quote)}
-                    className={`p-5 rounded-2xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-4 group ${
-                      isCurrent 
-                        ? "bg-emerald-950/20 border-emerald-500/40 hover:border-emerald-500/60 ring-1 ring-emerald-500/20" 
-                        : isFinalizada
-                          ? "bg-emerald-950/35 border-emerald-500/60 border-l-4 border-l-emerald-400 hover:border-emerald-400 hover:bg-emerald-950/50 shadow-lg shadow-emerald-950/50"
-                          : quote.status === "enviada"
-                            ? "bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-950/30"
-                            : quote.status === "cancelada"
-                              ? "bg-red-950/20 border-red-500/30 hover:border-red-500/50 hover:bg-red-950/30"
-                              : "bg-[#111827]/40 border-white/5 hover:border-white/15 hover:bg-white/[0.01]"
-                    }`}
-                  >
-                    <div className="space-y-2.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 pr-2 space-y-1">
-                          <h4 className="font-bold text-white group-hover:text-emerald-300 transition-colors truncate flex items-center gap-1.5">
-                            {isFinalizada && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 inline" />}
-                            <span>{quote.name}</span>
-                          </h4>
-                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                            {isPctPliegoQuote(quote) && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 text-[10px] font-bold border border-purple-500/30">
-                                <FileSpreadsheet className="w-3 h-3 text-purple-400" />
-                                PCT / Pliego
-                              </span>
-                            )}
-                            {quote.categoria && quote.categoria.trim().toUpperCase() !== "PCT/PLIEGOS" && quote.categoria.trim().toUpperCase() !== "PCT / PLIEGOS" && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] font-semibold border border-amber-500/20">
-                                <Folder className="w-3 h-3 text-amber-400" />
+                  return (
+                    <motion.div
+                      key={quote.id || quote.name}
+                      layout
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      transition={{ duration: 0.22, ease: EASE_OUT }}
+                      whileHover={{ y: -3 }}
+                      className="group relative flex flex-col justify-between p-5 rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] hover:border-white/[0.18] shadow-2xl backdrop-blur-xl transition-all duration-200"
+                    >
+                      <div className="space-y-3">
+                        {/* Header: Status & Category */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                                qStatus === "finalizada"
+                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                                  : qStatus === "enviada"
+                                  ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
+                                  : qStatus === "cancelada"
+                                  ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                                  : "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                              }`}
+                            >
+                              {qStatus}
+                            </span>
+                            {quote.categoria && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
+                                <Folder className="w-2.5 h-2.5" />
                                 {quote.categoria}
                               </span>
                             )}
                           </div>
+                          <span className="text-[10px] text-slate-500 tabular-nums">{quoteDate}</span>
                         </div>
 
-                        <div className="flex flex-col gap-1 items-end shrink-0 select-none">
-                          {isCurrent && (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-extrabold uppercase border border-emerald-500/20 whitespace-nowrap">
-                              Cargada
-                            </span>
-                          )}
-                          {quote.status === "enviada" && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-extrabold uppercase border border-amber-500/20 whitespace-nowrap">
-                              Enviada
-                            </span>
-                          )}
-                          {isFinalizada && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-black uppercase shadow-md shadow-emerald-500/30 border border-emerald-400 whitespace-nowrap tracking-wider">
-                              <CheckCircle2 className="w-3 h-3 text-slate-950 stroke-[2.5]" />
-                              Finalizada
-                            </span>
-                          )}
-                          {quote.status === "cancelada" && (
-                            <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-[10px] font-extrabold uppercase border border-red-500/20 whitespace-nowrap">
-                              Cancelada
-                            </span>
+                        {/* Title */}
+                        <div className="space-y-1">
+                          <h3
+                            onClick={() => handleSelectQuote(quote)}
+                            className="text-sm font-bold text-white tracking-tight cursor-pointer hover:text-indigo-300 transition-colors leading-snug"
+                          >
+                            {quote.name}
+                          </h3>
+                          {quote.notes && (
+                            <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                              {quote.notes}
+                            </p>
                           )}
                         </div>
-                      </div>
-                      
-                      {quote.notes && (
-                        <p className="text-xs text-gray-400 line-clamp-2 italic">
-                          &quot;{quote.notes}&quot;
-                        </p>
-                      )}
 
-                      {/* Pendiente Vinculado Badge */}
-                      {quote.pendienteId && (
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`/pendientes?id=${quote.pendienteId}`, "_blank");
-                          }}
-                          className="flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-xs text-indigo-300 transition-colors group/pend"
-                          title="Abrir pendiente en nueva pestaña"
-                        >
-                          <div className="flex items-center gap-1.5 truncate">
-                            <Link2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                            <span className="truncate text-[11px] font-medium">
-                              {quote.pendienteTitulo || "Pendiente vinculado"}
+                        {/* Metrics Pills */}
+                        <div className="flex items-center gap-2 pt-1 flex-wrap">
+                          <span className="text-[10px] font-bold text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.06] tabular-nums">
+                            {quote.items?.length || 0} ítems
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.06] tabular-nums">
+                            {quote.providers?.length || 0} proveedores
+                          </span>
+                          {winningProv && (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
+                              <Trophy className="w-2.5 h-2.5" />
+                              {winningProv.name}
                             </span>
-                          </div>
-                          <ExternalLink className="w-3 h-3 text-indigo-400 opacity-60 group-hover/pend:opacity-100 shrink-0" />
+                          )}
                         </div>
-                      )}
 
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-500 pt-2 border-t border-white/5">
-                        <div>
-                          Moneda: <span className="text-gray-300 font-semibold">{quote.baseCurrency}</span>
-                        </div>
-                        <div>
-                          Tipo Cambio: <span className="text-gray-300 font-semibold font-mono">${quote.exchangeRate}</span>
-                        </div>
-                        <div>
-                          Ítems: <span className="text-gray-300 font-semibold">{quote.items?.length || 0}</span>
-                        </div>
-                        <div>
-                          Provs: <span className="text-gray-300 font-semibold">{quote.providers?.length || 0}</span>
-                        </div>
-                        {quote.attachments && quote.attachments.length > 0 && (
-                          <div className="text-emerald-400 font-semibold flex items-center gap-1" title={`${quote.attachments.length} archivos adjuntos`}>
-                            <Paperclip className="w-2.5 h-2.5" />
-                            <span>{quote.attachments.length}</span>
+                        {/* Linked Pendiente Badge */}
+                        {quote.pendienteId && (
+                          <div className="pt-2 border-t border-white/[0.05]">
+                            <a
+                              href={`/pendientes?id=${quote.pendienteId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300 hover:underline"
+                            >
+                              <ListTodo className="w-3 h-3" />
+                              <span className="truncate max-w-[200px]">
+                                {quote.pendienteTitulo || "Pendiente vinculado"}
+                              </span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
                           </div>
                         )}
                       </div>
 
-                      {isFinalizada && (
-                        <div className="pt-2 border-t border-emerald-500/30 flex items-center justify-between gap-1.5 text-xs text-emerald-300 bg-emerald-950/40 -mx-5 -mb-5 px-5 py-2.5 rounded-b-2xl">
-                          <div className="flex items-center gap-1.5 truncate">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                            <span className="truncate">
-                              Ganador: <strong className="text-white font-bold">{winningProvider ? winningProvider.name : "No seleccionado"}</strong>
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/30 shrink-0">
-                            Adjudicada
-                          </span>
+                      {/* Card Footer Actions */}
+                      <div className="pt-3 mt-3 border-t border-white/[0.06] flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <motion.button
+                            whileTap={{ scale: 0.94 }}
+                            onClick={() => handleSelectQuote(quote)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[11px] font-bold text-white transition-colors cursor-pointer"
+                          >
+                            Abrir Editor
+                          </motion.button>
+                          <motion.button
+                            whileTap={{ scale: 0.94 }}
+                            onClick={() => {
+                              handleSelectQuote(quote);
+                              setActiveTab("comparador");
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-[11px] font-semibold text-slate-300 hover:text-white border border-white/[0.06] transition-colors cursor-pointer"
+                          >
+                            Matriz
+                          </motion.button>
                         </div>
-                      )}
 
-                      {quote.status === "enviada" && quote.sentAt && (
-                        <div className="pt-2 border-t border-white/5 flex items-center gap-1.5 text-xs text-amber-400">
-                          <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
-                          <span className="truncate">
-                            Enviada el: <strong className="text-white">{quote.sentAt.includes("-") ? quote.sentAt.split("-").reverse().join("/") : quote.sentAt}</strong>
-                          </span>
+                        <div className="flex items-center gap-1">
+                          <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => handleDuplicateQuote(quote, e)}
+                            className="p-1 rounded-lg text-slate-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                            title="Duplicar cotización"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </motion.button>
+                          <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => quote.id && handleDeleteSavedQuote(quote.id, e)}
+                            className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title="Eliminar cotización"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </motion.button>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 text-[10px] text-gray-500 border-t border-white/5">
-                      <span>{date}</span>
-                      
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectQuote(quote);
-                            setIsAiChatOpen(true);
-                          }}
-                          className="p-1.5 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer text-emerald-400"
-                          title="Abrir Chat con IA para esta cotización"
-                        >
-                          <Bot className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDuplicateQuote(quote, e)}
-                          className="p-1.5 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
-                          title="Duplicar cotización"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            if (quote.id) handleDeleteSavedQuote(quote.id, e);
-                          }}
-                          className="p-1.5 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                          title="Eliminar de historial"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Empty state when filters match nothing */}
-              {filteredQuotations.length === 0 && savedQuotations.length > 0 && (
-                <div className="col-span-full py-12 text-center text-gray-400 space-y-3">
-                  <FolderOpen className="w-10 h-10 text-gray-600 mx-auto" />
-                  <p className="text-sm">No se encontraron cotizaciones con los filtros seleccionados.</p>
-                  <button
-                    onClick={() => {
-                      setFilterCategoria("todas");
-                      setFilterStatus("todos");
-                      setFilterOnlyLinked(false);
-                      setSearchHistory("");
-                    }}
-                    className="px-4 py-2 bg-white/5 hover:bg-white/10 text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-500/20 transition-colors cursor-pointer"
-                  >
-                    Restablecer filtros
-                  </button>
-                </div>
-              )}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           )}
-        </div>
-      )}
-      {/* Modal Vista Previa Imagen Exportable */}
-      {showImgModal && generatedImgUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="glass-card rounded-3xl p-6 max-w-4xl w-full border border-white/10 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-white text-lg">Reporte Comparativo de Precios</h3>
-                <p className="text-xs text-gray-400">Descargá o copiá la imagen generada para enviarla por WhatsApp o Slack</p>
-              </div>
-              <button
-                onClick={() => setShowImgModal(false)}
-                className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Generated Image Preview Container */}
-            <div className="border border-white/5 rounded-2xl overflow-hidden bg-black/40 flex items-center justify-center p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={generatedImgUrl}
-                alt="Reporte Comparativo"
-                className="max-w-full h-auto rounded-lg shadow-2xl max-h-[55vh] object-contain"
-              />
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => {
-                  const link = document.createElement("a");
-                  link.download = `Comparativa-${quoteName.replace(/\s+/g, "-")}.png`;
-                  link.href = generatedImgUrl;
-                  link.click();
-                  showToast("Imagen descargada con éxito");
-                }}
-                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all cursor-pointer"
-              >
-                Descargar PNG
-              </button>
-
-              <button
-                onClick={async () => {
-                  try {
-                    const response = await fetch(generatedImgUrl);
-                    const blob = await response.blob();
-                    await navigator.clipboard.write([
-                      new ClipboardItem({
-                        [blob.type]: blob
-                      })
-                    ]);
-                    showToast("¡Imagen copiada al portapapeles! Ya podés pegarla.");
-                  } catch (err) {
-                    console.error("Error copying to clipboard:", err);
-                    showToast("No se pudo copiar automáticamente. Descargá el archivo.", "error");
-                  }
-                }}
-                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl text-sm font-bold transition-colors cursor-pointer"
-              >
-                Copiar al Portapapeles
-              </button>
-
-              <button
-                onClick={() => setShowImgModal(false)}
-                className="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-sm font-bold transition-colors cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
+        </motion.div>
       )}
 
-      {/* Modal Crear Nueva Carpeta / Rubro */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="glass-card rounded-3xl p-6 max-w-md w-full border border-white/10 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                  <FolderPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">Nueva Carpeta de Rubro</h3>
-                  <p className="text-xs text-gray-400">Compartida con la sección de Pendientes</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setIsCategoryModalOpen(false);
-                  setNewCategoryModalInput("");
-                }}
-                className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newCategoryModalInput.trim()) {
-                  handleCreateCategory(newCategoryModalInput.trim());
-                  setIsCategoryModalOpen(false);
-                  setNewCategoryModalInput("");
-                }
-              }}
-              className="space-y-4"
+      {/* ============================================================
+          MODAL: CATEGORÍAS / CARPETAS
+          ============================================================ */}
+      <AnimatePresence>
+        {isCategoryModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={() => setIsCategoryModalOpen(false)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="relative w-full max-w-md bg-[#0d1222] border border-white/[0.1] rounded-3xl shadow-2xl overflow-hidden flex flex-col z-10 p-6 space-y-4"
             >
-              <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                  Nombre del Rubro o Área
-                </label>
-                <input
-                  type="text"
-                  value={newCategoryModalInput}
-                  onChange={(e) => setNewCategoryModalInput(e.target.value)}
-                  placeholder="Ej. Insumos, Mantenimiento, Sistemas..."
-                  autoFocus
-                  className="w-full bg-[#111827]/80 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400 transition-colors"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-amber-400" />
+                  <span>Gestionar Carpetas / Rubros</span>
+                </h3>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsCategoryModalOpen(false);
-                    setNewCategoryModalInput("");
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white"
                 >
-                  Cancelar
+                  <X className="w-4 h-4" />
                 </button>
+              </div>
+
+              {/* Add form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newCategoryModalInput.trim()) {
+                    handleCreateCategory(newCategoryModalInput.trim());
+                    setNewCategoryModalInput("");
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Nueva carpeta (Ej. Ferretería, Limpieza)..."
+                  value={newCategoryModalInput}
+                  onChange={(e) => setNewCategoryModalInput(e.target.value)}
+                  className="flex-1 bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 outline-none"
+                />
                 <button
                   type="submit"
                   disabled={!newCategoryModalInput.trim()}
-                  className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-xs font-bold text-white rounded-xl cursor-pointer"
                 >
-                  Crear Carpeta
+                  Añadir
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              </form>
 
-      {/* ====================================================
-          MODAL: IMPORTAR COTIZACIÓN DESDE EXCEL / TABLA
-          ==================================================== */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <div className="glass-card rounded-3xl p-6 max-w-2xl w-full border border-white/10 flex flex-col gap-5 my-8 max-h-[90vh] overflow-y-auto">
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  <FileSpreadsheet className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-lg">Importar Matriz de Cotizaciones</h3>
-                  <p className="text-xs text-gray-400">Carga automática de empresas, ítems y precios</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setIsImportModalOpen(false);
-                  setImportParsedPreview(null);
-                  setImportError(null);
-                  setPastedText("");
-                  setImportFileName("");
-                }}
-                className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Explanation Guide / Layout Visualizer */}
-            <div className="p-4 rounded-2xl bg-[#0e1626]/80 border border-white/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                  <Info className="w-4 h-4" />
-                  Estructura Requerida de la Tabla
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadTemplate}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold transition-colors cursor-pointer"
-                  title="Descargar una plantilla Excel lista para completar"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Descargar Plantilla Excel
-                </button>
-              </div>
-
-              {/* Visual Grid Map */}
-              <div className="overflow-x-auto rounded-xl border border-white/10 text-[11px] font-mono">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-emerald-950/40 text-emerald-300 border-b border-white/10">
-                      <th className="p-2.5 bg-black/30 text-gray-500 font-bold border-r border-white/10 text-center w-28">A1: [Vacío]</th>
-                      <th className="p-2.5 font-bold border-r border-white/10">B1: Empresa A</th>
-                      <th className="p-2.5 font-bold border-r border-white/10">C1: Empresa B</th>
-                      <th className="p-2.5 font-bold">D1: Empresa C...</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-gray-300">
-                    <tr className="hover:bg-white/[0.02]">
-                      <td className="p-2 bg-emerald-500/5 font-semibold text-emerald-300 border-r border-white/10">A2: Nombre Ítem 1</td>
-                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 1A</td>
-                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 1B</td>
-                      <td className="p-2 text-gray-400">$ Precio 1C</td>
-                    </tr>
-                    <tr className="hover:bg-white/[0.02]">
-                      <td className="p-2 bg-emerald-500/5 font-semibold text-emerald-300 border-r border-white/10">A3: Nombre Ítem 2</td>
-                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 2A</td>
-                      <td className="p-2 border-r border-white/10 text-gray-400">$ Precio 2B</td>
-                      <td className="p-2 text-gray-400">$ Precio 2C</td>
-                    </tr>
-                    <tr className="hover:bg-white/[0.02]">
-                      <td className="p-2 bg-emerald-500/5 font-semibold text-emerald-300 border-r border-white/10">A4: Nombre Ítem 3</td>
-                      <td className="p-2 border-r border-white/10 text-gray-400">...</td>
-                      <td className="p-2 border-r border-white/10 text-gray-400">...</td>
-                      <td className="p-2 text-gray-400">...</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-gray-400">
-                <div className="flex items-start gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                  <span><strong>Celda A1:</strong> Vacía (o encabezado opcional).</span>
-                </div>
-                <div className="flex items-start gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                  <span><strong>Fila 1 (B1, C1...):</strong> Nombres de las empresas.</span>
-                </div>
-                <div className="flex items-start gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                  <span><strong>Columna A (A2, A3...):</strong> Nombres de los ítems.</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Mode Switcher Tabs */}
-            <div className="flex items-center gap-2 p-1 bg-white/5 rounded-2xl border border-white/5">
-              <button
-                type="button"
-                onClick={() => setImportMode("file")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  importMode === "file"
-                    ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <Upload className="w-4 h-4" />
-                Opción 1: Subir Archivo (.xlsx / .csv)
-              </button>
-              <button
-                type="button"
-                onClick={() => setImportMode("paste")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  importMode === "paste"
-                    ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <Clipboard className="w-4 h-4" />
-                Opción 2: Pegar Celdas (Ctrl+V)
-              </button>
-            </div>
-
-            {/* Input Options Body */}
-            {importMode === "file" ? (
-              <div className="space-y-3">
-                <label className="border-2 border-dashed border-white/10 hover:border-emerald-500/40 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors bg-white/[0.01] hover:bg-emerald-950/5">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                    <FileUp className="w-6 h-6" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-white">
-                      {importFileName ? importFileName : "Hacé clic para seleccionar o arrastrá tu archivo Excel acá"}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Formatos compatibles: .xlsx, .xls, .csv
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={handleFileImportChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-400 flex items-center justify-between">
-                  <span>Pegar celdas copiadas directamente de Excel o Google Sheets</span>
-                  <span className="text-gray-500 text-[11px]">Soporta tabulaciones (Ctrl+C / Ctrl+V)</span>
-                </label>
-                <textarea
-                  value={pastedText}
-                  onChange={(e) => handlePasteTextChange(e.target.value)}
-                  placeholder={"[A1 vacio]\tEmpresa A\tEmpresa B\tEmpresa C\nResma A4\t6500\t6200\t6800\nCafé 1kg\t25000\t24500\t26000\nAzúcar 1kg\t1200\t1150\t1300"}
-                  rows={6}
-                  className="w-full bg-[#111827]/80 border border-white/10 rounded-2xl p-3 text-xs font-mono text-gray-200 placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-              </div>
-            )}
-
-            {/* Error banner */}
-            {importError && (
-              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs animate-fadeIn">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{importError}</span>
-              </div>
-            )}
-
-            {/* Preview Section */}
-            {importParsedPreview && (
-              <div className="space-y-3 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 animate-fadeIn">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>
-                      Vista Previa: {importParsedPreview.items.length} ítems y {importParsedPreview.providers.length} empresas detectadas
-                    </span>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto max-h-48 border border-white/10 rounded-xl">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#111827] text-gray-400 sticky top-0 border-b border-white/10">
-                      <tr>
-                        <th className="p-2.5 font-bold">Ítem</th>
-                        {importParsedPreview.rawHeaders.map((prov, i) => (
-                          <th key={i} className="p-2.5 font-bold border-l border-white/10">{prov}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 text-gray-300">
-                      {importParsedPreview.sampleRows.slice(0, 5).map((row, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-white/[0.02]">
-                          <td className="p-2 font-medium text-white">{row.itemName}</td>
-                          {row.prices.map((p, cIdx) => (
-                            <td key={cIdx} className="p-2 border-l border-white/5 font-mono text-emerald-300">
-                              {p > 0 ? `$${p.toLocaleString("es-AR")}` : "-"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {importParsedPreview.sampleRows.length > 5 && (
-                  <p className="text-[11px] text-gray-500 italic text-center">
-                    ... y {importParsedPreview.sampleRows.length - 5} ítems más
-                  </p>
+              {/* List */}
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+                {allCategories.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-4">No hay carpetas creadas</p>
+                ) : (
+                  allCategories.map((cat) => (
+                    <div
+                      key={cat}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-[#080b15] border border-white/[0.06] text-xs text-white"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Folder className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{cat}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {getCategoryQuoteCount(cat)} cotizaciones
+                      </span>
+                    </div>
+                  ))
                 )}
               </div>
-            )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-            {/* Options & Action buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5">
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300 select-none">
-                <input
-                  type="checkbox"
-                  checked={importReplaceExisting}
-                  onChange={(e) => setImportReplaceExisting(e.target.checked)}
-                  className="rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
-                />
-                <span>Reemplazar ítems y empresas existentes</span>
-              </label>
-
-              <div className="flex items-center gap-2">
+      {/* ============================================================
+          MODAL: IMPORTAR EXCEL / PEGAR CELDAS
+          ============================================================ */}
+      <AnimatePresence>
+        {isImportModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={() => setIsImportModalOpen(false)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="relative w-full max-w-xl max-h-[85vh] bg-[#0d1222] border border-white/[0.1] rounded-3xl shadow-2xl overflow-hidden flex flex-col z-10"
+            >
+              <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#0a0e1a]/80">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-indigo-400" />
+                  <h3 className="text-sm font-bold text-white">Importar Matriz de Precios</h3>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsImportModalOpen(false);
-                    setImportParsedPreview(null);
-                    setImportError(null);
-                    setPastedText("");
-                    setImportFileName("");
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApplyImport}
-                  disabled={!importParsedPreview || importParsedPreview.items.length === 0}
-                  className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  Aplicar a Cotización
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            </div>
 
+              <div className="p-6 space-y-4 overflow-y-auto flex-1 scrollbar-thin">
+                {/* Mode Selector */}
+                <div className="grid grid-cols-2 gap-2 bg-[#080b15] p-1 rounded-xl border border-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={() => setImportMode("file")}
+                    className={`py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                      importMode === "file" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Subir Archivo (.xlsx / .csv)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportMode("paste")}
+                    className={`py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                      importMode === "paste" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    Pegar Celdas (Ctrl+V)
+                  </button>
+                </div>
+
+                {importMode === "file" ? (
+                  <label className="border-2 border-dashed border-white/[0.1] hover:border-indigo-500/50 rounded-2xl p-8 flex flex-col items-center justify-center gap-2.5 cursor-pointer bg-[#080b15] transition-colors">
+                    <FileUp className="w-8 h-8 text-indigo-400" />
+                    <span className="text-xs font-semibold text-white">
+                      {importFileName ? importFileName : "Seleccionar o arrastrar archivo Excel"}
+                    </span>
+                    <span className="text-[10px] text-slate-500">Formatos: .xlsx, .xls, .csv</span>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleFileImportChange}
+                      className="hidden"
+                    />
+                  </label>
+                ) : (
+                  <textarea
+                    value={pastedText}
+                    onChange={(e) => handlePasteTextChange(e.target.value)}
+                    placeholder={"[A1 vacio]\tEmpresa A\tEmpresa B\nResma A4\t6500\t6200\nCafé 1kg\t25000\t24500"}
+                    rows={5}
+                    className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl p-3 text-xs font-mono text-white outline-none"
+                  />
+                )}
+
+                {importError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+                    {importError}
+                  </div>
+                )}
+
+                {importParsedPreview && (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-[#080b15] border border-emerald-500/20">
+                    <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>
+                        Vista previa: {importParsedPreview.items.length} ítems y{" "}
+                        {importParsedPreview.providers.length} empresas detectadas
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={importReplaceExisting}
+                      onChange={(e) => setImportReplaceExisting(e.target.checked)}
+                      className="rounded border-white/20 bg-white/5 text-indigo-500"
+                    />
+                    <span>Reemplazar ítems y empresas existentes</span>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(false)}
+                      className="px-3.5 py-1.5 text-xs text-slate-400 hover:text-white"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyImport}
+                      disabled={!importParsedPreview || importParsedPreview.items.length === 0}
+                      className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl cursor-pointer"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================
+          MODAL: EXPORTAR IMAGEN PREVIEW
+          ============================================================ */}
+      <AnimatePresence>
+        {showImgModal && generatedImgUrl && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              onClick={() => setShowImgModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE_OUT }}
+              className="relative w-full max-w-4xl max-h-[90vh] bg-[#0d1222] border border-white/[0.1] rounded-3xl shadow-2xl overflow-hidden flex flex-col z-10"
+            >
+              <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#0a0e1a]/80">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  <span>Imagen de Matriz Comparativa</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowImgModal(false)}
+                  className="p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-auto flex-1 flex justify-center bg-[#070a14]">
+                <img
+                  src={generatedImgUrl}
+                  alt="Matriz de Cotizaciones"
+                  className="max-w-full h-auto rounded-xl shadow-2xl border border-white/[0.08]"
+                />
+              </div>
+
+              <div className="px-6 py-3.5 border-t border-white/[0.08] bg-[#0a0e1a]/80 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowImgModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white"
+                >
+                  Cerrar
+                </button>
+                <a
+                  href={generatedImgUrl}
+                  download={`Cotizacion_${quoteName.replace(/\s+/g, "_")}.png`}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar PNG</span>
+                </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Cotizaciones AI Chat Modal */}
       <CotizacionesAiChatModal
@@ -4964,15 +4171,12 @@ export default function CotizacionesPage() {
         onDeleteAttachment={handleDeleteAttachment}
         onSummaryUpdated={(newSummary) => {
           if (currentQuoteId) {
-            // Dual Write: Mongo
             syncCotizacionToMongo({ id: currentQuoteId, aiSummary: newSummary });
-
-            // Dual Write: Firebase
             const db = getFirebaseDb();
             if (db && !currentQuoteId.startsWith("local-")) {
               updateDoc(doc(db, "cotizaciones", currentQuoteId), {
                 aiSummary: newSummary,
-                updatedAt: serverTimestamp()
+                updatedAt: serverTimestamp(),
               }).catch(console.warn);
             }
           }
@@ -4984,7 +4188,12 @@ export default function CotizacionesPage() {
         isOpen={isImportAiModalOpen}
         onClose={() => setIsImportAiModalOpen(false)}
         cotizacionId={currentQuoteId || "general"}
-        existingItems={items.map((it) => ({ id: it.id, name: it.name, baseUnit: it.baseUnit, targetQuantity: it.targetQuantity }))}
+        existingItems={items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          baseUnit: it.baseUnit,
+          targetQuantity: it.targetQuantity,
+        }))}
         targetProviderId={importAiTargetProviderId}
         targetProviderName={importAiTargetProviderName}
         onConfirmImport={handleConfirmImportAi}
