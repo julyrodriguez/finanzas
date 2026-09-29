@@ -3549,84 +3549,149 @@ export default function CotizacionesPage() {
           transition={{ duration: 0.22, ease: EASE_OUT }}
           className="space-y-6"
         >
-          {/* Carpetas / Rubros Horizontal Bar */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              onClick={() => setFilterCategoria("todas")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
-                filterCategoria === "todas"
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
-              }`}
-            >
-              <Folders className="w-3.5 h-3.5" />
-              <span>Todas las Carpetas</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold tabular-nums">
-                {savedQuotations.length}
-              </span>
-            </button>
+          {/* Carpetas / Rubros Filter Bar (Chips compactos y con wrap para ver todo) */}
+          <div className="p-3.5 rounded-2xl bg-[#0d1222]/80 border border-white/[0.08] shadow-lg backdrop-blur-md">
+            <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-white/[0.05]">
+              <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold">
+                <Folders className="w-3.5 h-3.5 text-amber-400" />
+                <span>Carpetas por Área / Rubro</span>
+                {filterCategoria !== "todas" && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterCategoria("todas")}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold underline cursor-pointer ml-1"
+                  >
+                    (Ver todas)
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white text-[11px] font-semibold border border-white/[0.06] transition-colors cursor-pointer"
+                title="Crear o administrar carpetas"
+              >
+                <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
+                <span>+ Nueva Carpeta</span>
+              </button>
+            </div>
 
-            {allCategories.map((cat) => {
-              const count = getCategoryQuoteCount(cat);
-              const isSel = filterCategoria.toLowerCase() === cat.toLowerCase();
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setFilterCategoria(cat)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
-                    isSel
-                      ? "bg-amber-500 text-slate-950 font-bold shadow-sm"
-                      : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Todas las Carpetas */}
+              <button
+                type="button"
+                onClick={() => setFilterCategoria("todas")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 w-auto cursor-pointer transition-colors ${
+                  filterCategoria === "todas"
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                    : "bg-[#080b15] text-slate-400 hover:text-white border border-white/[0.06] hover:border-white/[0.12]"
+                }`}
+              >
+                <Folders className="w-3.5 h-3.5" />
+                <span>Todas</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                    filterCategoria === "todas"
+                      ? "bg-white/20 text-white"
+                      : "bg-white/[0.06] text-slate-400"
                   }`}
                 >
-                  <Folder className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{cat}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 font-bold tabular-nums">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                  {savedQuotations.length}
+                </span>
+              </button>
 
-            {/* PCT/PLIEGOS */}
-            <button
-              onClick={() => setFilterCategoria("PCT/PLIEGOS")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
-                filterCategoria === "PCT/PLIEGOS"
-                  ? "bg-indigo-600 text-white shadow-sm"
-                  : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
-              }`}
-            >
-              <Folder className="w-3.5 h-3.5 text-indigo-400" />
-              <span>PCT/PLIEGOS</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 font-bold tabular-nums">
-                {pctPliegosQuoteCount}
-              </span>
-            </button>
+              {/* Botón especial PCT / Pliegos (ÚNICO, sin duplicados) */}
+              {(() => {
+                const isPctActive =
+                  filterCategoria === "_pct_pliegos_" ||
+                  filterCategoria.toUpperCase() === "PCT/PLIEGOS" ||
+                  filterCategoria.toUpperCase() === "PCT / PLIEGOS";
 
-            {/* Sin rubro */}
-            <button
-              onClick={() => setFilterCategoria("_sin_categoria_")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors shrink-0 ${
-                filterCategoria === "_sin_categoria_"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "bg-[#0d1222]/80 text-slate-400 hover:text-white border border-white/[0.06]"
-              }`}
-            >
-              <span>Sin Carpeta</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/10 font-bold tabular-nums">
-                {uncategorizedQuoteCount}
-              </span>
-            </button>
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setFilterCategoria(isPctActive ? "todas" : "PCT/PLIEGOS")}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 w-auto cursor-pointer transition-colors ${
+                      isPctActive
+                        ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                        : "bg-[#080b15] text-purple-300 hover:text-white border border-purple-500/25 hover:border-purple-500/40"
+                    }`}
+                  >
+                    <Folder className="w-3.5 h-3.5 text-purple-400" />
+                    <span>PCT / Pliegos</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                        isPctActive
+                          ? "bg-white/20 text-white"
+                          : "bg-purple-500/20 text-purple-300"
+                      }`}
+                    >
+                      {pctPliegosQuoteCount}
+                    </span>
+                  </button>
+                );
+              })()}
 
-            {/* Manage categories button */}
-            <button
-              onClick={() => setIsCategoryModalOpen(true)}
-              className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
-              title="Gestionar carpetas"
-            >
-              <FolderPlus className="w-4 h-4" />
-            </button>
+              {/* Carpetas por cada rubro (filtrando PCT/PLIEGOS para evitar duplicación) */}
+              {allCategories
+                .filter((cat) => {
+                  const norm = cat.trim().toUpperCase();
+                  return norm !== "PCT/PLIEGOS" && norm !== "PCT / PLIEGOS";
+                })
+                .map((cat) => {
+                  const count = getCategoryQuoteCount(cat);
+                  const isSel = filterCategoria.toLowerCase() === cat.toLowerCase();
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFilterCategoria(isSel ? "todas" : cat)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 w-auto cursor-pointer transition-colors ${
+                        isSel
+                          ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/30"
+                          : "bg-[#080b15] text-slate-400 hover:text-white border border-white/[0.06] hover:border-white/[0.12]"
+                      }`}
+                    >
+                      <Folder className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{cat}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                          isSel ? "bg-black/20 text-slate-950" : "bg-white/[0.06] text-slate-400"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+
+              {/* Sin Carpeta */}
+              {(() => {
+                const isSinCatActive = filterCategoria === "_sin_categoria_";
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setFilterCategoria(isSinCatActive ? "todas" : "_sin_categoria_")}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 w-auto cursor-pointer transition-colors ${
+                      isSinCatActive
+                        ? "bg-slate-700 text-white shadow-md"
+                        : "bg-[#080b15] text-slate-400 hover:text-white border border-white/[0.06] hover:border-white/[0.12]"
+                    }`}
+                  >
+                    <span>Sin Carpeta</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums ${
+                        isSinCatActive
+                          ? "bg-white/20 text-white"
+                          : "bg-white/[0.06] text-slate-400"
+                      }`}
+                    >
+                      {uncategorizedQuoteCount}
+                    </span>
+                  </button>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Search & Status Filters */}
