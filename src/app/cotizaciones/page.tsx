@@ -241,6 +241,8 @@ export default function CotizacionesPage() {
   const [highlightMode, setHighlightMode] = useState<"none" | "company" | "item" | "strongpoint">("none");
   // Excluded items from comparison / calculations in matrix
   const [excludedItemIds, setExcludedItemIds] = useState<string[]>([]);
+  // Excluded providers from comparison / calculations / copy / export
+  const [excludedProviderIds, setExcludedProviderIds] = useState<string[]>([]);
 
   // UI Toast State
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
@@ -1615,6 +1617,13 @@ export default function CotizacionesPage() {
     );
   };
 
+  // Toggle provider inclusion in matrix calculations and copying/export
+  const toggleProviderInclusion = (providerId: string) => {
+    setExcludedProviderIds(prev => 
+      prev.includes(providerId) ? prev.filter(id => id !== providerId) : [...prev, providerId]
+    );
+  };
+
   // Totals per Provider (for full quote)
   const providerTotals = providers.map(prov => {
     let sumARS = 0;
@@ -1649,13 +1658,16 @@ export default function CotizacionesPage() {
       totalARS: sumARS,
       totalUSD: sumUSD,
       itemsQuotedCount,
-      allQuoted: itemsQuotedCount === activeItems.length && activeItems.length > 0
+      allQuoted: itemsQuotedCount === activeItems.length && activeItems.length > 0,
+      isExcluded: excludedProviderIds.includes(prov.id)
     };
   });
+
   // Calculate cheapest provider overall (for highlightMode === "company")
   const providerCostComparisons = useMemo(() => {
     const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
-    return providers.map(prov => {
+    const activeProviders = providers.filter(p => !excludedProviderIds.includes(p.id));
+    return activeProviders.map(prov => {
       let totalBC = 0;
       let itemsQuoted = 0;
       activeItems.forEach(item => {
@@ -1672,29 +1684,31 @@ export default function CotizacionesPage() {
         itemsQuoted
       };
     });
-  }, [providers, items, excludedItemIds, exchangeRate, baseCurrency, useRealLots]);
+  }, [providers, items, excludedItemIds, excludedProviderIds, exchangeRate, baseCurrency, useRealLots]);
 
   const cheapestProviderId = useMemo(() => {
-    if (providers.length <= 1) return null;
+    const activeProviders = providers.filter(p => !excludedProviderIds.includes(p.id));
+    if (activeProviders.length <= 1) return null;
     const valid = providerCostComparisons.filter(p => p.itemsQuoted > 0 && p.totalBC > 0);
     if (valid.length === 0) return null;
     const maxQuoted = Math.max(...valid.map(p => p.itemsQuoted));
     const candidates = valid.filter(p => p.itemsQuoted === maxQuoted);
     candidates.sort((a, b) => a.totalBC - b.totalBC);
     return candidates[0]?.providerId || null;
-  }, [providers.length, providerCostComparisons]);
+  }, [providers, excludedProviderIds, providerCostComparisons]);
 
   // Map of item.id -> array of providerIds that offer the lowest cost for that item
   const cheapestProvidersPerItem = useMemo(() => {
     const map: Record<string, string[]> = {};
-    if (providers.length <= 1) return map;
+    const activeProviders = providers.filter(p => !excludedProviderIds.includes(p.id));
+    if (activeProviders.length <= 1) return map;
     const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
 
     activeItems.forEach(item => {
       let minCost = Infinity;
       const providerCosts: { provId: string; cost: number }[] = [];
 
-      providers.forEach(prov => {
+      activeProviders.forEach(prov => {
         const quote = prov.quotes[item.id];
         if (quote && quote.price > 0) {
           const { totalBaseCurrency } = calculateTotalCost(quote, item.targetQuantity, exchangeRate, baseCurrency, useRealLots);
@@ -1713,13 +1727,14 @@ export default function CotizacionesPage() {
     });
 
     return map;
-  }, [items, providers, excludedItemIds, exchangeRate, baseCurrency, useRealLots]);
+  }, [items, providers, excludedItemIds, excludedProviderIds, exchangeRate, baseCurrency, useRealLots]);
 
   // Map of provider.id -> array of itemIds where that provider has its lowest unit cost (Punto Fuerte)
   const strongestItemPerProvider = useMemo(() => {
     const map: Record<string, string[]> = {};
+    const activeProviders = providers.filter(p => !excludedProviderIds.includes(p.id));
     const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
-    providers.forEach(prov => {
+    activeProviders.forEach(prov => {
       let minUnitCost = Infinity;
       const itemsQuoted: { itemId: string; unitCost: number }[] = [];
 
@@ -1742,7 +1757,7 @@ export default function CotizacionesPage() {
     });
 
     return map;
-  }, [providers, items, excludedItemIds, exchangeRate, baseCurrency]);
+  }, [providers, items, excludedItemIds, excludedProviderIds, exchangeRate, baseCurrency]);
 
 
 
@@ -1783,6 +1798,14 @@ export default function CotizacionesPage() {
 
   // Export quote comparison as a beautiful image card (Excel-style spreadsheet screenshot)
   const handleExportImage = () => {
+    const activeProviders = providers.filter(p => !excludedProviderIds.includes(p.id));
+    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
+
+    if (activeProviders.length === 0) {
+      showToast("No hay proveedores activos para exportar (están todos excluidos)", "error");
+      return;
+    }
+
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -1796,11 +1819,10 @@ export default function CotizacionesPage() {
     const colWidth = 135;
     const itemColWidth = 280;
     const qtyColWidth = 110;
-    const tableWidth = itemColWidth + qtyColWidth + providers.length * (colWidth * 2);
+    const tableWidth = itemColWidth + qtyColWidth + activeProviders.length * (colWidth * 2);
     
-    const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
     const width = Math.max(1000, tableWidth + padding * 2);
-    const contentHeight = 60 + (activeItems.length * itemRowHeight) + 75; // Headers + rows + totals (increased height to 75)
+    const contentHeight = 60 + (activeItems.length * itemRowHeight) + 75; // Headers + rows + totals
     
     const height = headerHeight + contentHeight + padding * 2;
     canvas.width = width;
@@ -1918,7 +1940,7 @@ export default function CotizacionesPage() {
     ctx.lineTo(padding + tableWidth, startY + 35);
     ctx.stroke();
 
-    providers.forEach((prov, pIdx) => {
+    activeProviders.forEach((prov, pIdx) => {
       const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
 
       // Provider header name (Spans 2 columns)
@@ -1975,7 +1997,7 @@ export default function CotizacionesPage() {
       ctx.fillText(`${item.targetQuantity} ${item.baseUnit}`, padding + itemColWidth + 15, rowY + 38);
 
       // Provider quotes
-      providers.forEach((prov, pIdx) => {
+      activeProviders.forEach((prov, pIdx) => {
         const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
         const quote = prov.quotes[item.id];
         const hasQuote = quote && quote.price > 0;
@@ -2023,7 +2045,7 @@ export default function CotizacionesPage() {
     });
 
     // SUMMARY TOTAL ROW
-    const totalRowY = startY + 60 + items.length * itemRowHeight;
+    const totalRowY = startY + 60 + activeItems.length * itemRowHeight;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -2038,9 +2060,7 @@ export default function CotizacionesPage() {
     ctx.font = "bold 12px sans-serif";
     ctx.fillText("TOTAL GENERAL", padding + 15, totalRowY + 35);
 
-
-
-    providers.forEach((prov, pIdx) => {
+    activeProviders.forEach((prov, pIdx) => {
       const pX = padding + itemColWidth + qtyColWidth + pIdx * (colWidth * 2);
       const totalData = providerTotals.find(t => t.providerId === prov.id);
 
@@ -2067,8 +2087,6 @@ export default function CotizacionesPage() {
           ctx.fillText(formatCurrencyValue(totalData.totalUSD, "USD"), pX + colWidth + 15, curY);
           curY += 16;
         }
-
-
       }
     });
 
@@ -2087,12 +2105,18 @@ export default function CotizacionesPage() {
 
   const handleCopyExcelFormat = () => {
     try {
+      const activeProviders = providers.filter(prov => !excludedProviderIds.includes(prov.id));
+      if (activeProviders.length === 0) {
+        showToast("No hay proveedores activos para copiar (están todos excluidos)", "error");
+        return;
+      }
+
       let tsv = "";
       let html = `<table style="border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10pt; border: 1px solid #cbd5e1;">`;
 
       // Row 1: Main Headers
       const row1 = ["Nombre del Ítem", "Cantidad"];
-      providers.forEach(prov => {
+      activeProviders.forEach(prov => {
         row1.push(prov.name, ""); // Leave empty column for spacing (since each provider has Unitario & Total)
       });
       tsv += row1.join("\t") + "\n";
@@ -2100,20 +2124,20 @@ export default function CotizacionesPage() {
       html += `<tr style="background-color: #000000; color: #ffffff; font-weight: bold; border-bottom: 2px solid #334155;">`;
       html += `<th style="border: 1px solid #334155; padding: 10px; text-align: left; background-color: #000000; color: #ffffff;" rowspan="2">Nombre del Ítem</th>`;
       html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #000000; color: #ffffff;" rowspan="2">Cantidad</th>`;
-      providers.forEach(prov => {
+      activeProviders.forEach(prov => {
         html += `<th style="border: 1px solid #334155; padding: 10px; text-align: center; background-color: #000000; color: #ffffff;" colspan="2">${prov.name}</th>`;
       });
       html += `</tr>`;
 
       // Row 2: Sub-headers
       const row2 = ["", ""];
-      providers.forEach(() => {
+      activeProviders.forEach(() => {
         row2.push("Unitario", "Total");
       });
       tsv += row2.join("\t") + "\n";
 
       html += `<tr style="background-color: #1e293b; color: #f1f5f9; font-weight: bold;">`;
-      providers.forEach(() => {
+      activeProviders.forEach(() => {
         html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt; background-color: #1e293b; color: #f1f5f9;">Unitario</th>`;
         html += `<th style="border: 1px solid #334155; padding: 6px; text-align: center; font-size: 9pt; background-color: #1e293b; color: #f1f5f9;">Total</th>`;
       });
@@ -2132,7 +2156,7 @@ export default function CotizacionesPage() {
         html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-weight: bold; color: #0f172a;">${item.name || "Ítem sin nombre"}</td>`;
         html += `<td style="border: 1px solid #cbd5e1; padding: 10px; text-align: center; color: #475569;">${item.targetQuantity} ${item.baseUnit}</td>`;
 
-        providers.forEach(prov => {
+        activeProviders.forEach(prov => {
           const quote = prov.quotes[item.id];
           const hasQuote = quote && quote.price > 0;
 
@@ -2207,7 +2231,7 @@ export default function CotizacionesPage() {
       html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: left; font-weight: 800; color: #0f172a;">TOTAL GENERAL</td>`;
       html += `<td style="border: 1px solid #cbd5e1; padding: 12px 10px; text-align: center; font-size: 8pt; color: #475569;">-</td>`;
 
-      providers.forEach(prov => {
+      activeProviders.forEach(prov => {
         const totalData = providerTotals.find(t => t.providerId === prov.id);
         if (totalData) {
           const hasARS = totalData.totalARS > 0;
@@ -2896,13 +2920,23 @@ export default function CotizacionesPage() {
                     {/* Provider Header Bar */}
                     <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0a0e1a]/80 border-b border-white/[0.06]">
                       <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        {/* Provider inclusion checkbox */}
+                        <label className="flex items-center cursor-pointer shrink-0 p-1 rounded-lg hover:bg-white/5 transition-colors" title={excludedProviderIds.includes(prov.id) ? "Proveedor excluido: Clic para incluir en comparativa y copiado" : "Proveedor activo: Clic para excluir de comparativa y copiado"}>
+                          <input
+                            type="checkbox"
+                            checked={!excludedProviderIds.includes(prov.id)}
+                            onChange={() => toggleProviderInclusion(prov.id)}
+                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </label>
+
                         {/* Move provider order */}
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => moveProvider(pIdx, -1)}
                             disabled={isLocked || pIdx === 0}
-                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer"
+                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer transition-colors"
                             title="Mover a la izquierda"
                           >
                             <ChevronLeft className="w-4 h-4" />
@@ -2911,7 +2945,7 @@ export default function CotizacionesPage() {
                             type="button"
                             onClick={() => moveProvider(pIdx, 1)}
                             disabled={isLocked || pIdx === providers.length - 1}
-                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer"
+                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer transition-colors"
                             title="Mover a la derecha"
                           >
                             <ChevronRight className="w-4 h-4" />
@@ -3038,7 +3072,7 @@ export default function CotizacionesPage() {
                                 {/* Price & Currency */}
                                 <div className="lg:col-span-3 flex items-center gap-2">
                                   <div className="relative flex-1">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold pointer-events-none select-none">
                                       {quote.currency === "ARS" ? "$" : "USD"}
                                     </span>
                                     <input
@@ -3054,7 +3088,9 @@ export default function CotizacionesPage() {
                                       }
                                       placeholder="0.00"
                                       disabled={isLocked}
-                                      className="w-full bg-[#0a0e1a] border border-white/[0.08] focus:border-indigo-500 rounded-xl pl-7 pr-2.5 py-1.5 text-xs font-mono font-bold text-white outline-none disabled:opacity-50"
+                                      className={`w-full bg-[#0a0e1a] border border-white/[0.08] focus:border-indigo-500 rounded-xl ${
+                                        quote.currency === "USD" ? "pl-12" : "pl-7"
+                                      } pr-2.5 py-1.5 text-xs font-mono font-bold text-white outline-none disabled:opacity-50`}
                                     />
                                   </div>
                                   <button
@@ -3168,6 +3204,29 @@ export default function CotizacionesPage() {
                                       </div>
                                     )}
                                   </div>
+                                </div>
+
+                                {/* Item specification / description (Detalle propio del proveedor) */}
+                                <div className="col-span-1 lg:col-span-12 pt-2 border-t border-white/[0.04] flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                                    <FileText className="w-3 h-3 text-slate-400" />
+                                    <span>Detalle / Marca:</span>
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={quote.specification || ""}
+                                    onChange={(e) =>
+                                      handleUpdateQuote(
+                                        prov.id,
+                                        item.id,
+                                        "specification",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Ej: Philips 9W, alternativo, código de producto o especificación..."
+                                    disabled={isLocked}
+                                    className="flex-1 bg-[#0a0e1a]/80 border border-white/[0.06] focus:border-indigo-500/60 rounded-xl px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-600 outline-none transition-all"
+                                  />
                                 </div>
                               </div>
                             );
@@ -3319,6 +3378,37 @@ export default function CotizacionesPage() {
             </div>
           </div>
 
+          {/* Quick Provider Visibility Chips */}
+          {providers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 p-3.5 rounded-2xl bg-[#0d1222]/70 border border-white/[0.06]">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mr-1">
+                <span>Proveedores en comparativa:</span>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  ({providers.length - excludedProviderIds.length}/{providers.length} activos)
+                </span>
+              </span>
+              {providers.map((prov) => {
+                const isExcluded = excludedProviderIds.includes(prov.id);
+                return (
+                  <button
+                    key={prov.id}
+                    type="button"
+                    onClick={() => toggleProviderInclusion(prov.id)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      isExcluded
+                        ? "bg-slate-900/60 border-white/[0.06] text-slate-500 line-through opacity-60 hover:opacity-100"
+                        : "bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20"
+                    }`}
+                    title={isExcluded ? "Clic para reactivar en la tabla y en el copiado" : "Clic para excluir de la tabla y del copiado"}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${isExcluded ? "bg-slate-600" : "bg-emerald-400"}`} />
+                    <span>{prov.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* The Matrix Table */}
           <div className="rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl overflow-hidden">
             <div className="overflow-x-auto max-h-[70vh] scrollbar-thin">
@@ -3331,22 +3421,70 @@ export default function CotizacionesPage() {
                     <th className="py-3 px-3 font-bold text-slate-400 text-center w-24">
                       Cantidad
                     </th>
-                    {providers.map((prov) => {
-                      const isCompanyWinner = highlightMode === "company" && prov.id === cheapestProviderId;
+                    {providers.map((prov, pIdx) => {
+                      const isExcluded = excludedProviderIds.includes(prov.id);
+                      const isCompanyWinner = !isExcluded && highlightMode === "company" && prov.id === cheapestProviderId;
                       return (
                         <th
                           key={prov.id}
                           colSpan={2}
-                          className={`py-3 px-4 text-center border-l border-white/[0.06] ${
-                            isCompanyWinner ? "bg-emerald-500/10 text-emerald-300" : "text-white"
+                          className={`py-2.5 px-3 text-center border-l border-white/[0.06] transition-all min-w-[210px] ${
+                            isExcluded
+                              ? "bg-slate-900/60 text-slate-500"
+                              : isCompanyWinner
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : "text-white"
                           }`}
                         >
-                          <div className="font-bold truncate max-w-[220px] mx-auto">{prov.name}</div>
-                          {isCompanyWinner && (
-                            <span className="text-[9px] font-bold text-emerald-400 tracking-wider">
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <button
+                              type="button"
+                              onClick={() => moveProvider(pIdx, -1)}
+                              disabled={pIdx === 0}
+                              className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                              title="Mover columna a la izquierda"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+
+                            <label className="flex items-center justify-center gap-1.5 cursor-pointer select-none group min-w-0 mx-1">
+                              <input
+                                type="checkbox"
+                                checked={!isExcluded}
+                                onChange={() => toggleProviderInclusion(prov.id)}
+                                className="w-3.5 h-3.5 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                                title="Tilde para incluir o excluir en comparador y copiado"
+                              />
+                              <span
+                                className={`font-bold text-xs truncate max-w-[130px] ${
+                                  isExcluded ? "line-through text-slate-500" : "text-white group-hover:text-indigo-300"
+                                }`}
+                                title={prov.name}
+                              >
+                                {prov.name}
+                              </span>
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() => moveProvider(pIdx, 1)}
+                              disabled={pIdx === providers.length - 1}
+                              className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                              title="Mover columna a la derecha"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {isExcluded ? (
+                            <span className="inline-block text-[9px] font-semibold text-rose-400/90 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
+                              Excluido de copia y total
+                            </span>
+                          ) : isCompanyWinner ? (
+                            <span className="inline-block text-[9px] font-bold text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded tracking-wider">
                               ★ Más Conveniente
                             </span>
-                          )}
+                          ) : null}
                         </th>
                       );
                     })}
@@ -3354,12 +3492,19 @@ export default function CotizacionesPage() {
                   <tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-[#080b15]">
                     <th className="py-1 px-4 sticky left-0 bg-[#080b15] z-30"></th>
                     <th className="py-1 px-3 text-center"></th>
-                    {providers.map((prov) => (
-                      <Fragment key={prov.id}>
-                        <th className="py-1.5 px-3 text-center border-l border-white/[0.06]">Unitario</th>
-                        <th className="py-1.5 px-3 text-center">Total</th>
-                      </Fragment>
-                    ))}
+                    {providers.map((prov) => {
+                      const isExcluded = excludedProviderIds.includes(prov.id);
+                      return (
+                        <Fragment key={prov.id}>
+                          <th className={`py-1.5 px-3 text-center border-l border-white/[0.06] ${isExcluded ? "opacity-35 text-slate-600" : ""}`}>
+                            Unitario
+                          </th>
+                          <th className={`py-1.5 px-3 text-center ${isExcluded ? "opacity-35 text-slate-600" : ""}`}>
+                            Total
+                          </th>
+                        </Fragment>
+                      );
+                    })}
                   </tr>
                 </thead>
 
@@ -3391,8 +3536,24 @@ export default function CotizacionesPage() {
                         </td>
 
                         {providers.map((prov) => {
+                          const isExcluded = excludedProviderIds.includes(prov.id);
                           const quote = prov.quotes[item.id];
                           const hasQuote = quote && quote.price > 0;
+
+                          if (isExcluded) {
+                            return (
+                              <Fragment key={prov.id}>
+                                <td className="py-3 px-3 text-center text-slate-600 border-l border-white/[0.04] opacity-30 bg-black/20 font-mono text-[11px]">-</td>
+                                <td className="py-3 px-3 text-center text-slate-600 opacity-30 bg-black/20 font-mono text-[11px]">
+                                  {hasQuote ? (
+                                    <span className="line-through text-slate-600">
+                                      {formatCurrencyValue(quote.price, quote.currency)}
+                                    </span>
+                                  ) : "-"}
+                                </td>
+                              </Fragment>
+                            );
+                          }
 
                           if (!hasQuote) {
                             return (
@@ -3439,6 +3600,14 @@ export default function CotizacionesPage() {
                                     {quote.presentationName || `x${quote.unitsPerPresentation}`}
                                   </div>
                                 )}
+                                {quote.specification && (
+                                  <div
+                                    className="text-[10px] text-slate-400 italic truncate max-w-[130px] mx-auto mt-0.5"
+                                    title={quote.specification}
+                                  >
+                                    {quote.specification}
+                                  </div>
+                                )}
                               </td>
                               <td
                                 className={`py-3 px-3 text-center font-mono font-bold tabular-nums ${
@@ -3475,9 +3644,21 @@ export default function CotizacionesPage() {
                     </td>
                     <td className="py-3.5 px-3 text-center text-slate-500">-</td>
                     {providers.map((prov) => {
+                      const isExcluded = excludedProviderIds.includes(prov.id);
                       const totalData = providerTotals.find((t) => t.providerId === prov.id);
                       const isCompanyWinner =
-                        highlightMode === "company" && prov.id === cheapestProviderId;
+                        !isExcluded && highlightMode === "company" && prov.id === cheapestProviderId;
+
+                      if (isExcluded) {
+                        return (
+                          <Fragment key={prov.id}>
+                            <td className="py-3.5 px-3 text-center text-slate-600 border-l border-white/[0.06] opacity-35 bg-black/20">-</td>
+                            <td className="py-3.5 px-3 text-center text-slate-600 font-mono text-xs opacity-35 bg-black/20">
+                              (Excluido)
+                            </td>
+                          </Fragment>
+                        );
+                      }
 
                       if (!totalData) {
                         return (
