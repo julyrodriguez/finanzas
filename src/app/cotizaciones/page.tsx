@@ -435,6 +435,24 @@ export default function CotizacionesPage() {
   };
 
   // Filtered quotations for Historial tab
+  // Helper para verificar concordancia de estado de cotización con el filtro activo
+  const matchQuoteStatus = (q: SavedQuotation, filter: string): boolean => {
+    if (filter === "todas" || filter === "todos") return true;
+    const isFin = q.status === "finalizada" || q.isFinalized;
+    const raw = (q.status || (isFin ? "finalizada" : "borrador")).toLowerCase().trim();
+
+    if (filter === "pendientes" || filter === "borrador" || filter === "borradores") {
+      return !isFin && raw !== "enviada" && raw !== "enviados" && raw !== "cancelada";
+    }
+    if (filter === "enviadas" || filter === "enviados" || filter === "enviada") {
+      return raw === "enviada" || raw === "enviados";
+    }
+    if (filter === "finalizadas" || filter === "finalizados" || filter === "finalizada") {
+      return isFin || raw === "finalizada" || raw === "finalizados";
+    }
+    return raw === filter.toLowerCase().trim();
+  };
+
   // Status Counts for Top Filter Tabs
   const statusCounts = useMemo(() => {
     let todos = savedQuotations.length;
@@ -444,7 +462,7 @@ export default function CotizacionesPage() {
 
     savedQuotations.forEach((q) => {
       const isFin = q.status === "finalizada" || q.isFinalized;
-      const raw = q.status || (isFin ? "finalizada" : "borrador");
+      const raw = (q.status || (isFin ? "finalizada" : "borrador")).toLowerCase().trim();
       if (isFin || raw === "finalizada" || raw === "finalizados") {
         finalizados++;
       } else if (raw === "enviada" || raw === "enviados") {
@@ -476,19 +494,8 @@ export default function CotizacionesPage() {
       }
 
       // 2. Status filter
-      if (filterStatus !== "todos") {
-        const isFin = quote.status === "finalizada" || quote.isFinalized;
-        const rawStatus = quote.status || (isFin ? "finalizada" : "borrador");
-
-        if (filterStatus === "pendientes" || filterStatus === "borrador") {
-          if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
-        } else if (filterStatus === "enviados" || filterStatus === "enviada") {
-          if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
-        } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
-          if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
-        } else if (rawStatus !== filterStatus) {
-          return false;
-        }
+      if (!matchQuoteStatus(quote, filterStatus)) {
+        return false;
       }
 
       // 3. Only linked filter
@@ -517,51 +524,18 @@ export default function CotizacionesPage() {
   const getCategoryQuoteCount = (catName: string) => {
     return savedQuotations.filter((q) => {
       if (q.categoria?.toLowerCase() !== catName.toLowerCase()) return false;
-      if (filterStatus !== "todos") {
-        const isFin = q.status === "finalizada" || q.isFinalized;
-        const rawStatus = q.status || (isFin ? "finalizada" : "borrador");
-        if (filterStatus === "pendientes" || filterStatus === "borrador") {
-          if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
-        } else if (filterStatus === "enviados" || filterStatus === "enviada") {
-          if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
-        } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
-          if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
-        }
-      }
-      return true;
+      return matchQuoteStatus(q, filterStatus);
     }).length;
   };
 
   const pctPliegosQuoteCount = savedQuotations.filter((q) => {
     if (!isPctPliegoQuote(q)) return false;
-    if (filterStatus !== "todos") {
-      const isFin = q.status === "finalizada" || q.isFinalized;
-      const rawStatus = q.status || (isFin ? "finalizada" : "borrador");
-      if (filterStatus === "pendientes" || filterStatus === "borrador") {
-        if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
-      } else if (filterStatus === "enviados" || filterStatus === "enviada") {
-        if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
-      } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
-        if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
-      }
-    }
-    return true;
+    return matchQuoteStatus(q, filterStatus);
   }).length;
 
   const uncategorizedQuoteCount = savedQuotations.filter((q) => {
     if (q.categoria && q.categoria.trim() !== "") return false;
-    if (filterStatus !== "todos") {
-      const isFin = q.status === "finalizada" || q.isFinalized;
-      const rawStatus = q.status || (isFin ? "finalizada" : "borrador");
-      if (filterStatus === "pendientes" || filterStatus === "borrador") {
-        if (isFin || rawStatus === "enviada" || rawStatus === "cancelada") return false;
-      } else if (filterStatus === "enviados" || filterStatus === "enviada") {
-        if (rawStatus !== "enviada" && rawStatus !== "enviados") return false;
-      } else if (filterStatus === "finalizados" || filterStatus === "finalizada") {
-        if (!isFin && rawStatus !== "finalizada" && rawStatus !== "finalizados") return false;
-      }
-    }
-    return true;
+    return matchQuoteStatus(q, filterStatus);
   }).length;
 
   // Calc helper: gets true unit price in base unit and base currency
@@ -3793,7 +3767,7 @@ export default function CotizacionesPage() {
                           : quote.createdAt
                       ).toLocaleDateString("es-AR")
                     : "-";
-                  const qStatus = quote.status || "borrador";
+                  const qStatus = quote.status || (quote.isFinalized ? "finalizada" : "borrador");
                   const winningProv = quote.providers?.find((p) => p.id === quote.winningProviderId);
 
                   return (
