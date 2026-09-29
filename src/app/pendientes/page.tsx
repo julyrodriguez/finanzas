@@ -369,28 +369,24 @@ export default function PendientesPage() {
       };
     });
 
-    // Check if all steps are now completed
-    const allDone = updatedEtapas.length > 0 && updatedEtapas.every((s) => s.completado);
-
     setItems((prev) =>
       prev.map((p) => {
         if (p.id !== pendienteId) return p;
         return {
           ...p,
           etapas: updatedEtapas,
-          completado: allDone ? true : p.completado,
         };
       })
     );
 
-    addToast(allDone ? "¡Todos los pasos completados!" : "Paso actualizado", "success");
+    const allStepsFinished = updatedEtapas.length > 0 && updatedEtapas.every((s) => s.completado);
+    addToast(
+      allStepsFinished ? "Todos los pasos completados" : "Paso actualizado",
+      "success"
+    );
 
     try {
       const payload: any = { etapas: updatedEtapas };
-      if (allDone && !parent.completado) {
-        payload.completado = true;
-        payload.completedAt = serverTimestamp();
-      }
 
       if (db) {
         await updateDoc(doc(db, "pendientes", pendienteId), payload);
@@ -470,16 +466,15 @@ export default function PendientesPage() {
 
     setIsSavingEdit(true);
 
-    const allStepsDone = editEtapas.length > 0 && editEtapas.every((s) => s.completado);
-    const shouldComplete = allStepsDone || editingItem.completado;
+    const isCompleted = editingItem.completado;
 
     const updatedData: Partial<Pendiente> = {
       titulo: editTitle.trim(),
       descripcion: editDescription.trim(),
       prioridad: editPriority,
       etapas: editEtapas,
-      completado: shouldComplete,
-      completedAt: shouldComplete ? (Timestamp.now() as any) : null,
+      completado: isCompleted,
+      completedAt: isCompleted ? (editingItem.completedAt || (Timestamp.now() as any)) : null,
     };
 
     setItems((prev) =>
@@ -492,7 +487,7 @@ export default function PendientesPage() {
     try {
       const fbPayload: any = {
         ...updatedData,
-        completedAt: shouldComplete ? serverTimestamp() : null,
+        completedAt: isCompleted ? (editingItem.completedAt || serverTimestamp()) : null,
       };
 
       if (db) {
