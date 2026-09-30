@@ -143,6 +143,10 @@ export function ApprovalConfigModal({
 }: ApprovalConfigModalProps) {
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_APPROVAL_CONFIG);
   const [saving, setSaving] = useState(false);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+  
+  const configRef = useRef<ApprovalConfig>(DEFAULT_APPROVAL_CONFIG);
   const isDirtyRef = useRef(false);
   const pendingInputsRef = useRef<Record<string, string>>({});
 
@@ -152,16 +156,28 @@ export function ApprovalConfigModal({
       pendingInputsRef.current = {};
       const initial = getStoredApprovalConfig();
       setConfig(initial);
+      configRef.current = initial;
+      setServerLoading(true);
 
-      // Sincronizar con el servidor en segundo plano sin pisar si el usuario ya modificó algo
+      // Sincronizar inmediatamente con el servidor MongoDB
       let active = true;
       fetchApprovalConfigFromServer()
         .then((cfg) => {
-          if (active && cfg && !isDirtyRef.current) {
-            setConfig(cfg);
+          if (active && cfg) {
+            setServerConnected(true);
+            // Si el usuario aún no editó nada en el modal, actualizar con la data fresca del servidor
+            if (!isDirtyRef.current) {
+              setConfig(cfg);
+              configRef.current = cfg;
+            }
           }
         })
-        .catch(() => null);
+        .catch(() => {
+          if (active) setServerConnected(false);
+        })
+        .finally(() => {
+          if (active) setServerLoading(false);
+        });
 
       return () => {
         active = false;
@@ -178,38 +194,48 @@ export function ApprovalConfigModal({
     }
   };
 
+  const handleLimitChange = (key: "limiteNivel1" | "limiteNivel2" | "limiteNivel3", val: number) => {
+    isDirtyRef.current = true;
+    const next = { ...configRef.current, [key]: Math.max(0, val) };
+    configRef.current = next;
+    setConfig(next);
+  };
+
   const addSignerTo = (key: keyof ApprovalConfig, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     isDirtyRef.current = true;
-    setConfig((prev) => {
-      const list = Array.isArray(prev[key]) ? (prev[key] as string[]) : [];
-      // Se permite que el mismo nombre esté en otros niveles sin ningún problema.
-      // Solo evitamos duplicarlo exactamente dentro de este mismo campo.
-      if (list.some((s) => s.trim().toLowerCase() === trimmed.toLowerCase())) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [key]: [...list, trimmed],
-      };
-    });
+
+    const currentList = Array.isArray(configRef.current[key]) ? (configRef.current[key] as string[]) : [];
+    // Se permite que el mismo nombre esté en otros niveles sin restricciones.
+    // Solo evitamos duplicarlo exactamente dentro de este mismo campo.
+    if (currentList.some((s) => s.trim().toLowerCase() === trimmed.toLowerCase())) {
+      return;
+    }
+
+    const next = {
+      ...configRef.current,
+      [key]: [...currentList, trimmed],
+    };
+    configRef.current = next;
+    setConfig(next);
   };
 
   const removeSignerFrom = (key: keyof ApprovalConfig, name: string) => {
     isDirtyRef.current = true;
-    setConfig((prev) => {
-      const list = Array.isArray(prev[key]) ? (prev[key] as string[]) : [];
-      return {
-        ...prev,
-        [key]: list.filter((s) => s.trim().toLowerCase() !== name.trim().toLowerCase()),
-      };
-    });
+    const currentList = Array.isArray(configRef.current[key]) ? (configRef.current[key] as string[]) : [];
+    const next = {
+      ...configRef.current,
+      [key]: currentList.filter((s) => s.trim().toLowerCase() !== name.trim().toLowerCase()),
+    };
+    configRef.current = next;
+    setConfig(next);
   };
 
   const handleResetDefaults = () => {
     if (confirm("¿Restablecer todas las escalas y firmadores a los valores por defecto?")) {
       isDirtyRef.current = true;
+      configRef.current = DEFAULT_APPROVAL_CONFIG;
       setConfig(DEFAULT_APPROVAL_CONFIG);
     }
   };
@@ -228,8 +254,8 @@ export function ApprovalConfigModal({
   const handleSave = async () => {
     setSaving(true);
 
-    // 1. Integrar automáticamente cualquier firmante que haya quedado escrito en un input sin hacer clic en "+ Agregar"
-    let updatedConfig = { ...config };
+    // 1. Integrar inmediatamente cualquier firmante pendiente en los inputs sin hacer clic en "+ Agregar"
+    let updatedConfig = { ...configRef.current };
     for (const [key, text] of Object.entries(pendingInputsRef.current)) {
       const trimmed = (text || "").trim();
       if (trimmed) {
@@ -246,17 +272,19 @@ export function ApprovalConfigModal({
       }
     }
 
+    configRef.current = updatedConfig;
+    setConfig(updatedConfig);
     pendingInputsRef.current = {};
     isDirtyRef.current = false;
-    setConfig(updatedConfig);
 
+    // 2. Guardar en el servidor MongoDB
     const ok = await saveApprovalConfigToServer(updatedConfig);
     setSaving(false);
     if (onConfigSaved) onConfigSaved(updatedConfig);
     if (showToast) {
       showToast(ok 
-        ? "⚙️ Firmadores y escalas guardados en el servidor MongoDB" 
-        : "⚙️ Guardado localmente (aviso: verificar conexión con servidor)"
+        ? "✅ Firmantes y escalas guardados en el servidor MongoDB" 
+        : "⚠️ Guardado localmente (aviso: no se pudo sincronizar con el servidor MongoDB)"
       );
     }
     onClose();
@@ -277,9 +305,26 @@ export function ApprovalConfigModal({
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">
-                Configurar Firmantes y Escalas de Aprobación
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Configurar Firmantes y Escalas de Aprobación
+                </h3>
+                {serverLoading ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-300">
+                    <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                    <span>Conectando con MongoDB...</span>
+                  </span>
+                ) : serverConnected ? (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10.5px] text-emerald-400 font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Servidor MongoDB conectado</span>
+                  </span>
+                ) : serverConnected === false ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-400 font-semibold">
+                    <span>Modo local</span>
+                  </span>
+                ) : null}
+              </div>
               <p className="text-xs text-slate-400">
                 Agrega o quita firmantes habilitados para cada firma en los 4 niveles
               </p>
@@ -311,10 +356,7 @@ export function ApprovalConfigModal({
                 <input
                   type="number"
                   value={config.limiteNivel1}
-                  onChange={(e) => {
-                    isDirtyRef.current = true;
-                    setConfig({ ...config, limiteNivel1: Math.max(0, Number(e.target.value)) });
-                  }}
+                  onChange={(e) => handleLimitChange("limiteNivel1", Number(e.target.value))}
                   className="w-32 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -360,10 +402,7 @@ export function ApprovalConfigModal({
                 <input
                   type="number"
                   value={config.limiteNivel2}
-                  onChange={(e) => {
-                    isDirtyRef.current = true;
-                    setConfig({ ...config, limiteNivel2: Math.max(0, Number(e.target.value)) });
-                  }}
+                  onChange={(e) => handleLimitChange("limiteNivel2", Number(e.target.value))}
                   className="w-32 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -409,10 +448,7 @@ export function ApprovalConfigModal({
                 <input
                   type="number"
                   value={config.limiteNivel3}
-                  onChange={(e) => {
-                    isDirtyRef.current = true;
-                    setConfig({ ...config, limiteNivel3: Math.max(0, Number(e.target.value)) });
-                  }}
+                  onChange={(e) => handleLimitChange("limiteNivel3", Number(e.target.value))}
                   className="w-36 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>

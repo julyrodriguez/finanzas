@@ -81,21 +81,21 @@ export function getStoredApprovalConfig(): ApprovalConfig {
       limiteNivel1: Number(parsed.limiteNivel1) || DEFAULT_APPROVAL_CONFIG.limiteNivel1,
       limiteNivel2: Number(parsed.limiteNivel2) || DEFAULT_APPROVAL_CONFIG.limiteNivel2,
       limiteNivel3: Number(parsed.limiteNivel3) || DEFAULT_APPROVAL_CONFIG.limiteNivel3,
-      firmantes1Nivel1: Array.isArray(parsed.firmantes1Nivel1) && parsed.firmantes1Nivel1.length > 0
+      firmantes1Nivel1: Array.isArray(parsed.firmantes1Nivel1)
         ? parsed.firmantes1Nivel1 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel1,
-      firmantes2Nivel1: Array.isArray(parsed.firmantes2Nivel1) && parsed.firmantes2Nivel1.length > 0
+      firmantes2Nivel1: Array.isArray(parsed.firmantes2Nivel1)
         ? parsed.firmantes2Nivel1 : (Array.isArray(parsed.firmantesAreaNivel1) ? parsed.firmantesAreaNivel1 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel1),
-      firmantes1Nivel2: Array.isArray(parsed.firmantes1Nivel2) && parsed.firmantes1Nivel2.length > 0
+      firmantes1Nivel2: Array.isArray(parsed.firmantes1Nivel2)
         ? parsed.firmantes1Nivel2 : (parsed.firmante1Nivel2 ? [parsed.firmante1Nivel2] : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel2),
-      firmantes2Nivel2: Array.isArray(parsed.firmantes2Nivel2) && parsed.firmantes2Nivel2.length > 0
+      firmantes2Nivel2: Array.isArray(parsed.firmantes2Nivel2)
         ? parsed.firmantes2Nivel2 : (parsed.firmante2Nivel2 ? [parsed.firmante2Nivel2] : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel2),
-      firmantes1Nivel3: Array.isArray(parsed.firmantes1Nivel3) && parsed.firmantes1Nivel3.length > 0
+      firmantes1Nivel3: Array.isArray(parsed.firmantes1Nivel3)
         ? parsed.firmantes1Nivel3 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel3,
-      firmantes2Nivel3: Array.isArray(parsed.firmantes2Nivel3) && parsed.firmantes2Nivel3.length > 0
+      firmantes2Nivel3: Array.isArray(parsed.firmantes2Nivel3)
         ? parsed.firmantes2Nivel3 : (parsed.firmante2Nivel3 ? [parsed.firmante2Nivel3] : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel3),
-      firmantes1Nivel4: Array.isArray(parsed.firmantes1Nivel4) && parsed.firmantes1Nivel4.length > 0
+      firmantes1Nivel4: Array.isArray(parsed.firmantes1Nivel4)
         ? parsed.firmantes1Nivel4 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel4,
-      firmantes2Nivel4: Array.isArray(parsed.firmantes2Nivel4) && parsed.firmantes2Nivel4.length > 0
+      firmantes2Nivel4: Array.isArray(parsed.firmantes2Nivel4)
         ? parsed.firmantes2Nivel4 : (parsed.firmante2Nivel4 ? [parsed.firmante2Nivel4] : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel4),
     };
   } catch {
@@ -108,7 +108,13 @@ export function getStoredApprovalConfig(): ApprovalConfig {
  */
 export async function fetchApprovalConfigFromServer(): Promise<ApprovalConfig> {
   try {
-    const res = await fetch(APPROVAL_CONFIG_API_URL);
+    const res = await fetch(`${APPROVAL_CONFIG_API_URL}?_t=${Date.now()}`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+      },
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data && data.success && data.config) {
@@ -118,21 +124,21 @@ export async function fetchApprovalConfigFromServer(): Promise<ApprovalConfig> {
         limiteNivel1: Number(data.config.limiteNivel1) || DEFAULT_APPROVAL_CONFIG.limiteNivel1,
         limiteNivel2: Number(data.config.limiteNivel2) || DEFAULT_APPROVAL_CONFIG.limiteNivel2,
         limiteNivel3: Number(data.config.limiteNivel3) || DEFAULT_APPROVAL_CONFIG.limiteNivel3,
-        firmantes1Nivel1: Array.isArray(data.config.firmantes1Nivel1) && data.config.firmantes1Nivel1.length > 0
+        firmantes1Nivel1: Array.isArray(data.config.firmantes1Nivel1)
           ? data.config.firmantes1Nivel1 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel1,
-        firmantes2Nivel1: Array.isArray(data.config.firmantes2Nivel1) && data.config.firmantes2Nivel1.length > 0
+        firmantes2Nivel1: Array.isArray(data.config.firmantes2Nivel1)
           ? data.config.firmantes2Nivel1 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel1,
-        firmantes1Nivel2: Array.isArray(data.config.firmantes1Nivel2) && data.config.firmantes1Nivel2.length > 0
+        firmantes1Nivel2: Array.isArray(data.config.firmantes1Nivel2)
           ? data.config.firmantes1Nivel2 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel2,
-        firmantes2Nivel2: Array.isArray(data.config.firmantes2Nivel2) && data.config.firmantes2Nivel2.length > 0
+        firmantes2Nivel2: Array.isArray(data.config.firmantes2Nivel2)
           ? data.config.firmantes2Nivel2 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel2,
-        firmantes1Nivel3: Array.isArray(data.config.firmantes1Nivel3) && data.config.firmantes1Nivel3.length > 0
+        firmantes1Nivel3: Array.isArray(data.config.firmantes1Nivel3)
           ? data.config.firmantes1Nivel3 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel3,
-        firmantes2Nivel3: Array.isArray(data.config.firmantes2Nivel3) && data.config.firmantes2Nivel3.length > 0
+        firmantes2Nivel3: Array.isArray(data.config.firmantes2Nivel3)
           ? data.config.firmantes2Nivel3 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel3,
-        firmantes1Nivel4: Array.isArray(data.config.firmantes1Nivel4) && data.config.firmantes1Nivel4.length > 0
+        firmantes1Nivel4: Array.isArray(data.config.firmantes1Nivel4)
           ? data.config.firmantes1Nivel4 : DEFAULT_APPROVAL_CONFIG.firmantes1Nivel4,
-        firmantes2Nivel4: Array.isArray(data.config.firmantes2Nivel4) && data.config.firmantes2Nivel4.length > 0
+        firmantes2Nivel4: Array.isArray(data.config.firmantes2Nivel4)
           ? data.config.firmantes2Nivel4 : DEFAULT_APPROVAL_CONFIG.firmantes2Nivel4,
       };
 
@@ -171,6 +177,13 @@ export async function saveApprovalConfigToServer(config: ApprovalConfig, updated
       }),
     });
     if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && data.success && data.config) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data.config));
+          window.dispatchEvent(new Event("approval_config_updated"));
+        }
+      }
       console.log("✅ [ApprovalConfig] Guardado exitosamente en el servidor MongoDB");
       return true;
     }
