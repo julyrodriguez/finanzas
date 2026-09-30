@@ -289,82 +289,101 @@ export function BatchLiberateModal({
             }
           }
           // ==========================================
-          // TIER 2: De 5M a 18M (Pablo Mondelo + Darío)
+          // TIER 2: De 5M a 18M
           // ==========================================
           else if (numMonto > config.limiteNivel1 && numMonto <= config.limiteNivel2) {
             const isFirma1 = isNameInList(activeAuthorizer, config.firmantes1Nivel2);
             const isFirma2 = isNameInList(activeAuthorizer, config.firmantes2Nivel2);
 
-            if (isFirma1) {
-              const hasF2 = Boolean(matchedOrder.firmado2 && matchedOrder.firmante2 && isNameInList(matchedOrder.firmante2, config.firmantes2Nivel2));
-              if (hasF2) {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "ready_to_liberate",
-                  statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
-                  updatesToApply: {
-                    liberada: true,
-                    mandada: false,
-                    entregada: false,
-                    cancelada: false,
-                    firmado1: true,
-                    firmante1: activeAuthorizer,
-                    fechaFirma1: nowIso,
-                  },
-                });
-              } else {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "partial_signed",
-                  statusDetail: `Firma 1 registrada por ${activeAuthorizer}. Falta firma 2 (${config.firmantes2Nivel2.join("/")})`,
-                  updatesToApply: {
-                    liberada: false,
-                    mandada: true,
-                    firmado1: true,
-                    firmante1: activeAuthorizer,
-                    fechaFirma1: nowIso,
-                  },
-                });
-              }
-            } else if (isFirma2) {
-              const hasF1 = Boolean(matchedOrder.firmado1 && matchedOrder.firmante1 && isNameInList(matchedOrder.firmante1, config.firmantes1Nivel2));
-              if (hasF1) {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "ready_to_liberate",
-                  statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
-                  updatesToApply: {
-                    liberada: true,
-                    mandada: false,
-                    entregada: false,
-                    cancelada: false,
-                    firmado2: true,
-                    firmante2: activeAuthorizer,
-                    fechaFirma2: nowIso,
-                  },
-                });
-              } else {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "partial_signed",
-                  statusDetail: `Firma 2 registrada por ${activeAuthorizer}. Falta firma 1 (${config.firmantes1Nivel2.join("/")})`,
-                  updatesToApply: {
-                    liberada: false,
-                    mandada: true,
-                    firmado2: true,
-                    firmante2: activeAuthorizer,
-                    fechaFirma2: nowIso,
-                  },
-                });
-              }
+            const hasF1 = Boolean(matchedOrder.firmado1 && matchedOrder.firmante1 && isNameInList(matchedOrder.firmante1, config.firmantes1Nivel2));
+            const hasF2 = Boolean(matchedOrder.firmado2 && matchedOrder.firmante2 && isNameInList(matchedOrder.firmante2, config.firmantes2Nivel2));
+
+            // Si puede firmar como F2 y F1 ya está firmada, actúa como Firma 2 y libera
+            if (isFirma2 && hasF1 && !hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                  firmado2: true,
+                  firmante2: activeAuthorizer,
+                  fechaFirma2: nowIso,
+                },
+              });
+            } else if (isFirma1 && hasF2 && !hasF1) {
+              // Si puede firmar como F1 y F2 ya está firmada, actúa como Firma 1 y libera
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                  firmado1: true,
+                  firmante1: activeAuthorizer,
+                  fechaFirma1: nowIso,
+                },
+              });
+            } else if (isFirma1 && !hasF1) {
+              // Firma 1 registrada
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: hasF2 ? "ready_to_liberate" : "partial_signed",
+                statusDetail: hasF2
+                  ? `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`
+                  : `Firma 1 registrada por ${activeAuthorizer}. Falta firma 2 (${config.firmantes2Nivel2.join("/")})`,
+                updatesToApply: {
+                  liberada: hasF2,
+                  mandada: !hasF2,
+                  firmado1: true,
+                  firmante1: activeAuthorizer,
+                  fechaFirma1: nowIso,
+                },
+              });
+            } else if (isFirma2 && !hasF2) {
+              // Firma 2 registrada
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: hasF1 ? "ready_to_liberate" : "partial_signed",
+                statusDetail: hasF1
+                  ? `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`
+                  : `Firma 2 registrada por ${activeAuthorizer}. Falta firma 1 (${config.firmantes1Nivel2.join("/")})`,
+                updatesToApply: {
+                  liberada: hasF1,
+                  mandada: !hasF1,
+                  firmado2: true,
+                  firmante2: activeAuthorizer,
+                  fechaFirma2: nowIso,
+                },
+              });
+            } else if (hasF1 && hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Ya cuenta con ambas firmas (${matchedOrder.firmante1} y ${matchedOrder.firmante2})`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                },
+              });
             } else {
               results.push({
                 rawToken: token,
@@ -376,82 +395,97 @@ export function BatchLiberateModal({
             }
           }
           // ==========================================
-          // TIER 3: De 18M a 150M (Matías / Hernán + Darío)
+          // TIER 3: De 18M a 150M
           // ==========================================
           else if (numMonto > config.limiteNivel2 && numMonto <= config.limiteNivel3) {
             const isFirma1 = isNameInList(activeAuthorizer, config.firmantes1Nivel3);
             const isFirma2 = isNameInList(activeAuthorizer, config.firmantes2Nivel3);
 
-            if (isFirma1) {
-              const hasF2 = Boolean(matchedOrder.firmado2 && matchedOrder.firmante2 && isNameInList(matchedOrder.firmante2, config.firmantes2Nivel3));
-              if (hasF2) {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "ready_to_liberate",
-                  statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
-                  updatesToApply: {
-                    liberada: true,
-                    mandada: false,
-                    entregada: false,
-                    cancelada: false,
-                    firmado1: true,
-                    firmante1: activeAuthorizer,
-                    fechaFirma1: nowIso,
-                  },
-                });
-              } else {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "partial_signed",
-                  statusDetail: `Firma 1 registrada por ${activeAuthorizer}. Falta firma 2 (${config.firmantes2Nivel3.join("/")})`,
-                  updatesToApply: {
-                    liberada: false,
-                    mandada: true,
-                    firmado1: true,
-                    firmante1: activeAuthorizer,
-                    fechaFirma1: nowIso,
-                  },
-                });
-              }
-            } else if (isFirma2) {
-              const hasF1 = Boolean(matchedOrder.firmado1 && matchedOrder.firmante1 && isNameInList(matchedOrder.firmante1, config.firmantes1Nivel3));
-              if (hasF1) {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "ready_to_liberate",
-                  statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
-                  updatesToApply: {
-                    liberada: true,
-                    mandada: false,
-                    entregada: false,
-                    cancelada: false,
-                    firmado2: true,
-                    firmante2: activeAuthorizer,
-                    fechaFirma2: nowIso,
-                  },
-                });
-              } else {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "partial_signed",
-                  statusDetail: `Firma 2 registrada por ${activeAuthorizer}. Falta firma 1 (${config.firmantes1Nivel3.join("/")})`,
-                  updatesToApply: {
-                    liberada: false,
-                    mandada: true,
-                    firmado2: true,
-                    firmante2: activeAuthorizer,
-                    fechaFirma2: nowIso,
-                  },
-                });
-              }
+            const hasF1 = Boolean(matchedOrder.firmado1 && matchedOrder.firmante1 && isNameInList(matchedOrder.firmante1, config.firmantes1Nivel3));
+            const hasF2 = Boolean(matchedOrder.firmado2 && matchedOrder.firmante2 && isNameInList(matchedOrder.firmante2, config.firmantes2Nivel3));
+
+            if (isFirma2 && hasF1 && !hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                  firmado2: true,
+                  firmante2: activeAuthorizer,
+                  fechaFirma2: nowIso,
+                },
+              });
+            } else if (isFirma1 && hasF2 && !hasF1) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                  firmado1: true,
+                  firmante1: activeAuthorizer,
+                  fechaFirma1: nowIso,
+                },
+              });
+            } else if (isFirma1 && !hasF1) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: hasF2 ? "ready_to_liberate" : "partial_signed",
+                statusDetail: hasF2
+                  ? `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`
+                  : `Firma 1 registrada por ${activeAuthorizer}. Falta firma 2 (${config.firmantes2Nivel3.join("/")})`,
+                updatesToApply: {
+                  liberada: hasF2,
+                  mandada: !hasF2,
+                  firmado1: true,
+                  firmante1: activeAuthorizer,
+                  fechaFirma1: nowIso,
+                },
+              });
+            } else if (isFirma2 && !hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: hasF1 ? "ready_to_liberate" : "partial_signed",
+                statusDetail: hasF1
+                  ? `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`
+                  : `Firma 2 registrada por ${activeAuthorizer}. Falta firma 1 (${config.firmantes1Nivel3.join("/")})`,
+                updatesToApply: {
+                  liberada: hasF1,
+                  mandada: !hasF1,
+                  firmado2: true,
+                  firmante2: activeAuthorizer,
+                  fechaFirma2: nowIso,
+                },
+              });
+            } else if (hasF1 && hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Ya cuenta con ambas firmas (${matchedOrder.firmante1} y ${matchedOrder.firmante2})`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                },
+              });
             } else {
               results.push({
                 rawToken: token,
@@ -463,82 +497,97 @@ export function BatchLiberateModal({
             }
           }
           // ==========================================
-          // TIER 4: Más de 150M (Darío / Hernán + Martín)
+          // TIER 4: Más de 150M
           // ==========================================
           else if (numMonto > config.limiteNivel3) {
             const isFirma1 = isNameInList(activeAuthorizer, config.firmantes1Nivel4);
             const isFirma2 = isNameInList(activeAuthorizer, config.firmantes2Nivel4);
 
-            if (isFirma1) {
-              const hasF2 = Boolean(matchedOrder.firmado2 && matchedOrder.firmante2 && isNameInList(matchedOrder.firmante2, config.firmantes2Nivel4));
-              if (hasF2) {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "ready_to_liberate",
-                  statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
-                  updatesToApply: {
-                    liberada: true,
-                    mandada: false,
-                    entregada: false,
-                    cancelada: false,
-                    firmado1: true,
-                    firmante1: activeAuthorizer,
-                    fechaFirma1: nowIso,
-                  },
-                });
-              } else {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "partial_signed",
-                  statusDetail: `Firma 1 registrada por ${activeAuthorizer}. Falta firma 2 (${config.firmantes2Nivel4.join("/")})`,
-                  updatesToApply: {
-                    liberada: false,
-                    mandada: true,
-                    firmado1: true,
-                    firmante1: activeAuthorizer,
-                    fechaFirma1: nowIso,
-                  },
-                });
-              }
-            } else if (isFirma2) {
-              const hasF1 = Boolean(matchedOrder.firmado1 && matchedOrder.firmante1 && isNameInList(matchedOrder.firmante1, config.firmantes1Nivel4));
-              if (hasF1) {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "ready_to_liberate",
-                  statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
-                  updatesToApply: {
-                    liberada: true,
-                    mandada: false,
-                    entregada: false,
-                    cancelada: false,
-                    firmado2: true,
-                    firmante2: activeAuthorizer,
-                    fechaFirma2: nowIso,
-                  },
-                });
-              } else {
-                results.push({
-                  rawToken: token,
-                  normalizedOC: normToken,
-                  order: matchedOrder,
-                  status: "partial_signed",
-                  statusDetail: `Firma 2 registrada por ${activeAuthorizer}. Falta firma 1 (${config.firmantes1Nivel4.join("/")})`,
-                  updatesToApply: {
-                    liberada: false,
-                    mandada: true,
-                    firmado2: true,
-                    firmante2: activeAuthorizer,
-                    fechaFirma2: nowIso,
-                  },
-                });
-              }
+            const hasF1 = Boolean(matchedOrder.firmado1 && matchedOrder.firmante1 && isNameInList(matchedOrder.firmante1, config.firmantes1Nivel4));
+            const hasF2 = Boolean(matchedOrder.firmado2 && matchedOrder.firmante2 && isNameInList(matchedOrder.firmante2, config.firmantes2Nivel4));
+
+            if (isFirma2 && hasF1 && !hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                  firmado2: true,
+                  firmante2: activeAuthorizer,
+                  fechaFirma2: nowIso,
+                },
+              });
+            } else if (isFirma1 && hasF2 && !hasF1) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                  firmado1: true,
+                  firmante1: activeAuthorizer,
+                  fechaFirma1: nowIso,
+                },
+              });
+            } else if (isFirma1 && !hasF1) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: hasF2 ? "ready_to_liberate" : "partial_signed",
+                statusDetail: hasF2
+                  ? `Liberada: ${activeAuthorizer} (F1) + ${matchedOrder.firmante2} (F2)`
+                  : `Firma 1 registrada por ${activeAuthorizer}. Falta firma 2 (${config.firmantes2Nivel4.join("/")})`,
+                updatesToApply: {
+                  liberada: hasF2,
+                  mandada: !hasF2,
+                  firmado1: true,
+                  firmante1: activeAuthorizer,
+                  fechaFirma1: nowIso,
+                },
+              });
+            } else if (isFirma2 && !hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: hasF1 ? "ready_to_liberate" : "partial_signed",
+                statusDetail: hasF1
+                  ? `Liberada: ${matchedOrder.firmante1} (F1) + ${activeAuthorizer} (F2)`
+                  : `Firma 2 registrada por ${activeAuthorizer}. Falta firma 1 (${config.firmantes1Nivel4.join("/")})`,
+                updatesToApply: {
+                  liberada: hasF1,
+                  mandada: !hasF1,
+                  firmado2: true,
+                  firmante2: activeAuthorizer,
+                  fechaFirma2: nowIso,
+                },
+              });
+            } else if (hasF1 && hasF2) {
+              results.push({
+                rawToken: token,
+                normalizedOC: normToken,
+                order: matchedOrder,
+                status: "ready_to_liberate",
+                statusDetail: `Ya cuenta con ambas firmas (${matchedOrder.firmante1} y ${matchedOrder.firmante2})`,
+                updatesToApply: {
+                  liberada: true,
+                  mandada: false,
+                  entregada: false,
+                  cancelada: false,
+                },
+              });
             } else {
               results.push({
                 rawToken: token,

@@ -33,8 +33,10 @@ interface SignerSectionBoxProps {
   label: string;
   hint: string;
   signers: string[];
+  fieldKey: keyof ApprovalConfig;
   onAdd: (name: string) => void;
   onRemove: (name: string) => void;
+  onInputChange?: (fieldKey: keyof ApprovalConfig, val: string) => void;
   badgeClass: string;
 }
 
@@ -42,8 +44,10 @@ function SignerSectionBox({
   label,
   hint,
   signers,
+  fieldKey,
   onAdd,
   onRemove,
+  onInputChange,
   badgeClass,
 }: SignerSectionBoxProps) {
   const [inputVal, setInputVal] = useState("");
@@ -53,6 +57,12 @@ function SignerSectionBox({
     if (!trimmed) return;
     onAdd(trimmed);
     setInputVal("");
+    if (onInputChange) onInputChange(fieldKey, "");
+  };
+
+  const handleChange = (val: string) => {
+    setInputVal(val);
+    if (onInputChange) onInputChange(fieldKey, val);
   };
 
   return (
@@ -93,7 +103,12 @@ function SignerSectionBox({
         <input
           type="text"
           value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
+          onBlur={() => {
+            if (inputVal.trim()) {
+              handleAdd();
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -118,6 +133,8 @@ function SignerSectionBox({
   );
 }
 
+import { useRef } from "react";
+
 export function ApprovalConfigModal({
   isOpen,
   onClose,
@@ -126,49 +143,116 @@ export function ApprovalConfigModal({
 }: ApprovalConfigModalProps) {
   const [config, setConfig] = useState<ApprovalConfig>(DEFAULT_APPROVAL_CONFIG);
   const [saving, setSaving] = useState(false);
+  const isDirtyRef = useRef(false);
+  const pendingInputsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen) {
-      setConfig(getStoredApprovalConfig());
-      // Sincronizar con el servidor en segundo plano
+      isDirtyRef.current = false;
+      pendingInputsRef.current = {};
+      const initial = getStoredApprovalConfig();
+      setConfig(initial);
+
+      // Sincronizar con el servidor en segundo plano sin pisar si el usuario ya modificó algo
+      let active = true;
       fetchApprovalConfigFromServer()
         .then((cfg) => {
-          if (cfg) setConfig(cfg);
+          if (active && cfg && !isDirtyRef.current) {
+            setConfig(cfg);
+          }
         })
         .catch(() => null);
+
+      return () => {
+        active = false;
+      };
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const handleInputChange = (fieldKey: keyof ApprovalConfig, val: string) => {
+    pendingInputsRef.current[fieldKey] = val;
+    if (val.trim()) {
+      isDirtyRef.current = true;
+    }
+  };
+
   const addSignerTo = (key: keyof ApprovalConfig, name: string) => {
-    const list = Array.isArray(config[key]) ? (config[key] as string[]) : [];
-    if (list.includes(name)) return;
-    setConfig((prev) => ({
-      ...prev,
-      [key]: [...list, name],
-    }));
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    isDirtyRef.current = true;
+    setConfig((prev) => {
+      const list = Array.isArray(prev[key]) ? (prev[key] as string[]) : [];
+      // Se permite que el mismo nombre esté en otros niveles sin ningún problema.
+      // Solo evitamos duplicarlo exactamente dentro de este mismo campo.
+      if (list.some((s) => s.trim().toLowerCase() === trimmed.toLowerCase())) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: [...list, trimmed],
+      };
+    });
   };
 
   const removeSignerFrom = (key: keyof ApprovalConfig, name: string) => {
-    const list = Array.isArray(config[key]) ? (config[key] as string[]) : [];
-    setConfig((prev) => ({
-      ...prev,
-      [key]: list.filter((s) => s !== name),
-    }));
+    isDirtyRef.current = true;
+    setConfig((prev) => {
+      const list = Array.isArray(prev[key]) ? (prev[key] as string[]) : [];
+      return {
+        ...prev,
+        [key]: list.filter((s) => s.trim().toLowerCase() !== name.trim().toLowerCase()),
+      };
+    });
   };
 
   const handleResetDefaults = () => {
     if (confirm("¿Restablecer todas las escalas y firmadores a los valores por defecto?")) {
+      isDirtyRef.current = true;
       setConfig(DEFAULT_APPROVAL_CONFIG);
     }
   };
 
+  const handleClose = () => {
+    const hasPending = Object.values(pendingInputsRef.current).some((v) => v && v.trim());
+    if (isDirtyRef.current || hasPending) {
+      if (confirm("Tenés cambios pendientes en los firmantes. ¿Deseas guardarlos antes de salir?")) {
+        handleSave();
+        return;
+      }
+    }
+    onClose();
+  };
+
   const handleSave = async () => {
     setSaving(true);
-    const ok = await saveApprovalConfigToServer(config);
+
+    // 1. Integrar automáticamente cualquier firmante que haya quedado escrito en un input sin hacer clic en "+ Agregar"
+    let updatedConfig = { ...config };
+    for (const [key, text] of Object.entries(pendingInputsRef.current)) {
+      const trimmed = (text || "").trim();
+      if (trimmed) {
+        const fieldKey = key as keyof ApprovalConfig;
+        const currentList = Array.isArray(updatedConfig[fieldKey])
+          ? (updatedConfig[fieldKey] as string[])
+          : [];
+        if (!currentList.some((s) => s.trim().toLowerCase() === trimmed.toLowerCase())) {
+          updatedConfig = {
+            ...updatedConfig,
+            [fieldKey]: [...currentList, trimmed],
+          };
+        }
+      }
+    }
+
+    pendingInputsRef.current = {};
+    isDirtyRef.current = false;
+    setConfig(updatedConfig);
+
+    const ok = await saveApprovalConfigToServer(updatedConfig);
     setSaving(false);
-    if (onConfigSaved) onConfigSaved(config);
+    if (onConfigSaved) onConfigSaved(updatedConfig);
     if (showToast) {
       showToast(ok 
         ? "⚙️ Firmadores y escalas guardados en el servidor MongoDB" 
@@ -204,7 +288,7 @@ export function ApprovalConfigModal({
 
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -227,7 +311,10 @@ export function ApprovalConfigModal({
                 <input
                   type="number"
                   value={config.limiteNivel1}
-                  onChange={(e) => setConfig({ ...config, limiteNivel1: Math.max(0, Number(e.target.value)) })}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    setConfig({ ...config, limiteNivel1: Math.max(0, Number(e.target.value)) });
+                  }}
                   className="w-32 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -238,8 +325,10 @@ export function ApprovalConfigModal({
                 label="Firma 1 (Automática al pasar a Mandada)"
                 hint="Se asume aprobada automáticamente si la orden está mandada y dentro del tope."
                 signers={config.firmantes1Nivel1}
+                fieldKey="firmantes1Nivel1"
                 onAdd={(name) => addSignerTo("firmantes1Nivel1", name)}
                 onRemove={(name) => removeSignerFrom("firmantes1Nivel1", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
               />
 
@@ -247,8 +336,10 @@ export function ApprovalConfigModal({
                 label="Firma 2 (Responsables de Área)"
                 hint="Al pegar la autorización de cualquiera de estas personas, la orden queda 100% liberada."
                 signers={config.firmantes2Nivel1}
+                fieldKey="firmantes2Nivel1"
                 onAdd={(name) => addSignerTo("firmantes2Nivel1", name)}
                 onRemove={(name) => removeSignerFrom("firmantes2Nivel1", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
               />
             </div>
@@ -269,7 +360,10 @@ export function ApprovalConfigModal({
                 <input
                   type="number"
                   value={config.limiteNivel2}
-                  onChange={(e) => setConfig({ ...config, limiteNivel2: Math.max(0, Number(e.target.value)) })}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    setConfig({ ...config, limiteNivel2: Math.max(0, Number(e.target.value)) });
+                  }}
                   className="w-32 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -280,8 +374,10 @@ export function ApprovalConfigModal({
                 label="Firma 1 Requerida"
                 hint="Debe mandar confirmación expresa de autorización."
                 signers={config.firmantes1Nivel2}
+                fieldKey="firmantes1Nivel2"
                 onAdd={(name) => addSignerTo("firmantes1Nivel2", name)}
                 onRemove={(name) => removeSignerFrom("firmantes1Nivel2", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-purple-500/15 border-purple-500/30 text-purple-300"
               />
 
@@ -289,8 +385,10 @@ export function ApprovalConfigModal({
                 label="Firma 2 Requerida"
                 hint="Segunda firma obligatoria para completar la liberación."
                 signers={config.firmantes2Nivel2}
+                fieldKey="firmantes2Nivel2"
                 onAdd={(name) => addSignerTo("firmantes2Nivel2", name)}
                 onRemove={(name) => removeSignerFrom("firmantes2Nivel2", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-purple-500/15 border-purple-500/30 text-purple-300"
               />
             </div>
@@ -311,7 +409,10 @@ export function ApprovalConfigModal({
                 <input
                   type="number"
                   value={config.limiteNivel3}
-                  onChange={(e) => setConfig({ ...config, limiteNivel3: Math.max(0, Number(e.target.value)) })}
+                  onChange={(e) => {
+                    isDirtyRef.current = true;
+                    setConfig({ ...config, limiteNivel3: Math.max(0, Number(e.target.value)) });
+                  }}
                   className="w-36 px-2.5 py-1 rounded-lg bg-[#111726] border border-slate-700 text-white font-mono font-bold text-right focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -322,8 +423,10 @@ export function ApprovalConfigModal({
                 label="Firma 1 Habilitados"
                 hint="Cualquiera de ellos puede autorizar en 1ra instancia."
                 signers={config.firmantes1Nivel3}
+                fieldKey="firmantes1Nivel3"
                 onAdd={(name) => addSignerTo("firmantes1Nivel3", name)}
                 onRemove={(name) => removeSignerFrom("firmantes1Nivel3", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-blue-500/15 border-blue-500/30 text-blue-300"
               />
 
@@ -331,8 +434,10 @@ export function ApprovalConfigModal({
                 label="Firma 2 Habilitados"
                 hint="Segunda firma requerida para completar la liberación."
                 signers={config.firmantes2Nivel3}
+                fieldKey="firmantes2Nivel3"
                 onAdd={(name) => addSignerTo("firmantes2Nivel3", name)}
                 onRemove={(name) => removeSignerFrom("firmantes2Nivel3", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-blue-500/15 border-blue-500/30 text-blue-300"
               />
             </div>
@@ -355,8 +460,10 @@ export function ApprovalConfigModal({
                 label="Firma 1 Habilitados"
                 hint="Cualquiera de ellos puede autorizar en 1ra instancia."
                 signers={config.firmantes1Nivel4}
+                fieldKey="firmantes1Nivel4"
                 onAdd={(name) => addSignerTo("firmantes1Nivel4", name)}
                 onRemove={(name) => removeSignerFrom("firmantes1Nivel4", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-amber-500/15 border-amber-500/30 text-amber-300"
               />
 
@@ -364,8 +471,10 @@ export function ApprovalConfigModal({
                 label="Firma 2 Habilitados"
                 hint="Segunda firma requerida para montos máximos."
                 signers={config.firmantes2Nivel4}
+                fieldKey="firmantes2Nivel4"
                 onAdd={(name) => addSignerTo("firmantes2Nivel4", name)}
                 onRemove={(name) => removeSignerFrom("firmantes2Nivel4", name)}
+                onInputChange={handleInputChange}
                 badgeClass="bg-amber-500/15 border-amber-500/30 text-amber-300"
               />
             </div>
@@ -389,7 +498,7 @@ export function ApprovalConfigModal({
             <motion.button
               type="button"
               whileTap={{ scale: 0.96 }}
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancelar

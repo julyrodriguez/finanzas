@@ -172,13 +172,15 @@ export default function ProcesoDeLiberacionPage() {
     if (numMonto <= limite1) {
       const isF1 = Boolean(orden.firmante1?.trim() || orden.mandada || orden.liberada);
       const isF2 = Boolean(orden.firmante2?.trim() || orden.liberada);
+      const f1Names = config?.firmantes1Nivel1?.length ? config.firmantes1Nivel1.join(" / ") : "Tomás";
+      const f2Names = config?.firmantes2Nivel1?.length ? config.firmantes2Nivel1.join(" / ") : "Área";
       return {
         tierName: "Nivel 1 (Hasta $5M)",
         tierBadge: "≤ $5M",
         tierKey: "Nivel 1",
-        f1Label: "Tomás",
-        f2Label: "Área",
-        f1Signer: orden.firmante1?.trim() || (isF1 ? "Tomas" : ""),
+        f1Label: f1Names,
+        f2Label: f2Names,
+        f1Signer: orden.firmante1?.trim() || (isF1 ? (config?.firmantes1Nivel1?.[0] || "Tomas") : ""),
         f2Signer: orden.firmante2?.trim() || "",
         isF1Signed: isF1,
         isF2Signed: isF2,
@@ -189,12 +191,14 @@ export default function ProcesoDeLiberacionPage() {
     } else if (numMonto > limite1 && numMonto <= limite2) {
       const isF1 = Boolean(orden.firmante1?.trim());
       const isF2 = Boolean(orden.firmante2?.trim());
+      const f1Names = config?.firmantes1Nivel2?.length ? config.firmantes1Nivel2.join(" / ") : "Pablo Mondelo";
+      const f2Names = config?.firmantes2Nivel2?.length ? config.firmantes2Nivel2.join(" / ") : "Darío";
       return {
         tierName: "Nivel 2 ($5M - $18M)",
         tierBadge: "$5M-$18M",
         tierKey: "Nivel 2",
-        f1Label: "Pablo Mondelo",
-        f2Label: "Darío",
+        f1Label: f1Names,
+        f2Label: f2Names,
         f1Signer: orden.firmante1?.trim() || "",
         f2Signer: orden.firmante2?.trim() || "",
         isF1Signed: isF1,
@@ -206,12 +210,14 @@ export default function ProcesoDeLiberacionPage() {
     } else if (numMonto > limite2 && numMonto <= limite3) {
       const isF1 = Boolean(orden.firmante1?.trim());
       const isF2 = Boolean(orden.firmante2?.trim());
+      const f1Names = config?.firmantes1Nivel3?.length ? config.firmantes1Nivel3.join(" / ") : "Matías / Hernán";
+      const f2Names = config?.firmantes2Nivel3?.length ? config.firmantes2Nivel3.join(" / ") : "Darío";
       return {
         tierName: "Nivel 3 ($18M - $150M)",
         tierBadge: "$18M-$150M",
         tierKey: "Nivel 3",
-        f1Label: "Matías / Hernán",
-        f2Label: "Darío",
+        f1Label: f1Names,
+        f2Label: f2Names,
         f1Signer: orden.firmante1?.trim() || "",
         f2Signer: orden.firmante2?.trim() || "",
         isF1Signed: isF1,
@@ -223,12 +229,14 @@ export default function ProcesoDeLiberacionPage() {
     } else {
       const isF1 = Boolean(orden.firmante1?.trim());
       const isF2 = Boolean(orden.firmante2?.trim());
+      const f1Names = config?.firmantes1Nivel4?.length ? config.firmantes1Nivel4.join(" / ") : "Darío / Hernán";
+      const f2Names = config?.firmantes2Nivel4?.length ? config.firmantes2Nivel4.join(" / ") : "Martín";
       return {
         tierName: "Nivel 4 (> $150M)",
         tierBadge: "> $150M",
         tierKey: "Nivel 4",
-        f1Label: "Darío / Hernán",
-        f2Label: "Martín",
+        f1Label: f1Names,
+        f2Label: f2Names,
         f1Signer: orden.firmante1?.trim() || "",
         f2Signer: orden.firmante2?.trim() || "",
         isF1Signed: isF1,

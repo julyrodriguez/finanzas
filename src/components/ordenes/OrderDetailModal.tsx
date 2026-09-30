@@ -29,7 +29,7 @@ import {
   Send
 } from "lucide-react";
 import { getCreadorBadgeStyle, type OrdenCompra, type Nota } from "@/types/ordenes";
-import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber } from "@/lib/approvalConfig";
+import { getStoredApprovalConfig, DEFAULT_APPROVAL_CONFIG, parseMontoToNumber, type ApprovalConfig } from "@/lib/approvalConfig";
 import { getFirebaseDb } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { syncOrderToMongo } from "@/lib/serverSync";
@@ -47,6 +47,7 @@ interface OrderDetailModalProps {
   onAddNota: (e: React.FormEvent) => void;
   showToast?: (message: string) => void;
   getFormattedCreatedAt?: (orden: OrdenCompra | null) => string;
+  config?: ApprovalConfig;
 }
 
 export function OrderDetailModal({
@@ -61,14 +62,29 @@ export function OrderDetailModal({
   onAddNota,
   showToast,
   getFormattedCreatedAt,
+  config: propConfig,
 }: OrderDetailModalProps) {
-  const config = useMemo(() => {
+  const [internalConfig, setInternalConfig] = useState<ApprovalConfig>(() => {
     try {
       return getStoredApprovalConfig() || DEFAULT_APPROVAL_CONFIG;
     } catch {
       return DEFAULT_APPROVAL_CONFIG;
     }
+  });
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      try {
+        setInternalConfig(getStoredApprovalConfig() || DEFAULT_APPROVAL_CONFIG);
+      } catch {
+        setInternalConfig(DEFAULT_APPROVAL_CONFIG);
+      }
+    };
+    window.addEventListener("approval_config_updated", handleUpdate);
+    return () => window.removeEventListener("approval_config_updated", handleUpdate);
   }, []);
+
+  const config = propConfig || internalConfig;
 
   // State for interactive inline signature editing
   const [editingFirma1, setEditingFirma1] = useState(false);
@@ -178,14 +194,17 @@ export function OrderDetailModal({
       const f1Name = orden.firmante1?.trim() || "";
       const f2Name = orden.firmante2?.trim() || "";
 
+      const f1Text = formatSigners(config?.firmantes1Nivel2, "Pablo Mondelo");
+      const f2Text = formatSigners(config?.firmantes2Nivel2, "Darío");
+
       return {
         tierName: `Nivel 2 (De $${limite1.toLocaleString("es-AR")} a $${limite2.toLocaleString("es-AR")})`,
-        f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel2, "Pablo Mondelo")}`,
-        f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel2, "Darío")}`,
+        f1Label: `Firma 1: ${f1Text}`,
+        f2Label: `Firma 2: ${f2Text}`,
         isF1Signed: hasF1,
-        f1Signer: f1Name || "Pendiente de P. Mondelo",
+        f1Signer: f1Name || `Pendiente (${f1Text})`,
         isF2Signed: hasF2,
-        f2Signer: f2Name || "Pendiente de Darío",
+        f2Signer: f2Name || `Pendiente (${f2Text})`,
       };
     } else if (numMonto > limite2 && numMonto <= limite3) {
       const hasF1 = Boolean(orden.firmante1?.trim());
@@ -193,14 +212,17 @@ export function OrderDetailModal({
       const f1Name = orden.firmante1?.trim() || "";
       const f2Name = orden.firmante2?.trim() || "";
 
+      const f1Text = formatSigners(config?.firmantes1Nivel3, "Matías, Hernán");
+      const f2Text = formatSigners(config?.firmantes2Nivel3, "Darío");
+
       return {
         tierName: `Nivel 3 (De $${limite2.toLocaleString("es-AR")} a $${limite3.toLocaleString("es-AR")})`,
-        f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel3, "Matías, Hernán")}`,
-        f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel3, "Darío")}`,
+        f1Label: `Firma 1: ${f1Text}`,
+        f2Label: `Firma 2: ${f2Text}`,
         isF1Signed: hasF1,
-        f1Signer: f1Name || "Pendiente de Matías/Hernán",
+        f1Signer: f1Name || `Pendiente (${f1Text})`,
         isF2Signed: hasF2,
-        f2Signer: f2Name || "Pendiente de Darío",
+        f2Signer: f2Name || `Pendiente (${f2Text})`,
       };
     } else {
       const hasF1 = Boolean(orden.firmante1?.trim());
@@ -208,14 +230,17 @@ export function OrderDetailModal({
       const f1Name = orden.firmante1?.trim() || "";
       const f2Name = orden.firmante2?.trim() || "";
 
+      const f1Text = formatSigners(config?.firmantes1Nivel4, "Darío, Hernán");
+      const f2Text = formatSigners(config?.firmantes2Nivel4, "Martín");
+
       return {
         tierName: `Nivel 4 (Más de $${limite3.toLocaleString("es-AR")})`,
-        f1Label: `Firma 1: ${formatSigners(config?.firmantes1Nivel4, "Darío, Hernán")}`,
-        f2Label: `Firma 2: ${formatSigners(config?.firmantes2Nivel4, "Martín")}`,
+        f1Label: `Firma 1: ${f1Text}`,
+        f2Label: `Firma 2: ${f2Text}`,
         isF1Signed: hasF1,
-        f1Signer: f1Name || "Pendiente de Darío/Hernán",
+        f1Signer: f1Name || `Pendiente (${f1Text})`,
         isF2Signed: hasF2,
-        f2Signer: f2Name || "Pendiente de Martín",
+        f2Signer: f2Name || `Pendiente (${f2Text})`,
       };
     }
   })();

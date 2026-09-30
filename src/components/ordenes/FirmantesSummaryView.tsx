@@ -73,17 +73,17 @@ export function FirmantesSummaryView({
       let f2Label = "Área";
 
       if (numMonto <= limite1) {
-        f1Label = "Tomás";
-        f2Label = "Área";
+        f1Label = config?.firmantes1Nivel1?.length ? config.firmantes1Nivel1.join(" / ") : "Tomás";
+        f2Label = config?.firmantes2Nivel1?.length ? config.firmantes2Nivel1.join(" / ") : "Área";
       } else if (numMonto <= limite2) {
-        f1Label = "Pablo Mondelo";
-        f2Label = "Darío";
+        f1Label = config?.firmantes1Nivel2?.length ? config.firmantes1Nivel2.join(" / ") : "Pablo Mondelo";
+        f2Label = config?.firmantes2Nivel2?.length ? config.firmantes2Nivel2.join(" / ") : "Darío";
       } else if (numMonto <= limite3) {
-        f1Label = "Matías / Hernán";
-        f2Label = "Darío";
+        f1Label = config?.firmantes1Nivel3?.length ? config.firmantes1Nivel3.join(" / ") : "Matías / Hernán";
+        f2Label = config?.firmantes2Nivel3?.length ? config.firmantes2Nivel3.join(" / ") : "Darío";
       } else {
-        f1Label = "Darío / Hernán";
-        f2Label = "Martín";
+        f1Label = config?.firmantes1Nivel4?.length ? config.firmantes1Nivel4.join(" / ") : "Darío / Hernán";
+        f2Label = config?.firmantes2Nivel4?.length ? config.firmantes2Nivel4.join(" / ") : "Martín";
       }
 
       const isTier1 = numMonto <= limite1;
