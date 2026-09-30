@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { motion } from "motion/react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { 
   X, 
   Send, 
@@ -439,7 +442,12 @@ export function BatchSendToSignModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#0b0f19] border border-slate-700/80 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: EASE_OUT }}
+        className="bg-[#0b0f19] border border-slate-700/80 rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
         
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-950/40 via-indigo-950/20 to-transparent">
@@ -460,12 +468,13 @@ export function BatchSendToSignModal({
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={handleClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
-          </button>
+          </motion.button>
         </div>
 
         {/* Modal Body */}
@@ -682,16 +691,18 @@ export function BatchSendToSignModal({
           </span>
 
           <div className="flex items-center gap-3">
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.96 }}
               onClick={handleClose}
               className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancelar
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.96 }}
               onClick={handleExecuteBatch}
               disabled={totalExecutableCount === 0 || isProcessing}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-blue-950/50 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border border-blue-400/30"
@@ -707,11 +718,11 @@ export function BatchSendToSignModal({
                   <span>Confirmar y Marcar Enviadas ({totalExecutableCount})</span>
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
         </div>
 
-      </div>
+      </motion.div>
     </div>
   );
 }

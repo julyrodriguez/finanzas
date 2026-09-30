@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
+import { motion } from "motion/react";
 import { FolderPlus, Terminal, Folder, X } from "lucide-react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
 interface OrderCmdBarProps {
   showCMDSection: boolean;
@@ -25,7 +28,12 @@ export function OrderCmdBar({
   if (!showCMDSection || selectedOCIds.length === 0) return null;
 
   return (
-    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-3">
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: EASE_OUT }}
+      className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-3"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="space-y-0.5">
           <h4 className="text-xs font-bold text-blue-300 flex items-center gap-1.5">
@@ -37,19 +45,21 @@ export function OrderCmdBar({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={() => setSelectedOCIds([])}
             className="px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-[11px] font-medium transition-colors cursor-pointer"
           >
             Limpiar selección
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={onCopyCMD}
             className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white shadow-sm text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Terminal className="w-3.5 h-3.5" />
             <span>Copiar Comando CMD</span>
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -82,6 +92,6 @@ export function OrderCmdBar({
       <div className="p-2 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-blue-200 overflow-x-auto whitespace-pre">
         {cmdCommand}
       </div>
-    </div>
+    </motion.div>
   );
 }

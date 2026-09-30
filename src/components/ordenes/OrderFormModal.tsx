@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { motion } from "motion/react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { Edit3, Plus, X, Clock, ChevronDown, AlertCircle, Trash2, Loader2, Building2, CheckCircle2, Sparkles } from "lucide-react";
 import type { OrdenCompra } from "@/types/ordenes";
 import { 
@@ -180,7 +183,12 @@ export function OrderFormModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md overflow-y-auto flex items-start justify-center p-4">
-      <div className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-7 rounded-xl shadow-2xl relative space-y-4 my-auto bg-[#0f1422]">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: EASE_OUT }}
+        className="w-full max-w-lg glass-card border border-white/15 p-6 sm:p-7 rounded-xl shadow-2xl relative space-y-4 my-auto bg-[#0f1422]"
+      >
         <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
           <h3 className="text-base font-semibold text-white flex items-center gap-2">
             {editingOrden ? (
@@ -195,12 +203,13 @@ export function OrderFormModal({
               </>
             )}
           </h3>
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={onClose}
-            className="p-1 rounded-lg bg-white/5 text-slate-400 hover:text-white"
+            className="p-1 rounded-lg bg-white/5 text-slate-400 hover:text-white cursor-pointer"
           >
             <X className="w-4 h-4" />
-          </button>
+          </motion.button>
         </div>
 
         <form onSubmit={onSave} className="space-y-4 text-xs">
@@ -220,28 +229,30 @@ export function OrderFormModal({
           <div>
             <label className="block text-gray-300 font-medium mb-1.5">Empresa</label>
             <div className="grid grid-cols-2 gap-3">
-              <button
+              <motion.button
                 type="button"
+                whileTap={{ scale: 0.96 }}
                 onClick={() => setEmpresa("Hoyts")}
-                className={`py-2.5 rounded-xl border font-semibold transition-all ${
+                className={`py-2.5 rounded-xl border font-semibold transition-all cursor-pointer ${
                   empresa === "Hoyts"
                     ? "bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-md"
                     : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10"
                 }`}
               >
                 Hoyts
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
+                whileTap={{ scale: 0.96 }}
                 onClick={() => setEmpresa("CMK")}
-                className={`py-2.5 rounded-xl border font-semibold transition-all ${
+                className={`py-2.5 rounded-xl border font-semibold transition-all cursor-pointer ${
                   empresa === "CMK"
                     ? "bg-teal-500/20 text-teal-300 border-teal-500/50 shadow-md"
                     : "bg-white/5 text-gray-400 border-white/10 hover:bg-white/10"
                 }`}
               >
                 CMK
-              </button>
+              </motion.button>
             </div>
           </div>
 
@@ -582,8 +593,9 @@ export function OrderFormModal({
           {/* Action Buttons: Delete (when editing) + Cancel + Save */}
           <div className="pt-3.5 flex items-center justify-between gap-3 border-t border-white/10">
             {editingOrden && editingOrden.id ? (
-              <button
+              <motion.button
                 type="button"
+                whileTap={{ scale: 0.96 }}
                 onClick={() => {
                   onClose();
                   onDelete(editingOrden.id!);
@@ -592,21 +604,23 @@ export function OrderFormModal({
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Eliminar Orden</span>
-              </button>
+              </motion.button>
             ) : (
               <div />
             )}
 
             <div className="flex items-center gap-2">
-              <button
+              <motion.button
                 type="button"
+                whileTap={{ scale: 0.96 }}
                 onClick={onClose}
                 className="px-3.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-medium transition-colors cursor-pointer"
               >
                 Cancelar
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="submit"
+                whileTap={{ scale: 0.96 }}
                 disabled={submitting}
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
               >
@@ -618,11 +632,11 @@ export function OrderFormModal({
                     <span>{editingOrden ? "Guardar Cambios" : "Guardar Orden"}</span>
                   </>
                 )}
-              </button>
+              </motion.button>
             </div>
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }

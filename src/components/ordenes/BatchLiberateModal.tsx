@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { motion } from "motion/react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { 
   X, 
   ClipboardPaste, 
@@ -718,8 +721,13 @@ export function BatchLiberateModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: EASE_OUT }}
+        className="relative w-full max-w-3xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
@@ -737,12 +745,13 @@ export function BatchLiberateModal({
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={handleClose}
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
-          </button>
+          </motion.button>
         </div>
 
         {/* Content Body */}
@@ -1077,16 +1086,18 @@ export function BatchLiberateModal({
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-white/10 bg-[#0b0f19] flex items-center justify-between gap-3">
-          <button
+          <motion.button
             type="button"
+            whileTap={{ scale: 0.96 }}
             onClick={handleClose}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
           >
             Cancelar
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
             type="button"
+            whileTap={{ scale: 0.96 }}
             onClick={handleExecuteBatch}
             disabled={totalExecutableCount === 0 || isProcessing}
             className={`px-5 py-2.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-2 shadow-lg ${
@@ -1115,9 +1126,9 @@ export function BatchLiberateModal({
                 {totalExecutableCount > 0 && <ArrowRight className="w-3.5 h-3.5 ml-0.5" />}
               </>
             )}
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

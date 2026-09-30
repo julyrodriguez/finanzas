@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { motion } from "motion/react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { 
   ChevronDown, 
   Check, 
@@ -281,9 +284,10 @@ export function OrderStatusMenu({
   return (
     <>
       {/* Trigger Button (Smart Pill) */}
-      <button
+      <motion.button
         ref={buttonRef}
         type="button"
+        whileTap={{ scale: 0.95 }}
         onClick={() => {
           if (!isOpen) {
             updatePosition();
@@ -303,12 +307,15 @@ export function OrderStatusMenu({
             isOpen ? "rotate-180" : ""
           }`}
         />
-      </button>
+      </motion.button>
 
       {/* Dropdown Menu Modal / Popover via Portal */}
       {isOpen && mounted && createPortal(
-        <div
+        <motion.div
           ref={dropdownRef}
+          initial={{ opacity: 0, scale: 0.95, y: menuPosition.openUpward ? 4 : -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: EASE_OUT }}
           style={{
             position: "fixed",
             top: `${menuPosition.top}px`,
@@ -316,7 +323,7 @@ export function OrderStatusMenu({
             transform: menuPosition.openUpward ? "translateY(-100%)" : "none",
             zIndex: 9999,
           }}
-          className="w-52 rounded-lg bg-[#0d121c] border border-slate-700 shadow-xl p-1 backdrop-blur-md animate-in fade-in duration-100"
+          className="w-52 rounded-lg bg-[#0d121c] border border-slate-700 shadow-xl p-1 backdrop-blur-md"
         >
           <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-white/5 mb-1">
             Cambiar Estado
@@ -328,9 +335,10 @@ export function OrderStatusMenu({
               const isSelected = key === currentStatus;
 
               return (
-                <button
+                <motion.button
                   key={key}
                   type="button"
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => handleSelectStatus(key)}
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-colors cursor-pointer ${
                     isSelected
@@ -349,11 +357,11 @@ export function OrderStatusMenu({
                   {isSelected && (
                     <Check className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 ml-2" />
                   )}
-                </button>
+                </motion.button>
               );
             })}
           </div>
-        </div>,
+        </motion.div>,
         document.body
       )}
     </>

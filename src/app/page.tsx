@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { getFirebaseDb } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { 
@@ -1422,12 +1425,20 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       subtitle="Gestión, edición, notas internas y copia rápida de solicitudes"
     >
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-medium text-xs shadow-xl flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: EASE_OUT }}
+            className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-slate-900/95 text-emerald-300 font-semibold text-xs shadow-2xl flex items-center gap-2 border border-emerald-500/30 backdrop-blur-md"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="space-y-6">
         {/* Executive Header Bar */}
@@ -1449,22 +1460,26 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
           <div className="flex flex-wrap items-center gap-2.5">
             <DolarVentaBadge />
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.12, ease: EASE_OUT }}
               onClick={handleManualSyncStats}
               disabled={isSyncingStats}
-              className={`px-3 py-2 rounded-xl border border-white/10 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm bg-[#0e1424] hover:bg-white/5 text-slate-200 hover:text-white cursor-pointer ${
+              className={`px-3 py-2 rounded-xl border border-white/10 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm bg-[#0e1424] hover:bg-white/5 text-slate-200 hover:text-white cursor-pointer ${
                 isSyncingStats ? "opacity-75 cursor-not-allowed" : ""
               }`}
               title="Sincronizar y recalcular contadores con la base de datos del servidor"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isSyncingStats ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">{isSyncingStats ? "Sincronizando..." : "Sincronizar"}</span>
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.12, ease: EASE_OUT }}
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
-              className={`px-3.5 py-2 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+              className={`px-3.5 py-2 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
                 hasLoadedAllFromDb
                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
                   : "bg-[#0e1424] hover:bg-white/5 border-white/10 text-slate-200 hover:text-white cursor-pointer"
@@ -1479,25 +1494,29 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 <Database className="w-3.5 h-3.5 text-blue-400" />
               )}
               <span>{loadingAllDb ? "Cargando..." : hasLoadedAllFromDb ? "Toda la BD cargada" : "Cargar toda la BD"}</span>
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.12, ease: EASE_OUT }}
               onClick={handleExportExcel}
-              className="px-3.5 py-2 rounded-xl bg-[#0e1424] hover:bg-white/5 border border-white/10 text-slate-200 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[#0e1424] hover:bg-white/5 border border-white/10 text-slate-200 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               title="Descargar listado actual de órdenes en Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Exportar Excel</span>
-            </button>
+            </motion.button>
 
             {!isOrdenesUser && (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.12, ease: EASE_OUT }}
                 onClick={handleOpenAddModal}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-blue-500/20 active:scale-95"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-blue-500/20"
               >
                 <Plus className="w-4 h-4" />
                 <span>Nueva Orden</span>
-              </button>
+              </motion.button>
             )}
           </div>
         </div>
@@ -1505,13 +1524,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         {/* KPI Live Server Metrics Bar: Pendientes y En Autorización */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {/* Card 1: Pendientes */}
-          <button
+          <motion.button
             type="button"
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => {
               setFilterEstado("Pendientes");
               setQueryLimit(15);
             }}
-            className={`glass-card p-5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
+            className={`glass-card p-5 rounded-2xl border text-left transition-colors cursor-pointer relative overflow-hidden group ${
               filterEstado === "Pendientes"
                 ? "border-slate-400/60 bg-slate-500/10 shadow-lg shadow-slate-500/10 ring-1 ring-slate-400/30"
                 : "border-white/10 hover:border-slate-400/40 hover:bg-white/[0.02]"
@@ -1533,16 +1555,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 Sin enviar a autorizar
               </span>
             </div>
-          </button>
+          </motion.button>
 
           {/* Card 2: En Autorización */}
-          <button
+          <motion.button
             type="button"
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => {
               setFilterEstado("Mandadas");
               setQueryLimit(15);
             }}
-            className={`glass-card p-5 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
+            className={`glass-card p-5 rounded-2xl border text-left transition-colors cursor-pointer relative overflow-hidden group ${
               filterEstado === "Mandadas"
                 ? "border-amber-500/60 bg-amber-500/10 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/30"
                 : "border-white/10 hover:border-amber-500/40 hover:bg-white/[0.02]"
@@ -1564,16 +1589,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 Mandadas a firma
               </span>
             </div>
-          </button>
+          </motion.button>
         </div>
 
         {/* Botón de ancho completo hacia Estadísticas Mensuales */}
         <Link
           href="/estadisticas-mensuales"
-          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-blue-900/30 via-slate-900/40 to-indigo-950/30 hover:from-blue-900/50 hover:via-slate-900/60 hover:to-indigo-950/50 border border-blue-500/30 hover:border-blue-500/50 text-white transition-all shadow-sm group cursor-pointer"
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-blue-900/30 via-slate-900/40 to-indigo-950/30 hover:from-blue-900/50 hover:via-slate-900/60 hover:to-indigo-950/50 border border-blue-500/30 hover:border-blue-500/50 text-white transition-colors shadow-sm group cursor-pointer"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-105 group-hover:text-blue-300 transition-all">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-105 group-hover:text-blue-300 transition-transform">
               <CalendarDays className="w-4 h-4" />
             </div>
             <div className="text-left">
@@ -1591,7 +1616,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
           <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400 group-hover:text-blue-300 transition-colors">
             <span className="hidden sm:inline">Explorar métricas</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
           </div>
         </Link>
 
@@ -1635,7 +1660,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   <Loader2 className="w-4 h-4 animate-spin text-blue-400 absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none" />
                 )}
                 {searchQuery && (
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ duration: 0.1, ease: EASE_OUT }}
                     onClick={() => {
                       setSearchQuery("");
                       setQueryLimit(15);
@@ -1643,7 +1670,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
                   >
                     <X className="w-3.5 h-3.5" />
-                  </button>
+                  </motion.button>
                 )}
               </div>
             </div>
@@ -1666,13 +1693,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
                 const isSelected = filterEmpresa === emp;
                 return (
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ duration: 0.12, ease: EASE_OUT }}
                     key={emp}
                     onClick={() => {
                       setFilterEmpresa(emp);
                       setQueryLimit(15);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                       isSelected
                         ? emp === "Hoyts"
                           ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
@@ -1683,7 +1712,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     }`}
                   >
                     {emp}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -1702,14 +1731,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               ).map((est) => {
                 const isSelected = filterEstado === est.id;
                 return (
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ duration: 0.12, ease: EASE_OUT }}
                     key={est.id}
                     onClick={() => {
                       setFilterEstado(est.id);
                       setQueryLimit(15);
                       setSelectedOCIds([]);
                     }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                       isSelected
                         ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
                         : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -1717,7 +1748,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   >
                     {est.dot && <span className={`w-1.5 h-1.5 rounded-full ${est.dot}`} />}
                     <span>{est.label}</span>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -1878,17 +1909,23 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </td>
                       </tr>
                     ) : (
-                      visibleOrdenes.map((orden) => {
+                      visibleOrdenes.map((orden, index) => {
                       const isPendingSend = orden.liberada && !orden.mandada;
-                      let rowClass = "hover:bg-white/[0.02] transition-all duration-200";
+                      let rowClass = "hover:bg-white/[0.03] transition-colors duration-150";
                       
                       if (orden.cancelada) {
-                        rowClass = "bg-red-950/10 opacity-60 hover:opacity-80 border-l-4 border-l-red-600 transition-all duration-200";
+                        rowClass = "bg-red-950/10 opacity-60 hover:opacity-80 border-l-4 border-l-red-600 transition-colors duration-150";
                       } else if (isPendingSend) {
-                        rowClass = "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500 transition-all duration-200";
+                        rowClass = "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500 transition-colors duration-150";
                       }
                       return (
-                        <tr key={orden.id} className={rowClass}>
+                        <motion.tr
+                          key={orden.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.16, delay: Math.min(index * 0.015, 0.2), ease: EASE_OUT }}
+                          className={rowClass}
+                        >
                           {showCMDSection && (
                             <td className="px-4 py-4 w-10">
                               <input
@@ -1945,13 +1982,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                               <span className="font-mono font-bold text-blue-400 text-xs">
                                 #{orden.numOC}
                               </span>
-                              <button
+                              <motion.button
+                                whileTap={{ scale: 0.9 }}
+                                transition={{ duration: 0.1, ease: EASE_OUT }}
                                 onClick={() => handleCopy(orden)}
-                                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
                                 title="Copiar resumen de OC"
                               >
                                 <Copy className="w-3 h-3" />
-                              </button>
+                              </motion.button>
                               {orden.linkSharepoint ? (
                                 <div className="inline-flex items-center gap-0.5">
                                   <a
@@ -1965,7 +2004,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                                   </a>
                                   <button
                                     onClick={() => handlePromptLink(orden)}
-                                    className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-blue-300 transition-colors"
+                                    className="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-blue-300 transition-colors cursor-pointer"
                                     title="Modificar enlace de carpeta"
                                   >
                                     <Link2 className="w-2.5 h-2.5" />
@@ -1984,15 +2023,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                             {orden.relatedOC && (
                               <div className="flex flex-wrap items-center gap-1 mt-0.5 max-w-[200px]">
                                 {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
-                                  <button
+                                  <motion.button
+                                    whileTap={{ scale: 0.92 }}
+                                    transition={{ duration: 0.1, ease: EASE_OUT }}
                                     key={idx}
                                     onClick={() => setSearchQuery(ocNum)}
-                                    className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 transition-all"
+                                    className="flex items-center gap-1 text-[9px] text-purple-400 hover:text-purple-300 font-bold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 transition-colors cursor-pointer"
                                     title={`Click para buscar la OC ${ocNum}`}
                                   >
                                     <Link2 className="w-2.5 h-2.5" />
                                     <span>Ref: OC {ocNum}</span>
-                                  </button>
+                                  </motion.button>
                                 ))}
                               </div>
                             )}
@@ -2041,7 +2082,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
                         {/* Botón Ver Descripción / Card Detalle */}
                         <td className="px-4 py-3.5">
-                          <button
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            transition={{ duration: 0.1, ease: EASE_OUT }}
                             onClick={() => setActiveNotesOrden(orden)}
                             className="px-2.5 py-1 rounded-md bg-blue-500/10 hover:bg-blue-600 hover:text-white text-blue-300 border border-blue-500/25 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                             title="Ver descripción completa, firmas y notas de la orden"
@@ -2053,22 +2096,24 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                                 {orden.notas.length}
                               </span>
                             )}
-                          </button>
+                          </motion.button>
                         </td>
 
                         {/* Action: Open Edit Form (Icon-only) */}
                         {!isOrdenesUser && (
                           <td className="px-4 py-3.5 text-right">
-                            <button
+                            <motion.button
+                              whileTap={{ scale: 0.92 }}
+                              transition={{ duration: 0.1, ease: EASE_OUT }}
                               onClick={() => handleOpenEditModal(orden)}
                               className="p-1.5 rounded-md bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/10 ml-auto transition-colors inline-flex items-center justify-center cursor-pointer"
                               title="Editar orden"
                             >
                               <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                            </button>
+                            </motion.button>
                           </td>
                         )}
-                      </tr>
+                      </motion.tr>
                       );
                     })
                     )}
@@ -2099,7 +2144,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     </div>
                   </div>
                 ) : (
-                  visibleOrdenes.map((orden) => {
+                  visibleOrdenes.map((orden, index) => {
                   const isPendingSend = orden.liberada && !orden.mandada;
                   let cardClass = "p-4 space-y-3 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
                   if (orden.cancelada) {
@@ -2108,7 +2153,13 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     cardClass = "p-4 space-y-3 bg-red-500/5 border-l-4 border-l-red-500 border border-white/10 rounded-2xl glass-card transition-all duration-200 shadow-md";
                   }
                   return (
-                    <div key={orden.id} className={cardClass}>
+                    <motion.div
+                      key={orden.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: Math.min(index * 0.02, 0.2), ease: EASE_OUT }}
+                      className={cardClass}
+                    >
                       {/* Top Row: Empresa, OC number and Actions (Copiar/Editar) */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -2142,15 +2193,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           {orden.relatedOC && (
                             <div className="flex flex-wrap items-center gap-1 ml-1.5">
                               {orden.relatedOC.split(/[\s,/\-]+/).map(s => s.trim()).filter(Boolean).map((ocNum, idx) => (
-                                <button
+                                <motion.button
                                   key={idx}
+                                  whileTap={{ scale: 0.95 }}
                                   onClick={() => setSearchQuery(ocNum)}
-                                  className="flex items-center gap-1 text-[8px] text-purple-300 font-bold bg-purple-500/15 px-1 rounded border border-purple-500/20 active:bg-purple-500/30 transition-all"
+                                  className="flex items-center gap-1 text-[8px] text-purple-300 font-bold bg-purple-500/15 px-1 rounded border border-purple-500/20 active:bg-purple-500/30 transition-all cursor-pointer"
                                   title={`Click para buscar la OC ${ocNum}`}
                                 >
                                   <Link2 className="w-2 h-2" />
                                   <span>Ref: {ocNum}</span>
-                                </button>
+                                </motion.button>
                               ))}
                             </div>
                           )}
@@ -2160,37 +2212,41 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         <div className="flex items-center gap-1.5">
                           {orden.linkSharepoint ? (
                             <div className="inline-flex items-center gap-1">
-                              <a
+                              <motion.a
+                                whileTap={{ scale: 0.95 }}
                                 href={orden.linkSharepoint}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-2 py-1 rounded-lg border border-blue-500/30 bg-blue-500/20 text-blue-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                                className="px-2 py-1 rounded-lg border border-blue-500/30 bg-blue-500/20 text-blue-300 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                                 title="Abrir carpeta vinculada"
                               >
                                 <FolderOpen className="w-3 h-3" />
                                 <span>Carpeta</span>
-                              </a>
-                              <button
+                              </motion.a>
+                              <motion.button
+                                whileTap={{ scale: 0.95 }}
                                 onClick={() => handlePromptLink(orden)}
-                                className="p-1 rounded-lg border border-white/10 hover:bg-white/10 text-slate-400 hover:text-blue-300 transition-colors"
+                                className="p-1 rounded-lg border border-white/10 hover:bg-white/10 text-slate-400 hover:text-blue-300 transition-colors cursor-pointer"
                                 title="Modificar enlace de carpeta"
                               >
                                 <Link2 className="w-3 h-3" />
-                              </button>
+                              </motion.button>
                             </div>
                           ) : (
-                            <button
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => handlePromptLink(orden)}
                               className="px-2 py-1 rounded-lg border border-slate-700 bg-slate-800/40 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                               title="Pegar enlace de carpeta"
                             >
                               <Folder className="w-3 h-3" />
                               <span>Carpeta</span>
-                            </button>
+                            </motion.button>
                           )}
-                          <button
+                          <motion.button
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => handleCopy(orden)}
-                            className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                               filterEstado === "Liberadas"
                                 ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-300"
                                 : "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
@@ -2199,15 +2255,16 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           >
                             <Copy className="w-3 h-3" />
                             <span>Copiar</span>
-                          </button>
+                          </motion.button>
                           {!isOrdenesUser && (
-                            <button
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => handleOpenEditModal(orden)}
-                              className="p-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10 transition-colors inline-flex items-center justify-center"
+                              className="p-1.5 rounded-lg bg-white/5 text-gray-300 border border-white/10 transition-colors inline-flex items-center justify-center cursor-pointer"
                               title="Editar orden"
                             >
                               <Edit3 className="w-3 h-3 text-emerald-400" />
-                            </button>
+                            </motion.button>
                           )}
                         </div>
                       </div>
@@ -2278,7 +2335,8 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </div>
 
                         {/* Botón Ver Descripción */}
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
                           onClick={() => setActiveNotesOrden(orden)}
                           className="px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 border border-indigo-500/30 text-[10.5px] font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                         >
@@ -2289,9 +2347,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                               {orden.notas.length}
                             </span>
                           )}
-                        </button>
+                        </motion.button>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })
                 )}
@@ -2301,16 +2359,18 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {/* Botón Cargar Más y Cargar Todo */}
             <div className="py-4 flex flex-col sm:flex-row items-center justify-center gap-2.5">
               {hasMore && !hasLoadedAllFromDb && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
                   onClick={() => setQueryLimit((prev) => prev + 15)}
                   className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-medium transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
                   <span>Cargar más órdenes (+15)</span>
-                </button>
+                </motion.button>
               )}
               {!hasLoadedAllFromDb && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
                   onClick={handleLoadAllFromDb}
                   disabled={loadingAllDb}
                   className="px-4 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-medium transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
@@ -2321,7 +2381,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     <Database className="w-3.5 h-3.5 text-blue-400" />
                   )}
                   <span>{loadingAllDb ? "Cargando toda la base de datos..." : "Cargar todas las de la base de datos"}</span>
-                </button>
+                </motion.button>
               )}
               {hasLoadedAllFromDb && (
                 <span className="text-xs font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">

@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { motion } from "motion/react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { 
   X, 
   Eye, 
@@ -414,8 +417,13 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="relative w-full max-w-3xl rounded-xl bg-[#0d121c] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: EASE_OUT }}
+        className="relative w-full max-w-3xl rounded-xl bg-[#0d121c] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
         
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
@@ -446,12 +454,13 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
 
           <div className="flex items-center gap-2.5">
             {getStatusBadge()}
-            <button
+            <motion.button
+              whileTap={{ scale: 0.95 }}
               onClick={onClose}
               className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -578,8 +587,9 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                       <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
                         {tierInfo.isF1Signed ? (
                           <>
-                            <button
+                            <motion.button
                               type="button"
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => {
                                 setEditingFirma1(true);
                                 setSelectedF1Signer(orden.firmante1 || f1SignerOptions[0] || "");
@@ -588,9 +598,10 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                             >
                               <Edit3 className="w-3.5 h-3.5 text-slate-400" />
                               <span>Cambiar firmante</span>
-                            </button>
-                            <button
+                            </motion.button>
+                            <motion.button
                               type="button"
+                              whileTap={{ scale: 0.95 }}
                               onClick={handleRemoveFirma1}
                               disabled={isSavingFirma}
                               className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/25 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
@@ -598,11 +609,12 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                             >
                               <Trash2 className="w-3.5 h-3.5 text-red-400" />
                               <span>Quitar</span>
-                            </button>
+                            </motion.button>
                           </>
                         ) : (
-                          <button
+                          <motion.button
                             type="button"
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => {
                               setEditingFirma1(true);
                               setSelectedF1Signer(f1SignerOptions[0] || "");
@@ -611,7 +623,7 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                           >
                             <PenTool className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
                             <span>Registrar firma manual</span>
-                          </button>
+                          </motion.button>
                         )}
                       </div>
                     )}
@@ -642,8 +654,9 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                     )}
 
                     <div className="flex items-center gap-2 pt-1">
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.95 }}
                         disabled={isSavingFirma || (selectedF1Signer === "Otro" && !customF1Signer.trim())}
                         onClick={() => {
                           const finalName = selectedF1Signer === "Otro" ? customF1Signer : selectedF1Signer;
@@ -653,14 +666,15 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                       >
                         {isSavingFirma ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         <span>Confirmar Firma</span>
-                      </button>
-                      <button
+                      </motion.button>
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => setEditingFirma1(false)}
                         className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[11px] font-semibold transition-all cursor-pointer"
                       >
                         Cancelar
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
                 )}
@@ -710,8 +724,9 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                       <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
                         {tierInfo.isF2Signed ? (
                           <>
-                            <button
+                            <motion.button
                               type="button"
+                              whileTap={{ scale: 0.95 }}
                               onClick={() => {
                                 setEditingFirma2(true);
                                 setSelectedF2Signer(orden.firmante2 || f2SignerOptions[0] || "");
@@ -720,9 +735,10 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                             >
                               <Edit3 className="w-3.5 h-3.5 text-slate-400" />
                               <span>Cambiar firmante</span>
-                            </button>
-                            <button
+                            </motion.button>
+                            <motion.button
                               type="button"
+                              whileTap={{ scale: 0.95 }}
                               onClick={handleRemoveFirma2}
                               disabled={isSavingFirma}
                               className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/25 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
@@ -730,11 +746,12 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                             >
                               <Trash2 className="w-3.5 h-3.5 text-red-400" />
                               <span>Quitar</span>
-                            </button>
+                            </motion.button>
                           </>
                         ) : (
-                          <button
+                          <motion.button
                             type="button"
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => {
                               setEditingFirma2(true);
                               setSelectedF2Signer(f2SignerOptions[0] || "");
@@ -743,7 +760,7 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                           >
                             <PenTool className="w-3.5 h-3.5 text-indigo-400 group-hover:text-indigo-300 transition-colors" />
                             <span>Registrar firma manual</span>
-                          </button>
+                          </motion.button>
                         )}
                       </div>
                     )}
@@ -774,8 +791,9 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                     )}
 
                     <div className="flex items-center gap-2 pt-1">
-                      <button
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.95 }}
                         disabled={isSavingFirma || (selectedF2Signer === "Otro" && !customF2Signer.trim())}
                         onClick={() => {
                           const finalName = selectedF2Signer === "Otro" ? customF2Signer : selectedF2Signer;
@@ -785,14 +803,15 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                       >
                         {isSavingFirma ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         <span>Confirmar Firma</span>
-                      </button>
-                      <button
+                      </motion.button>
+                      <motion.button
                         type="button"
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => setEditingFirma2(false)}
                         className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-[11px] font-semibold transition-all cursor-pointer"
                       >
                         Cancelar
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
                 )}
@@ -850,8 +869,9 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                   placeholder="Escribir una nueva nota o comentario..."
                   className="w-full sm:flex-1 px-3.5 py-2.5 sm:py-2 text-xs rounded-xl bg-[#111726] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 min-w-0"
                 />
-                <button
+                <motion.button
                   type="submit"
+                  whileTap={{ scale: 0.96 }}
                   disabled={savingNota || !newNotaText.trim()}
                   className="w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
                 >
@@ -863,7 +883,7 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
                       <span>Agregar Nota</span>
                     </>
                   )}
-                </button>
+                </motion.button>
               </form>
             )}
           </div>
@@ -871,19 +891,21 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
 
         {/* Modal Footer */}
         <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-white/10 bg-[#0b0f19] flex flex-wrap items-center justify-between gap-2.5">
-          <button
+          <motion.button
             type="button"
+            whileTap={{ scale: 0.96 }}
             onClick={handleCopySummary}
             className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Copy className="w-3.5 h-3.5" />
             <span>Copiar Resumen</span>
-          </button>
+          </motion.button>
 
           <div className="flex items-center gap-2 ml-auto">
             {!isOrdenesUser && onEdit && (
-              <button
+              <motion.button
                 type="button"
+                whileTap={{ scale: 0.96 }}
                 onClick={() => {
                   onClose();
                   onEdit(orden);
@@ -892,19 +914,20 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Editar Orden</span>
-              </button>
+              </motion.button>
             )}
 
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.96 }}
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
             >
               Cerrar
-            </button>
+            </motion.button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

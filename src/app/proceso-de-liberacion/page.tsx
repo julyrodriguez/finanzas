@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { getFirebaseDb } from "@/lib/firebase";
 import { 
   collection, 
@@ -440,12 +443,20 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       <div className="space-y-6 max-w-7xl mx-auto pb-16">
         
         {/* Toast Notification */}
-        {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-900/95 text-emerald-300 font-semibold text-xs shadow-2xl backdrop-blur-md border border-emerald-500/30 animate-in slide-in-from-bottom duration-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.96 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-900/95 text-emerald-300 font-semibold text-xs shadow-2xl backdrop-blur-md border border-emerald-500/30"
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{toastMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ========================================================
             1. HERO ACTION HEADER (Modern Glass Panel)
@@ -478,78 +489,106 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             {/* Quick Actions Toolbar */}
             <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
               {filteredOrdenes.length > 0 && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  transition={{ duration: 0.14, ease: EASE_OUT }}
                   onClick={handleCopyAll}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs transition-colors flex items-center gap-2 shadow-sm cursor-pointer"
                   title="Copiar todas las órdenes visibles en formato de texto"
                 >
                   <Copy className="w-4 h-4 text-emerald-400" />
                   <span>Copiar ({filteredOrdenes.length})</span>
-                </button>
+                </motion.button>
               )}
 
-              <button
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.14, ease: EASE_OUT }}
                 onClick={() => setIsBatchSendOpen(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-900/30 flex items-center gap-2 cursor-pointer border border-blue-400/30 hover:scale-[1.01] active:scale-[0.99]"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-blue-900/30 flex items-center gap-2 cursor-pointer border border-blue-400/30"
                 title="Pegar texto de órdenes y marcarlas como enviadas a firmar"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Enviadas a Firmar</span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.14, ease: EASE_OUT }}
                 onClick={() => setIsBatchLiberateOpen(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-900/30 flex items-center gap-2 cursor-pointer border border-emerald-400/30 hover:scale-[1.01] active:scale-[0.99]"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-900/30 flex items-center gap-2 cursor-pointer border border-emerald-400/30"
                 title="Pegar texto de órdenes y registrar autorizaciones / liberar"
               >
                 <PenTool className="w-3.5 h-3.5" />
                 <span>Registrar Autorizadas</span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                transition={{ duration: 0.14, ease: EASE_OUT }}
                 onClick={() => setIsConfigOpen(true)}
-                className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+                className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
                 title="Configuración de Firmantes y Límites de Aprobación"
               >
                 <Settings className="w-4 h-4" />
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
 
         {/* ========================================================
-            SUB-APARTADO NAVIGATION TABS
+            SUB-APARTADO NAVIGATION TABS (Segmented Pill with Spring Indicator)
             ======================================================== */}
-        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-          <button
+        <div className="flex items-center p-1 rounded-2xl bg-[#0b0f19] border border-white/10 w-fit">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveSubTab("ordenes")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeSubTab === "ordenes"
-                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 border border-blue-400/30"
-                : "bg-[#0f1422] text-slate-400 hover:text-white hover:bg-slate-800/80 border border-white/5"
+            className={`relative flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-colors cursor-pointer ${
+              activeSubTab === "ordenes" ? "text-white" : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            <LayoutGrid className="w-4 h-4" />
-            <span>Órdenes en Proceso</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-black/30 text-white/90">
-              {stats.totalCount}
+            {activeSubTab === "ordenes" && (
+              <motion.div
+                layoutId="activeLiberacionSubTab"
+                transition={{ duration: 0.22, ease: EASE_OUT }}
+                className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-md shadow-blue-900/30 border border-blue-400/30"
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4" />
+              <span>Órdenes en Proceso</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                activeSubTab === "ordenes" ? "bg-black/30 text-white" : "bg-white/5 text-slate-400"
+              }`}>
+                {stats.totalCount}
+              </span>
             </span>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={() => setActiveSubTab("firmantes")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeSubTab === "firmantes"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/30"
-                : "bg-[#0f1422] text-slate-400 hover:text-white hover:bg-slate-800/80 border border-white/5"
+            className={`relative flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-colors cursor-pointer ${
+              activeSubTab === "firmantes" ? "text-white" : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            <Users className="w-4 h-4" />
-            <span>Resumen por Firmante</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              Cards & Copiado
+            {activeSubTab === "firmantes" && (
+              <motion.div
+                layoutId="activeLiberacionSubTab"
+                transition={{ duration: 0.22, ease: EASE_OUT }}
+                className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-md shadow-indigo-900/30 border border-indigo-400/30"
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              <span>Resumen por Firmante</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                activeSubTab === "firmantes" ? "bg-black/30 text-white" : "bg-indigo-500/15 text-indigo-300"
+              }`}>
+                Cards & Copiado
+              </span>
             </span>
-          </button>
+          </motion.button>
         </div>
 
         {activeSubTab === "ordenes" ? (
@@ -560,9 +599,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           
           {/* Card: Todas */}
-          <button
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => setStatusFilter("todas")}
-            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+            className={`text-left p-3.5 rounded-xl border transition-colors cursor-pointer relative overflow-hidden ${
               statusFilter === "todas"
                 ? "bg-slate-800/90 border-slate-500/80 ring-2 ring-indigo-500/40 shadow-lg"
                 : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
@@ -578,12 +620,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="text-[10px] text-slate-400 font-mono truncate">
               $ {stats.totalMonto.toLocaleString("es-AR")}
             </div>
-          </button>
+          </motion.button>
 
           {/* Card: Sin Firmas y Sin Enviar */}
-          <button
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => setStatusFilter("sin_firmas_sin_enviar")}
-            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+            className={`text-left p-3.5 rounded-xl border transition-colors cursor-pointer relative overflow-hidden ${
               statusFilter === "sin_firmas_sin_enviar"
                 ? "bg-slate-800/90 border-slate-500/80 ring-2 ring-slate-400/40 shadow-lg"
                 : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
@@ -599,12 +644,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="text-[10px] text-slate-500 truncate">
               Aún sin enviar
             </div>
-          </button>
+          </motion.button>
 
           {/* Card: Enviado a 1ra */}
-          <button
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => setStatusFilter("enviado_1ra")}
-            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+            className={`text-left p-3.5 rounded-xl border transition-colors cursor-pointer relative overflow-hidden ${
               statusFilter === "enviado_1ra"
                 ? "bg-blue-500/20 border-blue-400/70 ring-2 ring-blue-500/40 shadow-lg"
                 : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
@@ -620,12 +668,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="text-[10px] text-blue-300/70 truncate">
               Esperando 1ra
             </div>
-          </button>
+          </motion.button>
 
           {/* Card: Con 1ra Esperando */}
-          <button
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => setStatusFilter("con_1ra_esperando")}
-            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+            className={`text-left p-3.5 rounded-xl border transition-colors cursor-pointer relative overflow-hidden ${
               statusFilter === "con_1ra_esperando"
                 ? "bg-amber-500/20 border-amber-400/70 ring-2 ring-amber-500/40 shadow-lg"
                 : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
@@ -641,12 +692,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="text-[10px] text-amber-300/70 truncate">
               Falta enviar 2da
             </div>
-          </button>
+          </motion.button>
 
           {/* Card: Enviado a 2da */}
-          <button
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => setStatusFilter("con_1ra_enviado_2da")}
-            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+            className={`text-left p-3.5 rounded-xl border transition-colors cursor-pointer relative overflow-hidden ${
               statusFilter === "con_1ra_enviado_2da"
                 ? "bg-purple-500/20 border-purple-400/70 ring-2 ring-purple-500/40 shadow-lg"
                 : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
@@ -662,12 +716,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="text-[10px] text-purple-300/70 truncate">
               Esperando 2da
             </div>
-          </button>
+          </motion.button>
 
           {/* Card: Completas (Listas para Liberar) */}
-          <button
+          <motion.button
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.16, ease: EASE_OUT }}
             onClick={() => setStatusFilter("completas")}
-            className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative overflow-hidden ${
+            className={`text-left p-3.5 rounded-xl border transition-colors cursor-pointer relative overflow-hidden ${
               statusFilter === "completas"
                 ? "bg-emerald-500/20 border-emerald-400/70 ring-2 ring-emerald-500/40 shadow-lg"
                 : "bg-[#0d121f]/70 border-white/5 hover:border-white/15 hover:bg-[#12192b]/70"
@@ -683,7 +740,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             <div className="text-[10px] text-emerald-300/70 truncate">
               Ambas firmadas
             </div>
-          </button>
+          </motion.button>
 
         </div>
 
@@ -704,12 +761,14 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 className="w-full pl-10 pr-9 py-2 rounded-xl bg-[#0a0e18] border border-white/10 text-white text-xs font-medium placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
               />
               {searchQuery && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  transition={{ duration: 0.12, ease: EASE_OUT }}
                   onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
-                </button>
+                </motion.button>
               )}
             </div>
 
@@ -720,10 +779,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 {(["Todas", "Hoyts", "CMK"] as const).map((emp) => {
                   const isSelected = empresaFilter === emp;
                   return (
-                    <button
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ duration: 0.12, ease: EASE_OUT }}
                       key={emp}
                       onClick={() => setEmpresaFilter(emp)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                         isSelected
                           ? emp === "Hoyts"
                             ? "bg-purple-600 text-white shadow-sm"
@@ -734,7 +795,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       }`}
                     >
                       {emp === "CMK" ? "CMK (Cinemark)" : emp}
-                    </button>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -757,9 +818,11 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
               {/* View Switcher (Cards / Table) */}
               <div className="flex items-center bg-[#0a0e18] p-1 rounded-xl border border-white/10">
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  transition={{ duration: 0.12, ease: EASE_OUT }}
                   onClick={() => setViewMode("cards")}
-                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                     viewMode === "cards" 
                       ? "bg-slate-800 text-blue-400 shadow-sm" 
                       : "text-slate-400 hover:text-white"
@@ -767,10 +830,12 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   title="Vista en Tarjetas con Flujo de Firmas"
                 >
                   <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.92 }}
+                  transition={{ duration: 0.12, ease: EASE_OUT }}
                   onClick={() => setViewMode("table")}
-                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                     viewMode === "table" 
                       ? "bg-slate-800 text-blue-400 shadow-sm" 
                       : "text-slate-400 hover:text-white"
@@ -778,7 +843,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   title="Vista Compacta en Tabla"
                 >
                   <ListFilter className="w-4 h-4" />
-                </button>
+                </motion.button>
               </div>
             </div>
 
@@ -791,7 +856,9 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 {filteredOrdenes.length} órdenes encontradas
               </span>
               {(statusFilter !== "todas" || empresaFilter !== "Todas" || tierFilter !== "Todos" || searchQuery) && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.12, ease: EASE_OUT }}
                   onClick={() => {
                     setStatusFilter("todas");
                     setEmpresaFilter("Todas");
@@ -801,7 +868,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                   className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 ml-1 cursor-pointer font-medium"
                 >
                   Restablecer filtros
-                </button>
+                </motion.button>
               )}
             </div>
 
@@ -848,13 +915,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filteredOrdenes.map((orden) => {
+                {filteredOrdenes.map((orden, index) => {
                   const sigInfo = getOrderSignatureInfo(orden);
                   const numMonto = parseMontoToNumber(orden.monto);
                   const isCopied = copiedId === (orden.id || orden.numOC);
 
                   return (
-                    <tr key={orden.id} className="hover:bg-white/[0.02] transition-colors group">
+                    <motion.tr
+                      key={orden.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.16, delay: Math.min(index * 0.015, 0.2), ease: EASE_OUT }}
+                      className="hover:bg-white/[0.03] transition-colors group"
+                    >
                       {/* Empresa */}
                       <td className="py-3 px-4">
                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
@@ -870,13 +943,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                       <td className="py-3 px-4">
                         <div className="font-mono font-bold text-white flex items-center gap-1.5">
                           <span>OC {orden.numOC}</span>
-                          <button
+                          <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            transition={{ duration: 0.1, ease: EASE_OUT }}
                             onClick={() => handleCopy(orden)}
                             className="text-slate-500 hover:text-emerald-400 p-0.5 rounded cursor-pointer"
                             title="Copiar datos de orden"
                           >
                             {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                          </button>
+                          </motion.button>
                         </div>
                         {orden.numSolicitud && (
                           <div className="text-[10px] text-slate-400 font-mono">
@@ -945,15 +1020,17 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
 
                       {/* Acciones */}
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.94 }}
+                          transition={{ duration: 0.12, ease: EASE_OUT }}
                           onClick={() => setActiveNotesOrden(orden)}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-600/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-[11px] transition-all cursor-pointer inline-flex items-center gap-1"
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 font-semibold text-[11px] transition-colors cursor-pointer inline-flex items-center gap-1"
                         >
                           <Eye className="w-3 h-3" />
                           <span>Ver</span>
-                        </button>
+                        </motion.button>
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
               </tbody>
@@ -964,16 +1041,19 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
              DETAILED CARD VIEW (Visual Pipeline Stepper)
              ======================================================== */
           <div className="space-y-3.5">
-            {filteredOrdenes.map((orden) => {
+            {filteredOrdenes.map((orden, index) => {
               const sigInfo = getOrderSignatureInfo(orden);
               const numMonto = parseMontoToNumber(orden.monto);
               const isCopied = copiedId === (orden.id || orden.numOC);
               const hasNotes = Boolean(orden.notas && orden.notas.length > 0);
 
               return (
-                <div
+                <motion.div
                   key={orden.id}
-                  className="rounded-2xl bg-[#0f1422] border border-white/10 hover:border-white/20 transition-all shadow-md overflow-hidden group"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, delay: Math.min(index * 0.025, 0.25), ease: EASE_OUT }}
+                  className="rounded-2xl bg-[#0f1422] border border-white/[0.08] hover:border-white/20 transition-all shadow-md overflow-hidden group"
                 >
                   {/* Card Header Bar */}
                   <div className="p-4 sm:p-4.5 bg-gradient-to-r from-[#121829] to-[#0f1422] border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -993,8 +1073,10 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         <span className="text-sm font-black text-white font-mono tracking-tight">
                           OC {orden.numOC}
                         </span>
-                        <button
+                        <motion.button
                           type="button"
+                          whileTap={{ scale: 0.9 }}
+                          transition={{ duration: 0.1, ease: EASE_OUT }}
                           onClick={() => handleCopy(orden)}
                           className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                           title="Copiar datos de esta orden"
@@ -1004,7 +1086,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                           ) : (
                             <Copy className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200" />
                           )}
-                        </button>
+                        </motion.button>
                       </div>
 
                       {/* SC Number */}
@@ -1039,13 +1121,15 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                         </div>
                       </div>
 
-                      <button
+                      <motion.button
+                        whileTap={{ scale: 0.96 }}
+                        transition={{ duration: 0.12, ease: EASE_OUT }}
                         onClick={() => setActiveNotesOrden(orden)}
-                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-[1.02] active:scale-[0.98]"
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>Detalle / Firmar</span>
-                      </button>
+                      </motion.button>
                     </div>
 
                   </div>
@@ -1199,7 +1283,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
                     </div>
 
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

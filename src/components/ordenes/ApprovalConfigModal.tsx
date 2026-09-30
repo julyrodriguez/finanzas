@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "motion/react";
 import { 
   Settings, 
   X, 
@@ -10,6 +11,8 @@ import {
   Users,
   Loader2
 } from "lucide-react";
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 import { 
   ApprovalConfig, 
   DEFAULT_APPROVAL_CONFIG, 
@@ -100,15 +103,16 @@ function SignerSectionBox({
           placeholder="Nombre del firmante..."
           className="flex-1 px-2.5 py-1.5 rounded-lg bg-[#080c16] border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs font-medium"
         />
-        <button
+        <motion.button
           type="button"
+          whileTap={{ scale: 0.96 }}
           onClick={handleAdd}
           disabled={!inputVal.trim()}
           className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Agregar</span>
-        </button>
+        </motion.button>
       </div>
     </div>
   );
@@ -175,8 +179,13 @@ export function ApprovalConfigModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: EASE_OUT }}
+        className="relative w-full max-w-4xl rounded-2xl bg-[#0e1322] border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#0b0f19]">
           <div className="flex items-center gap-3">
@@ -193,12 +202,13 @@ export function ApprovalConfigModal({
             </div>
           </div>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={onClose}
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
-          </button>
+          </motion.button>
         </div>
 
         {/* Modal Body */}
@@ -364,27 +374,30 @@ export function ApprovalConfigModal({
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-white/10 bg-[#0b0f19] flex items-center justify-between gap-3">
-          <button
+          <motion.button
             type="button"
+            whileTap={{ scale: 0.96 }}
             onClick={handleResetDefaults}
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Restablecer escalas por defecto"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Por Defecto</span>
-          </button>
+          </motion.button>
 
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.96 }}
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancelar
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.96 }}
               onClick={handleSave}
               disabled={saving}
               className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 cursor-pointer"
@@ -395,10 +408,10 @@ export function ApprovalConfigModal({
                 <Save className="w-3.5 h-3.5" />
               )}
               <span>{saving ? "Guardando en Servidor..." : "Guardar Firmantes"}</span>
-            </button>
+            </motion.button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
