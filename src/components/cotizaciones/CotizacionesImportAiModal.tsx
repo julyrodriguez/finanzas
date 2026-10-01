@@ -211,7 +211,8 @@ export function CotizacionesImportAiModal({
       if (finalAttachment) setAttachment(finalAttachment);
 
       const defaultProvider = targetFile?.name ? targetFile.name.replace(/\.[^/.]+$/, "") : "Proveedor";
-      const finalProviderName = targetProviderName || extracted.providerName || defaultProvider;
+      const isGenericProviderName = !targetProviderName || /^proveedor(\s*\d+)?$/i.test(targetProviderName.trim());
+      const finalProviderName = (!isGenericProviderName ? targetProviderName : extracted.providerName) || extracted.providerName || targetProviderName || defaultProvider;
       const finalCurrency: "ARS" | "USD" = extracted.currency === "USD" ? "USD" : "ARS";
       const finalNotes = extracted.notes || "";
 

@@ -166,14 +166,17 @@ export default function CotizacionesPage() {
   const [importAiTargetProviderName, setImportAiTargetProviderName] = useState<string | undefined>(undefined);
 
   const toggleMinimizeProvider = (providerId: string) => {
-    setMinimizedProviders((prev) => ({
-      ...prev,
-      [providerId]: !prev[providerId]
-    }));
+    setMinimizedProviders((prev) => {
+      const current = prev[providerId] ?? true;
+      return {
+        ...prev,
+        [providerId]: !current
+      };
+    });
   };
 
   const toggleMinimizeAllProviders = () => {
-    const allMinimized = providers.length > 0 && providers.every((p) => minimizedProviders[p.id]);
+    const allMinimized = providers.length > 0 && providers.every((p) => (minimizedProviders[p.id] ?? true));
     const newState: Record<string, boolean> = {};
     providers.forEach((p) => {
       newState[p.id] = !allMinimized;
@@ -2903,13 +2906,13 @@ export default function CotizacionesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleMinimizeAllProviders}
                   className="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] text-xs font-semibold text-slate-300 hover:text-white border border-white/[0.08] transition-colors cursor-pointer"
                 >
-                  {providers.length > 0 && providers.every((p) => minimizedProviders[p.id])
+                  {providers.length > 0 && providers.every((p) => (minimizedProviders[p.id] ?? true))
                     ? "Expandir Todos"
                     : "Colapsar Todos"}
                 </button>
@@ -2917,10 +2920,24 @@ export default function CotizacionesPage() {
                   whileTap={{ scale: 0.95 }}
                   onClick={handleAddProvider}
                   disabled={isLocked}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 disabled:opacity-40 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 hover:text-white border border-white/[0.08] rounded-xl text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>Añadir Proveedor</span>
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setImportAiTargetProviderId(undefined);
+                    setImportAiTargetProviderName(undefined);
+                    setIsImportAiModalOpen(true);
+                  }}
+                  disabled={isLocked}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-40 cursor-pointer"
+                  title="Crear un nuevo proveedor automáticamente importando un presupuesto con IA"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-300 stroke-[2.5]" />
+                  <span>Agregar Proveedor por IA</span>
                 </motion.button>
               </div>
             </div>
@@ -2929,7 +2946,7 @@ export default function CotizacionesPage() {
             <div className="space-y-4">
               {providers.map((prov, pIdx) => {
                 const totalData = providerTotals.find((t) => t.providerId === prov.id);
-                const isMinimized = minimizedProviders[prov.id];
+                const isMinimized = minimizedProviders[prov.id] ?? true;
 
                 return (
                   <div
@@ -2937,58 +2954,67 @@ export default function CotizacionesPage() {
                     className="rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-200"
                   >
                     {/* Provider Header Bar */}
-                    <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0a0e1a]/80 border-b border-white/[0.06]">
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        {/* Provider inclusion checkbox */}
-                        <label className="flex items-center cursor-pointer shrink-0 p-1 rounded-lg hover:bg-white/5 transition-colors" title={excludedProviderIds.includes(prov.id) ? "Proveedor excluido: Clic para incluir en comparativa y copiado" : "Proveedor activo: Clic para excluir de comparativa y copiado"}>
-                          <input
-                            type="checkbox"
-                            checked={!excludedProviderIds.includes(prov.id)}
-                            onChange={() => toggleProviderInclusion(prov.id)}
-                            className="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
-                          />
-                        </label>
+                    <div className="p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#0a0e1a]/80 border-b border-white/[0.06]">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {/* Provider inclusion checkbox */}
+                          <label
+                            className="flex items-center cursor-pointer shrink-0 p-1 rounded-lg hover:bg-white/5 transition-colors"
+                            title={
+                              excludedProviderIds.includes(prov.id)
+                                ? "Proveedor excluido: Clic para incluir en comparativa y copiado"
+                                : "Proveedor activo: Clic para excluir de comparativa y copiado"
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!excludedProviderIds.includes(prov.id)}
+                              onChange={() => toggleProviderInclusion(prov.id)}
+                              className="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          </label>
 
-                        {/* Move provider order */}
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => moveProvider(pIdx, -1)}
-                            disabled={isLocked || pIdx === 0}
-                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer transition-colors"
-                            title="Mover a la izquierda"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveProvider(pIdx, 1)}
-                            disabled={isLocked || pIdx === providers.length - 1}
-                            className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer transition-colors"
-                            title="Mover a la derecha"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
+                          {/* Move provider order */}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => moveProvider(pIdx, -1)}
+                              disabled={isLocked || pIdx === 0}
+                              className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer transition-colors"
+                              title="Mover a la izquierda"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveProvider(pIdx, 1)}
+                              disabled={isLocked || pIdx === providers.length - 1}
+                              className="p-1 text-slate-500 hover:text-white disabled:opacity-20 cursor-pointer transition-colors"
+                              title="Mover a la derecha"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Provider Name Input */}
+                          <input
+                            type="text"
+                            value={prov.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setProviders((prev) =>
+                                prev.map((p) => (p.id === prov.id ? { ...p, name: val } : p))
+                              );
+                            }}
+                            placeholder="Nombre del Proveedor..."
+                            disabled={isLocked}
+                            className="flex-1 min-w-0 md:max-w-xs lg:max-w-sm bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-white outline-none transition-colors disabled:opacity-50"
+                          />
                         </div>
 
-                        {/* Provider Name Input */}
-                        <input
-                          type="text"
-                          value={prov.name}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setProviders((prev) =>
-                              prev.map((p) => (p.id === prov.id ? { ...p, name: val } : p))
-                            );
-                          }}
-                          placeholder="Nombre del Proveedor..."
-                          disabled={isLocked}
-                          className="flex-1 max-w-sm bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-white outline-none transition-colors disabled:opacity-50"
-                        />
-
-                        {/* Computed Total Badge */}
+                        {/* Computed Total Badge (su valor a la derecha) */}
                         {totalData && (
-                          <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono font-bold text-emerald-300 shrink-0">
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-mono font-bold text-emerald-300 shrink-0 self-start sm:self-center">
                             {totalData.totalARS > 0 && (
                               <span>{formatCurrencyValue(totalData.totalARS, "ARS")}</span>
                             )}
@@ -3008,83 +3034,87 @@ export default function CotizacionesPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Direct File Attachment button (Sin autocargar items) */}
-                        <label
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                            uploadingProviderId === prov.id
-                              ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                              : "bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]"
-                          }`}
-                          title="Adjuntar archivo (PDF, presupuesto, etc.) a este proveedor sin autocargar ni modificar ítems"
-                        >
-                          {uploadingProviderId === prov.id ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                              <span className="hidden sm:inline">Subiendo...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
-                              <span className="hidden sm:inline">Adjuntar</span>
-                            </>
-                          )}
-                          <input
-                            type="file"
-                            accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.doc,.docx,.txt"
-                            className="hidden"
-                            disabled={isLocked || uploadingProviderId === prov.id}
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                setUploadingProviderId(prov.id);
-                                await handleUploadAttachment(file, prov.id, prov.name);
-                                setUploadingProviderId(null);
-                                e.target.value = "";
-                              }
+                      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-white/[0.06]">
+                        <div className="flex items-center gap-1.5">
+                          {/* Direct File Attachment button (Sin autocargar items) */}
+                          <label
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                              uploadingProviderId === prov.id
+                                ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                                : "bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]"
+                            }`}
+                            title="Adjuntar archivo (PDF, presupuesto, etc.) a este proveedor sin autocargar ni modificar ítems"
+                          >
+                            {uploadingProviderId === prov.id ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                                <span className="hidden sm:inline">Subiendo...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Paperclip className="w-3.5 h-3.5 text-indigo-400" />
+                                <span className="hidden sm:inline">Adjuntar</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.xlsx,.xls,.csv,.doc,.docx,.txt"
+                              className="hidden"
+                              disabled={isLocked || uploadingProviderId === prov.id}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setUploadingProviderId(prov.id);
+                                  await handleUploadAttachment(file, prov.id, prov.name);
+                                  setUploadingProviderId(null);
+                                  e.target.value = "";
+                                }
+                              }}
+                            />
+                          </label>
+
+                          {/* AI Import shortcut */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImportAiTargetProviderId(prov.id);
+                              setImportAiTargetProviderName(prov.name);
+                              setIsImportAiModalOpen(true);
                             }}
-                          />
-                        </label>
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 text-xs font-semibold transition-colors cursor-pointer"
+                            title="Importar presupuesto PDF con IA"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            <span className="hidden sm:inline">Importar IA</span>
+                          </button>
+                        </div>
 
-                        {/* AI Import shortcut */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setImportAiTargetProviderId(prov.id);
-                            setImportAiTargetProviderName(prov.name);
-                            setIsImportAiModalOpen(true);
-                          }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 text-xs font-semibold transition-colors cursor-pointer"
-                          title="Importar presupuesto PDF con IA"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                          <span className="hidden sm:inline">Importar IA</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {/* Minimize toggle */}
+                          <button
+                            type="button"
+                            onClick={() => toggleMinimizeProvider(prov.id)}
+                            className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
+                            title={isMinimized ? "Expandir" : "Colapsar"}
+                          >
+                            {isMinimized ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4" />
+                            )}
+                          </button>
 
-                        {/* Minimize toggle */}
-                        <button
-                          type="button"
-                          onClick={() => toggleMinimizeProvider(prov.id)}
-                          className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer"
-                          title={isMinimized ? "Expandir" : "Colapsar"}
-                        >
-                          {isMinimized ? (
-                            <ChevronDown className="w-4 h-4" />
-                          ) : (
-                            <ChevronUp className="w-4 h-4" />
-                          )}
-                        </button>
-
-                        {/* Delete provider */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteProvider(prov.id)}
-                          disabled={isLocked || providers.length === 1}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-20 cursor-pointer"
-                          title="Eliminar proveedor"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          {/* Delete provider */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProvider(prov.id)}
+                            disabled={isLocked || providers.length === 1}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-20 cursor-pointer"
+                            title="Eliminar proveedor"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 

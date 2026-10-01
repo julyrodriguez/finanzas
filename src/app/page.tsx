@@ -1443,22 +1443,24 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
       <div className="space-y-6">
         {/* Executive Header Bar */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-white/10">
-          <div>
-            <div className="flex items-center gap-2.5">
+          <div className="w-full lg:w-auto text-center lg:text-left">
+            <div className="flex items-center justify-center lg:justify-start gap-2.5">
               <h2 className="text-2xl font-black text-white tracking-tight">
                 Órdenes de Compra
               </h2>
-              <span className="px-2.5 py-1 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono font-bold uppercase tracking-wider">
+              <span className="hidden sm:inline-flex px-2.5 py-1 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-mono font-bold uppercase tracking-wider">
                 Control Corporativo
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1 font-medium">
+            <p className="text-xs text-slate-400 mt-1 font-medium text-center lg:text-left">
               Gestión, autorización, notas internas y seguimiento presupuestario de Cinemark & Hoyts
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <DolarVentaBadge />
+          <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2.5">
+            <div className="hidden sm:flex">
+              <DolarVentaBadge />
+            </div>
 
             <motion.button
               whileTap={{ scale: 0.96 }}
@@ -1479,7 +1481,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               transition={{ duration: 0.12, ease: EASE_OUT }}
               onClick={handleLoadAllFromDb}
               disabled={loadingAllDb || hasLoadedAllFromDb}
-              className={`px-3.5 py-2 rounded-xl border font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+              className={`hidden sm:flex px-3.5 py-2 rounded-xl border font-semibold text-xs transition-colors items-center justify-center gap-1.5 shadow-sm ${
                 hasLoadedAllFromDb
                   ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default"
                   : "bg-[#0e1424] hover:bg-white/5 border-white/10 text-slate-200 hover:text-white cursor-pointer"
@@ -1500,7 +1502,7 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
               whileTap={{ scale: 0.96 }}
               transition={{ duration: 0.12, ease: EASE_OUT }}
               onClick={handleExportExcel}
-              className="px-3.5 py-2 rounded-xl bg-[#0e1424] hover:bg-white/5 border border-white/10 text-slate-200 hover:text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-[#0e1424] hover:bg-white/5 border border-white/10 text-slate-200 hover:text-white font-semibold text-xs transition-colors items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               title="Descargar listado actual de órdenes en Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
