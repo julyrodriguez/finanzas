@@ -406,29 +406,41 @@ export function BeachWeatherBackdrop({
               : "w-[150px] sm:w-[175px] h-[88%] left-[-16%] sm:left-[-18%]"
           } flex flex-col items-center justify-end z-[4] transition-all duration-500`}
         >
-          {/* Resplandor de Neón Rojo sobre el techo del edificio */}
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-44 sm:w-56 h-20 bg-red-600/35 blur-2xl pointer-events-none animate-pulse" />
+          {/* Resplandor de Neón Rojo sobre el techo del edificio (solo en fullscreen) */}
+          {fullscreen && (
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-44 sm:w-56 h-20 bg-red-600/35 blur-2xl pointer-events-none animate-pulse" />
+          )}
 
-          {/* ESTRUCTURA DEL TECHO CON LAS LETRAS DE CINEMARK EN ROJO */}
+          {/* ESTRUCTURA DEL TECHO */}
           <div className="relative z-10 flex flex-col items-center mb-1">
-            {/* Cartel Luminoso de Cinemark en el techo */}
-            <div className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-md bg-[#0a0505]/85 border-2 border-red-500/70 shadow-[0_0_20px_rgba(239,68,68,0.7),inset_0_0_12px_rgba(220,38,38,0.4)] backdrop-blur-md flex items-center justify-center">
-              <span 
-                className="text-xs sm:text-sm md:text-base font-black tracking-widest text-[#ff2a2a] uppercase font-sans"
-                style={{
-                  animation: "cinemarkPulse 3s ease-in-out infinite",
-                  letterSpacing: "0.2em"
-                }}
-              >
-                CINEMARK
-              </span>
-            </div>
+            {fullscreen ? (
+              /* En pantalla grande: Cartel Luminoso de Cinemark en el techo */
+              <>
+                <div className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-md bg-[#0a0505]/85 border-2 border-red-500/70 shadow-[0_0_20px_rgba(239,68,68,0.7),inset_0_0_12px_rgba(220,38,38,0.4)] backdrop-blur-md flex items-center justify-center">
+                  <span 
+                    className="text-xs sm:text-sm md:text-base font-black tracking-widest text-[#ff2a2a] uppercase font-sans"
+                    style={{
+                      animation: "cinemarkPulse 3s ease-in-out infinite",
+                      letterSpacing: "0.2em"
+                    }}
+                  >
+                    CINEMARK
+                  </span>
+                </div>
 
-            {/* Soportes metálicos del cartel */}
-            <div className="flex items-center gap-6 sm:gap-10 h-2 w-full justify-center">
-              <div className="w-1 h-full bg-slate-700" />
-              <div className="w-1 h-full bg-slate-700" />
-            </div>
+                {/* Soportes metálicos del cartel */}
+                <div className="flex items-center gap-6 sm:gap-10 h-2 w-full justify-center">
+                  <div className="w-1 h-full bg-slate-700" />
+                  <div className="w-1 h-full bg-slate-700" />
+                </div>
+              </>
+            ) : (
+              /* En versión pequeña: Remate arquitectónico moderno limpio sin cartel */
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-1 h-2.5 bg-red-500/80 rounded-full animate-pulse" />
+                <div className="w-6 h-1 bg-slate-600 rounded-full" />
+              </div>
+            )}
 
             {/* Coronamiento / Terraza del edificio */}
             <div className="w-[110%] h-2 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border-t border-slate-500 rounded-t-xs" />
