@@ -9,33 +9,33 @@ import {
   Cloud, 
   CloudRain, 
   Sunset,
-  Sunrise,
-  Droplets
+  Sunrise
 } from "lucide-react";
 import { WeatherData } from "@/types/weather";
 
 interface BeachWeatherBackdropProps {
   children?: React.ReactNode;
   className?: string;
+  fullscreen?: boolean;
 }
 
 // 48 static raindrops with staggered positions and timings
-const RAINDROPS = Array.from({ length: 48 }, (_, i) => ({
+const RAINDROPS = Array.from({ length: 54 }, (_, i) => ({
   id: i,
-  left: `${(i * 2.15) % 100}%`,
+  left: `${(i * 1.9) % 100}%`,
   top: `${-25 - ((i * 19) % 65)}px`,
-  delay: `${((i * 0.11) % 1.5).toFixed(2)}s`,
+  delay: `${((i * 0.09) % 1.5).toFixed(2)}s`,
   duration: `${(0.7 + ((i * 0.04) % 0.4)).toFixed(2)}s`,
-  height: `${(18 + (i % 16))}px`,
+  height: `${(20 + (i % 18))}px`,
   opacity: 0.4 + ((i % 5) * 0.12),
 }));
 
 // Water surface ripples where drops hit the sea
-const RIPPLES = Array.from({ length: 9 }, (_, i) => ({
+const RIPPLES = Array.from({ length: 12 }, (_, i) => ({
   id: i,
-  left: `${12 + (i * 10.5) % 76}%`,
-  bottom: `${7 + (i * 3.2) % 19}%`,
-  delay: `${(i * 0.32).toFixed(2)}s`,
+  left: `${10 + (i * 8) % 80}%`,
+  bottom: `${7 + (i * 2.8) % 19}%`,
+  delay: `${(i * 0.28).toFixed(2)}s`,
   duration: `${(1.1 + (i % 3) * 0.35).toFixed(2)}s`,
 }));
 
@@ -44,9 +44,9 @@ const RAIN_CODES = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99];
 export function BeachWeatherBackdrop({
   children,
   className = "",
+  fullscreen = false,
 }: BeachWeatherBackdropProps) {
   const [data, setData] = useState<WeatherData | null>(null);
-  const [testRain, setTestRain] = useState(false);
 
   const fetchWeather = async () => {
     try {
@@ -102,7 +102,7 @@ export function BeachWeatherBackdrop({
     )
   );
 
-  const isRaining = isActualRaining || testRain;
+  const isRaining = isActualRaining;
   const isStorm = Boolean(data && [95, 96, 99].includes(data.current.weatherCode));
 
   // Posición del sol
@@ -174,7 +174,11 @@ export function BeachWeatherBackdrop({
 
   return (
     <div
-      className={`relative rounded-[36px] sm:rounded-[42px] overflow-hidden border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.65)] select-none transition-all duration-700 w-full max-w-[350px] sm:max-w-[410px] h-[360px] sm:h-[420px] flex flex-col items-center justify-between p-4 sm:p-5 ${className}`}
+      className={
+        fullscreen
+          ? `fixed inset-0 z-[100] w-screen h-screen rounded-none border-none max-w-none shadow-none select-none transition-all duration-700 flex flex-col items-center justify-between p-6 sm:p-10 overflow-hidden ${className}`
+          : `relative rounded-[36px] sm:rounded-[42px] overflow-hidden border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.65)] select-none transition-all duration-700 w-full max-w-[350px] sm:max-w-[410px] h-[360px] sm:h-[420px] flex flex-col items-center justify-between p-4 sm:p-5 ${className}`
+      }
     >
       {/* Keyframes de Lluvia y Ondas */}
       <style jsx>{`
@@ -190,7 +194,7 @@ export function BeachWeatherBackdrop({
             opacity: 0.9;
           }
           100% {
-            transform: translateY(450px) translateX(-50px);
+            transform: translateY(${fullscreen ? "115vh" : "450px"}) translateX(-50px);
             opacity: 0;
           }
         }
@@ -231,6 +235,13 @@ export function BeachWeatherBackdrop({
           <div className="absolute top-16 right-32 w-1.5 h-1.5 bg-purple-200 rounded-full opacity-60" />
           <div className="absolute top-24 left-16 w-1 h-1 bg-amber-100 rounded-full opacity-80" />
           <div className="absolute top-14 right-8 w-1 h-1 bg-white rounded-full" />
+          {fullscreen && (
+            <>
+              <div className="absolute top-8 left-1/3 w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+              <div className="absolute top-1/4 right-1/4 w-1 h-1 bg-indigo-100 rounded-full" />
+              <div className="absolute top-20 right-1/3 w-1 h-1 bg-purple-100 rounded-full animate-ping" />
+            </>
+          )}
         </div>
       )}
 
@@ -238,21 +249,21 @@ export function BeachWeatherBackdrop({
       {(cloudCover > 20 || isRaining || isCloudy) && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <motion.div
-            animate={{ x: [-20, 30, -20] }}
-            transition={{ duration: 35, repeat: Infinity, ease: "easeInOut" }}
-            className={`absolute top-10 -left-6 ${isRaining ? "opacity-60" : "opacity-45"} filter blur-xs`}
+            animate={{ x: [-30, 45, -30] }}
+            transition={{ duration: 40, repeat: Infinity, ease: "easeInOut" }}
+            className={`absolute top-10 -left-6 ${isRaining ? "opacity-60" : "opacity-45"} filter blur-xs ${fullscreen ? "scale-150" : ""}`}
           >
-            <svg width="180" height="70" viewBox="0 0 100 40" fill={isRaining ? "#64748b" : "#f1f5f9"}>
+            <svg width={fullscreen ? "280" : "180"} height={fullscreen ? "110" : "70"} viewBox="0 0 100 40" fill={isRaining ? "#64748b" : "#f1f5f9"}>
               <path d="M10,30 Q20,10 40,20 Q55,5 75,18 Q90,15 95,30 Z" opacity="0.85" />
             </svg>
           </motion.div>
 
           <motion.div
-            animate={{ x: [15, -25, 15] }}
-            transition={{ duration: 42, repeat: Infinity, ease: "easeInOut" }}
-            className={`absolute top-16 right-0 ${isRaining ? "opacity-55" : "opacity-40"} filter blur-xs`}
+            animate={{ x: [25, -35, 25] }}
+            transition={{ duration: 48, repeat: Infinity, ease: "easeInOut" }}
+            className={`absolute top-16 right-0 ${isRaining ? "opacity-55" : "opacity-40"} filter blur-xs ${fullscreen ? "scale-150" : ""}`}
           >
-            <svg width="210" height="80" viewBox="0 0 100 40" fill={isRaining ? "#475569" : "#e2e8f0"}>
+            <svg width={fullscreen ? "320" : "210"} height={fullscreen ? "120" : "80"} viewBox="0 0 100 40" fill={isRaining ? "#475569" : "#e2e8f0"}>
               <path d="M15,32 Q30,12 55,22 Q70,8 88,20 Q98,18 100,32 Z" opacity="0.8" />
             </svg>
           </motion.div>
@@ -271,7 +282,7 @@ export function BeachWeatherBackdrop({
         >
           {/* Resplandor exterior difuso */}
           <div
-            className="absolute -inset-10 rounded-full blur-2xl pointer-events-none animate-pulse"
+            className={`absolute ${fullscreen ? "-inset-20" : "-inset-10"} rounded-full ${fullscreen ? "blur-3xl" : "blur-2xl"} pointer-events-none animate-pulse`}
             style={{
               background: `radial-gradient(circle, ${sunGlow} 0%, rgba(254, 215, 170, 0) 70%)`,
             }}
@@ -279,7 +290,7 @@ export function BeachWeatherBackdrop({
 
           {/* Corona solar */}
           <div
-            className="absolute -inset-6 rounded-full blur-xl pointer-events-none opacity-85"
+            className={`absolute ${fullscreen ? "-inset-12" : "-inset-6"} rounded-full blur-xl pointer-events-none opacity-85`}
             style={{
               background: isCloudy 
                 ? "radial-gradient(circle, #ffffff 30%, rgba(254, 240, 138, 0.6) 65%, transparent 85%)"
@@ -288,10 +299,10 @@ export function BeachWeatherBackdrop({
           />
 
           {/* Núcleo luminoso del sol */}
-          <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full ${
+          <div className={`relative ${fullscreen ? "w-28 h-28 sm:w-36 sm:h-36" : "w-16 h-16 sm:w-20 sm:h-20"} rounded-full ${
             isCloudy 
-              ? "bg-gradient-to-t from-amber-200 via-yellow-100 to-white shadow-[0_0_35px_rgba(255,255,255,0.9),0_0_70px_rgba(254,240,138,0.7)]" 
-              : "bg-gradient-to-t from-amber-400 via-yellow-200 to-white shadow-[0_0_40px_rgba(251,191,36,0.9),0_0_80px_rgba(245,158,11,0.6)]"
+              ? "bg-gradient-to-t from-amber-200 via-yellow-100 to-white shadow-[0_0_45px_rgba(255,255,255,0.9),0_0_90px_rgba(254,240,138,0.7)]" 
+              : "bg-gradient-to-t from-amber-400 via-yellow-200 to-white shadow-[0_0_50px_rgba(251,191,36,0.9),0_0_100px_rgba(245,158,11,0.6)]"
           } border border-yellow-100/70`} />
         </div>
       ) : (
@@ -303,9 +314,9 @@ export function BeachWeatherBackdrop({
             top: "18%",
           }}
         >
-          <div className="absolute -inset-6 rounded-full blur-xl bg-indigo-300/40 pointer-events-none" />
-          <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-white via-indigo-100 to-slate-300 shadow-[0_0_30px_rgba(255,255,255,0.7)] flex items-center justify-center border border-white/50">
-            <div className="w-9 h-9 rounded-full bg-slate-900/10 blur-[1px]" />
+          <div className={`absolute ${fullscreen ? "-inset-12" : "-inset-6"} rounded-full blur-xl bg-indigo-300/40 pointer-events-none`} />
+          <div className={`relative ${fullscreen ? "w-20 h-20" : "w-12 h-12"} rounded-full bg-gradient-to-br from-white via-indigo-100 to-slate-300 shadow-[0_0_35px_rgba(255,255,255,0.7)] flex items-center justify-center border border-white/50`}>
+            <div className={`rounded-full bg-slate-900/10 blur-[1px] ${fullscreen ? "w-15 h-15" : "w-9 h-9"}`} />
           </div>
         </div>
       )}
@@ -315,15 +326,15 @@ export function BeachWeatherBackdrop({
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-[2]">
           {/* Nube izquierda */}
           <motion.div
-            animate={{ x: [-15, 20, -15] }}
-            transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute opacity-90 filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+            animate={{ x: [-20, 30, -20] }}
+            transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
+            className={`absolute opacity-90 filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.15)] ${fullscreen ? "scale-140" : ""}`}
             style={{
               left: `${Math.max(5, sunXPercent - 32)}%`,
               bottom: `${Math.max(22, sunBottomPercent - 4)}%`,
             }}
           >
-            <svg width="170" height="65" viewBox="0 0 160 60" fill="none">
+            <svg width={fullscreen ? "240" : "170"} height={fullscreen ? "90" : "65"} viewBox="0 0 160 60" fill="none">
               <path
                 d="M20,48 C20,38 28,30 38,30 C40,18 52,10 65,10 C80,10 92,20 96,32 C104,30 114,35 116,44 C124,44 132,50 132,58 L20,58 Z"
                 fill={isRaining ? "url(#cloudGradRain1)" : isCloudy ? "url(#cloudGradDayCloudy)" : "url(#cloudGradFront)"}
@@ -350,15 +361,15 @@ export function BeachWeatherBackdrop({
 
           {/* Nube derecha */}
           <motion.div
-            animate={{ x: [20, -15, 20] }}
-            transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute opacity-88 filter drop-shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
+            animate={{ x: [25, -20, 25] }}
+            transition={{ duration: 34, repeat: Infinity, ease: "easeInOut" }}
+            className={`absolute opacity-88 filter drop-shadow-[0_4px_14px_rgba(0,0,0,0.18)] ${fullscreen ? "scale-140" : ""}`}
             style={{
               left: `${Math.min(50, sunXPercent + 6)}%`,
               bottom: `${Math.max(24, sunBottomPercent - 2)}%`,
             }}
           >
-            <svg width="190" height="75" viewBox="0 0 170 65" fill="none">
+            <svg width={fullscreen ? "260" : "190"} height={fullscreen ? "100" : "75"} viewBox="0 0 170 65" fill="none">
               <path
                 d="M25,52 C22,40 32,32 44,32 C48,18 64,10 78,12 C92,12 104,22 108,34 C118,34 126,40 128,50 L25,52 Z"
                 fill={isRaining ? "url(#cloudGradRain2)" : isCloudy ? "url(#cloudGradDayCloudy2)" : "url(#cloudGradFront2)"}
@@ -386,7 +397,7 @@ export function BeachWeatherBackdrop({
       )}
 
       {/* 6. OCÉANO Y REFLEJO */}
-      <div className="absolute left-0 right-0 bottom-0 h-[28%] z-[3] overflow-hidden pointer-events-none">
+      <div className={`absolute left-0 right-0 bottom-0 ${fullscreen ? "h-[32%]" : "h-[28%]"} z-[3] overflow-hidden pointer-events-none`}>
         <div className={`w-full h-full bg-gradient-to-b ${oceanGradient} opacity-95 relative`}>
           
           {/* Línea de horizonte */}
@@ -408,7 +419,7 @@ export function BeachWeatherBackdrop({
             <motion.div
               animate={{ opacity: [0.75, 0.95, 0.75], scaleX: [0.95, 1.05, 0.95] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute top-0 bottom-0 w-24 sm:w-32 filter blur-[2px]"
+              className={`absolute top-0 bottom-0 ${fullscreen ? "w-36 sm:w-52" : "w-24 sm:w-32"} filter blur-[2px]`}
               style={{
                 left: `${sunXPercent}%`,
                 transform: "translateX(-50%)",
@@ -456,7 +467,7 @@ export function BeachWeatherBackdrop({
       </div>
 
       {/* 7. ORILLA Y ARENA */}
-      <div className="absolute left-0 right-0 bottom-0 h-[14%] sm:h-[15%] z-[4] pointer-events-none">
+      <div className={`absolute left-0 right-0 bottom-0 ${fullscreen ? "h-[16%]" : "h-[14%] sm:h-[15%]"} z-[4] pointer-events-none`}>
         <svg
           className="w-full h-full drop-shadow-[0_-3px_8px_rgba(0,0,0,0.35)]"
           preserveAspectRatio="none"
@@ -483,7 +494,7 @@ export function BeachWeatherBackdrop({
       </div>
 
       {/* 8. PALMERAS EN LAS ESQUINAS */}
-      <div className="absolute top-0 left-0 w-28 h-28 pointer-events-none z-[5] opacity-75">
+      <div className={`absolute top-0 left-0 ${fullscreen ? "w-44 h-44 sm:w-64 sm:h-64" : "w-28 h-28"} pointer-events-none z-[5] opacity-75`}>
         <motion.div
           animate={{ rotate: isRaining ? [-3, 4, -3] : [-1.5, 2.5, -1.5] }}
           transition={{ duration: isRaining ? 4 : 7, repeat: Infinity, ease: "easeInOut" }}
@@ -498,7 +509,7 @@ export function BeachWeatherBackdrop({
         </motion.div>
       </div>
 
-      <div className="absolute top-0 right-0 w-32 h-32 pointer-events-none z-[5] opacity-70">
+      <div className={`absolute top-0 right-0 ${fullscreen ? "w-48 h-48 sm:w-72 sm:h-72" : "w-32 h-32"} pointer-events-none z-[5] opacity-70`}>
         <motion.div
           animate={{ rotate: isRaining ? [3, -4, 3] : [1.5, -2, 1.5] }}
           transition={{ duration: isRaining ? 4.5 : 8, repeat: Infinity, ease: "easeInOut" }}
@@ -538,8 +549,8 @@ export function BeachWeatherBackdrop({
               style={{
                 left: rip.left,
                 bottom: rip.bottom,
-                width: "20px",
-                height: "9px",
+                width: fullscreen ? "26px" : "20px",
+                height: fullscreen ? "11px" : "9px",
                 animation: `rainRipple ${rip.duration} ease-out ${rip.delay} infinite`,
               }}
             />
@@ -556,12 +567,10 @@ export function BeachWeatherBackdrop({
         </div>
       )}
 
-      {/* 10. BADGE SUPERIOR DE CLIMA (Sin botón de actualizar, con auto-refresh cada 5m) */}
-      <div className="w-full flex items-center justify-between z-10">
+      {/* 10. BADGE SUPERIOR DE CLIMA */}
+      <div className={`w-full flex items-center justify-between z-10 ${fullscreen ? "max-w-6xl mx-auto" : ""}`}>
         <div 
-          onClick={() => setTestRain((prev) => !prev)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white shadow-lg text-[11px] font-semibold tracking-tight cursor-pointer hover:bg-black/65 transition-all select-none"
-          title={isRaining ? "Hacé clic para alternar lluvia" : "Hacé clic para probar la lluvia"}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white shadow-lg text-[11px] font-semibold tracking-tight select-none"
         >
           {getWeatherIcon()}
           <span>{data ? `${data.current.temperature}°C` : "14°C"}</span>
@@ -577,44 +586,32 @@ export function BeachWeatherBackdrop({
               ? "Atardecer" 
               : data?.current.weatherDescription || "Buenos Aires"}
           </span>
-          {testRain && (
-            <span className="ml-1 text-[9px] px-1 py-0.2 rounded bg-cyan-500/30 text-cyan-200 border border-cyan-500/40">
-              Demo
-            </span>
-          )}
         </div>
 
-        {/* Indicador en vivo sutil con botón de prueba de lluvia (sin botón de refresh) */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setTestRain((prev) => !prev)}
-            className={`p-1.5 rounded-full backdrop-blur-md border text-xs transition-all shadow-md active:scale-95 cursor-pointer ${
-              isRaining 
-                ? "bg-cyan-500/30 border-cyan-400 text-cyan-200" 
-                : "bg-black/35 hover:bg-black/55 border-white/15 text-white/70 hover:text-white"
-            }`}
-            title={testRain ? "Desactivar demo de lluvia" : "Probar lluvia"}
-          >
-            <Droplets className="w-3 h-3" />
-          </button>
-
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-md border border-white/15 text-[10px] text-emerald-300 font-medium tracking-tight">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>En vivo</span>
-          </div>
+        {/* Indicador en vivo sutil */}
+        <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-md border border-white/15 text-[10px] text-emerald-300 font-medium tracking-tight">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>En vivo</span>
         </div>
       </div>
 
       {/* 11. CENTRO: LA CARITA */}
-      <div className="relative z-10 flex items-center justify-center my-auto drop-shadow-[0_15px_30px_rgba(0,0,0,0.6)]">
+      <div className="relative z-10 flex items-center justify-center my-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.65)]">
         {children}
       </div>
 
-      {/* 12. PIE: UBICACIÓN */}
-      <div className="z-10 text-center pb-0.5">
-        <span className="text-[10px] font-medium tracking-wide text-white/90 bg-black/35 px-2.5 py-0.5 rounded-full backdrop-blur-xs border border-white/10">
-          {isRaining ? "Buenos Aires, AR • Lluvia en Vivo" : "Buenos Aires, AR • Clima en Vivo"}
-        </span>
+      {/* 12. PIE */}
+      <div className="z-10 text-center pb-1">
+        {fullscreen ? (
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/15 text-[11px] font-mono text-slate-300 tracking-widest shadow-lg">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+            <span>MODO REPOSO • MOVER EL MOUSE PARA REGRESAR</span>
+          </div>
+        ) : (
+          <span className="text-[10px] font-medium tracking-wide text-white/90 bg-black/35 px-2.5 py-0.5 rounded-full backdrop-blur-xs border border-white/10">
+            {isRaining ? "Buenos Aires, AR • Lluvia en Vivo" : "Buenos Aires, AR • Clima en Vivo"}
+          </span>
+        )}
       </div>
     </div>
   );

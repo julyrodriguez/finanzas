@@ -372,70 +372,46 @@ export default function HomePage() {
         />
       )}
 
-      {/* Full-Screen Giant Carita Screensaver on 1-min Inactivity */}
+      {/* Full-Screen Giant Carita Screensaver on 1-min Inactivity with Giant Weather Background */}
       <AnimatePresence>
         {isIdle && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: EASE_OUT }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl select-none overflow-hidden"
+            transition={{ duration: 0.6, ease: EASE_OUT }}
+            className="fixed inset-0 z-[100] select-none overflow-hidden"
           >
-            {/* Ambient Deep Glow */}
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ 
-                scale: [1, 1.18, 1],
-                opacity: [0.14, 0.28, 0.14]
-              }}
-              transition={{ 
-                duration: 6, 
-                repeat: Infinity, 
-                ease: "easeInOut" 
-              }}
-              className="absolute w-[640px] h-[640px] rounded-full bg-blue-500/20 blur-3xl pointer-events-none"
-            />
-
-            {/* Giant Carita with smooth entrance/exit scaling */}
-            <motion.div
-              initial={{ scale: 0.35, opacity: 0, y: 30 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.35, opacity: 0, y: 20 }}
-              transition={{
-                duration: 0.65,
-                ease: EASE_OUT,
-              }}
-              className="relative z-10 flex flex-col items-center"
-            >
-              <div className="hidden sm:block">
-                <EyeTrackerCube 
-                  size={480} 
-                  follow={80} 
-                  bounce={40} 
-                  mood="thinking" 
-                />
-              </div>
-              <div className="block sm:hidden">
-                <EyeTrackerCube 
-                  size={300} 
-                  follow={80} 
-                  bounce={40} 
-                  mood="thinking" 
-                />
-              </div>
-            </motion.div>
-
-            {/* Subtle return hint */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 0.4, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ delay: 1, duration: 0.5 }}
-              className="absolute bottom-10 text-center text-[11px] font-mono font-medium text-slate-400 tracking-widest pointer-events-none"
-            >
-              MODO REPOSO • MOVER EL MOUSE PARA REGRESAR
-            </motion.div>
+            <BeachWeatherBackdrop fullscreen>
+              {/* Giant Carita with smooth entrance/exit scaling */}
+              <motion.div
+                initial={{ scale: 0.35, opacity: 0, y: 30 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.35, opacity: 0, y: 20 }}
+                transition={{
+                  duration: 0.65,
+                  ease: EASE_OUT,
+                }}
+                className="relative z-10 flex flex-col items-center"
+              >
+                <div className="hidden sm:block">
+                  <EyeTrackerCube 
+                    size={460} 
+                    follow={80} 
+                    bounce={40} 
+                    mood="thinking" 
+                  />
+                </div>
+                <div className="block sm:hidden">
+                  <EyeTrackerCube 
+                    size={280} 
+                    follow={80} 
+                    bounce={40} 
+                    mood="thinking" 
+                  />
+                </div>
+              </motion.div>
+            </BeachWeatherBackdrop>
           </motion.div>
         )}
       </AnimatePresence>
