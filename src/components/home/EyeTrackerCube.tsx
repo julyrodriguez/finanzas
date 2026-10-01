@@ -7,7 +7,7 @@ interface EyeTrackerCubeProps {
   className?: string;
   follow?: number; // 0 - 100
   bounce?: number; // 0 - 100
-  mood?: "normal" | "thinking";
+  mood?: "normal" | "thinking" | "searching";
 }
 
 const CUBE_PATH =
@@ -127,6 +127,15 @@ export function EyeTrackerCube({
       // Spring physics with inertia & bounce
       const stiffness = 0.065;
       const friction = 0.34 - (clamp(bounce, 0, 100) / 100) * 0.22;
+
+      // If searching, animate scanning gaze across data
+      if (mood === "searching") {
+        const scanTime = time * 0.0035;
+        const scanX = Math.sin(scanTime) * 0.65 + Math.sin(scanTime * 2.1) * 0.22;
+        const scanY = Math.cos(scanTime * 1.4) * 0.3 - 0.12;
+        state.tx = state.tx * 0.2 + scanX * 0.8;
+        state.ty = state.ty * 0.2 + scanY * 0.8;
+      }
 
       state.vx += ((state.tx - state.x) * stiffness - state.vx * friction) * dt;
       state.vy += ((state.ty - state.y) * stiffness - state.vy * friction) * dt;

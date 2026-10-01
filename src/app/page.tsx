@@ -6,6 +6,14 @@ import { motion } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { EyeTrackerCube } from "@/components/home/EyeTrackerCube";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
+import { SeekSearchBar } from "@/components/home/SeekSearchBar";
+import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
+import { CotizacionDetailModal } from "@/components/cotizaciones/CotizacionDetailModal";
+import type { OrdenCompra, Nota } from "@/types/ordenes";
+import { useAuth } from "@/context/AuthContext";
+import { getFirebaseDb } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
+import { syncOrderToMongo } from "@/lib/serverSync";
 import { 
   ShoppingBag, 
   Clock, 
@@ -115,18 +123,72 @@ function MenuCard({
 }
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchModalQuery, setSearchModalQuery] = useState("");
+
+  // Modals for detail view
+  const [selectedOrdenForDetail, setSelectedOrdenForDetail] = useState<OrdenCompra | null>(null);
+  const [selectedQuoteForDetail, setSelectedQuoteForDetail] = useState<any | null>(null);
+
+  // Note state for OrderDetailModal
+  const [newNotaText, setNewNotaText] = useState("");
+  const [savingNota, setSavingNota] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setSearchModalQuery("");
         setIsSearchOpen(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const handleAddNota = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNotaText.trim() || !selectedOrdenForDetail || !selectedOrdenForDetail.id) return;
+
+    setSavingNota(true);
+    const now = new Date();
+    const formattedDate = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`;
+
+    const nuevaNota: Nota = {
+      id: "nota-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+      texto: newNotaText.trim(),
+      autor: user?.displayName || user?.email?.split("@")[0] || "julian",
+      fecha: formattedDate,
+    };
+
+    const updatedNotas = [...(selectedOrdenForDetail.notas || []), nuevaNota];
+    const updatedOrden = { ...selectedOrdenForDetail, notas: updatedNotas };
+    setSelectedOrdenForDetail(updatedOrden);
+
+    syncOrderToMongo(updatedOrden);
+
+    const db = getFirebaseDb();
+    if (db && selectedOrdenForDetail.id) {
+      try {
+        const docRef = doc(db, "ordenes_compra", selectedOrdenForDetail.id);
+        await updateDoc(docRef, { notas: updatedNotas });
+      } catch (err) {
+        console.warn("Aviso Firebase al agregar nota:", err);
+      }
+    }
+
+    setNewNotaText("");
+    setSavingNota(false);
+  };
+
+  const handleStatusChange = (ordenId: string, updatedFields: Partial<OrdenCompra>) => {
+    if (selectedOrdenForDetail && selectedOrdenForDetail.id === ordenId) {
+      const updated = { ...selectedOrdenForDetail, ...updatedFields };
+      setSelectedOrdenForDetail(updated);
+      syncOrderToMongo(updated);
+    }
+  };
 
   return (
     <AppLayout title="Portal Principal" subtitle="Cinemark & Hoyts">
@@ -201,25 +263,15 @@ export default function HomePage() {
                 />
               </div>
 
-              {/* Lupita button below the carita */}
-              <motion.button
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.96 }}
-                transition={{ duration: 0.15, ease: EASE_OUT }}
-                onClick={() => setIsSearchOpen(true)}
-                className="mt-6 px-4 py-2.5 rounded-full bg-[#0d1322]/90 hover:bg-[#131b2e] border border-white/10 hover:border-blue-500/40 text-slate-200 hover:text-white shadow-xl flex items-center gap-2.5 transition-all group cursor-pointer"
-                title="Buscar órdenes por N°, cotizaciones o pendientes (⌘K)"
-              >
-                <div className="w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                  <Search className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs font-semibold text-slate-300 group-hover:text-white">
-                  Buscar OCs, cotizaciones o pendientes...
-                </span>
-                <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[10px] font-mono text-slate-400">
-                  ⌘K
-                </span>
-              </motion.button>
+              {/* Seek Search Bar below the carita (bencho.dev/blocks/seek) */}
+              <div className="mt-6 flex flex-col items-center">
+                <SeekSearchBar
+                  onSearchSubmit={(val) => {
+                    setSearchModalQuery(val);
+                    setIsSearchOpen(true);
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -262,11 +314,42 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Intelligent Search Modal with Thinking Carita in Background */}
+      {/* Intelligent Search Modal with Thinking/Searching Carita in Background */}
       <HomeSearchModal
         isOpen={isSearchOpen}
+        initialQuery={searchModalQuery}
         onClose={() => setIsSearchOpen(false)}
+        onSelectOC={(oc) => {
+          setIsSearchOpen(false);
+          setSelectedOrdenForDetail(oc);
+        }}
+        onSelectCotizacion={(quote) => {
+          setIsSearchOpen(false);
+          setSelectedQuoteForDetail(quote);
+        }}
       />
+
+      {/* Order Detail Modal (direct view without page change) */}
+      {selectedOrdenForDetail && (
+        <OrderDetailModal
+          orden={selectedOrdenForDetail}
+          onClose={() => setSelectedOrdenForDetail(null)}
+          isOrdenesUser={true}
+          onStatusChange={handleStatusChange}
+          newNotaText={newNotaText}
+          setNewNotaText={setNewNotaText}
+          savingNota={savingNota}
+          onAddNota={handleAddNota}
+        />
+      )}
+
+      {/* Cotización Detail Modal (direct view) */}
+      {selectedQuoteForDetail && (
+        <CotizacionDetailModal
+          quote={selectedQuoteForDetail}
+          onClose={() => setSelectedQuoteForDetail(null)}
+        />
+      )}
     </AppLayout>
   );
 }
