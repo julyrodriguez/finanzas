@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { EyeTrackerCube } from "@/components/home/EyeTrackerCube";
+import { BeachWeatherBackdrop } from "@/components/home/BeachWeatherBackdrop";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
 import { SeekSearchBar } from "@/components/home/SeekSearchBar";
 import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
@@ -265,29 +266,31 @@ export default function HomePage() {
             />
           </div>
 
-          {/* Center Column: The Large Interactive Eye Tracker Cube */}
+          {/* Center Column: The Large Interactive Eye Tracker Cube with Beach Weather Backdrop */}
           <div className="order-1 lg:order-2 lg:col-span-4 flex flex-col items-center justify-center py-4 lg:py-0 z-0">
-            <div className="relative flex flex-col items-center">
-              {/* Responsive Eye Tracker Cube */}
-              <div className="hidden sm:block">
-                <EyeTrackerCube 
-                  size={240} 
-                  follow={70} 
-                  bounce={32} 
-                  mood={isSearchOpen ? "thinking" : "normal"} 
-                />
-              </div>
-              <div className="block sm:hidden">
-                <EyeTrackerCube 
-                  size={180} 
-                  follow={70} 
-                  bounce={32} 
-                  mood={isSearchOpen ? "thinking" : "normal"} 
-                />
-              </div>
+            <div className="relative flex flex-col items-center w-full max-w-[420px]">
+              <BeachWeatherBackdrop>
+                {/* Responsive Eye Tracker Cube */}
+                <div className="hidden sm:block">
+                  <EyeTrackerCube 
+                    size={210} 
+                    follow={70} 
+                    bounce={32} 
+                    mood={isSearchOpen ? "thinking" : "normal"} 
+                  />
+                </div>
+                <div className="block sm:hidden">
+                  <EyeTrackerCube 
+                    size={165} 
+                    follow={70} 
+                    bounce={32} 
+                    mood={isSearchOpen ? "thinking" : "normal"} 
+                  />
+                </div>
+              </BeachWeatherBackdrop>
 
               {/* Seek Search Bar below the carita (bencho.dev/blocks/seek) */}
-              <div className="mt-6 flex flex-col items-center">
+              <div className="mt-5 flex flex-col items-center w-full">
                 <SeekSearchBar
                   onSearchSubmit={(val) => {
                     setSearchModalQuery(val);
