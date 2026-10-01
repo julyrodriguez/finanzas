@@ -53,47 +53,47 @@ function MenuCard({
   return (
     <Link href={href} className="block group select-none">
       <motion.div
-        whileHover={{ y: -5, scale: 1.02 }}
+        whileHover={{ y: -4, scale: 1.015 }}
         whileTap={{ scale: 0.98 }}
-        transition={{ duration: 0.2, ease: EASE_OUT }}
+        transition={{ duration: 0.18, ease: EASE_OUT }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className={`relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-white/[0.08] bg-[#0d1322]/85 backdrop-blur-xl transition-all duration-300 shadow-xl group-hover:border-white/20 group-hover:shadow-2xl ${gradientHover}`}
+        className={`relative overflow-hidden rounded-2xl p-4 sm:p-4.5 border border-white/[0.08] bg-[#0d1322]/85 backdrop-blur-xl transition-all duration-300 shadow-lg group-hover:border-white/20 group-hover:shadow-xl ${gradientHover}`}
       >
         {/* Ambient Top Glow */}
         <div 
-          className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-opacity duration-300 group-hover:opacity-40"
+          className="absolute -top-10 -right-10 w-24 h-24 rounded-full blur-2xl opacity-20 pointer-events-none transition-opacity duration-300 group-hover:opacity-35"
           style={{ background: iconColor }}
         />
 
         {/* Card Header: Icon + Badge */}
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-transform duration-300 group-hover:scale-110 ${iconBg}`}>
-            <Icon className={`w-6 h-6 ${iconColor}`} />
+        <div className="flex items-center justify-between gap-2.5 mb-2.5">
+          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border transition-transform duration-300 group-hover:scale-105 ${iconBg}`}>
+            <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColor}`} />
           </div>
-          <span className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold uppercase tracking-wider border ${badgeColor}`}>
+          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-mono font-bold uppercase tracking-wider border ${badgeColor}`}>
             {badge}
           </span>
         </div>
 
         {/* Card Title & Description */}
-        <div className="space-y-1.5 mb-5">
+        <div className="space-y-1 mb-3">
           <div className="flex items-center gap-1.5">
-            <h3 className="text-lg sm:text-xl font-black text-white tracking-tight group-hover:text-blue-200 transition-colors">
+            <h3 className="text-sm sm:text-base font-black text-white tracking-tight group-hover:text-blue-200 transition-colors">
               {title}
             </h3>
           </div>
-          <p className="text-xs sm:text-[13px] text-slate-400 font-medium leading-relaxed line-clamp-2 sm:line-clamp-3">
+          <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-relaxed line-clamp-2">
             {description}
           </p>
         </div>
 
         {/* Tags / Features */}
-        <div className="flex flex-wrap gap-1.5 mb-5">
+        <div className="flex flex-wrap gap-1 mb-3">
           {tags.map((tag) => (
             <span
               key={tag}
-              className="px-2 py-0.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-300 font-semibold"
+              className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[9px] text-slate-300 font-semibold"
             >
               {tag}
             </span>
@@ -101,10 +101,10 @@ function MenuCard({
         </div>
 
         {/* Action Link Footer */}
-        <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
+        <div className="pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-[11px] font-bold text-slate-300 group-hover:text-white transition-colors">
           <span>{ctaText}</span>
-          <div className="w-7 h-7 rounded-xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-slate-400 group-hover:text-white group-hover:translate-x-1 group-hover:bg-white/10 transition-all">
-            <ChevronRight className="w-4 h-4" />
+          <div className="w-5 h-5 rounded-md bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-slate-400 group-hover:text-white group-hover:translate-x-0.5 group-hover:bg-white/10 transition-all">
+            <ChevronRight className="w-3.5 h-3.5" />
           </div>
         </div>
       </motion.div>
@@ -132,10 +132,10 @@ export default function HomePage() {
         </div>
 
         {/* Desktop 3-Column Layout with Center Eye-Tracker Cube */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-center w-full max-w-6xl mx-auto">
           
           {/* Left Column: 2 Cards */}
-          <div className="order-2 lg:order-1 lg:col-span-4 flex flex-col gap-5 sm:gap-6 z-10">
+          <div className="order-2 lg:order-1 lg:col-span-4 flex flex-col gap-4 sm:gap-4.5 max-w-[340px] w-full mx-auto z-10">
             <MenuCard
               href="/ordenes-de-compras"
               title="Órdenes de Compra"
@@ -175,19 +175,11 @@ export default function HomePage() {
               <div className="block sm:hidden">
                 <EyeTrackerCube size={180} follow={70} bounce={32} />
               </div>
-
-              {/* Status indicator below the cube */}
-              <div className="mt-6 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-inner">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] font-mono font-medium text-slate-300 tracking-tight select-none">
-                  Siguiendo tu cursor
-                </span>
-              </div>
             </div>
           </div>
 
           {/* Right Column: 2 Cards */}
-          <div className="order-3 lg:order-3 lg:col-span-4 flex flex-col gap-5 sm:gap-6 z-10">
+          <div className="order-3 lg:order-3 lg:col-span-4 flex flex-col gap-4 sm:gap-4.5 max-w-[340px] w-full mx-auto z-10">
             <MenuCard
               href="/cotizaciones"
               title="Cotizaciones"
