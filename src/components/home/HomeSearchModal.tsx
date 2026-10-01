@@ -18,7 +18,8 @@ import {
   AlertCircle,
   ExternalLink,
   Layers,
-  Sparkles
+  Sparkles,
+  Calendar
 } from "lucide-react";
 import { EyeTrackerCube } from "./EyeTrackerCube";
 import { 
@@ -30,9 +31,41 @@ import {
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
+function formatOrderDate(oc: any): string {
+  if (!oc) return "";
+  const rawDate = oc.createdAt || oc.fechaOC || oc.raw?.createdAt || oc.raw?.fechaOC || oc.createdAtFirebase;
+  if (!rawDate) return "";
+
+  let date: Date | null = null;
+  if (typeof rawDate === "object") {
+    if ("toDate" in rawDate && typeof rawDate.toDate === "function") {
+      try {
+        date = rawDate.toDate();
+      } catch {}
+    } else if ("seconds" in rawDate && typeof rawDate.seconds === "number" && rawDate.seconds > 0) {
+      date = new Date(rawDate.seconds * 1000);
+    } else if (rawDate instanceof Date) {
+      date = rawDate;
+    }
+  } else if (typeof rawDate === "string" || typeof rawDate === "number") {
+    const parsed = new Date(rawDate);
+    if (!isNaN(parsed.getTime())) {
+      date = parsed;
+    }
+  }
+
+  if (!date || isNaN(date.getTime()) || date.getFullYear() < 2000) return "";
+  return date.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+
 interface HomeSearchModalProps {
   isOpen: boolean;
   initialQuery?: string;
+  isSubModalOpen?: boolean;
   onClose: () => void;
   onSelectOC: (orden: any) => void;
   onSelectCotizacion: (quote: any) => void;
@@ -41,6 +74,7 @@ interface HomeSearchModalProps {
 export function HomeSearchModal({ 
   isOpen, 
   initialQuery = "", 
+  isSubModalOpen = false,
   onClose,
   onSelectOC,
   onSelectCotizacion
@@ -72,16 +106,16 @@ export function HomeSearchModal({
     }
   }, [isOpen, initialQuery]);
 
-  // Handle ESC key
+  // Handle ESC key (only if not viewing a detail submodal)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape" && isOpen && !isSubModalOpen) {
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, isSubModalOpen, onClose]);
 
   // Execute search with debounce
   useEffect(() => {
@@ -319,6 +353,7 @@ export function HomeSearchModal({
                           {resultsOC.map((oc, idx) => {
                             const isLiberada = Boolean(oc.liberada);
                             const isMandada = Boolean(oc.mandada) && !isLiberada;
+                            const fechaCreacion = formatOrderDate(oc);
 
                             return (
                               <div
@@ -328,7 +363,7 @@ export function HomeSearchModal({
                               >
                                 <div className="space-y-1.5">
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className="px-2 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/25 text-blue-300 font-mono text-xs font-bold">
                                         OC #{oc.numOC || "S/N"}
                                       </span>
@@ -339,6 +374,15 @@ export function HomeSearchModal({
                                       }`}>
                                         {oc.empresa || "Hoyts"}
                                       </span>
+                                      {fechaCreacion && (
+                                        <span 
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08] text-[10px] text-slate-300 font-mono"
+                                          title={`Fecha de creación: ${fechaCreacion}`}
+                                        >
+                                          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                                          <span>{fechaCreacion}</span>
+                                        </span>
+                                      )}
                                     </div>
 
                                     {/* Estado Actual */}

@@ -235,6 +235,7 @@ export function parseMongoDocToOrdenCompra(docItem: any): OrdenCompra {
             toDate: () => new Date((raw.createdAt.seconds || 0) * 1000),
           }
         : null),
+    fechaOC: docItem.fechaOC || raw.fechaOC || (createdAtObj ? createdAtObj.toDate() : undefined),
     relatedOC: String(docItem.relatedOC || raw.relatedOC || ""),
     enviado: Boolean(docItem.enviado ?? raw.enviado),
     enviadoA1: String(docItem.enviadoA1 || raw.enviadoA1 || ""),

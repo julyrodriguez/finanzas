@@ -27,7 +27,74 @@ interface CotizacionDetailModalProps {
   onClose: () => void;
 }
 
+function getProviderTotals(prov: any, items: any[]): { ars: number; usd: number; count: number } {
+  let sumARS = Number(prov?.totalARS || prov?.total_ars || 0);
+  let sumUSD = Number(prov?.totalUSD || prov?.total_usd || 0);
+  let count = 0;
+
+  if (prov?.quotes && typeof prov.quotes === "object") {
+    let calcARS = 0;
+    let calcUSD = 0;
+    let calcCount = 0;
+
+    items.forEach((item) => {
+      const q = prov.quotes[item.id];
+      if (!q) return;
+
+      const rawPrice = typeof q === "number" ? q : Number(q.price ?? q.cost ?? q.precio ?? 0);
+      if (rawPrice <= 0) return;
+
+      const qty = Number(item.targetQuantity || 1);
+      const discount = Number(q.discount || 0);
+      const discountedPrice = rawPrice * (1 - discount / 100);
+
+      let cost = 0;
+      if (q.presentationType === "package" && q.unitsPerPresentation > 0) {
+        const pkgs = Math.ceil(qty / q.unitsPerPresentation);
+        cost = pkgs * discountedPrice;
+      } else if (q.presentationType === "package" && q.unitsPerPresentation) {
+        cost = (qty / q.unitsPerPresentation) * discountedPrice;
+      } else {
+        cost = qty * discountedPrice;
+      }
+
+      const curr = String(q.currency || "ARS").toUpperCase();
+      if (curr === "USD") {
+        calcUSD += cost;
+      } else {
+        calcARS += cost;
+      }
+      calcCount++;
+    });
+
+    if (calcCount > 0) {
+      sumARS = calcARS;
+      sumUSD = calcUSD;
+      count = calcCount;
+    }
+  }
+
+  // Fallback if prov.total exists
+  if (sumARS === 0 && sumUSD === 0 && prov?.total) {
+    sumARS = Number(prov.total);
+  }
+
+  return { ars: sumARS, usd: sumUSD, count };
+}
+
 export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalProps) {
+  React.useEffect(() => {
+    if (!quote) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [quote, onClose]);
+
   if (!quote) return null;
 
   const items = Array.isArray(quote.items) ? quote.items : [];
@@ -39,7 +106,7 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-5">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -134,26 +201,53 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {providers.map((prov: any) => {
                   const isWinner = isFinalizada && prov.id === winningId;
+                  const totals = getProviderTotals(prov, items);
+
                   return (
                     <div
                       key={prov.id}
-                      className={`p-3 rounded-2xl border transition-all ${
+                      className={`p-3.5 rounded-2xl border transition-all ${
                         isWinner
-                          ? "bg-emerald-500/10 border-emerald-500/30"
+                          ? "bg-emerald-500/10 border-emerald-500/30 shadow-sm shadow-emerald-950/20"
                           : "bg-[#090d18] border-white/[0.08]"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-xs font-bold text-white truncate">{prov.name}</span>
+                        <span className="text-xs font-bold text-white truncate" title={prov.name}>
+                          {prov.name}
+                        </span>
                         {isWinner && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
                             Ganador
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400">
-                        {Object.keys(prov.quotes || {}).length} precios cotizados
-                      </span>
+
+                      {/* Total Price of each Provider */}
+                      <div className="mt-2.5 pt-2 border-t border-white/[0.06] flex items-baseline justify-between gap-2">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Total:</span>
+                        <div className="text-right flex items-center gap-1.5 flex-wrap justify-end">
+                          {totals.ars > 0 && (
+                            <span className="font-mono font-black text-xs text-emerald-400">
+                              $ {totals.ars.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          )}
+                          {totals.usd > 0 && (
+                            <span className="font-mono font-black text-xs text-sky-400">
+                              USD {totals.usd.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          )}
+                          {totals.ars === 0 && totals.usd === 0 && (
+                            <span className="font-mono text-[11px] text-slate-500">
+                              S/C
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
+                        <span>{totals.count || Object.keys(prov.quotes || {}).length} cotizados</span>
+                      </div>
                     </div>
                   );
                 })}

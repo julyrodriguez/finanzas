@@ -84,6 +84,19 @@ export function OrderDetailModal({
     return () => window.removeEventListener("approval_config_updated", handleUpdate);
   }, []);
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    if (!orden) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [orden, onClose]);
+
   const config = propConfig || internalConfig;
 
   // State for interactive inline signature editing
@@ -442,7 +455,7 @@ Estado: ${orden.entregada ? "Entregada" : orden.liberada ? "Liberada" : orden.ma
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

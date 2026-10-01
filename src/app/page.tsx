@@ -291,13 +291,12 @@ export default function HomePage() {
       <HomeSearchModal
         isOpen={isSearchOpen}
         initialQuery={searchModalQuery}
+        isSubModalOpen={Boolean(selectedOrdenForDetail || selectedQuoteForDetail)}
         onClose={() => setIsSearchOpen(false)}
         onSelectOC={(oc) => {
-          setIsSearchOpen(false);
           setSelectedOrdenForDetail(oc);
         }}
         onSelectCotizacion={(quote) => {
-          setIsSearchOpen(false);
           setSelectedQuoteForDetail(quote);
         }}
       />
