@@ -17,7 +17,8 @@ import {
   Layers,
   ArrowRight,
   FileSpreadsheet,
-  Mail
+  Mail,
+  Edit3
 } from "lucide-react";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -103,6 +104,8 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
   const isFinalizada = quote.status === "finalizada";
   const winningId = quote.winningProviderId;
   const winningProv = providers.find((p: any) => p.id === winningId);
+  const quoteId = quote.id || quote.firebaseId || quote._id;
+  const editUrl = quoteId ? `/cotizaciones?id=${quoteId}` : "/cotizaciones";
 
   return (
     <AnimatePresence>
@@ -157,13 +160,25 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href={editUrl}
+                onClick={onClose}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 text-emerald-300 hover:text-white text-xs font-bold transition-all shadow-sm group"
+                title="Ir al editor de esta cotización"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
+                <span>Ir a edición</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Body */}
@@ -318,12 +333,13 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
             </span>
             <div className="flex items-center gap-2">
               <Link
-                href="/cotizaciones"
+                href={editUrl}
                 onClick={onClose}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg shadow-emerald-500/20"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg shadow-emerald-500/20 group"
               >
-                <span>Abrir en Cotizaciones</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Ir a edición</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </Link>
             </div>
           </div>
