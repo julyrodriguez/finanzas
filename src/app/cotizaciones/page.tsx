@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { getFirebaseDb } from "@/lib/firebase";
@@ -110,6 +110,8 @@ interface Provider {
 
 interface SavedQuotation {
   id?: string;
+  firebaseId?: string;
+  _id?: string;
   name: string;
   notes: string;
   exchangeRate: number;
@@ -888,11 +890,12 @@ export default function CotizacionesPage() {
   };
 
   // Load quote from history
-  const handleSelectQuote = (quote: SavedQuotation) => {
-    if (quote.id) {
-      setCurrentQuoteId(quote.id);
+  const handleSelectQuote = (quote: any) => {
+    const qId = quote.id || quote.firebaseId || quote._id;
+    if (qId) {
+      setCurrentQuoteId(qId);
     }
-    setQuoteName(quote.name);
+    setQuoteName(quote.name || "");
     setNotes(quote.notes || "");
     setExchangeRate(quote.exchangeRate || 1400);
     setBaseCurrency(quote.baseCurrency || "ARS");
@@ -914,22 +917,34 @@ export default function CotizacionesPage() {
     setQuotePendienteTitulo(quote.pendienteTitulo || "");
     setHasActiveQuote(true);
     setActiveTab("editor");
-    showToast(`Cotización "${quote.name}" cargada`);
+    showToast(`Cotización "${quote.name || "sin título"}" cargada`);
   };
 
-  // Deep-link effect: If opened with ?id=... or ?quoteId=..., load and open the quote directly in editor
+  const loadedDeepLinkIdRef = useRef<string | null>(null);
+
+  // Deep-link effect: If opened with ?id=... or ?quoteId=..., load and open the quote directly in editor once
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const targetId = params.get("id") || params.get("quoteId");
-    if (!targetId || currentQuoteId === targetId) return;
+    if (!targetId || loadedDeepLinkIdRef.current === targetId) return;
+
+    const applyQuote = (q: any) => {
+      loadedDeepLinkIdRef.current = targetId;
+      handleSelectQuote(q);
+      // Clean query params so subsequent renders or state changes never overwrite in-memory edits
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("id");
+        url.searchParams.delete("quoteId");
+        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+      } catch {}
+    };
 
     // 1. If already in savedQuotations, load it immediately
-    const found = savedQuotations.find((q) => q.id === targetId);
+    const found = savedQuotations.find((q) => q.id === targetId || q.firebaseId === targetId || (q as any)._id === targetId);
     if (found) {
-      setTimeout(() => {
-        handleSelectQuote(found);
-      }, 0);
+      applyQuote(found);
       return;
     }
 
@@ -937,9 +952,9 @@ export default function CotizacionesPage() {
     fetchCotizacionesFromMongo()
       .then((quotes) => {
         if (Array.isArray(quotes)) {
-          const match = quotes.find((q: any) => q.id === targetId || q.firebaseId === targetId);
+          const match = quotes.find((q: any) => q.id === targetId || q.firebaseId === targetId || q._id === targetId);
           if (match) {
-            handleSelectQuote(match);
+            applyQuote(match);
             return;
           }
         }
@@ -948,8 +963,8 @@ export default function CotizacionesPage() {
           getDoc(doc(db, "cotizaciones", targetId))
             .then((docSnap) => {
               if (docSnap.exists()) {
-                const loaded = { id: docSnap.id, ...docSnap.data() } as SavedQuotation;
-                handleSelectQuote(loaded);
+                const loaded = { id: docSnap.id, firebaseId: docSnap.id, ...docSnap.data() } as SavedQuotation;
+                applyQuote(loaded);
               }
             })
             .catch((err) => {
@@ -960,7 +975,7 @@ export default function CotizacionesPage() {
       .catch((err) => {
         console.warn("Error checking MongoDB for deep link quote:", err);
       });
-  }, [savedQuotations, dbActive, currentQuoteId]);
+  }, [savedQuotations]);
 
   // Delete saved quote from list
   const handleDeleteSavedQuote = async (id: string, e: React.MouseEvent) => {
@@ -1093,12 +1108,13 @@ export default function CotizacionesPage() {
       // Auto-guardar si la cotización ya existe
       if (currentQuoteId) {
         // Dual Write: Mongo
-        syncCotizacionToMongo({ id: currentQuoteId, attachments: updated });
+        syncCotizacionToMongo({ id: currentQuoteId, name: quoteName, attachments: updated });
 
         // Dual Write: Firebase
         const db = getFirebaseDb();
         if (db && !currentQuoteId.startsWith("local-")) {
           updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+            name: quoteName,
             attachments: updated,
             updatedAt: serverTimestamp()
           }).catch(console.warn);
@@ -1130,12 +1146,13 @@ export default function CotizacionesPage() {
 
       if (currentQuoteId) {
         // Dual Write: Mongo
-        syncCotizacionToMongo({ id: currentQuoteId, attachments: updated });
+        syncCotizacionToMongo({ id: currentQuoteId, name: quoteName, attachments: updated });
 
         // Dual Write: Firebase
         const db = getFirebaseDb();
         if (db && !currentQuoteId.startsWith("local-")) {
           updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+            name: quoteName,
             attachments: updated,
             updatedAt: serverTimestamp()
           }).catch(console.warn);
@@ -1315,9 +1332,17 @@ export default function CotizacionesPage() {
     }
 
     if (currentQuoteId) {
-      // Dual Write: Mongo
+      // Dual Write: Mongo (preservando siempre el nombre y metadata)
       syncCotizacionToMongo({
         id: currentQuoteId,
+        name: quoteName,
+        notes: quoteNotes || notes,
+        exchangeRate,
+        baseCurrency,
+        useRealLots,
+        status,
+        categoria: quoteCategoria,
+        winningProviderId,
         items: currentItems,
         providers: updatedProviders,
         attachments: updatedAttachments
@@ -1327,6 +1352,7 @@ export default function CotizacionesPage() {
       const db = getFirebaseDb();
       if (db && !currentQuoteId.startsWith("local-")) {
         updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+          name: quoteName,
           items: currentItems,
           providers: updatedProviders,
           attachments: updatedAttachments,
@@ -1335,6 +1361,21 @@ export default function CotizacionesPage() {
 
         triggerAiSummaryUpdate(currentQuoteId, updatedAttachments);
       }
+
+      // Actualizar estado local en memoria para mantener consistencia
+      setSavedQuotations((prev) =>
+        prev.map((q) =>
+          q.id === currentQuoteId || q.firebaseId === currentQuoteId
+            ? {
+                ...q,
+                name: quoteName,
+                items: currentItems,
+                providers: updatedProviders,
+                attachments: updatedAttachments
+              }
+            : q
+        )
+      );
     }
 
     if (selectedItems.length === 0) {
