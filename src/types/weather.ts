@@ -6,6 +6,7 @@ export interface WeatherCurrent {
   windSpeed: number;
   humidity: number;
   cloudCover: number;
+  precipitation: number;
   isDay: boolean;
   city: string;
   time: string;

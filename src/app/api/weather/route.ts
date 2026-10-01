@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   const city = searchParams.get("city") || "Buenos Aires, AR";
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=America/Argentina/Buenos_Aires&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,cloud_cover,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=America/Argentina/Buenos_Aires&forecast_days=1`;
 
     const res = await fetch(url, {
       next: { revalidate: 600 }, // 10 minutes cache
@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
         windSpeed: Math.round(data.current?.wind_speed_10m ?? 12),
         humidity: Math.round(data.current?.relative_humidity_2m ?? 55),
         cloudCover: Math.round(data.current?.cloud_cover ?? 40),
+        precipitation: Number((data.current?.precipitation ?? 0).toFixed(1)),
         isDay: Boolean(data.current?.is_day ?? 1),
         city,
         time: data.current?.time || new Date().toISOString(),
@@ -123,6 +124,7 @@ export async function GET(request: NextRequest) {
         windSpeed: 14,
         humidity: 58,
         cloudCover: 60,
+        precipitation: 0,
         isDay: true,
         city,
         time: new Date().toISOString(),
