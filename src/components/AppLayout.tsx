@@ -26,11 +26,11 @@ import {
   FileUp,
   Moon,
   Sparkles,
-  Layers,
   ArrowRight,
   PanelLeftClose,
   PanelLeft,
-  CalendarDays
+  CalendarDays,
+  Home
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -114,8 +114,15 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       title: "Operaciones",
       items: [
         {
-          name: "Órdenes de Compra",
+          name: "Inicio",
           href: "/",
+          icon: Home,
+          exact: true,
+          hideForOrders: true,
+        },
+        {
+          name: "Órdenes de Compra",
+          href: "/ordenes-de-compras",
           icon: ShoppingBag,
           exact: false,
           hideForOrders: true,
@@ -217,7 +224,10 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       return pathname === "/calendario";
     }
     if (href === "/") {
-      return pathname === "/" || pathname === "/ordenes-de-compras" || pathname === "/inicio";
+      return pathname === "/" || pathname === "/inicio";
+    }
+    if (href === "/ordenes-de-compras") {
+      return pathname === "/ordenes-de-compras";
     }
     if (exact) {
       return pathname === href;
