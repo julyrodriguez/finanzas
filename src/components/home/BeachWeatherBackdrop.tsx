@@ -1,20 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { 
   Sun, 
   Moon, 
   CloudSun, 
-  CloudMoon, 
   Cloud, 
   CloudRain, 
-  CloudLightning, 
-  RefreshCw,
   Sunset,
   Sunrise,
-  Droplets,
-  CloudDrizzle
+  Droplets
 } from "lucide-react";
 import { WeatherData } from "@/types/weather";
 
@@ -50,13 +46,10 @@ export function BeachWeatherBackdrop({
   className = "",
 }: BeachWeatherBackdropProps) {
   const [data, setData] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [testRain, setTestRain] = useState(false);
 
   const fetchWeather = async () => {
     try {
-      setRefreshing(true);
       const res = await fetch("/api/weather");
       if (res.ok) {
         const json: WeatherData = await res.json();
@@ -64,24 +57,41 @@ export function BeachWeatherBackdrop({
       }
     } catch (e) {
       console.warn("Error fetching weather in BeachWeatherBackdrop:", e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchWeather();
-    // Auto-refresh every 12 minutes
-    const interval = setInterval(fetchWeather, 12 * 60 * 1000);
-    return () => clearInterval(interval);
+
+    // Actualizar automáticamente cada 5 minutos solo si la página está abierta y visible
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchWeather();
+      }
+    }, 5 * 60 * 1000);
+
+    // Cuando el usuario regresa a la pestaña abierta, actualizar inmediatamente
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchWeather();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
-  // Determine current atmospheric phase, clouds, and rain
-  const phase = data?.astronomy.phase || "golden-hour";
+  // Determinar fase y parámetros climáticos
+  const phase = data?.astronomy.phase || "day";
   const isDay = data?.current.isDay ?? true;
   const cloudCover = data?.current.cloudCover ?? 60;
   const solarProgress = data?.astronomy.solarProgress ?? 0.85;
+
+  const isCloudy = (data?.current.weatherCode === 3) || (cloudCover >= 65);
 
   const isActualRaining = Boolean(
     data && (
@@ -92,11 +102,10 @@ export function BeachWeatherBackdrop({
     )
   );
 
-  // If user enabled test rain or it's actually raining in Buenos Aires
   const isRaining = isActualRaining || testRain;
   const isStorm = Boolean(data && [95, 96, 99].includes(data.current.weatherCode));
 
-  // Calculate sun position in the sky
+  // Posición del sol
   let sunXPercent = 50;
   let sunBottomPercent = 40;
 
@@ -112,50 +121,53 @@ export function BeachWeatherBackdrop({
     }
   }
 
-  // Sky background gradient styling based on phase and rain
-  let skyGradient = "from-[#0284c7] via-[#38bdf8] via-[#7dd3fc] to-[#fef08a]"; // Default Day
+  // Gradiente de cielo y mar
+  let skyGradient = "from-[#0284c7] via-[#38bdf8] via-[#7dd3fc] to-[#fef08a]"; // Día despejado por defecto
   let sunGlow = "rgba(251, 191, 36, 0.75)";
   let oceanGradient = "from-[#0369a1] via-[#0284c7] to-[#075985]";
 
-  if (isRaining) {
-    // Rainy coastal storm / drizzle mood
-    skyGradient = "from-[#0f172a] via-[#1e293b] via-[#334155] to-[#475569]";
-    sunGlow = "rgba(148, 163, 184, 0.35)";
-    oceanGradient = "from-[#0f172a] via-[#1e293b] via-[#1e3a8a] to-[#0f172a]";
-  } else if (phase === "sunset") {
-    // Dramatic Sunset (Ocaso): burning amber, violet, deep coral, and radiant gold
-    skyGradient = "from-[#1e1b4b] via-[#581c87] via-[#b91c1c] via-[#ea580c] to-[#fbbf24]";
-    sunGlow = "rgba(249, 115, 22, 0.95)";
-    oceanGradient = "from-[#311042] via-[#701a75] via-[#9a3412] to-[#b45309]";
-  } else if (phase === "golden-hour") {
-    // Golden Hour (Atardecer previo): warm amber, soft peach, rich twilight blue
-    skyGradient = "from-[#1e1b4b] via-[#4338ca] via-[#c2410c] via-[#f97316] to-[#fde047]";
-    sunGlow = "rgba(245, 158, 11, 0.9)";
-    oceanGradient = "from-[#1e1b4b] via-[#1e3a8a] via-[#9a3412] to-[#c2410c]";
-  } else if (phase === "dawn") {
-    // Dawn: pastel violet, rose, soft golden peach
-    skyGradient = "from-[#1e1b4b] via-[#701a75] via-[#be185d] via-[#f43f5e] to-[#fde047]";
-    sunGlow = "rgba(251, 146, 60, 0.85)";
-    oceanGradient = "from-[#1e1b4b] via-[#581c87] via-[#9d174d] to-[#be123c]";
-  } else if (phase === "dusk") {
-    // Dusk: deep indigo and purple
-    skyGradient = "from-[#030712] via-[#0f172a] via-[#312e81] to-[#4c1d95]";
-    sunGlow = "rgba(168, 85, 247, 0.6)";
-    oceanGradient = "from-[#020617] via-[#0f172a] to-[#1e1b4b]";
-  } else if (phase === "night") {
-    // Night: starry deep midnight blue
+  if (isDay) {
+    // === HORARIO DIURNO (NUNCA parecer de noche mientras sea de día) ===
+    if (isRaining) {
+      // Día con lluvia: cielo gris azulado luminoso con bruma diurna
+      skyGradient = "from-[#475569] via-[#64748b] via-[#94a3b8] to-[#cbd5e1]";
+      sunGlow = "rgba(226, 232, 240, 0.4)";
+      oceanGradient = "from-[#334155] via-[#475569] to-[#0284c7]";
+    } else if (isCloudy) {
+      // Día nublado: cielo iluminado plateado/celeste suave, 100% diurno
+      skyGradient = "from-[#475569] via-[#64748b] via-[#94a3b8] via-[#cbd5e1] to-[#e2e8f0]";
+      sunGlow = "rgba(255, 255, 255, 0.75)";
+      oceanGradient = "from-[#1e293b] via-[#334155] via-[#0284c7] to-[#38bdf8]";
+    } else if (phase === "sunset") {
+      // Atardecer con sol cayendo sobre el mar
+      skyGradient = "from-[#2563eb] via-[#7c3aed] via-[#db2777] via-[#ea580c] to-[#fde047]";
+      sunGlow = "rgba(249, 115, 22, 0.95)";
+      oceanGradient = "from-[#1e3a8a] via-[#3b82f6] via-[#ea580c] to-[#f59e0b]";
+    } else if (phase === "golden-hour") {
+      // Atardecer previo / sol de tarde cálido
+      skyGradient = "from-[#0284c7] via-[#38bdf8] via-[#fb923c] to-[#fde047]";
+      sunGlow = "rgba(245, 158, 11, 0.9)";
+      oceanGradient = "from-[#0369a1] via-[#0284c7] via-[#f59e0b] to-[#fbbf24]";
+    } else if (phase === "dawn") {
+      // Amanecer
+      skyGradient = "from-[#0284c7] via-[#ec4899] via-[#f43f5e] to-[#fde047]";
+      sunGlow = "rgba(251, 146, 60, 0.85)";
+      oceanGradient = "from-[#1e3a8a] via-[#be123c] to-[#f59e0b]";
+    }
+  } else {
+    // === NOCHE / OSCURIDAD (Solo cuando el sol ya se ocultó) ===
     skyGradient = "from-[#020617] via-[#0b1329] via-[#0f172a] to-[#172554]";
     sunGlow = "rgba(199, 210, 254, 0.7)";
     oceanGradient = "from-[#020617] via-[#080d1a] to-[#0f172a]";
   }
 
-  // Atmospheric icon for pill badge
+  // Ícono de clima
   const getWeatherIcon = () => {
     if (isRaining) return <CloudRain className="w-3.5 h-3.5 text-cyan-300 animate-bounce" />;
+    if (!isDay) return <Moon className="w-3.5 h-3.5 text-indigo-300" />;
+    if (isCloudy) return <Cloud className="w-3.5 h-3.5 text-slate-200" />;
     if (phase === "sunset") return <Sunset className="w-3.5 h-3.5 text-amber-300 animate-pulse" />;
     if (phase === "dawn") return <Sunrise className="w-3.5 h-3.5 text-pink-300" />;
-    if (!isDay) return <Moon className="w-3.5 h-3.5 text-indigo-300" />;
-    if (cloudCover > 65) return <Cloud className="w-3.5 h-3.5 text-slate-200" />;
     if (cloudCover > 25) return <CloudSun className="w-3.5 h-3.5 text-amber-300" />;
     return <Sun className="w-3.5 h-3.5 text-amber-300" />;
   };
@@ -164,7 +176,7 @@ export function BeachWeatherBackdrop({
     <div
       className={`relative rounded-[36px] sm:rounded-[42px] overflow-hidden border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.65)] select-none transition-all duration-700 w-full max-w-[350px] sm:max-w-[410px] h-[360px] sm:h-[420px] flex flex-col items-center justify-between p-4 sm:p-5 ${className}`}
     >
-      {/* Dynamic Keyframes for Rain Animations */}
+      {/* Keyframes de Lluvia y Ondas */}
       <style jsx>{`
         @keyframes raindropFall {
           0% {
@@ -205,13 +217,13 @@ export function BeachWeatherBackdrop({
         }
       `}</style>
 
-      {/* 1. SKY GRADIENT BACKGROUND */}
+      {/* 1. GRADIENTE DEL CIELO */}
       <div 
         className={`absolute inset-0 bg-gradient-to-b ${skyGradient} transition-colors duration-1000`}
       />
 
-      {/* 2. STARS (Only visible at Night or Dusk, when not raining) */}
-      {!isRaining && (phase === "night" || phase === "dusk") && (
+      {/* 2. ESTRELLAS (Solo de noche cuando no es de día) */}
+      {!isDay && (
         <div className="absolute inset-0 pointer-events-none opacity-80">
           <div className="absolute top-4 left-8 w-1 h-1 bg-white rounded-full animate-ping" />
           <div className="absolute top-10 left-28 w-1.5 h-1.5 bg-indigo-200 rounded-full opacity-70" />
@@ -222,33 +234,33 @@ export function BeachWeatherBackdrop({
         </div>
       )}
 
-      {/* 3. CLOUDS - LAYER 1 (Behind Sun) */}
-      {(cloudCover > 20 || isRaining) && (
+      {/* 3. NUBES - CAPA TRASERA */}
+      {(cloudCover > 20 || isRaining || isCloudy) && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <motion.div
             animate={{ x: [-20, 30, -20] }}
             transition={{ duration: 35, repeat: Infinity, ease: "easeInOut" }}
-            className={`absolute top-10 -left-6 ${isRaining ? "opacity-60" : "opacity-35"} filter blur-xs`}
+            className={`absolute top-10 -left-6 ${isRaining ? "opacity-60" : "opacity-45"} filter blur-xs`}
           >
-            <svg width="180" height="70" viewBox="0 0 100 40" fill={isRaining ? "#64748b" : "white"}>
-              <path d="M10,30 Q20,10 40,20 Q55,5 75,18 Q90,15 95,30 Z" opacity="0.8" />
+            <svg width="180" height="70" viewBox="0 0 100 40" fill={isRaining ? "#64748b" : "#f1f5f9"}>
+              <path d="M10,30 Q20,10 40,20 Q55,5 75,18 Q90,15 95,30 Z" opacity="0.85" />
             </svg>
           </motion.div>
 
           <motion.div
             animate={{ x: [15, -25, 15] }}
             transition={{ duration: 42, repeat: Infinity, ease: "easeInOut" }}
-            className={`absolute top-16 right-0 ${isRaining ? "opacity-55" : "opacity-30"} filter blur-xs`}
+            className={`absolute top-16 right-0 ${isRaining ? "opacity-55" : "opacity-40"} filter blur-xs`}
           >
-            <svg width="210" height="80" viewBox="0 0 100 40" fill={isRaining ? "#475569" : "white"}>
-              <path d="M15,32 Q30,12 55,22 Q70,8 88,20 Q98,18 100,32 Z" opacity="0.75" />
+            <svg width="210" height="80" viewBox="0 0 100 40" fill={isRaining ? "#475569" : "#e2e8f0"}>
+              <path d="M15,32 Q30,12 55,22 Q70,8 88,20 Q98,18 100,32 Z" opacity="0.8" />
             </svg>
           </motion.div>
         </div>
       )}
 
-      {/* 4. THE SUN / SUNSET OR MOON (Softened if raining) */}
-      {!isRaining && (isDay || phase === "sunset" || phase === "golden-hour" || phase === "dawn") ? (
+      {/* 4. SOL (Siempre presente de día, visible entre nubes) */}
+      {isDay ? (
         <div
           className="absolute pointer-events-none transition-all duration-1000 ease-out"
           style={{
@@ -257,7 +269,7 @@ export function BeachWeatherBackdrop({
             transform: "translate(-50%, 50%)",
           }}
         >
-          {/* Multi-layered Sun Glow */}
+          {/* Resplandor exterior difuso */}
           <div
             className="absolute -inset-10 rounded-full blur-2xl pointer-events-none animate-pulse"
             style={{
@@ -265,19 +277,25 @@ export function BeachWeatherBackdrop({
             }}
           />
 
-          {/* Golden Rays / Corona */}
+          {/* Corona solar */}
           <div
             className="absolute -inset-6 rounded-full blur-xl pointer-events-none opacity-85"
             style={{
-              background: `radial-gradient(circle, #fde047 20%, ${sunGlow} 60%, transparent 80%)`,
+              background: isCloudy 
+                ? "radial-gradient(circle, #ffffff 30%, rgba(254, 240, 138, 0.6) 65%, transparent 85%)"
+                : `radial-gradient(circle, #fde047 20%, ${sunGlow} 60%, transparent 80%)`,
             }}
           />
 
-          {/* Crisp Radiant Sun Core */}
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-t from-amber-400 via-yellow-200 to-white shadow-[0_0_40px_rgba(251,191,36,0.9),0_0_80px_rgba(245,158,11,0.6)] border border-yellow-100/60" />
+          {/* Núcleo luminoso del sol */}
+          <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-full ${
+            isCloudy 
+              ? "bg-gradient-to-t from-amber-200 via-yellow-100 to-white shadow-[0_0_35px_rgba(255,255,255,0.9),0_0_70px_rgba(254,240,138,0.7)]" 
+              : "bg-gradient-to-t from-amber-400 via-yellow-200 to-white shadow-[0_0_40px_rgba(251,191,36,0.9),0_0_80px_rgba(245,158,11,0.6)]"
+          } border border-yellow-100/70`} />
         </div>
-      ) : !isRaining && !isDay ? (
-        /* Glowing Moon at Night */
+      ) : (
+        /* Luna brillante de noche */
         <div
           className="absolute pointer-events-none"
           style={{
@@ -290,16 +308,16 @@ export function BeachWeatherBackdrop({
             <div className="w-9 h-9 rounded-full bg-slate-900/10 blur-[1px]" />
           </div>
         </div>
-      ) : null}
+      )}
 
-      {/* 5. VOLUMETRIC CLOUDS IN FRONT OF SUN */}
-      {(cloudCover > 25 || isRaining) && (
+      {/* 5. NUBES VOLUMÉTRICAS DELANTERAS (El sol asomándose entre nubes de día) */}
+      {(cloudCover > 20 || isRaining || isCloudy) && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-[2]">
-          {/* Cloud drifting in front */}
+          {/* Nube izquierda */}
           <motion.div
             animate={{ x: [-15, 20, -15] }}
             transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
-            className={`absolute ${isRaining ? "opacity-95" : "opacity-85"} filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]`}
+            className="absolute opacity-90 filter drop-shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
             style={{
               left: `${Math.max(5, sunXPercent - 32)}%`,
               bottom: `${Math.max(22, sunBottomPercent - 4)}%`,
@@ -308,9 +326,14 @@ export function BeachWeatherBackdrop({
             <svg width="170" height="65" viewBox="0 0 160 60" fill="none">
               <path
                 d="M20,48 C20,38 28,30 38,30 C40,18 52,10 65,10 C80,10 92,20 96,32 C104,30 114,35 116,44 C124,44 132,50 132,58 L20,58 Z"
-                fill={isRaining ? "url(#cloudGradRain1)" : "url(#cloudGradFront)"}
+                fill={isRaining ? "url(#cloudGradRain1)" : isCloudy ? "url(#cloudGradDayCloudy)" : "url(#cloudGradFront)"}
               />
               <defs>
+                <linearGradient id="cloudGradDayCloudy" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.98" />
+                  <stop offset="60%" stopColor="#f1f5f9" stopOpacity="0.92" />
+                  <stop offset="100%" stopColor="#cbd5e1" stopOpacity="0.88" />
+                </linearGradient>
                 <linearGradient id="cloudGradFront" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
                   <stop offset="70%" stopColor="#fed7aa" stopOpacity="0.85" />
@@ -325,11 +348,11 @@ export function BeachWeatherBackdrop({
             </svg>
           </motion.div>
 
-          {/* Secondary puffy cloud */}
+          {/* Nube derecha */}
           <motion.div
             animate={{ x: [20, -15, 20] }}
             transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
-            className={`absolute ${isRaining ? "opacity-90" : "opacity-80"} filter drop-shadow-[0_4px_14px_rgba(0,0,0,0.3)]`}
+            className="absolute opacity-88 filter drop-shadow-[0_4px_14px_rgba(0,0,0,0.18)]"
             style={{
               left: `${Math.min(50, sunXPercent + 6)}%`,
               bottom: `${Math.max(24, sunBottomPercent - 2)}%`,
@@ -338,9 +361,14 @@ export function BeachWeatherBackdrop({
             <svg width="190" height="75" viewBox="0 0 170 65" fill="none">
               <path
                 d="M25,52 C22,40 32,32 44,32 C48,18 64,10 78,12 C92,12 104,22 108,34 C118,34 126,40 128,50 L25,52 Z"
-                fill={isRaining ? "url(#cloudGradRain2)" : "url(#cloudGradFront2)"}
+                fill={isRaining ? "url(#cloudGradRain2)" : isCloudy ? "url(#cloudGradDayCloudy2)" : "url(#cloudGradFront2)"}
               />
               <defs>
+                <linearGradient id="cloudGradDayCloudy2" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.96" />
+                  <stop offset="55%" stopColor="#f8fafc" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.82" />
+                </linearGradient>
                 <linearGradient id="cloudGradFront2" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stopColor="#ffffff" stopOpacity="0.92" />
                   <stop offset="60%" stopColor="#ffedd5" stopOpacity="0.82" />
@@ -357,25 +385,26 @@ export function BeachWeatherBackdrop({
         </div>
       )}
 
-      {/* 6. OCEAN WATER & SUN/RAIN REFLECTION ("como un fondo de playa") */}
+      {/* 6. OCÉANO Y REFLEJO */}
       <div className="absolute left-0 right-0 bottom-0 h-[28%] z-[3] overflow-hidden pointer-events-none">
-        {/* Ocean Body Gradient */}
         <div className={`w-full h-full bg-gradient-to-b ${oceanGradient} opacity-95 relative`}>
           
-          {/* Horizon Line Glow */}
+          {/* Línea de horizonte */}
           <div 
-            className="absolute top-0 left-0 right-0 h-[2px] opacity-70"
+            className="absolute top-0 left-0 right-0 h-[2px] opacity-75"
             style={{
-              background: isRaining 
-                ? "linear-gradient(90deg, transparent, #64748b 50%, transparent)"
-                : phase === "sunset" 
-                ? "linear-gradient(90deg, transparent, #fbbf24 40%, #f97316 60%, transparent)"
+              background: isDay 
+                ? (isCloudy 
+                    ? "linear-gradient(90deg, transparent, #e2e8f0 50%, transparent)" 
+                    : phase === "sunset" 
+                    ? "linear-gradient(90deg, transparent, #fbbf24 40%, #f97316 60%, transparent)" 
+                    : "linear-gradient(90deg, transparent, #bae6fd 50%, transparent)")
                 : "linear-gradient(90deg, transparent, #38bdf8 50%, transparent)"
             }}
           />
 
-          {/* Glistening Sunlight Reflection Path (Only when not heavily raining) */}
-          {!isRaining && (isDay || phase === "sunset" || phase === "golden-hour") && (
+          {/* Reflejo de luz solar en el agua */}
+          {isDay && (
             <motion.div
               animate={{ opacity: [0.75, 0.95, 0.75], scaleX: [0.95, 1.05, 0.95] }}
               transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
@@ -385,13 +414,15 @@ export function BeachWeatherBackdrop({
                 transform: "translateX(-50%)",
                 background: phase === "sunset"
                   ? "linear-gradient(180deg, rgba(254, 240, 138, 0.9) 0%, rgba(249, 115, 22, 0.6) 60%, rgba(217, 119, 6, 0.2) 100%)"
+                  : isCloudy
+                  ? "linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(186, 230, 253, 0.4) 60%, transparent 100%)"
                   : "linear-gradient(180deg, rgba(254, 240, 138, 0.7) 0%, rgba(56, 189, 248, 0.4) 60%, transparent 100%)",
                 clipPath: "polygon(40% 0%, 60% 0%, 90% 100%, 10% 100%)",
               }}
             />
           )}
 
-          {/* Animated Wave Ripples on Sea */}
+          {/* Olas animadas */}
           <motion.div
             animate={{ x: [-10, 10, -10] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
@@ -401,7 +432,7 @@ export function BeachWeatherBackdrop({
               <path
                 d="M0,6 Q50,0 100,6 T200,6 T300,6 T400,6"
                 fill="none"
-                stroke="rgba(255,255,255,0.4)"
+                stroke="rgba(255,255,255,0.45)"
                 strokeWidth="1.2"
               />
             </svg>
@@ -416,7 +447,7 @@ export function BeachWeatherBackdrop({
               <path
                 d="M0,6 Q50,12 100,6 T200,6 T300,6 T400,6"
                 fill="none"
-                stroke="rgba(255,255,255,0.3)"
+                stroke="rgba(255,255,255,0.35)"
                 strokeWidth="1.2"
               />
             </svg>
@@ -424,19 +455,19 @@ export function BeachWeatherBackdrop({
         </div>
       </div>
 
-      {/* 7. BEACH SHORELINE & SAND FOREGROUND */}
+      {/* 7. ORILLA Y ARENA */}
       <div className="absolute left-0 right-0 bottom-0 h-[14%] sm:h-[15%] z-[4] pointer-events-none">
         <svg
           className="w-full h-full drop-shadow-[0_-3px_8px_rgba(0,0,0,0.35)]"
           preserveAspectRatio="none"
           viewBox="0 0 400 60"
         >
-          {/* Foaming Surf Shoreline */}
+          {/* Espuma marina */}
           <path
             d="M0,22 Q100,10 200,18 Q300,26 400,14 L400,60 L0,60 Z"
-            fill="rgba(255, 255, 255, 0.45)"
+            fill="rgba(255, 255, 255, 0.55)"
           />
-          {/* Sand Body */}
+          {/* Arena cálida */}
           <path
             d="M0,26 Q100,15 200,22 Q300,30 400,18 L400,60 L0,60 Z"
             fill="url(#sandGradient)"
@@ -451,7 +482,7 @@ export function BeachWeatherBackdrop({
         </svg>
       </div>
 
-      {/* 8. TROPICAL PALM FRONDS */}
+      {/* 8. PALMERAS EN LAS ESQUINAS */}
       <div className="absolute top-0 left-0 w-28 h-28 pointer-events-none z-[5] opacity-75">
         <motion.div
           animate={{ rotate: isRaining ? [-3, 4, -3] : [-1.5, 2.5, -1.5] }}
@@ -482,10 +513,9 @@ export function BeachWeatherBackdrop({
         </motion.div>
       </div>
 
-      {/* 9. RAIN PARTICLES & WATER RIPPLES ("si llueve también quiero que llueva") */}
+      {/* 9. EFECTO DE LLUVIA */}
       {isRaining && (
         <div className="absolute inset-0 pointer-events-none z-[8] overflow-hidden">
-          {/* Falling Raindrops Streaks */}
           {RAINDROPS.map((drop) => (
             <div
               key={drop.id}
@@ -501,7 +531,6 @@ export function BeachWeatherBackdrop({
             />
           ))}
 
-          {/* Water Ripples when drops hit the sea & beach */}
           {RIPPLES.map((rip) => (
             <div
               key={rip.id}
@@ -516,10 +545,8 @@ export function BeachWeatherBackdrop({
             />
           ))}
 
-          {/* Ambient Rain Mist Overlay */}
-          <div className="absolute inset-0 bg-slate-900/25 pointer-events-none" />
+          <div className="absolute inset-0 bg-slate-900/20 pointer-events-none" />
 
-          {/* Storm Lightning Flash */}
           {isStorm && (
             <div
               className="absolute inset-0 bg-cyan-100/35 pointer-events-none"
@@ -529,11 +556,11 @@ export function BeachWeatherBackdrop({
         </div>
       )}
 
-      {/* 10. HEADER WEATHER BADGE (Live official Buenos Aires weather pill + Rain control) */}
+      {/* 10. BADGE SUPERIOR DE CLIMA (Sin botón de actualizar, con auto-refresh cada 5m) */}
       <div className="w-full flex items-center justify-between z-10">
         <div 
           onClick={() => setTestRain((prev) => !prev)}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/20 text-white shadow-lg text-[11px] font-semibold tracking-tight cursor-pointer transition-all hover:bg-black/70 active:scale-95`}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/20 text-white shadow-lg text-[11px] font-semibold tracking-tight cursor-pointer hover:bg-black/65 transition-all select-none"
           title={isRaining ? "Hacé clic para alternar lluvia" : "Hacé clic para probar la lluvia"}
         >
           {getWeatherIcon()}
@@ -542,10 +569,12 @@ export function BeachWeatherBackdrop({
           <span className="text-slate-200">
             {isRaining 
               ? (isStorm ? "Tormenta" : "Lluvia") 
+              : isCloudy
+              ? "Nublado"
               : phase === "sunset" 
               ? "Atardecer" 
               : phase === "golden-hour" 
-              ? "Ocaso" 
+              ? "Atardecer" 
               : data?.current.weatherDescription || "Buenos Aires"}
           </span>
           {testRain && (
@@ -555,38 +584,33 @@ export function BeachWeatherBackdrop({
           )}
         </div>
 
+        {/* Indicador en vivo sutil con botón de prueba de lluvia (sin botón de refresh) */}
         <div className="flex items-center gap-1.5">
-          {/* Quick toggle for rain preview */}
           <button
             onClick={() => setTestRain((prev) => !prev)}
             className={`p-1.5 rounded-full backdrop-blur-md border text-xs transition-all shadow-md active:scale-95 cursor-pointer ${
               isRaining 
                 ? "bg-cyan-500/30 border-cyan-400 text-cyan-200" 
-                : "bg-black/40 hover:bg-black/60 border-white/20 text-white/80 hover:text-white"
+                : "bg-black/35 hover:bg-black/55 border-white/15 text-white/70 hover:text-white"
             }`}
-            title={testRain ? "Desactivar prueba de lluvia" : "Probar efecto de lluvia"}
+            title={testRain ? "Desactivar demo de lluvia" : "Probar lluvia"}
           >
             <Droplets className="w-3 h-3" />
           </button>
 
-          {/* Refresh button */}
-          <button
-            onClick={fetchWeather}
-            disabled={refreshing}
-            className="p-1.5 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 text-white/80 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer"
-            title="Actualizar clima oficial de Buenos Aires"
-          >
-            <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin text-amber-300" : ""}`} />
-          </button>
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/35 backdrop-blur-md border border-white/15 text-[10px] text-emerald-300 font-medium tracking-tight">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>En vivo</span>
+          </div>
         </div>
       </div>
 
-      {/* 11. CENTER SLOT: THE CARITA (Interactive Cube) */}
+      {/* 11. CENTRO: LA CARITA */}
       <div className="relative z-10 flex items-center justify-center my-auto drop-shadow-[0_15px_30px_rgba(0,0,0,0.6)]">
         {children}
       </div>
 
-      {/* 12. FOOTER CAPTION: Live Buenos Aires Location & Rain status */}
+      {/* 12. PIE: UBICACIÓN */}
       <div className="z-10 text-center pb-0.5">
         <span className="text-[10px] font-medium tracking-wide text-white/90 bg-black/35 px-2.5 py-0.5 rounded-full backdrop-blur-xs border border-white/10">
           {isRaining ? "Buenos Aires, AR • Lluvia en Vivo" : "Buenos Aires, AR • Clima en Vivo"}
