@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { EyeTrackerCube } from "@/components/home/EyeTrackerCube";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
@@ -115,6 +115,52 @@ export default function HomePage() {
   // Note state for OrderDetailModal
   const [newNotaText, setNewNotaText] = useState("");
   const [savingNota, setSavingNota] = useState(false);
+
+  // Idle / Inactivity 1-minute detection for Giant Carita Screensaver
+  const [isIdle, setIsIdle] = useState(false);
+  const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const IDLE_TIME = 60000; // 1 minute in milliseconds
+
+    const handleActivity = () => {
+      setIsIdle(false);
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+      // Only set idle timer when no modal is open
+      if (!isSearchOpen && !selectedOrdenForDetail && !selectedQuoteForDetail) {
+        idleTimeoutRef.current = setTimeout(() => {
+          setIsIdle(true);
+        }, IDLE_TIME);
+      }
+    };
+
+    handleActivity();
+
+    const activityEvents = [
+      "mousemove",
+      "pointermove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "wheel",
+      "scroll"
+    ];
+
+    activityEvents.forEach((ev) => {
+      window.addEventListener(ev, handleActivity, { passive: true });
+    });
+
+    return () => {
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+      activityEvents.forEach((ev) => {
+        window.removeEventListener(ev, handleActivity);
+      });
+    };
+  }, [isSearchOpen, selectedOrdenForDetail, selectedQuoteForDetail]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -322,6 +368,74 @@ export default function HomePage() {
           onClose={() => setSelectedQuoteForDetail(null)}
         />
       )}
+
+      {/* Full-Screen Giant Carita Screensaver on 1-min Inactivity */}
+      <AnimatePresence>
+        {isIdle && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: EASE_OUT }}
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-2xl select-none overflow-hidden"
+          >
+            {/* Ambient Deep Glow */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ 
+                scale: [1, 1.18, 1],
+                opacity: [0.14, 0.28, 0.14]
+              }}
+              transition={{ 
+                duration: 6, 
+                repeat: Infinity, 
+                ease: "easeInOut" 
+              }}
+              className="absolute w-[640px] h-[640px] rounded-full bg-blue-500/20 blur-3xl pointer-events-none"
+            />
+
+            {/* Giant Carita with smooth entrance/exit scaling */}
+            <motion.div
+              initial={{ scale: 0.35, opacity: 0, y: 30 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.35, opacity: 0, y: 20 }}
+              transition={{
+                duration: 0.65,
+                ease: EASE_OUT,
+              }}
+              className="relative z-10 flex flex-col items-center"
+            >
+              <div className="hidden sm:block">
+                <EyeTrackerCube 
+                  size={480} 
+                  follow={80} 
+                  bounce={40} 
+                  mood="thinking" 
+                />
+              </div>
+              <div className="block sm:hidden">
+                <EyeTrackerCube 
+                  size={300} 
+                  follow={80} 
+                  bounce={40} 
+                  mood="thinking" 
+                />
+              </div>
+            </motion.div>
+
+            {/* Subtle return hint */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 0.4, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ delay: 1, duration: 0.5 }}
+              className="absolute bottom-10 text-center text-[11px] font-mono font-medium text-slate-400 tracking-widest pointer-events-none"
+            >
+              MODO REPOSO • MOVER EL MOUSE PARA REGRESAR
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AppLayout>
   );
 }

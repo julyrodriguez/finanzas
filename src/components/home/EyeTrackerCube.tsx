@@ -135,6 +135,13 @@ export function EyeTrackerCube({
         const scanY = Math.cos(scanTime * 1.4) * 0.3 - 0.12;
         state.tx = state.tx * 0.2 + scanX * 0.8;
         state.ty = state.ty * 0.2 + scanY * 0.8;
+      } else if (mood === "thinking") {
+        // Contemplative autonomous gaze drifting upwards and across
+        const thinkTime = time * 0.0009;
+        const wanderX = Math.sin(thinkTime) * 0.38 + Math.sin(thinkTime * 0.47) * 0.18;
+        const wanderY = -0.32 + Math.cos(thinkTime * 0.75) * 0.16;
+        state.tx = state.tx * 0.15 + wanderX * 0.85;
+        state.ty = state.ty * 0.15 + wanderY * 0.85;
       }
 
       state.vx += ((state.tx - state.x) * stiffness - state.vx * friction) * dt;
