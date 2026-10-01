@@ -7,6 +7,7 @@ interface EyeTrackerCubeProps {
   className?: string;
   follow?: number; // 0 - 100
   bounce?: number; // 0 - 100
+  mood?: "normal" | "thinking";
 }
 
 const CUBE_PATH =
@@ -26,6 +27,7 @@ export function EyeTrackerCube({
   className = "",
   follow = 65,
   bounce = 35,
+  mood = "normal",
 }: EyeTrackerCubeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const eyesGroupRefs = useRef<(SVGGElement | null)[]>([]);
@@ -74,8 +76,9 @@ export function EyeTrackerCube({
       const cosPitch = Math.cos(pitch);
       const sinPitch = Math.sin(pitch);
 
-      // Tilt angle based on looking corners
-      const tilt = AW * state.x * state.y;
+      const isThinking = mood === "thinking";
+      // Tilt angle based on looking corners + thinking slant
+      const tilt = (isThinking ? AW * 1.25 : AW) * state.x * state.y + (isThinking ? -4.5 : 0);
       const eyeSep = KW * 1.05;
 
       // 3. Project both eyes onto 3D sphere
@@ -94,8 +97,9 @@ export function EyeTrackerCube({
         const foreshorten = 0.45 + 0.55 * visibleZ;
         const widthScale = foreshorten * (0.7 + 0.3 * visibleZ);
 
-        const currentW = SLANT_EYE.w * widthScale;
-        const currentH = Math.max(0.6, SLANT_EYE.h * foreshorten * blinkScale);
+        const currentW = SLANT_EYE.w * widthScale * (isThinking && idx === 0 ? 0.9 : 1);
+        const eyeSquint = isThinking ? (idx === 0 ? 0.82 : 1.1) : 1;
+        const currentH = Math.max(0.6, SLANT_EYE.h * foreshorten * blinkScale * eyeSquint);
         const currentR = Math.min(SLANT_EYE.r, currentW / 2, currentH / 2);
 
         const rect = eyeGroup.firstElementChild as SVGRectElement | null;
@@ -152,8 +156,9 @@ export function EyeTrackerCube({
         Math.tanh(dist / influenceRadius) * (clamp(follow, 0, 100) / 100) * 1.5
       );
 
-      state.tx = (dx / dist) * intensity;
-      state.ty = (dy / dist) * intensity;
+      const isThinking = mood === "thinking";
+      state.tx = (dx / dist) * intensity + (isThinking ? 0.08 : 0);
+      state.ty = (dy / dist) * intensity - (isThinking ? 0.16 : 0);
     };
 
     const handlePointerLeave = () => {
@@ -169,7 +174,7 @@ export function EyeTrackerCube({
       window.removeEventListener("pointermove", handlePointerMove);
       document.documentElement.removeEventListener("pointerleave", handlePointerLeave);
     };
-  }, [follow, bounce]);
+  }, [follow, bounce, mood]);
 
   return (
     <div
