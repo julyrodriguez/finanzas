@@ -212,6 +212,17 @@ export function BeachWeatherBackdrop({
             text-shadow: 0 0 15px rgba(248, 113, 113, 1), 0 0 30px rgba(239, 68, 68, 0.9), 0 0 45px rgba(220, 38, 38, 0.7);
           }
         }
+        @keyframes beaconPulse {
+          0%, 100% {
+            opacity: 0.25;
+            transform: scale(0.85);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.25);
+            filter: drop-shadow(0 0 7px rgba(239, 68, 68, 1));
+          }
+        }
       `}</style>
 
       {/* 1. GRADIENTE DEL CIELO EN VIVO */}
@@ -386,108 +397,280 @@ export function BeachWeatherBackdrop({
         </div>
       )}
 
-      {/* 6. EDIFICIO ALTO CON LETRAS DE CINEMARK EN ROJO EN EL TECHO Y SKYLINE */}
+      {/* 6. EDIFICIOS ARQUITECTÓNICOS MODERNOS, CRISTALES Y SKYLINE */}
       <div className={`absolute left-0 right-0 bottom-[14%] ${fullscreen ? "h-[62%]" : "h-[54%]"} z-[3] pointer-events-none overflow-hidden flex items-end justify-center`}>
         
-        {/* Siluetas de fondo de la ciudad / Skyline lejano */}
-        <div className="absolute bottom-0 left-0 right-0 h-[48%] opacity-35 flex items-end justify-between px-4 sm:px-12 pointer-events-none">
-          <div className="w-12 h-28 sm:w-16 sm:h-36 bg-[#0f172a] rounded-t-sm" />
-          <div className="w-10 h-20 sm:w-14 sm:h-28 bg-[#1e293b] rounded-t-sm" />
-          <div className="w-14 h-32 sm:w-20 sm:h-44 bg-[#0f172a] rounded-t-md" />
-          <div className="w-8 h-16 sm:w-12 sm:h-24 bg-[#1e293b] rounded-t-sm" />
-          <div className="w-12 h-26 sm:w-18 sm:h-38 bg-[#0f172a] rounded-t-sm" />
+        {/* Siluetas de fondo de la ciudad / Skyline lejano con antenas y luces de baliza */}
+        <div className="absolute bottom-0 left-0 right-0 h-[56%] opacity-40 flex items-end justify-between px-3 sm:px-10 pointer-events-none">
+          {/* Edificio 1 lejano (izquierda): Torre con remate escalonado */}
+          <div className="relative flex flex-col items-center">
+            <div className="w-0.5 h-4 bg-slate-500 relative flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-red-500" style={{ animation: "beaconPulse 2.4s ease-in-out infinite" }} />
+            </div>
+            <div className="w-4 h-2 bg-slate-700 rounded-t-xs" />
+            <div className="w-8 sm:w-14 h-28 sm:h-38 bg-gradient-to-t from-[#0a101d] via-[#121c2c] to-[#1e2a3c] rounded-t-sm border-t border-x border-slate-700/50" />
+          </div>
+
+          {/* Edificio 2 lejano: Torre con antena delgada */}
+          <div className="relative flex flex-col items-center">
+            <div className="w-0.5 h-6 bg-slate-400 relative flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-red-400" style={{ animation: "beaconPulse 1.8s ease-in-out infinite" }} />
+            </div>
+            <div className="w-7 sm:w-12 h-20 sm:h-28 bg-gradient-to-t from-[#0a101d] via-[#152030] to-[#1b2738] rounded-t-sm border-t border-x border-slate-700/40" />
+          </div>
+
+          {/* Edificio 3 lejano: Rascacielos con remate biselado (estilo Torre Macro) */}
+          <div className="relative flex flex-col items-center">
+            <div 
+              className="w-10 sm:w-16 h-3 sm:h-5 bg-gradient-to-t from-[#1b2738] to-[#25354c] border-t border-slate-600/50"
+              style={{ clipPath: "polygon(0% 100%, 35% 0%, 100% 0%, 100% 100%)" }}
+            />
+            <div className="w-10 sm:w-16 h-36 sm:h-48 bg-gradient-to-t from-[#0a101d] via-[#131d2d] to-[#1b2738] border-x border-slate-700/40" />
+          </div>
+
+          {/* Edificio 4 lejano: Corporativo central bajo */}
+          <div className="w-12 sm:w-20 h-18 sm:h-26 bg-gradient-to-t from-[#0a101d] to-[#162234] rounded-t-xs border-t border-x border-slate-700/40" />
+
+          {/* Edificio 5 lejano: Torre residencial con balcones sutiles */}
+          <div className="relative flex flex-col items-center">
+            <div className="w-0.5 h-5 bg-slate-400 relative flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-red-500" style={{ animation: "beaconPulse 2.1s ease-in-out infinite" }} />
+            </div>
+            <div className="w-10 sm:w-18 h-32 sm:h-44 bg-gradient-to-t from-[#0a101d] via-[#121c2d] to-[#1d2a3d] rounded-t-sm border-t border-x border-slate-700/40" />
+          </div>
+
+          {/* Edificio 6 lejano (derecha): Aguja y fachada vidriada */}
+          <div className="relative flex flex-col items-center">
+            <div className="w-0.5 h-7 bg-slate-500 relative flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-red-400" style={{ animation: "beaconPulse 1.9s ease-in-out infinite" }} />
+            </div>
+            <div className="w-8 sm:w-14 h-24 sm:h-34 bg-gradient-to-t from-[#0a101d] to-[#182436] rounded-t-sm border-t border-x border-slate-700/40" />
+          </div>
         </div>
 
-        {/* EDIFICIO PRINCIPAL DE CINEMARK */}
+        {/* NIEBLA / ATMÓSFERA URBANA BASE */}
+        <div className="absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-t from-[#080d17]/80 via-[#0b1322]/40 to-transparent pointer-events-none" />
+
+        {/* EDIFICIO SECUNDARIO DE RESPALDO (Izquierda-centro profundidad) */}
+        <div 
+          className={`relative ${
+            fullscreen ? "w-[120px] sm:w-[150px] h-[72%] left-[-26%] sm:left-[-28%]" : "w-[70px] sm:w-[85px] h-[68%] left-[-24%] sm:left-[-26%]"
+          } z-[3] opacity-65 flex flex-col items-center justify-end`}
+        >
+          <div className="w-0.5 h-5 bg-slate-500 relative flex items-center justify-center">
+            <div className="w-1 h-1 rounded-full bg-red-500" style={{ animation: "beaconPulse 2.6s ease-in-out infinite" }} />
+          </div>
+          <div className="w-[85%] h-2 bg-slate-700/80 rounded-t-xs" />
+          <div className="w-full h-full bg-gradient-to-b from-[#1b263b] via-[#111927] to-[#0a0f18] border-x border-t border-slate-600/50 rounded-t-sm relative overflow-hidden p-1 flex flex-col justify-between">
+            <div className="space-y-1 opacity-50">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="h-1.5 w-full flex gap-0.5">
+                  <div className={`flex-1 rounded-[1px] ${i % 3 === 0 ? "bg-amber-200/40" : "bg-slate-700/50"}`} />
+                  <div className={`flex-1 rounded-[1px] ${i % 2 === 0 ? "bg-cyan-200/40" : "bg-slate-700/50"}`} />
+                  <div className={`flex-1 rounded-[1px] ${i % 4 === 1 ? "bg-amber-200/50" : "bg-slate-700/50"}`} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* EDIFICIO PRINCIPAL DE CINEMARK (Izquierda-centro) */}
         <div 
           className={`relative ${
             fullscreen 
-              ? "w-[240px] sm:w-[320px] h-[85%] left-[-15%] sm:left-[-18%]" 
-              : "w-[150px] sm:w-[175px] h-[88%] left-[-16%] sm:left-[-18%]"
+              ? "w-[260px] sm:w-[320px] md:w-[360px] h-[88%] left-[-14%] sm:left-[-17%] md:left-[-19%]" 
+              : "w-[130px] sm:w-[150px] h-[86%] left-[-13%] sm:left-[-15%]"
           } flex flex-col items-center justify-end z-[4] transition-all duration-500`}
         >
-          {/* Resplandor de Neón Rojo sobre el techo del edificio (solo en fullscreen) */}
+          {/* Halo ambiental rojo proyectado hacia el cielo (solo en fullscreen) */}
           {fullscreen && (
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-44 sm:w-56 h-20 bg-red-600/35 blur-2xl pointer-events-none animate-pulse" />
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 sm:w-80 h-28 bg-red-600/35 blur-3xl pointer-events-none animate-pulse" />
           )}
 
-          {/* ESTRUCTURA DEL TECHO */}
-          <div className="relative z-10 flex flex-col items-center mb-1">
+          {/* ESTRUCTURA DEL TECHO ARQUITECTÓNICO */}
+          <div className="relative z-10 w-full flex flex-col items-center mb-0.5">
             {fullscreen ? (
-              /* En pantalla grande: Cartel Luminoso de Cinemark en el techo */
-              <>
-                <div className="px-3 py-1 sm:px-4 sm:py-1.5 rounded-md bg-[#0a0505]/85 border-2 border-red-500/70 shadow-[0_0_20px_rgba(239,68,68,0.7),inset_0_0_12px_rgba(220,38,38,0.4)] backdrop-blur-md flex items-center justify-center">
+              /* En pantalla grande: Cartel Neón Cinemark sobre celosía metálica */
+              <div className="relative flex flex-col items-center w-full">
+                {/* Antena lateral izquierda con baliza aeronáutica */}
+                <div className="absolute -top-7 left-4 flex flex-col items-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" style={{ animation: "beaconPulse 1.7s ease-in-out infinite" }} />
+                  <div className="w-0.5 h-6 bg-gradient-to-b from-slate-400 to-slate-600" />
+                </div>
+
+                {/* Estructura del cartel con marco y luces */}
+                <div className="relative px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-lg bg-gradient-to-b from-[#1c0808] to-[#0c0404] border border-red-500/80 shadow-[0_0_25px_rgba(239,68,68,0.75),inset_0_0_15px_rgba(220,38,38,0.45)] backdrop-blur-md flex items-center justify-center">
+                  {/* Resplandor interno sutil */}
+                  <div className="absolute inset-0 bg-red-500/10 rounded-lg blur-xs pointer-events-none" />
+                  
                   <span 
-                    className="text-xs sm:text-sm md:text-base font-black tracking-widest text-[#ff2a2a] uppercase font-sans"
+                    className="relative text-xs sm:text-base md:text-lg font-black text-[#ff2a2a] uppercase font-sans select-none tracking-[0.22em] drop-shadow-[0_0_10px_rgba(255,40,40,0.9)]"
                     style={{
-                      animation: "cinemarkPulse 3s ease-in-out infinite",
-                      letterSpacing: "0.2em"
+                      animation: "cinemarkPulse 3s ease-in-out infinite"
                     }}
                   >
                     CINEMARK
                   </span>
                 </div>
 
-                {/* Soportes metálicos del cartel */}
-                <div className="flex items-center gap-6 sm:gap-10 h-2 w-full justify-center">
-                  <div className="w-1 h-full bg-slate-700" />
-                  <div className="w-1 h-full bg-slate-700" />
+                {/* Pilares y vigas de soporte estructural del cartel */}
+                <div className="flex items-center justify-around w-3/4 h-2.5">
+                  <div className="w-1 h-full bg-gradient-to-b from-slate-600 to-slate-800" />
+                  <div className="w-1 h-full bg-gradient-to-b from-slate-600 to-slate-800" />
+                  <div className="w-1 h-full bg-gradient-to-b from-slate-600 to-slate-800" />
                 </div>
-              </>
+              </div>
             ) : (
-              /* En versión pequeña: Remate arquitectónico moderno limpio sin cartel */
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-1 h-2.5 bg-red-500/80 rounded-full animate-pulse" />
-                <div className="w-6 h-1 bg-slate-600 rounded-full" />
+              /* En versión pequeña: Remate corporativo elegante moderno sin cartel */
+              <div className="relative flex flex-col items-center w-full mb-1">
+                {/* Antena moderna delgada con baliza roja */}
+                <div className="flex flex-col items-center -mb-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ef4444]" style={{ animation: "beaconPulse 1.8s ease-in-out infinite" }} />
+                  <div className="w-0.5 h-5 bg-gradient-to-b from-slate-400 to-slate-600" />
+                </div>
+                {/* Penthouse técnico con rejillas de ventilación y luz de cristal */}
+                <div className="w-16 h-2.5 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border-t border-x border-slate-600 rounded-t-xs flex items-center justify-center gap-1">
+                  <div className="w-2.5 h-1 bg-cyan-300/40 rounded-xs" />
+                  <div className="w-2.5 h-1 bg-cyan-300/40 rounded-xs" />
+                  <div className="w-2.5 h-1 bg-cyan-300/40 rounded-xs" />
+                </div>
               </div>
             )}
 
-            {/* Coronamiento / Terraza del edificio */}
-            <div className="w-[110%] h-2 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border-t border-slate-500 rounded-t-xs" />
+            {/* Cornisa arquitectónica superior de la torre */}
+            <div className="w-[104%] h-2 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 border-t border-slate-500/80 shadow-md rounded-t-xs" />
           </div>
 
-          {/* CUERPO DEL EDIFICIO (Torre arquitectónica moderna con cristales) */}
-          <div className="w-full h-full rounded-t-sm bg-gradient-to-b from-[#182030] via-[#101726] to-[#0a0f1d] border-x border-t border-slate-700/80 shadow-[0_10px_35px_rgba(0,0,0,0.8)] relative overflow-hidden flex flex-col p-2.5 sm:p-3.5">
+          {/* CUERPO DE LA TORRE (Fachada moderna muro cortina con cristales y reflejos) */}
+          <div className="w-full h-full rounded-t-sm bg-gradient-to-b from-[#141d2f] via-[#0d1624] to-[#070b13] border-x border-t border-slate-600/80 shadow-[0_15px_45px_rgba(0,0,0,0.85)] relative overflow-hidden flex flex-col">
             
-            {/* Reflejo diagonal de luz sobre los cristales */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/[0.07] to-transparent pointer-events-none" />
+            {/* Línea LED de iluminación arquitectónica en el borde izquierdo */}
+            <div className="absolute top-0 bottom-0 left-0 w-[1.5px] bg-gradient-to-b from-cyan-400/50 via-sky-500/20 to-transparent pointer-events-none" />
 
-            {/* Grilla de ventanas iluminadas y oficinas */}
-            <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5 sm:gap-2 w-full h-full opacity-75">
-              {Array.from({ length: 28 }).map((_, idx) => {
-                const isLit = (idx % 3 === 0) || (idx % 7 === 1);
-                return (
-                  <div
-                    key={idx}
-                    className={`rounded-[2px] h-3 sm:h-4 transition-colors ${
-                      isLit
-                        ? "bg-amber-100/70 shadow-[0_0_6px_rgba(251,191,36,0.6)]"
-                        : "bg-slate-800/80 border border-slate-700/40"
-                    }`}
-                  />
-                );
-              })}
+            {/* Reflejo diagonal de luz sobre el cristal continuo */}
+            <div 
+              className="absolute inset-0 pointer-events-none opacity-80"
+              style={{
+                background: "linear-gradient(118deg, transparent 25%, rgba(255,255,255,0.11) 45%, rgba(255,255,255,0.02) 55%, transparent 75%)"
+              }}
+            />
+
+            {/* Montantes verticales del muro cortina */}
+            <div className="absolute inset-0 flex justify-between pointer-events-none px-2 opacity-25">
+              <div className="w-[1px] h-full bg-cyan-300" />
+              <div className="w-[1px] h-full bg-cyan-300" />
+              <div className="w-[1px] h-full bg-cyan-300" />
+              <div className="w-[1px] h-full bg-cyan-300" />
             </div>
 
-            {/* Base arquitectónica del edificio */}
-            <div className="w-full h-8 bg-slate-900 border-t border-slate-700/50 mt-auto flex items-center justify-center">
-              <div className="w-8 h-4 rounded-t-xs bg-amber-400/40 border border-amber-300/50" />
+            {/* Pisos y ventanales arquitectónicos */}
+            <div className="flex-1 flex flex-col justify-between py-2 px-2 sm:px-3 relative z-10">
+              {Array.from({ length: fullscreen ? 13 : 9 }).map((_, floorIdx) => (
+                <div key={floorIdx} className="w-full border-b border-white/[0.06] pb-1 flex items-center justify-between gap-1">
+                  {Array.from({ length: fullscreen ? 6 : 5 }).map((_, winIdx) => {
+                    const seed = (floorIdx * 7 + winIdx * 11) % 19;
+                    const isLitWarm = seed === 1 || seed === 5 || seed === 9 || seed === 14;
+                    const isLitCool = seed === 3 || seed === 8 || seed === 12;
+                    return (
+                      <div
+                        key={winIdx}
+                        className={`h-2 sm:h-2.5 flex-1 rounded-[1.5px] transition-colors ${
+                          isLitWarm
+                            ? "bg-amber-100/75 shadow-[0_0_5px_rgba(251,191,36,0.65)]"
+                            : isLitCool
+                            ? "bg-sky-100/60 shadow-[0_0_4px_rgba(186,230,254,0.5)]"
+                            : "bg-[#182337]/90 border border-slate-700/30"
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* Lobby de doble altura / Entrada iluminada en la base */}
+            <div className="w-full h-8 sm:h-10 bg-gradient-to-t from-slate-950 via-[#101726] to-transparent border-t border-slate-700/70 mt-auto flex items-center justify-center px-4 relative z-10">
+              <div className="w-12 sm:w-16 h-4 sm:h-5 rounded-t-xs bg-amber-400/25 border-x border-t border-amber-300/40 flex items-center justify-center">
+                <div className="w-2.5 sm:w-3 h-full bg-amber-300/40" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Edificio secundario a la derecha para dar escala urbana */}
+        {/* EDIFICIO SECUNDARIO A LA DERECHA (Inspirado en Puerto Madero / Torre Macro con corona biselada) */}
         <div 
           className={`relative ${
-            fullscreen ? "w-[180px] sm:w-[220px] h-[65%] right-[-10%]" : "w-[90px] sm:w-[110px] h-[60%] right-[-12%]"
-          } rounded-t-sm bg-gradient-to-b from-[#1e293b] to-[#0f172a] border-x border-t border-slate-700/60 shadow-xl opacity-80 flex flex-col p-2`}
+            fullscreen ? "w-[200px] sm:w-[250px] h-[72%] right-[-10%] sm:right-[-12%]" : "w-[95px] sm:w-[115px] h-[64%] right-[-11%] sm:right-[-13%]"
+          } flex flex-col items-center justify-end z-[4] transition-all duration-500`}
         >
-          <div className="grid grid-cols-3 gap-1.5 w-full opacity-60">
-            {Array.from({ length: 15 }).map((_, idx) => (
-              <div key={idx} className={`h-2.5 sm:h-3 rounded-xs ${idx % 4 === 0 ? "bg-cyan-200/50" : "bg-slate-800"}`} />
-            ))}
+          {/* Antena con baliza en la cúspide */}
+          <div className="flex flex-col items-center self-end mr-6 -mb-0.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_6px_#f87171]" style={{ animation: "beaconPulse 2.3s ease-in-out infinite" }} />
+            <div className="w-0.5 h-5 bg-slate-400" />
+          </div>
+
+          {/* Corona biselada con jardín de invierno / Sky Lounge iluminado */}
+          <div 
+            className="w-full h-5 sm:h-7 bg-gradient-to-t from-[#16253b] to-[#243b5e] border-t border-l border-cyan-400/40 rounded-tl-lg relative overflow-hidden flex items-center justify-end pr-3"
+            style={{
+              clipPath: "polygon(0% 100%, 0% 40%, 40% 0%, 100% 0%, 100% 100%)"
+            }}
+          >
+            <div className="w-12 h-3 bg-cyan-300/25 blur-xs rounded-full" />
+          </div>
+
+          {/* Fachada acristalada en tonos navy y cyan */}
+          <div className="w-full h-full rounded-t-xs bg-gradient-to-b from-[#162234] via-[#0f1724] to-[#090e17] border-x border-t border-slate-700/80 shadow-2xl relative overflow-hidden flex flex-col p-2">
+            
+            {/* Reflejo de cristal */}
+            <div 
+              className="absolute inset-0 pointer-events-none opacity-60"
+              style={{
+                background: "linear-gradient(130deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)"
+              }}
+            />
+
+            {/* Ventanales de la torre complementaria */}
+            <div className="flex-1 flex flex-col justify-between py-1 relative z-10">
+              {Array.from({ length: fullscreen ? 10 : 7 }).map((_, fIdx) => (
+                <div key={fIdx} className="w-full border-b border-white/[0.05] pb-0.5 flex gap-1">
+                  {Array.from({ length: 4 }).map((_, wIdx) => {
+                    const isLit = (fIdx + wIdx * 3) % 4 === 0;
+                    return (
+                      <div
+                        key={wIdx}
+                        className={`h-2 flex-1 rounded-xs ${
+                          isLit 
+                            ? "bg-cyan-200/50 shadow-[0_0_4px_rgba(165,243,252,0.4)]" 
+                            : "bg-slate-800/80 border border-slate-700/30"
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* TORRE COMPLEMENTARIA EXTREMO DERECHO (Solo en fullscreen para gran escala panorámica) */}
+        {fullscreen && (
+          <div className="relative w-[140px] sm:w-[170px] h-[58%] right-[-18%] z-[3] opacity-75 flex flex-col items-center justify-end">
+            <div className="w-0.5 h-4 bg-slate-400 relative flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-red-400" style={{ animation: "beaconPulse 2.8s ease-in-out infinite" }} />
+            </div>
+            <div className="w-full h-full bg-gradient-to-b from-[#1c273a] to-[#0d1420] border-x border-t border-slate-700/60 rounded-t-sm p-1.5 flex flex-col justify-between">
+              <div className="space-y-1 opacity-60">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-1.5 w-full flex gap-1">
+                    <div className={`flex-1 rounded-[1px] ${i % 2 === 0 ? "bg-amber-200/40" : "bg-slate-700/40"}`} />
+                    <div className={`flex-1 rounded-[1px] ${i % 3 === 0 ? "bg-cyan-200/40" : "bg-slate-700/40"}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 7. PASTO VERDE / PARQUE EN EL FRENTE */}
