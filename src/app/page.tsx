@@ -226,10 +226,10 @@ export default function HomePage() {
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold tracking-wide">
             <Building2 className="w-3.5 h-3.5" />
-            <span>Cinemark & Hoyts • Finanzas</span>
+            <span>Cinemark & Hoyts • Compras</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-            Centro de Control Financiero
+            Centro de Control de Compras
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 font-medium">
             Seleccioná uno de los módulos operativos principales para acceder a la gestión
@@ -332,7 +332,7 @@ export default function HomePage() {
 
         {/* Subtle Bottom Footnote */}
         <div className="text-center text-[11px] text-slate-500 font-medium">
-          Plataforma Financiera Corporativa • Cinemark & Hoyts Argentina
+          Plataforma Corporativa de Compras • Cinemark & Hoyts Argentina
         </div>
       </div>
 

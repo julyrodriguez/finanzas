@@ -135,7 +135,7 @@ export default function NotFound() {
 
       {/* Semantic Footer */}
       <footer className="relative z-10 w-full py-6 text-center text-xs text-slate-500 border-t border-white/5">
-        <p>© {new Date().getFullYear()} Finanzas · Cinemark & Hoyts. Todos los derechos reservados.</p>
+        <p>© {new Date().getFullYear()} Compras · Cinemark & Hoyts. Todos los derechos reservados.</p>
       </footer>
     </div>
   );

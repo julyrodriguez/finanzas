@@ -25,21 +25,21 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Finanzas - Plataforma Corporativa",
-    template: "%s | Finanzas",
+    default: "Cinemark & Hoyts • Compras",
+    template: "%s | Cinemark & Hoyts • Compras",
   },
   description:
-    "Plataforma corporativa integral para la gestión de órdenes de compra, control presupuestario, pagos a proveedores y métricas financieras de Cinemark & Hoyts.",
-  applicationName: "Finanzas",
-  authors: [{ name: "Finanzas Corporativo" }],
+    "Plataforma corporativa integral para la gestión de órdenes de compra, control presupuestario, pagos a proveedores y métricas de Cinemark & Hoyts.",
+  applicationName: "Cinemark & Hoyts • Compras",
+  authors: [{ name: "Cinemark & Hoyts - Compras" }],
   generator: "Next.js",
   keywords: [
-    "finanzas",
+    "compras",
     "ordenes de compra",
     "proveedores",
     "cinemark",
     "hoyts",
-    "gestion financiera",
+    "gestion de compras",
     "pagos",
     "interbanking",
     "cotizaciones bna",
@@ -54,14 +54,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "es_AR",
     url: "/",
-    siteName: "Finanzas - Plataforma Corporativa",
-    title: "Finanzas - Plataforma Corporativa",
+    siteName: "Cinemark & Hoyts • Compras",
+    title: "Cinemark & Hoyts • Compras",
     description:
       "Gestión integral de órdenes de compra, pagos a proveedores, seguimiento presupuestario y métricas corporativas.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Finanzas - Plataforma Corporativa",
+    title: "Cinemark & Hoyts • Compras",
     description:
       "Gestión integral de órdenes de compra, pagos a proveedores, seguimiento presupuestario y métricas corporativas.",
   },

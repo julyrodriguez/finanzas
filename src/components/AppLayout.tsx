@@ -158,7 +158,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       ],
     },
     {
-      title: "Finanzas & Control",
+      title: "Compras & Control",
       items: [
         {
           name: "Cotizaciones",
@@ -283,7 +283,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             expanded ? "opacity-100 max-w-[140px] translate-x-0" : "opacity-0 max-w-0 -translate-x-2 pointer-events-none"
           }`}>
             <h1 className="font-bold text-sm text-white tracking-wider uppercase truncate whitespace-nowrap">
-              Finanzas
+              Compras
             </h1>
             <p className="text-[10px] text-slate-400 font-medium truncate whitespace-nowrap">
               Cinemark & Hoyts
@@ -513,7 +513,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             <div className="h-7 w-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
               <TrendingUp className="w-3.5 h-3.5" />
             </div>
-            <span className="font-bold text-sm text-white">Finanzas</span>
+            <span className="font-bold text-sm text-white">Compras</span>
           </div>
           <div className="w-9" />
         </header>

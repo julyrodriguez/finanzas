@@ -802,18 +802,14 @@ export function BeachWeatherBackdrop({
       </div>
 
       {/* 11. PIE */}
-      <div className="z-10 text-center pb-1">
-        {fullscreen ? (
+      {fullscreen && (
+        <div className="z-10 text-center pb-1">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/45 backdrop-blur-md border border-white/15 text-[11px] font-mono text-slate-300 tracking-widest shadow-lg">
             <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
             <span>MODO REPOSO • MOVER EL MOUSE PARA REGRESAR</span>
           </div>
-        ) : (
-          <span className="text-[10px] font-medium tracking-wide text-white/90 bg-black/35 px-2.5 py-0.5 rounded-full backdrop-blur-xs border border-white/10">
-            {isRaining ? "Buenos Aires, AR • Lluvia en Vivo" : "Cinemark & Hoyts • Buenos Aires en Vivo"}
-          </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
