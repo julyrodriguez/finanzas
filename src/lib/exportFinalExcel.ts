@@ -54,6 +54,23 @@ function createButtonImage(text: string, bgColor: string): string | null {
   }
 }
 
+function normalizeSignerName(name?: string): string {
+  if (!name) return "";
+  const n = name.trim();
+  const lower = n.toLowerCase();
+  if (lower.includes("tomas") || lower.includes("tomás")) return "Tomas";
+  if (lower.includes("victoria")) return "Victoria";
+  if (lower.includes("tristan") || lower.includes("tristán")) return "Tristan";
+  if (lower.includes("pablo gonzalez") || lower.includes("pablo gonzález") || lower.includes("gonzalez") || lower.includes("gonzález")) return "Pablo Gonzalez";
+  if (lower.includes("mondelo")) return "Pablo Mondelo";
+  if (lower.includes("jorgelina")) return "Jorgelina";
+  if (lower.includes("dario") || lower.includes("darío")) return "Dario";
+  if (lower.includes("matias") || lower.includes("matías")) return "Matias";
+  if (lower.includes("hernan") || lower.includes("hernán")) return "Hernan";
+  if (lower.includes("martin") || lower.includes("martín")) return "Martin";
+  return n;
+}
+
 export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Sistema Finanzas";
@@ -76,13 +93,15 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   // Paleta de colores corporativa
   const COLOR_NAVY = "0F172A"; // Slate 900
   const COLOR_HEADER_TXT = "FFFFFF";
-  const COLOR_EMERALD = "166534"; // Green 700
+  const COLOR_EMERALD = "166534"; // Green 700 (Liberada)
   const COLOR_EMERALD_LIGHT = "DCFCE7";
-  const COLOR_AMBER = "B45309";
+  const COLOR_AMBER = "B45309"; // Amber 700 (Mandada)
   const COLOR_AMBER_LIGHT = "FEF3C7";
-  const COLOR_BLUE = "1E40AF";
+  const COLOR_INDIGO = "4338CA"; // Indigo 700 (Pendiente - color bien diferenciado)
+  const COLOR_INDIGO_LIGHT = "E0E7FF"; // Indigo 100
+  const COLOR_BLUE = "1E40AF"; // Blue 700 (Entregada)
   const COLOR_BLUE_LIGHT = "DBEAFE";
-  const COLOR_RED = "991B1B";
+  const COLOR_RED = "991B1B"; // Red 700 (Cancelada)
   const COLOR_RED_LIGHT = "FEE2E2";
   const COLOR_ZEBRA = "F8FAFC";
   const COLOR_BORDER = "CBD5E1";
@@ -186,6 +205,30 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
 
     const numMonto = parseMontoToNumber(o.monto);
 
+    // Determinar firmantes con fallback inteligente a enviadoA1 / enviadoA2 o regla Tomás Nivel 1
+    let exportFirmante1 = o.firmante1?.trim() || "";
+    let exportFirmante2 = o.firmante2?.trim() || "";
+
+    if (!exportFirmante1) {
+      if (o.enviadoA1?.trim()) {
+        exportFirmante1 = o.enviadoA1.trim();
+      } else if (numMonto <= 5500000 && (o.mandada || estadoStr === "Mandada" || estadoStr === "Liberada")) {
+        exportFirmante1 = "Tomas";
+      }
+    }
+
+    if (!exportFirmante2) {
+      if (o.enviadoA2?.trim()) {
+        exportFirmante2 = o.enviadoA2.trim();
+      }
+    }
+
+    exportFirmante1 = normalizeSignerName(exportFirmante1);
+    exportFirmante2 = normalizeSignerName(exportFirmante2);
+
+    const firmado1Str = (o.firmado1 || estadoStr === "Liberada") ? "Sí" : "No";
+    const firmado2Str = (o.firmado2 || estadoStr === "Liberada") ? "Sí" : "No";
+
     const formulaCopiar = `IF(G${rowNum}="Liberada", "OC 0" & C${rowNum} & " - " & D${rowNum}, "OC " & C${rowNum} & " " & A${rowNum} & CHAR(10) & "Proveedor: " & D${rowNum} & CHAR(10) & "Monto: " & TEXT(E${rowNum}, "$ #,##0") & CHAR(10) & "Detalle: " & M${rowNum} & CHAR(10) & "Forma de Pago: " & F${rowNum})`;
     const formulaCMD = `"mkdir ""OC " & C${rowNum} & " " & A${rowNum} & " " & SUBSTITUTE(D${rowNum}, """", "") & """"`;
 
@@ -197,10 +240,10 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
       numMonto,
       o.formaPago || "30DFF",
       estadoStr,
-      o.firmante1 || "",
-      o.firmado1 ? "Sí" : "No",
-      o.firmante2 || "",
-      o.firmado2 ? "Sí" : "No",
+      exportFirmante1,
+      firmado1Str,
+      exportFirmante2,
+      firmado2Str,
       o.entregada ? "Sí" : "No",
       o.motivo || "",
       o.relatedOC || "",
@@ -235,8 +278,13 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
         cell.alignment = { vertical: "middle", horizontal: "center" };
       }
 
-      // Badge de Color en columna Estado (Col 7)
+      // Validaciones y Badge de Color en columnas de estado y firma
       if (colNumber === 7) {
+        cell.dataValidation = {
+          type: "list",
+          allowBlank: false,
+          formulae: ['"Pendiente,Mandada,Liberada,Entregada,Cancelada"'],
+        };
         cell.font = { name: "Segoe UI", size: 9.5, bold: true };
         if (estadoStr === "Liberada") {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_EMERALD_LIGHT } };
@@ -244,6 +292,9 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
         } else if (estadoStr === "Mandada") {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_AMBER_LIGHT } };
           cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + COLOR_AMBER } };
+        } else if (estadoStr === "Pendiente") {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_INDIGO_LIGHT } };
+          cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + COLOR_INDIGO } };
         } else if (estadoStr === "Entregada") {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_BLUE_LIGHT } };
           cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + COLOR_BLUE } };
@@ -251,6 +302,18 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_RED_LIGHT } };
           cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + COLOR_RED } };
         }
+      } else if (colNumber === 8 || colNumber === 10) {
+        cell.dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: ['"Tomas,Victoria,Tristan,Pablo Gonzalez,Jorgelina,Pablo Mondelo,Dario,Matias,Hernan,Martin"'],
+        };
+      } else if (colNumber === 9 || colNumber === 11) {
+        cell.dataValidation = {
+          type: "list",
+          allowBlank: false,
+          formulae: ['"Sí,No"'],
+        };
       }
     });
   });
@@ -265,6 +328,64 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     from: { row: 2, column: 1 },
     to: { row: lastRow, column: 19 },
   };
+
+  // Formato Condicional en Columna Estado (G) para respuesta inmediata en Excel
+  const maxFormatRow = Math.max(lastRow + 300, 500);
+  wsOrdenes.addConditionalFormatting({
+    ref: `G3:G${maxFormatRow}`,
+    rules: [
+      {
+        priority: 1,
+        type: "cellIs",
+        operator: "equal",
+        formulae: ['"Pendiente"'],
+        style: {
+          fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF" + COLOR_INDIGO_LIGHT } },
+          font: { color: { argb: "FF" + COLOR_INDIGO }, bold: true },
+        },
+      },
+      {
+        priority: 2,
+        type: "cellIs",
+        operator: "equal",
+        formulae: ['"Mandada"'],
+        style: {
+          fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF" + COLOR_AMBER_LIGHT } },
+          font: { color: { argb: "FF" + COLOR_AMBER }, bold: true },
+        },
+      },
+      {
+        priority: 3,
+        type: "cellIs",
+        operator: "equal",
+        formulae: ['"Liberada"'],
+        style: {
+          fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF" + COLOR_EMERALD_LIGHT } },
+          font: { color: { argb: "FF" + COLOR_EMERALD }, bold: true },
+        },
+      },
+      {
+        priority: 4,
+        type: "cellIs",
+        operator: "equal",
+        formulae: ['"Entregada"'],
+        style: {
+          fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF" + COLOR_BLUE_LIGHT } },
+          font: { color: { argb: "FF" + COLOR_BLUE }, bold: true },
+        },
+      },
+      {
+        priority: 5,
+        type: "cellIs",
+        operator: "equal",
+        formulae: ['"Cancelada"'],
+        style: {
+          fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF" + COLOR_RED_LIGHT } },
+          font: { color: { argb: "FF" + COLOR_RED }, bold: true },
+        },
+      },
+    ],
+  });
 
   // -------------------------------------------------------------------------
   // HOJA 2: Enviados a Firmar (NUEVA)
@@ -720,24 +841,39 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   });
 
   const firmantesList = [
-    { name: "Tomas", nivel: "Nivel 1 (Hasta 5M)" },
-    { name: "Victoria", nivel: "Nivel 1 (Área)" },
-    { name: "Tristan", nivel: "Nivel 1 (Área)" },
-    { name: "Pablo Gonzalez", nivel: "Nivel 1 (Área)" },
-    { name: "Jorgelina", nivel: "Nivel 1 (Área)" },
-    { name: "Pablo Mondelo", nivel: "Nivel 2 (5M a 18M)" },
-    { name: "Dario", nivel: "Nivel 2, 3 y 4" },
-    { name: "Matias", nivel: "Nivel 3 (18M a 150M)" },
-    { name: "Hernan", nivel: "Nivel 3 y 4" },
-    { name: "Martin", nivel: "Nivel 4 (> 150M)" },
+    { name: "Tomas", altName: "Tomás", nivel: "Nivel 1 (Hasta 5.5M)" },
+    { name: "Victoria", altName: "Victoria", nivel: "Nivel 1 (Área)" },
+    { name: "Tristan", altName: "Tristán", nivel: "Nivel 1 (Área)" },
+    { name: "Pablo Gonzalez", altName: "Pablo González", nivel: "Nivel 1 (Área)" },
+    { name: "Jorgelina", altName: "Jorgelina", nivel: "Nivel 1 (Área)" },
+    { name: "Pablo Mondelo", altName: "Pablo Mondelo", nivel: "Nivel 2 (5.5M a 18M)" },
+    { name: "Dario", altName: "Darío", nivel: "Nivel 2, 3 y 4" },
+    { name: "Matias", altName: "Matías", nivel: "Nivel 3 (18M a 150M)" },
+    { name: "Hernan", altName: "Hernán", nivel: "Nivel 3 y 4" },
+    { name: "Martin", altName: "Martín", nivel: "Nivel 4 (> 150M)" },
   ];
 
   firmantesList.forEach((f, idx) => {
     const r = idx + 4;
-    const f1Count = `COUNTIFS('Órdenes de Compra'!$H$3:$H$${lastRow}, A${r}, 'Órdenes de Compra'!$I$3:$I$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
-    const f2Count = `COUNTIFS('Órdenes de Compra'!$J$3:$J$${lastRow}, A${r}, 'Órdenes de Compra'!$K$3:$K$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    const hasAlt = Boolean(f.altName && f.altName !== f.name);
+
+    let f1Count = `COUNTIFS('Órdenes de Compra'!$H$3:$H$${lastRow}, A${r}, 'Órdenes de Compra'!$I$3:$I$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    if (hasAlt) {
+      f1Count += ` + COUNTIFS('Órdenes de Compra'!$H$3:$H$${lastRow}, "${f.altName}", 'Órdenes de Compra'!$I$3:$I$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    }
+
+    let f2Count = `COUNTIFS('Órdenes de Compra'!$J$3:$J$${lastRow}, A${r}, 'Órdenes de Compra'!$K$3:$K$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    if (hasAlt) {
+      f2Count += ` + COUNTIFS('Órdenes de Compra'!$J$3:$J$${lastRow}, "${f.altName}", 'Órdenes de Compra'!$K$3:$K$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    }
+
     const totalCount = `C${r}+D${r}`;
-    const montoSum = `SUMIFS('Órdenes de Compra'!$E$3:$E$${lastRow}, 'Órdenes de Compra'!$H$3:$H$${lastRow}, A${r}, 'Órdenes de Compra'!$I$3:$I$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada") + SUMIFS('Órdenes de Compra'!$E$3:$E$${lastRow}, 'Órdenes de Compra'!$J$3:$J$${lastRow}, A${r}, 'Órdenes de Compra'!$K$3:$K$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+
+    let montoSum = `SUMIFS('Órdenes de Compra'!$E$3:$E$${lastRow}, 'Órdenes de Compra'!$H$3:$H$${lastRow}, A${r}, 'Órdenes de Compra'!$I$3:$I$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada") + SUMIFS('Órdenes de Compra'!$E$3:$E$${lastRow}, 'Órdenes de Compra'!$J$3:$J$${lastRow}, A${r}, 'Órdenes de Compra'!$K$3:$K$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    if (hasAlt) {
+      montoSum += ` + SUMIFS('Órdenes de Compra'!$E$3:$E$${lastRow}, 'Órdenes de Compra'!$H$3:$H$${lastRow}, "${f.altName}", 'Órdenes de Compra'!$I$3:$I$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada") + SUMIFS('Órdenes de Compra'!$E$3:$E$${lastRow}, 'Órdenes de Compra'!$J$3:$J$${lastRow}, "${f.altName}", 'Órdenes de Compra'!$K$3:$K$${lastRow}, "No", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Cancelada", 'Órdenes de Compra'!$G$3:$G$${lastRow}, "<>Liberada")`;
+    }
+
     const resumenText = `A${r} & ": " & E${r} & " órdenes pendientes por " & TEXT(F${r}, "$ #,##0")`;
 
     const row = wsFirmantes.addRow([
@@ -798,19 +934,19 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   const kpi1Title = wsStats.getCell("B3");
   kpi1Title.value = "⏳ PENDIENTES (SIN ENVIAR)";
   kpi1Title.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-  kpi1Title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+  kpi1Title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_INDIGO } };
   kpi1Title.alignment = { vertical: "middle", horizontal: "center" };
 
   wsStats.getCell("B4").value = "Cantidad:";
   wsStats.getCell("B4").font = { name: "Segoe UI", size: 9, bold: true };
   wsStats.getCell("C4").value = { formula: `COUNTIF('Órdenes de Compra'!$G$3:$G$${lastRow}, "Pendiente")` };
-  wsStats.getCell("C4").font = { name: "Segoe UI", size: 12, bold: true, color: { argb: "FF1E293B" } };
+  wsStats.getCell("C4").font = { name: "Segoe UI", size: 12, bold: true, color: { argb: "FF" + COLOR_INDIGO } };
   wsStats.getCell("C4").alignment = { horizontal: "right" };
 
   wsStats.getCell("B5").value = "Monto Total:";
   wsStats.getCell("B5").font = { name: "Segoe UI", size: 9, bold: true };
   wsStats.getCell("C5").value = { formula: `SUMIF('Órdenes de Compra'!$G$3:$G$${lastRow}, "Pendiente", 'Órdenes de Compra'!$E$3:$E$${lastRow})` };
-  wsStats.getCell("C5").font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF0F172A" } };
+  wsStats.getCell("C5").font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FF312E81" } };
   wsStats.getCell("C5").numFmt = '"$"#,##0.00;("$"#,##0.00);"-"';
 
   wsStats.getCell("B6").value = "Ticket Promedio:";
@@ -1106,6 +1242,9 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    wsOC.Cells(3, 5).NumberFormat = \"\"\"$\"\"#,##0.00;(\"\"$\"\"#,##0.00);\"\"-\"\"\"",
     "    wsOC.Cells(3, 6).Value = pago",
     "    wsOC.Cells(3, 7).Value = \"Pendiente\" ' Siempre en Pendiente",
+    "    wsOC.Cells(3, 7).Interior.Color = RGB(224, 231, 255)",
+    "    wsOC.Cells(3, 7).Font.Color = RGB(67, 56, 202)",
+    "    wsOC.Cells(3, 7).Font.Bold = True",
     "    wsOC.Cells(3, 8).Value = \"\"          ' Firmante 1",
     "    wsOC.Cells(3, 9).Value = \"No\"        ' Firmado 1",
     "    wsOC.Cells(3, 10).Value = \"\"         ' Firmante 2",
@@ -1150,6 +1289,8 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    End If",
     "    On Error GoTo 0",
     "    ",
+    "    Application.Calculate",
+    "    ",
     "    MsgBox \"¡Orden de Compra OC \" & oc & \" (\" & empresa & \") creada con éxito en estado Pendiente!\", vbInformation, \"Orden Creada\"",
     "End Sub",
     "",
@@ -1188,11 +1329,16 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "                ' Si ya tiene ambas firmas o queda 100% liberada",
     "                If InStr(1, accion, \"100% LIBERADA\", vbTextCompare) > 0 Or (wsOC.Cells(rowOC, 9).Value = \"Sí\" And wsOC.Cells(rowOC, 11).Value = \"Sí\") Then",
     "                    wsOC.Cells(rowOC, 7).Value = \"Liberada\"",
+    "                    wsOC.Cells(rowOC, 7).Interior.Color = RGB(220, 252, 231)",
+    "                    wsOC.Cells(rowOC, 7).Font.Color = RGB(22, 101, 52)",
+    "                    wsOC.Cells(rowOC, 7).Font.Bold = True",
     "                    cantLiberadas = cantLiberadas + 1",
     "                End If",
     "            End If",
     "        End If",
     "    Next r",
+    "    ",
+    "    Application.Calculate",
     "    ",
     "    MsgBox \"¡Firmas aplicadas!\" & vbCrLf & \"• Firmadas por \" & firmante & \": \" & cantFirmadas & vbCrLf & \"• Quedaron 100% Liberadas: \" & cantLiberadas, vbInformation, \"Éxito\"",
     "End Sub",
@@ -1202,8 +1348,17 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    Dim firmante As String, ocNum As String",
     "    Dim r As Long, lastBatchRow As Long, lastOCRow As Long, rowOC As Variant, cant As Long",
     "    ",
+    "    On Error Resume Next",
     "    Set wsEnv = ThisWorkbook.Sheets(\"Enviados a Firmar\")",
     "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ThisWorkbook.Sheets(\"Ordenes de Compra\")",
+    "    On Error GoTo 0",
+    "    ",
+    "    If wsEnv Is Nothing Or wsOC Is Nothing Then",
+    "        MsgBox \"No se encontraron las hojas 'Enviados a Firmar' u 'Órdenes de Compra'.\", vbCritical",
+    "        Exit Sub",
+    "    End If",
+    "    ",
     "    firmante = Trim(wsEnv.Range(\"B2\").Value)",
     "    If firmante = \"\" Then MsgBox \"Selecciona un firmante en B2.\", vbExclamation: Exit Sub",
     "    ",
@@ -1217,14 +1372,32 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "            rowOC = Application.Match(ocNum, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
     "            If Not IsError(rowOC) Then",
     "                If wsOC.Cells(rowOC, 7).Value <> \"Liberada\" Then",
+    "                    ' Cambiar estado a Mandada con color ámbar",
     "                    wsOC.Cells(rowOC, 7).Value = \"Mandada\"",
+    "                    wsOC.Cells(rowOC, 7).Interior.Color = RGB(254, 243, 199)",
+    "                    wsOC.Cells(rowOC, 7).Font.Color = RGB(180, 83, 9)",
+    "                    wsOC.Cells(rowOC, 7).Font.Bold = True",
+    "                    ",
+    "                    ' Si aún no tiene Firma 1, se asigna a Firmante 1",
+    "                    If Trim(wsOC.Cells(rowOC, 9).Value) <> \"Sí\" Then",
+    "                        wsOC.Cells(rowOC, 8).Value = firmante",
+    "                        wsOC.Cells(rowOC, 9).Value = \"No\"",
+    "                    Else",
+    "                        ' Si ya tiene Firma 1, se asigna a Firmante 2",
+    "                        wsOC.Cells(rowOC, 10).Value = firmante",
+    "                        wsOC.Cells(rowOC, 11).Value = \"No\"",
+    "                    End If",
     "                    cant = cant + 1",
     "                End If",
     "            End If",
     "        End If",
     "    Next r",
     "    ",
-    "    MsgBox \"¡Órdenes registradas como Enviadas a Firmar a \" & firmante & \"! Total: \" & cant, vbInformation, \"Enviadas Registradas\"",
+    "    Application.Calculate",
+    "    ",
+    "    MsgBox \"¡Órdenes registradas como Enviadas a Firmar a \" & firmante & \"!\" & vbCrLf & _",
+    "           \"• Cantidad de órdenes procesadas: \" & cant & vbCrLf & _",
+    "           \"• Ahora figuran contabilizadas en la hoja 'Resumen Firmantes'.\", vbInformation, \"Enviadas Registradas\"",
     "End Sub",
     "",
     "Sub ProcesarEnviadosATomas()",
@@ -1233,8 +1406,17 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    Dim r As Long, lastBatchRow As Long, lastOCRow As Long, rowOC As Variant",
     "    Dim cantTotal As Long, cantAutoFirma As Long",
     "    ",
+    "    On Error Resume Next",
     "    Set wsTom = ThisWorkbook.Sheets(\"Enviados a Tomas\")",
     "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ThisWorkbook.Sheets(\"Ordenes de Compra\")",
+    "    On Error GoTo 0",
+    "    ",
+    "    If wsTom Is Nothing Or wsOC Is Nothing Then",
+    "        MsgBox \"No se encontraron las hojas 'Enviados a Tomas' u 'Órdenes de Compra'.\", vbCritical",
+    "        Exit Sub",
+    "    End If",
+    "    ",
     "    lastBatchRow = wsTom.Cells(wsTom.Rows.Count, \"B\").End(xlUp).Row",
     "    lastOCRow = wsOC.Cells(wsOC.Rows.Count, \"C\").End(xlUp).Row",
     "    cantTotal = 0: cantAutoFirma = 0",
@@ -1247,22 +1429,32 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "                monto = Val(wsOC.Cells(rowOC, 5).Value)",
     "                If wsOC.Cells(rowOC, 7).Value <> \"Liberada\" Then",
     "                    wsOC.Cells(rowOC, 7).Value = \"Mandada\"",
+    "                    wsOC.Cells(rowOC, 7).Interior.Color = RGB(254, 243, 199)",
+    "                    wsOC.Cells(rowOC, 7).Font.Color = RGB(180, 83, 9)",
+    "                    wsOC.Cells(rowOC, 7).Font.Bold = True",
     "                End If",
     "                ' Regla menor a 5.500.000: Firma 1 de Tomás es automática",
     "                If monto < 5500000 Then",
     "                    wsOC.Cells(rowOC, 8).Value = \"Tomas\"",
     "                    wsOC.Cells(rowOC, 9).Value = \"Sí\"",
     "                    cantAutoFirma = cantAutoFirma + 1",
+    "                Else",
+    "                    ' Si es >= 5.500.000, requiere la 1ra firma manual de Tomás",
+    "                    wsOC.Cells(rowOC, 8).Value = \"Tomas\"",
+    "                    wsOC.Cells(rowOC, 9).Value = \"No\"",
     "                End If",
     "                cantTotal = cantTotal + 1",
     "            End If",
     "        End If",
     "    Next r",
     "    ",
+    "    Application.Calculate",
+    "    ",
     "    MsgBox \"¡Enviadas a Tomás procesadas!\" & vbCrLf & _",
     "           \"• Total pasadas a Mandadas: \" & cantTotal & vbCrLf & _",
     "           \"• Con Firma 1 de Tomás automática (< $5.5M): \" & cantAutoFirma & vbCrLf & _",
-    "           \"• Esperando 1ra firma (>= $5.5M): \" & (cantTotal - cantAutoFirma), vbInformation, \"Tomas Procesado\"",
+    "           \"• Esperando 1ra firma manual de Tomás (>= $5.5M): \" & (cantTotal - cantAutoFirma) & vbCrLf & _",
+    "           \"• Podés ver el seguimiento en 'Resumen Firmantes'.\", vbInformation, \"Tomas Procesado\"",
     "End Sub",
   ];
 
