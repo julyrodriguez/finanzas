@@ -12,8 +12,48 @@ import { getTimestampSeconds } from "@/lib/serverSync";
  * 4. "Pegado Masivo (Batch)": Proceso de firmas/autorizaciones, detección Firma 1 vs Firma 2 y liberación al reunir ambas.
  * 5. "Resumen Firmantes": Matriz dinámica de control por responsable.
  * 6. "Estadísticas": Dashboard con tarjetas KPI y tablas comparativas de Pendientes, Mandadas y Liberadas.
- * 7. "Guía y Macros": Manual completo y código VBA para automatizar cada botón con 1 clic.
+/**
+ * Crea una imagen PNG en base64 de un botón estilizado como forma con bordes redondeados.
+ * Esto permite que en Excel sea un objeto de dibujo real (Shape/Drawing) al cual se le puede
+ * hacer clic derecho y asignarle una macro con "Asignar macro...".
  */
+function createButtonImage(text: string, bgColor: string): string | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 460;
+    canvas.height = 68;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    // Fondo rectángulo redondeado
+    ctx.fillStyle = bgColor;
+    if (typeof (ctx as any).roundRect === "function") {
+      (ctx as any).roundRect(4, 4, 452, 60, 12);
+      ctx.fill();
+    } else {
+      ctx.fillRect(4, 4, 452, 60);
+    }
+
+    // Borde brillante
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Texto del botón
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "bold 22px 'Segoe UI', Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 230, 34);
+
+    return canvas.toDataURL("image/png");
+  } catch (e) {
+    console.warn("Canvas no disponible para generar botón gráfico:", e);
+    return null;
+  }
+}
+
 export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Sistema Finanzas";
@@ -75,6 +115,16 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     right: { style: "medium", color: { argb: "FF14532D" } },
   };
   wsOrdenes.getRow(1).height = 32;
+
+  // Insertar botón como Forma de dibujo (Drawing/Shape) para permitir clic derecho -> "Asignar macro..."
+  const btnImgBase64 = createButtonImage("➕ NUEVA ORDEN DE COMPRA", "#166534");
+  if (btnImgBase64) {
+    const imgId = wb.addImage({ base64: btnImgBase64, extension: "png" });
+    wsOrdenes.addImage(imgId, {
+      tl: { col: 16.02, row: 0.06 },
+      ext: { width: 230, height: 30 },
+    });
+  }
 
   // Fila 2: Cabeceras de Columnas
   const columnsOrdenes = [
@@ -261,6 +311,16 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   btnMacroEnv.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4338CA" } }; // Indigo
   btnMacroEnv.alignment = { vertical: "middle", horizontal: "center" };
 
+  // Insertar botón como Forma de dibujo para permitir clic derecho -> "Asignar macro..."
+  const btnImgEnv = createButtonImage("📨 REGISTRAR ENVÍO A FIRMAR", "#4338CA");
+  if (btnImgEnv) {
+    const imgId = wb.addImage({ base64: btnImgEnv, extension: "png" });
+    wsEnviados.addImage(imgId, {
+      tl: { col: 4.02, row: 1.06 },
+      ext: { width: 250, height: 28 },
+    });
+  }
+
   wsEnviados.mergeCells("A3:M3");
   const row3Env = wsEnviados.getCell("A3");
   row3Env.value = "Pegá el texto de tu mail o chat en la Columna A. Las órdenes detectadas pasan al proceso de 'Mandadas' para el firmante elegido. Tip: Filtrá la columna B por '(No vacías)' para compactar la vista.";
@@ -374,6 +434,16 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   btnMacroTom.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
   btnMacroTom.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD97706" } }; // Amber
   btnMacroTom.alignment = { vertical: "middle", horizontal: "center" };
+
+  // Insertar botón como Forma de dibujo para permitir clic derecho -> "Asignar macro..."
+  const btnImgTom = createButtonImage("⚡ PROCESAR ENVIADAS A TOMÁS", "#D97706");
+  if (btnImgTom) {
+    const imgId = wb.addImage({ base64: btnImgTom, extension: "png" });
+    wsTomas.addImage(imgId, {
+      tl: { col: 4.02, row: 1.06 },
+      ext: { width: 260, height: 28 },
+    });
+  }
 
   wsTomas.mergeCells("A3:K3");
   const row3Tom = wsTomas.getCell("A3");
@@ -503,6 +573,16 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   btnMacro.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
   btnMacro.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } };
   btnMacro.alignment = { vertical: "middle", horizontal: "center" };
+
+  // Insertar botón como Forma de dibujo para permitir clic derecho -> "Asignar macro..."
+  const btnImgBatch = createButtonImage("⚡ FIRMAR ÓRDENES DETECTADAS", "#166534");
+  if (btnImgBatch) {
+    const imgId = wb.addImage({ base64: btnImgBatch, extension: "png" });
+    wsBatch.addImage(imgId, {
+      tl: { col: 4.02, row: 1.06 },
+      ext: { width: 260, height: 28 },
+    });
+  }
 
   wsBatch.mergeCells("A3:M3");
   const row3B = wsBatch.getCell("A3");
