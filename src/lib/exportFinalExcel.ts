@@ -845,14 +845,15 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   });
 
   for (let r = 5; r <= 124; r++) {
-    const fNum = `IF(ISNUMBER(SEARCH("OC ", A${r})), TRIM(MID(SUBSTITUTE(TRIM(MID(A${r}, SEARCH("OC ", A${r}) + 3, 30)), " ", REPT(" ", 30)), 1, 30)), "")`;
-    const fExiste = `IF(B${r}="","",IF(ISNUMBER(MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"SÍ","NO"))`;
-    const fEmpresa = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$A$3:$A$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fProv = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$D$3:$D$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fF1 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$I$3:$I$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fF2 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$K$3:$K$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
+    const fNum = `IF(A${r}="","",IFERROR(VALUE(IF(ISNUMBER(SEARCH("OC",A${r})),TRIM(MID(SUBSTITUTE(SUBSTITUTE(TRIM(MID(A${r},SEARCH("OC",A${r})+2,30)),":"," ")," ",REPT(" ",30)),1,30)),TRIM(MID(SUBSTITUTE(TRIM(A${r})," ",REPT(" ",30)),1,30)))),IF(ISNUMBER(SEARCH("OC",A${r})),TRIM(MID(SUBSTITUTE(SUBSTITUTE(TRIM(MID(A${r},SEARCH("OC",A${r})+2,30)),":"," ")," ",REPT(" ",30)),1,30)),TRIM(MID(SUBSTITUTE(TRIM(A${r})," ",REPT(" ",30)),1,30)))))`;
+    const matchExpr = `IFERROR(MATCH(IFERROR(VALUE(SUBSTITUTE(SUBSTITUTE(TRIM(B${r}),"OC","")," ","")),TRIM(B${r})),'Órdenes de Compra'!$C$3:$C$${lastRow},0),MATCH(TRIM(B${r}),'Órdenes de Compra'!$C$3:$C$${lastRow},0))`;
+    const fExiste = `IF(B${r}="","",IF(ISNUMBER(${matchExpr}),"SÍ","NO"))`;
+    const fEmpresa = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$A$3:$A$${lastRow},${matchExpr}),"")`;
+    const fProv = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$D$3:$D$${lastRow},${matchExpr}),"")`;
+    const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},${matchExpr}),"")`;
+    const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},${matchExpr}),"")`;
+    const fF1 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$I$3:$I$${lastRow},${matchExpr}),"")`;
+    const fF2 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$K$3:$K$${lastRow},${matchExpr}),"")`;
     const fNivel = `IF(F${r}="","",IF(F${r}<=5000000,"Nivel 1 (<= 5M)",IF(F${r}<=18000000,"Nivel 2 (5M a 18M)",IF(F${r}<=150000000,"Nivel 3 (18M a 150M)","Nivel 4 (> 150M)"))))`;
     const fPaso = `IF(B${r}="","",IF(H${r}="No","Envío a 1ra Firma","Envío a 2da Firma"))`;
     const fAccion = `IF(B${r}="","",IF(G${r}="Liberada","Ya está 100% Liberada","Pasa a Mandada (Enviada a " & $B$2 & ")"))`;
@@ -967,12 +968,13 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   });
 
   for (let r = 5; r <= 124; r++) {
-    const fNum = `IF(ISNUMBER(SEARCH("OC ", A${r})), TRIM(MID(SUBSTITUTE(TRIM(MID(A${r}, SEARCH("OC ", A${r}) + 3, 30)), " ", REPT(" ", 30)), 1, 30)), "")`;
-    const fExiste = `IF(B${r}="","",IF(ISNUMBER(MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"SÍ","NO"))`;
-    const fEmpresa = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$A$3:$A$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fProv = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$D$3:$D$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
+    const fNum = `IF(A${r}="","",IFERROR(VALUE(IF(ISNUMBER(SEARCH("OC",A${r})),TRIM(MID(SUBSTITUTE(SUBSTITUTE(TRIM(MID(A${r},SEARCH("OC",A${r})+2,30)),":"," ")," ",REPT(" ",30)),1,30)),TRIM(MID(SUBSTITUTE(TRIM(A${r})," ",REPT(" ",30)),1,30)))),IF(ISNUMBER(SEARCH("OC",A${r})),TRIM(MID(SUBSTITUTE(SUBSTITUTE(TRIM(MID(A${r},SEARCH("OC",A${r})+2,30)),":"," ")," ",REPT(" ",30)),1,30)),TRIM(MID(SUBSTITUTE(TRIM(A${r})," ",REPT(" ",30)),1,30)))))`;
+    const matchExpr = `IFERROR(MATCH(IFERROR(VALUE(SUBSTITUTE(SUBSTITUTE(TRIM(B${r}),"OC","")," ","")),TRIM(B${r})),'Órdenes de Compra'!$C$3:$C$${lastRow},0),MATCH(TRIM(B${r}),'Órdenes de Compra'!$C$3:$C$${lastRow},0))`;
+    const fExiste = `IF(B${r}="","",IF(ISNUMBER(${matchExpr}),"SÍ","NO"))`;
+    const fEmpresa = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$A$3:$A$${lastRow},${matchExpr}),"")`;
+    const fProv = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$D$3:$D$${lastRow},${matchExpr}),"")`;
+    const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},${matchExpr}),"")`;
+    const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},${matchExpr}),"")`;
     const fFiltro = `IF(F${r}="","",IF(F${r}<5500000,"< $5.5M (Autofirma)","≥ $5.5M (Manual)"))`;
     const fF1 = `IF(F${r}="","",IF(F${r}<5500000,"Firma 1 Automática (Tomas)","Requiere Firma 1"))`;
     const fDiag = `IF(F${r}="","",IF(F${r}<5500000,"Mandada (Espera 2da Firma)","Mandada (Espera 1ra Firma)"))`;
@@ -1112,14 +1114,15 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   });
 
   for (let r = 5; r <= 124; r++) {
-    const fNum = `IF(ISNUMBER(SEARCH("OC ", A${r})), TRIM(MID(SUBSTITUTE(TRIM(MID(A${r}, SEARCH("OC ", A${r}) + 3, 30)), " ", REPT(" ", 30)), 1, 30)), "")`;
-    const fExiste = `IF(B${r}="","",IF(ISNUMBER(MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"SÍ","NO"))`;
-    const fEmpresa = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$A$3:$A$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fProv = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$D$3:$D$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fF1 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$I$3:$I$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
-    const fF2 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$K$3:$K$${lastRow},MATCH(B${r},'Órdenes de Compra'!$C$3:$C$${lastRow},0)),"")`;
+    const fNum = `IF(A${r}="","",IFERROR(VALUE(IF(ISNUMBER(SEARCH("OC",A${r})),TRIM(MID(SUBSTITUTE(SUBSTITUTE(TRIM(MID(A${r},SEARCH("OC",A${r})+2,30)),":"," ")," ",REPT(" ",30)),1,30)),TRIM(MID(SUBSTITUTE(TRIM(A${r})," ",REPT(" ",30)),1,30)))),IF(ISNUMBER(SEARCH("OC",A${r})),TRIM(MID(SUBSTITUTE(SUBSTITUTE(TRIM(MID(A${r},SEARCH("OC",A${r})+2,30)),":"," ")," ",REPT(" ",30)),1,30)),TRIM(MID(SUBSTITUTE(TRIM(A${r})," ",REPT(" ",30)),1,30)))))`;
+    const matchExpr = `IFERROR(MATCH(IFERROR(VALUE(SUBSTITUTE(SUBSTITUTE(TRIM(B${r}),"OC","")," ","")),TRIM(B${r})),'Órdenes de Compra'!$C$3:$C$${lastRow},0),MATCH(TRIM(B${r}),'Órdenes de Compra'!$C$3:$C$${lastRow},0))`;
+    const fExiste = `IF(B${r}="","",IF(ISNUMBER(${matchExpr}),"SÍ","NO"))`;
+    const fEmpresa = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$A$3:$A$${lastRow},${matchExpr}),"")`;
+    const fProv = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$D$3:$D$${lastRow},${matchExpr}),"")`;
+    const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},${matchExpr}),"")`;
+    const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},${matchExpr}),"")`;
+    const fF1 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$I$3:$I$${lastRow},${matchExpr}),"")`;
+    const fF2 = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$K$3:$K$${lastRow},${matchExpr}),"")`;
     const fNivel = `IF(F${r}="","",IF(F${r}<=5000000,"Nivel 1 (<= 5M)",IF(F${r}<=18000000,"Nivel 2 (5M a 18M)",IF(F${r}<=150000000,"Nivel 3 (18M a 150M)","Nivel 4 (> 150M)"))))`;
     const fRol = `IF(OR(B${r}="",$B$2=""),"",IF(F${r}<=5000000,IF($B$2="Tomas","Firma 1",IF(OR($B$2="Victoria",$B$2="Tristan",$B$2="Pablo Gonzalez",$B$2="Jorgelina"),"Firma 2","No corresponde")),IF(F${r}<=18000000,IF($B$2="Pablo Mondelo","Firma 1",IF($B$2="Dario","Firma 2","No corresponde")),IF(F${r}<=150000000,IF(OR($B$2="Matias",$B$2="Hernan"),"Firma 1",IF($B$2="Dario","Firma 2","No corresponde")),IF(OR($B$2="Dario",$B$2="Hernan"),"Firma 1",IF($B$2="Martin","Firma 2","No corresponde"))))))`;
     const fAccion = `IF(B${r}="","",IF(G${r}="Liberada","Ya está 100% Liberada",IF(K${r}="No corresponde","Firmante no habilitado para este monto",IF(K${r}="Firma 1",IF(H${r}="Sí","Ya tiene Firma 1",IF(I${r}="Sí","Aplica Firma 1 -> ¡100% LIBERADA!","Aplica Firma 1 (Pendiente F2)")),IF(K${r}="Firma 2",IF(I${r}="Sí","Ya tiene Firma 2",IF(H${r}="Sí","Aplica Firma 2 -> ¡100% LIBERADA!","Aplica Firma 2 (Pendiente F1)")),"")))))`;
@@ -1691,12 +1694,14 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "",
     "Sub AplicarFirmasDesdePegadoMasivo()",
     "    Dim wsBatch As Worksheet, wsOC As Worksheet",
-    "    Dim firmante As String, ocNum As String, rol As String, accion As String",
+    "    Dim firmante As String, rol As String, accion As String",
+    "    Dim ocVal As Variant, rawStr As String, cleanStr As String",
     "    Dim r As Long, lastBatchRow As Long, lastOCRow As Long, rowOC As Variant",
     "    Dim cantFirmadas As Long, cantLiberadas As Long",
     "    ",
     "    Set wsBatch = ThisWorkbook.Sheets(\"Pegado Masivo (Batch)\")",
     "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ThisWorkbook.Sheets(\"Ordenes de Compra\")",
     "    firmante = Trim(wsBatch.Range(\"B2\").Value)",
     "    If firmante = \"\" Then MsgBox \"Selecciona un firmante en B2.\", vbExclamation: Exit Sub",
     "    ",
@@ -1705,12 +1710,30 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    cantFirmadas = 0: cantLiberadas = 0",
     "    ",
     "    For r = 5 To lastBatchRow",
-    "        ocNum = Trim(wsBatch.Cells(r, 2).Value)",
-    "        rol = Trim(wsBatch.Cells(r, 11).Value)",
-    "        accion = Trim(wsBatch.Cells(r, 12).Value)",
+    "        ocVal = \"\"",
+    "        If Not IsError(wsBatch.Cells(r, 2).Value) Then ocVal = wsBatch.Cells(r, 2).Value",
+    "        If Trim(CStr(ocVal)) = \"\" And Not IsError(wsBatch.Cells(r, 1).Value) Then",
+    "            ocVal = wsBatch.Cells(r, 1).Value",
+    "        End If",
     "        ",
-    "        If ocNum <> \"\" And (rol = \"Firma 1\" Or rol = \"Firma 2\") Then",
-    "            rowOC = Application.Match(ocNum, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "        rol = Trim(CStr(wsBatch.Cells(r, 11).Value))",
+    "        accion = Trim(CStr(wsBatch.Cells(r, 12).Value))",
+    "        rawStr = Trim(CStr(ocVal))",
+    "        ",
+    "        If rawStr <> \"\" And (rol = \"Firma 1\" Or rol = \"Firma 2\") Then",
+    "            cleanStr = Trim(Replace(Replace(Replace(UCase(rawStr), \"OC\", \"\"), \":\", \"\"), \"-\", \"\"))",
+    "            rowOC = CVErr(xlErrNA)",
+    "            ",
+    "            If IsNumeric(cleanStr) Then",
+    "                rowOC = Application.Match(CLng(Val(cleanStr)), wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            If IsError(rowOC) And cleanStr <> \"\" Then",
+    "                rowOC = Application.Match(cleanStr, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            If IsError(rowOC) Then",
+    "                rowOC = Application.Match(rawStr, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            ",
     "            If Not IsError(rowOC) Then",
     "                If rol = \"Firma 1\" Then",
     "                    wsOC.Cells(rowOC, 8).Value = firmante",
@@ -1741,7 +1764,7 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "",
     "Sub ProcesarEnviadosAFirmar()",
     "    Dim wsEnv As Worksheet, wsOC As Worksheet",
-    "    Dim firmante As String, ocNum As String",
+    "    Dim firmante As String, ocVal As Variant, rawStr As String, cleanStr As String",
     "    Dim r As Long, lastBatchRow As Long, lastOCRow As Long, rowOC As Variant, cant As Long",
     "    ",
     "    On Error Resume Next",
@@ -1763,9 +1786,27 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    cant = 0",
     "    ",
     "    For r = 5 To lastBatchRow",
-    "        ocNum = Trim(wsEnv.Cells(r, 2).Value)",
-    "        If ocNum <> \"\" Then",
-    "            rowOC = Application.Match(ocNum, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "        ocVal = \"\"",
+    "        If Not IsError(wsEnv.Cells(r, 2).Value) Then ocVal = wsEnv.Cells(r, 2).Value",
+    "        If Trim(CStr(ocVal)) = \"\" And Not IsError(wsEnv.Cells(r, 1).Value) Then",
+    "            ocVal = wsEnv.Cells(r, 1).Value",
+    "        End If",
+    "        ",
+    "        rawStr = Trim(CStr(ocVal))",
+    "        If rawStr <> \"\" Then",
+    "            cleanStr = Trim(Replace(Replace(Replace(UCase(rawStr), \"OC\", \"\"), \":\", \"\"), \"-\", \"\"))",
+    "            rowOC = CVErr(xlErrNA)",
+    "            ",
+    "            If IsNumeric(cleanStr) Then",
+    "                rowOC = Application.Match(CLng(Val(cleanStr)), wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            If IsError(rowOC) And cleanStr <> \"\" Then",
+    "                rowOC = Application.Match(cleanStr, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            If IsError(rowOC) Then",
+    "                rowOC = Application.Match(rawStr, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            ",
     "            If Not IsError(rowOC) Then",
     "                If wsOC.Cells(rowOC, 7).Value <> \"Liberada\" Then",
     "                    ' Cambiar estado a Mandada con color ámbar",
@@ -1775,7 +1816,7 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "                    wsOC.Cells(rowOC, 7).Font.Bold = True",
     "                    ",
     "                    ' Si aún no tiene Firma 1, se asigna a Firmante 1",
-    "                    If Trim(wsOC.Cells(rowOC, 9).Value) <> \"Sí\" Then",
+    "                    If Trim(CStr(wsOC.Cells(rowOC, 9).Value)) <> \"Sí\" Then",
     "                        wsOC.Cells(rowOC, 8).Value = firmante",
     "                        wsOC.Cells(rowOC, 9).Value = \"No\"",
     "                    Else",
@@ -1799,7 +1840,8 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "",
     "Sub ProcesarEnviadosATomas()",
     "    Dim wsTom As Worksheet, wsOC As Worksheet",
-    "    Dim ocNum As String, monto As Double",
+    "    Dim ocVal As Variant, rawStr As String, cleanStr As String",
+    "    Dim monto As Double",
     "    Dim r As Long, lastBatchRow As Long, lastOCRow As Long, rowOC As Variant",
     "    Dim cantTotal As Long, cantAutoFirma As Long",
     "    ",
@@ -1819,17 +1861,41 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    cantTotal = 0: cantAutoFirma = 0",
     "    ",
     "    For r = 5 To lastBatchRow",
-    "        ocNum = Trim(wsTom.Cells(r, 2).Value)",
-    "        If ocNum <> \"\" Then",
-    "            rowOC = Application.Match(ocNum, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "        ocVal = \"\"",
+    "        If Not IsError(wsTom.Cells(r, 2).Value) Then ocVal = wsTom.Cells(r, 2).Value",
+    "        If Trim(CStr(ocVal)) = \"\" And Not IsError(wsTom.Cells(r, 1).Value) Then",
+    "            ocVal = wsTom.Cells(r, 1).Value",
+    "        End If",
+    "        ",
+    "        rawStr = Trim(CStr(ocVal))",
+    "        If rawStr <> \"\" Then",
+    "            cleanStr = Trim(Replace(Replace(Replace(UCase(rawStr), \"OC\", \"\"), \":\", \"\"), \"-\", \"\"))",
+    "            rowOC = CVErr(xlErrNA)",
+    "            ",
+    "            If IsNumeric(cleanStr) Then",
+    "                rowOC = Application.Match(CLng(Val(cleanStr)), wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            If IsError(rowOC) And cleanStr <> \"\" Then",
+    "                rowOC = Application.Match(cleanStr, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            If IsError(rowOC) Then",
+    "                rowOC = Application.Match(rawStr, wsOC.Range(\"C1:C\" & lastOCRow), 0)",
+    "            End If",
+    "            ",
     "            If Not IsError(rowOC) Then",
-    "                monto = Val(wsOC.Cells(rowOC, 5).Value)",
+    "                If IsNumeric(wsOC.Cells(rowOC, 5).Value) Then",
+    "                    monto = CDbl(wsOC.Cells(rowOC, 5).Value)",
+    "                Else",
+    "                    monto = Val(Replace(Replace(CStr(wsOC.Cells(rowOC, 5).Value), \"$\", \"\"), \".\", \"\"))",
+    "                End If",
+    "                ",
     "                If wsOC.Cells(rowOC, 7).Value <> \"Liberada\" Then",
     "                    wsOC.Cells(rowOC, 7).Value = \"Mandada\"",
     "                    wsOC.Cells(rowOC, 7).Interior.Color = RGB(254, 243, 199)",
     "                    wsOC.Cells(rowOC, 7).Font.Color = RGB(180, 83, 9)",
     "                    wsOC.Cells(rowOC, 7).Font.Bold = True",
     "                End If",
+    "                ",
     "                ' Regla menor a 5.500.000: Firma 1 de Tomás es automática",
     "                If monto < 5500000 Then",
     "                    wsOC.Cells(rowOC, 8).Value = \"Tomas\"",
