@@ -59,6 +59,7 @@ import { OrderCmdBar } from "@/components/ordenes/OrderCmdBar";
 import { OrderStatusMenu } from "@/components/ordenes/OrderStatusMenu";
 import { DolarVentaBadge } from "@/components/ordenes/DolarVentaBadge";
 import { exportToExcel } from "@/lib/exportToExcel";
+import { exportFinalExcel } from "@/lib/exportFinalExcel";
 import { syncOrderToMongo, deleteOrderFromMongo, fetchOrdersFromMongo, fetchOrdersStatsFromMongo, parseMongoDocToOrdenCompra, getTimestampSeconds } from "@/lib/serverSync";
 import { registerNewProvider, getProvidersRegistry, cleanLegalSuffixDots } from "@/lib/providersRegistry";
 import { 
@@ -99,6 +100,7 @@ export default function OrdenesDeComprasPage() {
   const [loadingAllDb, setLoadingAllDb] = useState(false);
   const [isServerOffline, setIsServerOffline] = useState(false);
   const [isFallbackSearchingFirebase, setIsFallbackSearchingFirebase] = useState(false);
+  const [isExportingFinalExcel, setIsExportingFinalExcel] = useState(false);
 
   // Filter creator state
   const [filterCreadoPor, setFilterCreadoPor] = useState<string>("todos");
@@ -589,6 +591,80 @@ export default function OrdenesDeComprasPage() {
 
     exportToExcel(dataToExport, `Ordenes_Compra_${new Date().toISOString().split("T")[0]}`);
     showToast("📊 Planilla de Órdenes exportada a Excel");
+  };
+
+  // Descargar Excel Final maestro con fórmulas, firmantes, batch y macros
+  const handleDownloadFinalExcel = async () => {
+    if (isExportingFinalExcel) return;
+    setIsExportingFinalExcel(true);
+    showToast("⏳ Preparando y generando el Excel Final...");
+
+    try {
+      let ordersToExport = ordenes;
+
+      // Si no están todas las órdenes cargadas de la base de datos, las traemos todas
+      if (!hasLoadedAllFromDb) {
+        try {
+          const res = await fetchOrdersFromMongo({
+            limit: 0,
+            sort: "numOC",
+          });
+          if (res && res.success && Array.isArray(res.ordenes) && res.ordenes.length > 0) {
+            ordersToExport = res.ordenes.map((docItem: any) => {
+              let createdAtObj: any = null;
+              if (docItem.fechaOC) {
+                const d = new Date(docItem.fechaOC);
+                createdAtObj = {
+                  seconds: Math.floor(d.getTime() / 1000),
+                  nanoseconds: 0,
+                };
+              } else if (docItem.createdAtFirebase) {
+                const d = new Date(docItem.createdAtFirebase);
+                createdAtObj = {
+                  seconds: Math.floor(d.getTime() / 1000),
+                  nanoseconds: 0,
+                };
+              } else if (docItem.createdAt) {
+                const d = new Date(docItem.createdAt);
+                createdAtObj = {
+                  seconds: Math.floor(d.getTime() / 1000),
+                  nanoseconds: 0,
+                };
+              }
+
+              return parseOrdenDoc(docItem.firebaseId || docItem._id, {
+                ...docItem,
+                createdAt: createdAtObj,
+              });
+            });
+
+            // Actualizar estado en memoria para que ya quede todo disponible
+            setOrdenes(ordersToExport);
+            setHasLoadedAllFromDb(true);
+          }
+        } catch (fetchErr) {
+          console.warn("Aviso al obtener todas las órdenes para Excel Final, usando las en memoria:", fetchErr);
+        }
+      }
+
+      // Ordenar por N° OC descendente
+      const sortedOrders = [...ordersToExport].sort((a, b) => {
+        const numA = parseInt(a.numOC, 10) || 0;
+        const numB = parseInt(b.numOC, 10) || 0;
+        if (numB !== numA) return numB - numA;
+        const timeA = getTimestampSeconds(a.createdAt);
+        const timeB = getTimestampSeconds(b.createdAt);
+        return timeB - timeA;
+      });
+
+      exportFinalExcel(sortedOrders);
+      showToast(`📊 ¡Excel Final descargado con ${sortedOrders.length} órdenes!`);
+    } catch (err) {
+      console.error("Error al exportar Excel Final:", err);
+      showToast("❌ Error al generar el Excel Final");
+    } finally {
+      setIsExportingFinalExcel(false);
+    }
   };
 
   // Sync Bidirectional relationships for OCs in Firestore (Full Clique/Transitive Sync)
@@ -1507,6 +1583,24 @@ Forma de Pago: ${orden.formaPago}${notasPart}${linkPart}`;
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Exportar Excel</span>
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.12, ease: EASE_OUT }}
+              onClick={handleDownloadFinalExcel}
+              disabled={isExportingFinalExcel}
+              className={`flex px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-xs transition-all items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/30 cursor-pointer ${
+                isExportingFinalExcel ? "opacity-75 cursor-not-allowed" : ""
+              }`}
+              title="Descargar el Excel Maestro final con fórmulas vivas de copia rápida, CMD de carpetas, resumen de firmantes y macros"
+            >
+              {isExportingFinalExcel ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+              ) : (
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span>{isExportingFinalExcel ? "Generando..." : "Descargar Excel Final"}</span>
             </motion.button>
 
             {!isOrdenesUser && (
