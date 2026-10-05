@@ -582,7 +582,7 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     else if (o.liberada || (o.firmado1 && o.firmado2)) estadoStr = "Liberada";
     else if (o.mandada) estadoStr = "Mandada";
 
-    if (estadoStr !== "Mandada") return;
+    if (estadoStr !== "Mandada" && estadoStr !== "Pendiente") return;
 
     const numMonto = parseMontoToNumber(o.monto);
     const f1Ok = Boolean(o.firmado1);
@@ -2197,7 +2197,7 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    For grupo = 1 To 4",
     "        For r = 3 To lastOCRow",
     "            est = Trim(wsOC.Cells(r, 7).Value)",
-    "            If est = \"Mandada\" Then",
+    "            If est = \"Mandada\" Or est = \"Pendiente\" Then",
     "                f1 = Trim(wsOC.Cells(r, 8).Value)",
     "                f1Ok = Trim(wsOC.Cells(r, 9).Value)",
     "                f2 = Trim(wsOC.Cells(r, 10).Value)",

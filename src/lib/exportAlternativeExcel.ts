@@ -660,6 +660,209 @@ export async function exportAlternativeExcel(ordenes: OrdenCompra[]) {
     wsProceso.addImage(id, { tl: { col: 10.02, row: 0.06 }, ext: { width: 190, height: 26 } });
   }
 
+  // Pre-poblar todas las órdenes activas en el ciclo de liberación (Mandadas y Pendientes)
+  const itemsProceso: {
+    order: OrdenCompra;
+    ocNumVal: number | string;
+    grupoId: number;
+    estadoLiberacion: string;
+    enviadoA: string;
+    firmado1Str: string;
+    firmado2Str: string;
+    linkDestino: { text: string; hyperlink: string };
+    bgColor: string;
+    textColor: string;
+  }[] = [];
+
+  sortedOrders.forEach((o) => {
+    let estadoStr = "Pendiente";
+    if (o.cancelada) estadoStr = "Cancelada";
+    else if (o.entregada) estadoStr = "Entregada";
+    else if (o.liberada || (o.firmado1 && o.firmado2)) estadoStr = "Liberada";
+    else if (o.mandada) estadoStr = "Mandada";
+
+    if (estadoStr !== "Mandada" && estadoStr !== "Pendiente") return;
+
+    let numMonto = 0;
+    if (typeof o.monto === "number") {
+      numMonto = o.monto;
+    } else if (typeof o.monto === "string") {
+      const cleaned = (o.monto as string).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
+      numMonto = parseFloat(cleaned) || 0;
+    }
+
+    const f1Ok = Boolean(o.firmado1);
+    const f2Ok = Boolean(o.firmado2);
+
+    let f1Name = (o.firmante1 || o.enviadoA1 || "").trim();
+    let f2Name = (o.firmante2 || o.enviadoA2 || "").trim();
+    if (f1Name) f1Name = normalizeSignerName(f1Name);
+    if (f2Name) f2Name = normalizeSignerName(f2Name);
+
+    const numOCInt = parseInt(o.numOC, 10);
+    const ocNumVal = !isNaN(numOCInt) && numOCInt > 0 ? numOCInt : (o.numOC || "");
+
+    let grupoId = 1;
+    let estadoLiberacion = "● Sin mandar a nadie";
+    let enviadoA = "(Sin enviar)";
+    let linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+    let bgColor = "FEE2E2"; // Soft red
+    let textColor = "991B1B";
+
+    if (!f1Ok && !f2Ok) {
+      if (f1Name && f1Name !== "(Sin enviar)") {
+        grupoId = 3;
+        estadoLiberacion = "● Enviada a 1ra Firma";
+        enviadoA = f1Name;
+        linkDestino = { text: "Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        bgColor = "FFEDD5";
+        textColor = "C2410C";
+      } else {
+        grupoId = 1;
+        estadoLiberacion = "● Sin mandar a nadie";
+        enviadoA = "(Sin enviar)";
+        if (numMonto < 5500000) {
+          linkDestino = { text: "Ir a Enviados a Tomas", hyperlink: "#'Enviados a Tomas'!A1" };
+        } else {
+          linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        }
+        bgColor = "FEE2E2";
+        textColor = "991B1B";
+      }
+    } else if (f1Ok && !f2Ok) {
+      if (f2Name && f2Name !== "(Sin enviar)") {
+        grupoId = 4;
+        estadoLiberacion = "● Enviada a 2da Firma";
+        enviadoA = f2Name;
+        linkDestino = { text: "Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        bgColor = "F3E8FF";
+        textColor = "7E22CE";
+      } else {
+        grupoId = 2;
+        estadoLiberacion = "● Esperando envío a 2da firma";
+        enviadoA = "(Sin enviar a 2da)";
+        linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        bgColor = "FEF3C7";
+        textColor = "B45309";
+      }
+    } else if (!f1Ok && f2Ok) {
+      if (f1Name && f1Name !== "(Sin enviar)") {
+        grupoId = 3;
+        estadoLiberacion = "● Enviada a 1ra Firma";
+        enviadoA = f1Name;
+        linkDestino = { text: "Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        bgColor = "FFEDD5";
+        textColor = "C2410C";
+      } else {
+        grupoId = 1;
+        estadoLiberacion = "● Sin mandar a nadie";
+        enviadoA = "(Sin enviar a 1ra)";
+        linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        bgColor = "FEE2E2";
+        textColor = "991B1B";
+      }
+    }
+
+    itemsProceso.push({
+      order: o,
+      ocNumVal,
+      grupoId,
+      estadoLiberacion,
+      enviadoA,
+      firmado1Str: f1Ok ? "Sí" : "No",
+      firmado2Str: f2Ok ? "Sí" : "No",
+      linkDestino,
+      bgColor,
+      textColor,
+    });
+  });
+
+  // Ordenar por grupo (1 -> 2 -> 3 -> 4) y luego por N° OC descendente
+  itemsProceso.sort((a, b) => {
+    if (a.grupoId !== b.grupoId) return a.grupoId - b.grupoId;
+    const numA = typeof a.ocNumVal === "number" ? a.ocNumVal : parseInt(String(a.ocNumVal), 10) || 0;
+    const numB = typeof b.ocNumVal === "number" ? b.ocNumVal : parseInt(String(b.ocNumVal), 10) || 0;
+    return numB - numA;
+  });
+
+  itemsProceso.forEach((item, idx) => {
+    const rowNum = idx + 3;
+    let numMonto = 0;
+    if (typeof item.order.monto === "number") {
+      numMonto = item.order.monto;
+    } else if (typeof item.order.monto === "string") {
+      const cleaned = (item.order.monto as string).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".");
+      numMonto = parseFloat(cleaned) || 0;
+    }
+
+    const row = wsProceso.addRow([
+      item.ocNumVal,
+      item.order.numSolicitud || "-",
+      item.order.empresa || "Hoyts",
+      item.order.razonSocial || "",
+      item.order.motivo || "",
+      numMonto,
+      item.estadoLiberacion,
+      item.enviadoA,
+      item.firmado1Str,
+      item.firmado2Str,
+      item.linkDestino,
+    ]);
+
+    row.height = 22;
+    const isEven = rowNum % 2 === 0;
+    const bgRowColor = isEven ? COLOR_ZEBRA : "FFFFFF";
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.font = { name: "Segoe UI", size: 9.5 };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFE2E8F0" } },
+        bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+        left: { style: "thin", color: { argb: "FFE2E8F0" } },
+        right: { style: "thin", color: { argb: "FFE2E8F0" } },
+      };
+
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + bgRowColor } };
+
+      if (colNumber === 1) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.numFmt = "0";
+        cell.font = { name: "Segoe UI", size: 9.5, bold: true };
+      } else if (colNumber === 2 || colNumber === 3) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        if (colNumber === 3) cell.font = { name: "Segoe UI", size: 9.5, bold: true };
+      } else if (colNumber === 4 || colNumber === 5) {
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      } else if (colNumber === 6) {
+        cell.alignment = { vertical: "middle", horizontal: "right" };
+        cell.numFmt = '"$"#,##0.00;("$"#,##0.00);"-"';
+      } else if (colNumber === 7) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + item.bgColor } };
+        cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + item.textColor } };
+      } else if (colNumber === 8) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.font = { name: "Segoe UI", size: 9.5, bold: true };
+      } else if (colNumber === 9 || colNumber === 10) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        const val = cell.value;
+        if (val === "Sí") {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_EMERALD_LIGHT } };
+          cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + COLOR_EMERALD } };
+        }
+      } else if (colNumber === 11) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "FF0284C7" }, underline: true };
+      }
+    });
+  });
+
+  const lastRowProc = Math.max(itemsProceso.length + 2, 3);
+  wsProceso.autoFilter = {
+    from: { row: 2, column: 1 },
+    to: { row: lastRowProc, column: 11 },
+  };
+
   wsProceso.columns = columnsProceso.map(c => ({ width: c.width }));
 
   // -------------------------------------------------------------------------
@@ -1665,7 +1868,7 @@ export async function exportAlternativeExcel(ordenes: OrdenCompra[]) {
     "    For grupo = 1 To 4",
     "        For r = 6 To lastOCRow",
     "            est = Trim(wsOC.Cells(r, 7).Value)",
-    "            If est = \"Mandada\" Then",
+    "            If est = \"Mandada\" Or est = \"Pendiente\" Then",
     "                f1 = Trim(wsOC.Cells(r, 8).Value)",
     "                f1Ok = Trim(wsOC.Cells(r, 9).Value)",
     "                f2 = Trim(wsOC.Cells(r, 10).Value)",
