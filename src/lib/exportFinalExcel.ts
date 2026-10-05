@@ -446,7 +446,318 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   });
 
   // -------------------------------------------------------------------------
-  // HOJA 2: Enviados a Firmar (NUEVA)
+  // HOJA 2: Proceso de Liberación (NUEVA)
+  // -------------------------------------------------------------------------
+  const wsProceso = wb.addWorksheet("Proceso de Liberación", {
+    views: [{ state: "frozen", ySplit: 2, showGridLines: true }],
+  });
+
+  // Fila 1: Banner Superior y Botones de Navegación Rápida
+  wsProceso.getRow(1).height = 34;
+
+  // A1:C1: Título de la Hoja
+  wsProceso.mergeCells("A1:C1");
+  const bannerProc = wsProceso.getCell("A1");
+  bannerProc.value = "PROCESO DE LIBERACIÓN - SEGUIMIENTO";
+  bannerProc.font = { name: "Segoe UI", size: 10.5, bold: true, color: { argb: "FFFFFFFF" } };
+  bannerProc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+  bannerProc.alignment = { vertical: "middle", horizontal: "center" };
+
+  // D1: Botón Actualizar
+  const btnProcAct = wsProceso.getCell("D1");
+  btnProcAct.value = "🔄 ACTUALIZAR";
+  btnProcAct.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+  btnProcAct.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } };
+  btnProcAct.alignment = { vertical: "middle", horizontal: "center" };
+
+  // E1:F1: Botón Enviados a Firmar
+  wsProceso.mergeCells("E1:F1");
+  const btnProcEnv = wsProceso.getCell("E1");
+  btnProcEnv.value = { text: "📨 ENVIADOS A FIRMAR", hyperlink: "#'Enviados a Firmar'!A1" };
+  btnProcEnv.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+  btnProcEnv.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFB45309" } };
+  btnProcEnv.alignment = { vertical: "middle", horizontal: "center" };
+
+  // G1:H1: Botón Enviados a Tomás
+  wsProceso.mergeCells("G1:H1");
+  const btnProcTom = wsProceso.getCell("G1");
+  btnProcTom.value = { text: "⚡ ENVIADOS A TOMÁS", hyperlink: "#'Enviados a Tomas'!A1" };
+  btnProcTom.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+  btnProcTom.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0284C7" } };
+  btnProcTom.alignment = { vertical: "middle", horizontal: "center" };
+
+  // I1:J1: Botón Pegar Firmas
+  wsProceso.mergeCells("I1:J1");
+  const btnProcPeg = wsProceso.getCell("I1");
+  btnProcPeg.value = { text: "✍️ PEGAR FIRMAS", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+  btnProcPeg.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+  btnProcPeg.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7C3AED" } };
+  btnProcPeg.alignment = { vertical: "middle", horizontal: "center" };
+
+  // K1: Botón Todas las OC
+  const btnProcOC = wsProceso.getCell("K1");
+  btnProcOC.value = { text: "📋 TODAS LAS OC", hyperlink: "#'Órdenes de Compra'!A1" };
+  btnProcOC.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+  btnProcOC.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+  btnProcOC.alignment = { vertical: "middle", horizontal: "center" };
+
+  // Formas flotantes para los botones de navegación
+  const imgProcAct = createButtonImage("🔄 ACTUALIZAR", "#166534");
+  if (imgProcAct) {
+    const id = wb.addImage({ base64: imgProcAct, extension: "png" });
+    wsProceso.addImage(id, { tl: { col: 3.02, row: 0.06 }, ext: { width: 175, height: 30 } });
+  }
+
+  const imgProcEnv = createButtonImage("📨 ENVIADOS A FIRMAR", "#B45309");
+  if (imgProcEnv) {
+    const id = wb.addImage({ base64: imgProcEnv, extension: "png" });
+    wsProceso.addImage(id, { tl: { col: 4.02, row: 0.06 }, ext: { width: 185, height: 30 } });
+  }
+
+  const imgProcTom = createButtonImage("⚡ ENVIADOS A TOMÁS", "#0284C7");
+  if (imgProcTom) {
+    const id = wb.addImage({ base64: imgProcTom, extension: "png" });
+    wsProceso.addImage(id, { tl: { col: 6.02, row: 0.06 }, ext: { width: 185, height: 30 } });
+  }
+
+  const imgProcPeg = createButtonImage("✍️ PEGAR FIRMAS", "#7C3AED");
+  if (imgProcPeg) {
+    const id = wb.addImage({ base64: imgProcPeg, extension: "png" });
+    wsProceso.addImage(id, { tl: { col: 8.02, row: 0.06 }, ext: { width: 160, height: 30 } });
+  }
+
+  const imgProcOC = createButtonImage("📋 TODAS LAS OC", "#334155");
+  if (imgProcOC) {
+    const id = wb.addImage({ base64: imgProcOC, extension: "png" });
+    wsProceso.addImage(id, { tl: { col: 10.02, row: 0.06 }, ext: { width: 155, height: 30 } });
+  }
+
+  // Fila 2: Cabeceras de Columnas
+  const columnsProceso = [
+    { header: "N° OC", key: "numOC", width: 13 },
+    { header: "N° Solicitud (SC)", key: "sc", width: 16 },
+    { header: "Empresa", key: "empresa", width: 12 },
+    { header: "Proveedor / Razón Social", key: "proveedor", width: 34 },
+    { header: "Detalle / Motivo", key: "motivo", width: 38 },
+    { header: "Monto ($)", key: "monto", width: 18 },
+    { header: "Estado de Liberación", key: "estado", width: 28 },
+    { header: "Enviado a / Firmante", key: "enviadoA", width: 22 },
+    { header: "Firma 1", key: "f1", width: 12 },
+    { header: "Firma 2", key: "f2", width: 12 },
+    { header: "Ir a Hoja de Gestión", key: "accion", width: 24 },
+  ];
+
+  const headerRowProc = wsProceso.getRow(2);
+  headerRowProc.height = 28;
+  columnsProceso.forEach((col, i) => {
+    const cell = headerRowProc.getCell(i + 1);
+    cell.value = col.header;
+    cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    cell.border = {
+      bottom: { style: "medium", color: { argb: "FF09101D" } },
+      right: { style: "thin", color: { argb: "FF334155" } },
+    };
+  });
+
+  // Datos de Proceso de Liberación (Solo Mandadas)
+  const itemsProceso: {
+    order: OrdenCompra;
+    ocNumVal: number | string;
+    grupoId: number;
+    estadoLiberacion: string;
+    enviadoA: string;
+    firmado1Str: string;
+    firmado2Str: string;
+    linkDestino: { text: string; hyperlink: string };
+    bgColor: string;
+    textColor: string;
+  }[] = [];
+
+  sortedOrders.forEach((o) => {
+    let estadoStr = "Pendiente";
+    if (o.cancelada) estadoStr = "Cancelada";
+    else if (o.entregada) estadoStr = "Entregada";
+    else if (o.liberada || (o.firmado1 && o.firmado2)) estadoStr = "Liberada";
+    else if (o.mandada) estadoStr = "Mandada";
+
+    if (estadoStr !== "Mandada") return;
+
+    const numMonto = parseMontoToNumber(o.monto);
+    const f1Ok = Boolean(o.firmado1);
+    const f2Ok = Boolean(o.firmado2);
+
+    let f1Name = (o.firmante1 || o.enviadoA1 || "").trim();
+    let f2Name = (o.firmante2 || o.enviadoA2 || "").trim();
+    if (f1Name) f1Name = normalizeSignerName(f1Name);
+    if (f2Name) f2Name = normalizeSignerName(f2Name);
+
+    const numOCInt = parseInt(o.numOC, 10);
+    const ocNumVal = !isNaN(numOCInt) && numOCInt > 0 ? numOCInt : (o.numOC || "");
+
+    let grupoId = 1;
+    let estadoLiberacion = "🔴 Sin mandar a nadie";
+    let enviadoA = "(Sin enviar)";
+    let linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+    let bgColor = "FEE2E2"; // Soft red
+    let textColor = "991B1B";
+
+    if (!f1Ok && !f2Ok) {
+      if (f1Name && f1Name !== "(Sin enviar)") {
+        grupoId = 3;
+        estadoLiberacion = "🟠 Enviada a 1ra Firma";
+        enviadoA = f1Name;
+        linkDestino = { text: "✍️ Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        bgColor = "FFEDD5";
+        textColor = "C2410C";
+      } else {
+        grupoId = 1;
+        estadoLiberacion = "🔴 Sin mandar a nadie";
+        enviadoA = "(Sin enviar)";
+        if (numMonto < 5500000) {
+          linkDestino = { text: "⚡ Ir a Enviados a Tomas", hyperlink: "#'Enviados a Tomas'!A1" };
+        } else {
+          linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        }
+        bgColor = "FEE2E2";
+        textColor = "991B1B";
+      }
+    } else if (f1Ok && !f2Ok) {
+      if (f2Name && f2Name !== "(Sin enviar)") {
+        grupoId = 4;
+        estadoLiberacion = "🟣 Enviada a 2da Firma";
+        enviadoA = f2Name;
+        linkDestino = { text: "✍️ Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        bgColor = "F3E8FF";
+        textColor = "7E22CE";
+      } else {
+        grupoId = 2;
+        estadoLiberacion = "🟡 Esperando envío a 2da firma";
+        enviadoA = "(Sin enviar a 2da)";
+        linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        bgColor = "FEF3C7";
+        textColor = "B45309";
+      }
+    } else if (!f1Ok && f2Ok) {
+      if (f1Name && f1Name !== "(Sin enviar)") {
+        grupoId = 3;
+        estadoLiberacion = "🟠 Enviada a 1ra Firma";
+        enviadoA = f1Name;
+        linkDestino = { text: "✍️ Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        bgColor = "FFEDD5";
+        textColor = "C2410C";
+      } else {
+        grupoId = 1;
+        estadoLiberacion = "🔴 Sin mandar a nadie";
+        enviadoA = "(Sin enviar a 1ra)";
+        linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        bgColor = "FEE2E2";
+        textColor = "991B1B";
+      }
+    }
+
+    itemsProceso.push({
+      order: o,
+      ocNumVal,
+      grupoId,
+      estadoLiberacion,
+      enviadoA,
+      firmado1Str: f1Ok ? "Sí" : "No",
+      firmado2Str: f2Ok ? "Sí" : "No",
+      linkDestino,
+      bgColor,
+      textColor,
+    });
+  });
+
+  // Ordenar por grupo (1 -> 2 -> 3 -> 4) y luego por N° OC descendente
+  itemsProceso.sort((a, b) => {
+    if (a.grupoId !== b.grupoId) return a.grupoId - b.grupoId;
+    const numA = typeof a.ocNumVal === "number" ? a.ocNumVal : parseInt(String(a.ocNumVal), 10) || 0;
+    const numB = typeof b.ocNumVal === "number" ? b.ocNumVal : parseInt(String(b.ocNumVal), 10) || 0;
+    return numB - numA;
+  });
+
+  itemsProceso.forEach((item, idx) => {
+    const rowNum = idx + 3;
+    const numMonto = parseMontoToNumber(item.order.monto);
+
+    const row = wsProceso.addRow([
+      item.ocNumVal,
+      item.order.numSolicitud || "-",
+      item.order.empresa || "Hoyts",
+      item.order.razonSocial || "",
+      item.order.motivo || "",
+      numMonto,
+      item.estadoLiberacion,
+      item.enviadoA,
+      item.firmado1Str,
+      item.firmado2Str,
+      item.linkDestino,
+    ]);
+
+    row.height = 22;
+    const isEven = rowNum % 2 === 0;
+    const bgRowColor = isEven ? COLOR_ZEBRA : "FFFFFF";
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.font = { name: "Segoe UI", size: 9.5 };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FF" + COLOR_BORDER } },
+        bottom: { style: "thin", color: { argb: "FF" + COLOR_BORDER } },
+        left: { style: "thin", color: { argb: "FF" + COLOR_BORDER } },
+        right: { style: "thin", color: { argb: "FF" + COLOR_BORDER } },
+      };
+
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + bgRowColor } };
+
+      if (colNumber === 1) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.numFmt = "0";
+        cell.font = { name: "Segoe UI", size: 9.5, bold: true };
+      } else if (colNumber === 2 || colNumber === 3) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        if (colNumber === 3) cell.font = { name: "Segoe UI", size: 9.5, bold: true };
+      } else if (colNumber === 4 || colNumber === 5) {
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      } else if (colNumber === 6) {
+        cell.alignment = { vertical: "middle", horizontal: "right" };
+        cell.numFmt = '"$"#,##0.00;("$"#,##0.00);"-"';
+      } else if (colNumber === 7) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + item.bgColor } };
+        cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + item.textColor } };
+      } else if (colNumber === 8) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.font = { name: "Segoe UI", size: 9.5, bold: true };
+      } else if (colNumber === 9 || colNumber === 10) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        const val = cell.value;
+        if (val === "Sí") {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_EMERALD_LIGHT } };
+          cell.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FF" + COLOR_EMERALD } };
+        }
+      } else if (colNumber === 11) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "FF1D4ED8" }, underline: true };
+      }
+    });
+  });
+
+  // Ajuste de anchos y autofiltro
+  columnsProceso.forEach((col, idx) => {
+    wsProceso.getColumn(idx + 1).width = col.width;
+  });
+
+  const lastRowProc = Math.max(itemsProceso.length + 2, 3);
+  wsProceso.autoFilter = {
+    from: { row: 2, column: 1 },
+    to: { row: lastRowProc, column: 11 },
+  };
+
+  // -------------------------------------------------------------------------
+  // HOJA 3: Enviados a Firmar
   // -------------------------------------------------------------------------
   const wsEnviados = wb.addWorksheet("Enviados a Firmar", {
     views: [{ showGridLines: true }],
@@ -1229,6 +1540,8 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "6) ¡Listo! Podés asignar cada macro haciendo clic derecho en cada botón -> 'Asignar macro'.",
     "",
     "2. QUÉ HACE CADA BOTÓN Y MACRO:",
+    "• Hoja [Proceso de Liberación]:",
+    "  Control en tiempo real de todas las órdenes Mandadas, ordenadas por su estado (Sin mandar a nadie, Esperando envío a 2da firma, Enviadas a 1ra o 2da firma). Cuenta con botones rápidos para saltar a cada proceso.",
     "• Botón [➕ NUEVA OC] (Hoja Órdenes de Compra):",
     "  Inserta una orden en estado 'Pendiente' y reordena automáticamente toda la tabla por N° OC de MAYOR A MENOR.",
     "• Botón [📁 CMD MULTICARPETAS] (Hoja Órdenes de Compra):",
@@ -1417,6 +1730,7 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    Next r",
     "    ",
     "    Application.Calculate",
+    "    On Error Resume Next: ActualizarProcesoLiberacion: On Error GoTo 0",
     "    ",
     "    MsgBox \"¡Firmas aplicadas!\" & vbCrLf & \"• Firmadas por \" & firmante & \": \" & cantFirmadas & vbCrLf & \"• Quedaron 100% Liberadas: \" & cantLiberadas, vbInformation, \"Éxito\"",
     "End Sub",
@@ -1472,10 +1786,11 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    Next r",
     "    ",
     "    Application.Calculate",
+    "    On Error Resume Next: ActualizarProcesoLiberacion: On Error GoTo 0",
     "    ",
     "    MsgBox \"¡Órdenes registradas como Enviadas a Firmar a \" & firmante & \"!\" & vbCrLf & _",
     "           \"• Cantidad de órdenes procesadas: \" & cant & vbCrLf & _",
-    "           \"• Ahora figuran contabilizadas en la hoja 'Resumen Firmantes'.\", vbInformation, \"Enviadas Registradas\"",
+    "           \"• Ahora figuran contabilizadas en 'Resumen Firmantes' y 'Proceso de Liberación'.\", vbInformation, \"Enviadas Registradas\"",
     "End Sub",
     "",
     "Sub ProcesarEnviadosATomas()",
@@ -1527,12 +1842,13 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    Next r",
     "    ",
     "    Application.Calculate",
+    "    On Error Resume Next: ActualizarProcesoLiberacion: On Error GoTo 0",
     "    ",
     "    MsgBox \"¡Enviadas a Tomás procesadas!\" & vbCrLf & _",
     "           \"• Total pasadas a Mandadas: \" & cantTotal & vbCrLf & _",
     "           \"• Con Firma 1 de Tomás automática (< $5.5M): \" & cantAutoFirma & vbCrLf & _",
     "           \"• Esperando 1ra firma manual de Tomás (>= $5.5M): \" & (cantTotal - cantAutoFirma) & vbCrLf & _",
-    "           \"• Podés ver el seguimiento en 'Resumen Firmantes'.\", vbInformation, \"Tomas Procesado\"",
+    "           \"• Podés ver el seguimiento en 'Resumen Firmantes' y 'Proceso de Liberación'.\", vbInformation, \"Tomas Procesado\"",
     "End Sub",
     "",
     "Sub CopiarFormatoParaCorreo()",
@@ -1750,6 +2066,176 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    msgConfirm = msgConfirm & \"Abrí CMD y presioná Ctrl + V para ejecutarlo de inmediato.\"",
     "    ",
     "    MsgBox msgConfirm, vbInformation, \"CMD Carpetas Copiado\"",
+    "End Sub",
+    "",
+    "Sub EnviarPortapapelesTexto(ByVal texto As String)",
+    "    Dim MSForms_DataObject As Object",
+    "    On Error Resume Next",
+    "    Set MSForms_DataObject = CreateObject(\"New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}\")",
+    "    MSForms_DataObject.SetText texto",
+    "    MSForms_DataObject.PutInClipboard",
+    "    If Err.Number <> 0 Then",
+    "        Dim fso As Object, tempFile As String, shellObj As Object",
+    "        Set fso = CreateObject(\"Scripting.FileSystemObject\")",
+    "        tempFile = Environ(\"TEMP\") & \"\\clip_temp.txt\"",
+    "        With fso.CreateTextFile(tempFile, True, False)",
+    "            .Write texto",
+    "            .Close",
+    "        End With",
+    "        Set shellObj = CreateObject(\"WScript.Shell\")",
+    "        shellObj.Run \"cmd.exe /c type \"\"\" & tempFile & \"\"\" | clip\", 0, True",
+    "        fso.DeleteFile tempFile, True",
+    "    End If",
+    "    On Error GoTo 0",
+    "End Sub",
+    "",
+    "Sub ActualizarProcesoLiberacion()",
+    "    Dim wsOC As Worksheet, wsProc As Worksheet",
+    "    Dim lastOCRow As Long, lastProcRow As Long, r As Long, outRow As Long",
+    "    Dim ocNum As Variant, sol As String, emp As String, prov As String, mot As String",
+    "    Dim monto As Double, est As String, f1 As String, f1Ok As String, f2 As String, f2Ok As String",
+    "    Dim estLib As String, envA As String, linkText As String, linkSheet As String",
+    "    ",
+    "    On Error Resume Next",
+    "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ThisWorkbook.Sheets(\"Ordenes de Compra\")",
+    "    Set wsProc = ThisWorkbook.Sheets(\"Proceso de Liberación\")",
+    "    If wsProc Is Nothing Then Set wsProc = ThisWorkbook.Sheets(\"Proceso de Liberacion\")",
+    "    On Error GoTo 0",
+    "    ",
+    "    If wsOC Is Nothing Or wsProc Is Nothing Then Exit Sub",
+    "    ",
+    "    Application.ScreenUpdating = False",
+    "    ",
+    "    lastProcRow = wsProc.Cells(wsProc.Rows.Count, \"A\").End(xlUp).Row",
+    "    If lastProcRow >= 3 Then",
+    "        wsProc.Range(\"A3:K\" & lastProcRow).ClearContents",
+    "        wsProc.Range(\"A3:K\" & lastProcRow).Interior.ColorIndex = xlNone",
+    "    End If",
+    "    ",
+    "    lastOCRow = wsOC.Cells(wsOC.Rows.Count, \"C\").End(xlUp).Row",
+    "    outRow = 3",
+    "    ",
+    "    For r = 3 To lastOCRow",
+    "        est = Trim(wsOC.Cells(r, 7).Value)",
+    "        If est = \"Mandada\" Then",
+    "            ocNum = wsOC.Cells(r, 3).Value",
+    "            sol = wsOC.Cells(r, 2).Value",
+    "            emp = wsOC.Cells(r, 1).Value",
+    "            prov = wsOC.Cells(r, 4).Value",
+    "            mot = wsOC.Cells(r, 13).Value",
+    "            monto = Val(wsOC.Cells(r, 5).Value)",
+    "            f1 = Trim(wsOC.Cells(r, 8).Value)",
+    "            f1Ok = Trim(wsOC.Cells(r, 9).Value)",
+    "            f2 = Trim(wsOC.Cells(r, 10).Value)",
+    "            f2Ok = Trim(wsOC.Cells(r, 11).Value)",
+    "            ",
+    "            If f1Ok <> \"Sí\" And f2Ok <> \"Sí\" Then",
+    "                If f1 <> \"\" And f1 <> \"(Sin enviar)\" Then",
+    "                    estLib = \"🟠 Enviada a 1ra Firma\"",
+    "                    envA = f1",
+    "                    linkText = \"✍️ Ir a Pegado Masivo\"",
+    "                    linkSheet = \"Pegado Masivo (Batch)\"",
+    "                Else",
+    "                    estLib = \"🔴 Sin mandar a nadie\"",
+    "                    envA = \"(Sin enviar)\"",
+    "                    If monto < 5500000 Then",
+    "                        linkText = \"⚡ Ir a Enviados a Tomas\"",
+    "                        linkSheet = \"Enviados a Tomas\"",
+    "                    Else",
+    "                        linkText = \"📨 Ir a Enviados a Firmar\"",
+    "                        linkSheet = \"Enviados a Firmar\"",
+    "                    End If",
+    "                End If",
+    "            ElseIf f1Ok = \"Sí\" And f2Ok <> \"Sí\" Then",
+    "                If f2 <> \"\" And f2 <> \"(Sin enviar)\" Then",
+    "                    estLib = \"🟣 Enviada a 2da Firma\"",
+    "                    envA = f2",
+    "                    linkText = \"✍️ Ir a Pegado Masivo\"",
+    "                    linkSheet = \"Pegado Masivo (Batch)\"",
+    "                Else",
+    "                    estLib = \"🟡 Esperando envío a 2da firma\"",
+    "                    envA = \"(Sin enviar a 2da)\"",
+    "                    linkText = \"📨 Ir a Enviados a Firmar\"",
+    "                    linkSheet = \"Enviados a Firmar\"",
+    "                End If",
+    "            Else",
+    "                estLib = \"🟢 Lista para Liberar\"",
+    "                envA = \"Completa\"",
+    "                linkText = \"✍️ Ir a Pegado Masivo\"",
+    "                linkSheet = \"Pegado Masivo (Batch)\"",
+    "            End If",
+    "            ",
+    "            wsProc.Cells(outRow, 1).Value = ocNum",
+    "            wsProc.Cells(outRow, 2).Value = sol",
+    "            wsProc.Cells(outRow, 3).Value = emp",
+    "            wsProc.Cells(outRow, 4).Value = prov",
+    "            wsProc.Cells(outRow, 5).Value = mot",
+    "            wsProc.Cells(outRow, 6).Value = monto",
+    "            wsProc.Cells(outRow, 6).NumberFormat = \"\"\"$\"\"#,##0.00;(\"\"$\"\"#,##0.00);\"\"-\"\"\"",
+    "            wsProc.Cells(outRow, 7).Value = estLib",
+    "            wsProc.Cells(outRow, 8).Value = envA",
+    "            wsProc.Cells(outRow, 9).Value = f1Ok",
+    "            wsProc.Cells(outRow, 10).Value = f2Ok",
+    "            wsProc.Hyperlinks.Add Anchor:=wsProc.Cells(outRow, 11), Address:=\"\", SubAddress:=\"'\" & linkSheet & \"'!A1\", TextToDisplay:=linkText",
+    "            ",
+    "            If InStr(estLib, \"Sin mandar\") > 0 Then",
+    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(254, 226, 226)",
+    "                wsProc.Cells(outRow, 7).Font.Color = RGB(153, 27, 27)",
+    "            ElseIf InStr(estLib, \"Esperando envío\") > 0 Then",
+    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(254, 243, 199)",
+    "                wsProc.Cells(outRow, 7).Font.Color = RGB(180, 83, 9)",
+    "            ElseIf InStr(estLib, \"1ra Firma\") > 0 Then",
+    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(255, 237, 213)",
+    "                wsProc.Cells(outRow, 7).Font.Color = RGB(194, 65, 12)",
+    "            ElseIf InStr(estLib, \"2da Firma\") > 0 Then",
+    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(243, 232, 255)",
+    "                wsProc.Cells(outRow, 7).Font.Color = RGB(126, 34, 206)",
+    "            End If",
+    "            wsProc.Cells(outRow, 7).Font.Bold = True",
+    "            outRow = outRow + 1",
+    "        End If",
+    "    Next r",
+    "    ",
+    "    If outRow > 3 Then",
+    "        wsProc.Range(\"A2:K\" & (outRow - 1)).Sort Key1:=wsProc.Range(\"G2\"), Order1:=xlAscending, _",
+    "                                                 Key2:=wsProc.Range(\"A2\"), Order2:=xlDescending, _",
+    "                                                 Header:=xlYes, DataOption2:=xlSortTextAsNumbers",
+    "    End If",
+    "    ",
+    "    Application.ScreenUpdating = True",
+    "End Sub",
+    "",
+    "Sub IrAEnviadosAFirmar()",
+    "    On Error Resume Next",
+    "    ThisWorkbook.Sheets(\"Enviados a Firmar\").Activate",
+    "    On Error GoTo 0",
+    "End Sub",
+    "",
+    "Sub IrAEnviadosATomas()",
+    "    On Error Resume Next",
+    "    ThisWorkbook.Sheets(\"Enviados a Tomas\").Activate",
+    "    On Error GoTo 0",
+    "End Sub",
+    "",
+    "Sub IrAPegadoMasivo()",
+    "    On Error Resume Next",
+    "    ThisWorkbook.Sheets(\"Pegado Masivo (Batch)\").Activate",
+    "    On Error GoTo 0",
+    "End Sub",
+    "",
+    "Sub IrAOrdenesCompra()",
+    "    On Error Resume Next",
+    "    ThisWorkbook.Sheets(\"Órdenes de Compra\").Activate",
+    "    If Err.Number <> 0 Then ThisWorkbook.Sheets(\"Ordenes de Compra\").Activate",
+    "    On Error GoTo 0",
+    "End Sub",
+    "",
+    "Sub IrAProcesoLiberacion()",
+    "    On Error Resume Next",
+    "    ThisWorkbook.Sheets(\"Proceso de Liberación\").Activate",
+    "    If Err.Number <> 0 Then ThisWorkbook.Sheets(\"Proceso de Liberacion\").Activate",
+    "    On Error GoTo 0",
     "End Sub",
     "",
     "Sub EnviarPortapapelesTexto(ByVal texto As String)",
