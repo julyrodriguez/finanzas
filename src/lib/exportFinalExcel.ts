@@ -113,14 +113,36 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     views: [{ state: "frozen", ySplit: 2, showGridLines: true }],
   });
 
-  // Fila 1: Banner Superior y Botón [➕ NUEVA ORDEN DE COMPRA]
-  // Fila 1: Banner Superior y 3 Botones de Acción
-  wsOrdenes.mergeCells("A1:N1");
+  // Fila 1: Banner Superior, Casilla de Ruta SharePoint y 3 Botones de Acción
+  // A1:G1: Título del Sistema
+  wsOrdenes.mergeCells("A1:G1");
   const bannerOC = wsOrdenes.getCell("A1");
   bannerOC.value = "BASE DE CONTROL Y GESTIÓN DE ÓRDENES DE COMPRA";
-  bannerOC.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: "FF" + COLOR_HEADER_TXT } };
+  bannerOC.font = { name: "Segoe UI", size: 10.5, bold: true, color: { argb: "FF" + COLOR_HEADER_TXT } };
   bannerOC.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_NAVY } };
   bannerOC.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+
+  // H1:I1: Etiqueta de Ruta SharePoint
+  wsOrdenes.mergeCells("H1:I1");
+  const lblRuta = wsOrdenes.getCell("H1");
+  lblRuta.value = "📁 Ruta SharePoint:";
+  lblRuta.font = { name: "Segoe UI", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
+  lblRuta.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E293B" } };
+  lblRuta.alignment = { vertical: "middle", horizontal: "center" };
+
+  // J1:N1: Campo editable para pegar la ruta de SharePoint (para cd /d)
+  wsOrdenes.mergeCells("J1:N1");
+  const cellRuta = wsOrdenes.getCell("J1");
+  cellRuta.value = "(Pegá acá tu ruta de SharePoint)";
+  cellRuta.font = { name: "Segoe UI", size: 9, italic: true, color: { argb: "FF713F12" } };
+  cellRuta.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF9C3" } };
+  cellRuta.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  cellRuta.border = {
+    top: { style: "thin", color: { argb: "FF94A3B8" } },
+    bottom: { style: "thin", color: { argb: "FF94A3B8" } },
+    left: { style: "thin", color: { argb: "FF94A3B8" } },
+    right: { style: "thin", color: { argb: "FF94A3B8" } },
+  };
 
   // Botón 1: ➕ NUEVA OC (Col O y P)
   wsOrdenes.mergeCells("O1:P1");
@@ -262,10 +284,13 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     const formulaCopiar = `IF(G${rowNum}="Liberada", "OC 0" & C${rowNum} & " - " & D${rowNum}, "OC " & C${rowNum} & " " & A${rowNum} & CHAR(10) & "Proveedor: " & D${rowNum} & CHAR(10) & "Monto: " & TEXT(E${rowNum}, "$ #,##0") & CHAR(10) & "Detalle: " & M${rowNum} & CHAR(10) & "Forma de Pago: " & F${rowNum} & IF(P${rowNum}<>"", CHAR(10) & "Link: " & P${rowNum}, ""))`;
     const formulaCMD = `"mkdir ""OC " & C${rowNum} & " " & A${rowNum} & " " & SUBSTITUTE(D${rowNum}, """", "") & """"`;
 
+    const numOCInt = parseInt(o.numOC, 10);
+    const valOC = !isNaN(numOCInt) && numOCInt > 0 ? numOCInt : (o.numOC || "");
+
     const row = wsOrdenes.addRow([
       o.empresa || "Hoyts",
       o.numSolicitud || "-",
-      o.numOC || "",
+      valOC,
       o.razonSocial || "",
       numMonto,
       o.formaPago || "30DFF",
@@ -304,6 +329,9 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
       } else if (colNumber === 5) {
         cell.alignment = { vertical: "middle", horizontal: "right" };
         cell.numFmt = '"$"#,##0.00;("$"#,##0.00);"-"';
+      } else if (colNumber === 3) {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+        cell.numFmt = "0";
       } else {
         cell.alignment = { vertical: "middle", horizontal: "center" };
       }
@@ -1202,11 +1230,11 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "",
     "2. QUÉ HACE CADA BOTÓN Y MACRO:",
     "• Botón [➕ NUEVA OC] (Hoja Órdenes de Compra):",
-    "  Inserta una orden en la primera fila, con estado 'Pendiente' y ordenada automáticamente por N° OC.",
+    "  Inserta una orden en estado 'Pendiente' y reordena automáticamente toda la tabla por N° OC de MAYOR A MENOR.",
     "• Botón [📁 CMD MULTICARPETAS] (Hoja Órdenes de Compra):",
-    "  Copia los comandos mkdir para crear carpetas en CMD. Podés seleccionar 1 o VARIAS filas (con mouse o Ctrl), o copiar todas las órdenes visibles juntas.",
+    "  Copia los comandos para crear carpetas en CMD de las órdenes seleccionadas. Si definís la ruta en la casilla 'Ruta SharePoint' (J1), antepone 'cd /d \"<ruta>\"' automáticamente. Si no tenés ninguna OC seleccionada, no copia nada.",
     "• Botón [📋 COPIAR TEXTO MAIL] (Hoja Órdenes de Compra):",
-    "  Copia el texto de 1 o VARIAS órdenes seleccionadas (pintando varias filas con el mouse o con Ctrl) como TEXTO PURO para Outlook/Gmail.",
+    "  Copia el texto de 1 o VARIAS órdenes seleccionadas (pintando filas con mouse o Ctrl) como TEXTO PURO para Outlook/Gmail. Si no tenés ninguna OC seleccionada, no copia nada.",
     "• Botón [📨 REGISTRAR ENVÍO A FIRMAR] (Hoja Enviados a Firmar):",
     "  Pasa las órdenes pegadas a estado 'Mandada' y registra a qué firmante fueron enviadas.",
     "• Botón [⚡ PROCESAR ENVIADAS A TOMÁS] (Hoja Enviados a Tomas):",
@@ -1270,7 +1298,12 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    ' 6. Asignar valores (siempre se crea en estado Pendiente)",
     "    wsOC.Cells(3, 1).Value = empresa",
     "    wsOC.Cells(3, 2).Value = sol",
-    "    wsOC.Cells(3, 3).Value = oc",
+    "    If IsNumeric(oc) Then",
+    "        wsOC.Cells(3, 3).Value = CLng(oc)",
+    "    Else",
+    "        wsOC.Cells(3, 3).Value = Trim(oc)",
+    "    End If",
+    "    wsOC.Cells(3, 3).NumberFormat = \"0\"",
     "    wsOC.Cells(3, 4).Value = prov",
     "    wsOC.Cells(3, 5).Value = Val(Replace(Replace(montoStr, \".\", \"\"), \",\", \".\"))",
     "    wsOC.Cells(3, 5).NumberFormat = \"\"\"$\"\"#,##0.00;(\"\"$\"\"#,##0.00);\"\"-\"\"\"",
@@ -1315,11 +1348,22 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    End If",
     "    On Error GoTo 0",
     "    ",
-    "    ' 8. Reordenar toda la tabla por N° OC descendente (Método clásico directo)",
+    "    ' 8. Reordenar toda la tabla por N° OC (Columna C) de MAYOR A MENOR (Descendente)",
     "    On Error Resume Next",
+    "    If wsOC.FilterMode Then wsOC.ShowAllData",
     "    lastRow = wsOC.Cells(wsOC.Rows.Count, \"C\").End(xlUp).Row",
     "    If lastRow >= 3 Then",
-    "        wsOC.Range(\"A2:S\" & lastRow).Sort Key1:=wsOC.Range(\"C2\"), Order1:=xlDescending, Header:=xlYes",
+    "        If wsOC.AutoFilterMode Then wsOC.AutoFilterMode = False",
+    "        wsOC.Range(\"A2:S\" & lastRow).Sort _",
+    "            Key1:=wsOC.Range(\"C2\"), _",
+    "            Order1:=xlDescending, _",
+    "            Header:=xlYes, _",
+    "            OrderCustom:=1, _",
+    "            MatchCase:=False, _",
+    "            Orientation:=xlTopToBottom, _",
+    "            DataOption1:=xlSortTextAsNumbers",
+    "        wsOC.Range(\"A2:S\" & lastRow).AutoFilter",
+    "        wsOC.Range(\"A2:S\" & lastRow).AutoFilter Field:=3, Order:=xlDescending",
     "    End If",
     "    On Error GoTo 0",
     "    ",
@@ -1527,11 +1571,12 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    End If",
     "    On Error GoTo 0",
     "    ",
-    "    ' Si la selección no tocó filas de órdenes (ej. clic directo en el botón), tomar la fila activa",
+    "    ' REGLA ESTRICTA: Si no seleccionó ninguna orden, no copiar nada",
     "    If dictFilas.Count = 0 Then",
-    "        r = ActiveCell.Row",
-    "        If r < 3 Or wsOC.Cells(r, 3).Value = \"\" Then r = 3",
-    "        If wsOC.Cells(r, 3).Value <> \"\" Then dictFilas.Add r, True",
+    "        MsgBox \"No tenés ninguna orden de compra seleccionada.\" & vbCrLf & vbCrLf & _",
+    "               \"• Por favor seleccioná la fila o celdas de las órdenes que querés copiar.\" & vbCrLf & _",
+    "               \"• Podés pintar varias filas con el mouse o con Ctrl.\", vbExclamation, \"Ninguna Orden Seleccionada\"",
+    "        Exit Sub",
     "    End If",
     "    ",
     "    textoAcumulado = \"\"",
@@ -1623,34 +1668,32 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    End If",
     "    On Error GoTo 0",
     "    ",
-    "    ' Si seleccionó exactamente 1 fila, preguntar si quiere solo esa o todas las visibles",
-    "    If dictFilas.Count = 1 Then",
-    "        Dim respCMD As VbMsgBoxResult, ocSel As String",
-    "        ocSel = wsOC.Cells(CLng(dictFilas.Keys()(0)), 3).Value",
-    "        respCMD = MsgBox(\"¿Qué carpetas querés generar en el comando CMD?\" & vbCrLf & vbCrLf & _",
-    "                         \"• Clic en [SÍ] para copiar SOLO la OC seleccionada (OC \" & ocSel & \")\" & vbCrLf & _",
-    "                         \"• Clic en [NO] para copiar TODAS las órdenes visibles de la lista\" & vbCrLf & _",
-    "                         \"• Clic en [Cancelar] para salir\", vbYesNoCancel + vbQuestion, \"Copiar CMD Carpetas\")",
-    "        If respCMD = vbYes Then",
-    "            ' Se queda con la fila seleccionada",
-    "        ElseIf respCMD = vbNo Then",
-    "            dictFilas.RemoveAll",
-    "            For r = 3 To lastRow",
-    "                If Not wsOC.Rows(r).Hidden And wsOC.Cells(r, 7).Value <> \"Cancelada\" And wsOC.Cells(r, 3).Value <> \"\" Then",
-    "                    dictFilas.Add r, True",
-    "                End If",
-    "            Next r",
-    "        Else",
-    "            Exit Sub",
-    "        End If",
-    "    ElseIf dictFilas.Count = 0 Then",
-    "        ' Si la selección estaba fuera de las órdenes (ej. clic en el botón), copia todas las visibles",
-    "        For r = 3 To lastRow",
-    "            If Not wsOC.Rows(r).Hidden And wsOC.Cells(r, 7).Value <> \"Cancelada\" And wsOC.Cells(r, 3).Value <> \"\" Then",
-    "                dictFilas.Add r, True",
-    "            End If",
-    "        Next r",
+    "    ' REGLA ESTRICTA: Si no seleccionó ninguna orden, NO copiar nada",
+    "    If dictFilas.Count = 0 Then",
+    "        MsgBox \"No tenés ninguna orden de compra seleccionada.\" & vbCrLf & vbCrLf & _",
+    "               \"• Por favor seleccioná la fila o celdas de las órdenes que querés crear.\" & vbCrLf & _",
+    "               \"• Podés pintar varias filas con el mouse o con la tecla Ctrl.\", vbExclamation, \"Ninguna Orden Seleccionada\"",
+    "        Exit Sub",
     "    End If",
+    "    ",
+    "    ' Leer la ruta de SharePoint desde la celda J1 de la fila superior",
+    "    Dim rutaSP As String",
+    "    rutaSP = Trim(wsOC.Range(\"J1\").Text)",
+    "    If rutaSP = \"\" Then rutaSP = Trim(wsOC.Range(\"J1\").Value)",
+    "    If rutaSP = \"(Pegá acá tu ruta de SharePoint)\" Then rutaSP = \"\"",
+    "    ",
+    "    ' Si la celda J1 está vacía, solicitarla al usuario para generar el comando cd /d",
+    "    If rutaSP = \"\" Then",
+    "        rutaSP = InputBox(\"Ruta de la carpeta en SharePoint donde van las órdenes:\" & vbCrLf & vbCrLf & _",
+    "                          \"(Ejemplo: C:\\Users\\Nombre\\SharePoint\\Compras)\" & vbCrLf & _",
+    "                          \"O dejalo vacío si querés únicamente los 'mkdir':\", \"Ruta SharePoint\", \"\")",
+    "        If Trim(rutaSP) <> \"\" Then",
+    "            wsOC.Range(\"J1\").Value = Trim(rutaSP)",
+    "            wsOC.Range(\"J1\").Font.Italic = False",
+    "        End If",
+    "    End If",
+    "    ",
+    "    rutaSP = Replace(Trim(rutaSP), \"\"\"\", \"\")",
     "    ",
     "    cmdAcumulado = \"\"",
     "    cantCarpetas = 0",
@@ -1684,14 +1727,29 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "        Exit Sub",
     "    End If",
     "    ",
+    "    ' Si se definió la ruta, anteponer el comando cd /d \"...\"",
+    "    If rutaSP <> \"\" Then",
+    "        cmdAcumulado = \"cd /d \"\"\" & rutaSP & \"\"\"\" & vbCrLf & cmdAcumulado",
+    "    End If",
+    "    ",
     "    EnviarPortapapelesTexto cmdAcumulado",
     "    ",
     "    If cantCarpetas > 4 Then ocsList = ocsList & \" (y \" & (cantCarpetas - 4) & \" más)\"",
     "    ",
-    "    MsgBox \"¡CMD de carpetas copiado al portapapeles!\" & vbCrLf & vbCrLf & _",
-    "           \"• Cantidad de carpetas: \" & cantCarpetas & \" (\" & ocsList & \")\" & vbCrLf & _",
-    "           \"• Abrí CMD en tu ruta de SharePoint y presioná Ctrl + V.\" & vbCrLf & _",
-    "           \"Se crearán todas las carpetas juntas al instante.\", vbInformation, \"CMD Carpetas Copiado\"",
+    "    Dim msgConfirm As String",
+    "    msgConfirm = \"¡Comando CMD copiado al portapapeles!\" & vbCrLf & vbCrLf & _",
+    "                 \"• Órdenes incluidas: \" & cantCarpetas & \" (\" & ocsList & \")\" & vbCrLf",
+    "    If rutaSP <> \"\" Then",
+    "        msgConfirm = msgConfirm & \"• Ruta destino: \" & rutaSP & vbCrLf & vbCrLf & _",
+    "                     \"Comando generado:\" & vbCrLf & _",
+    "                     \"cd /d \"\"\" & rutaSP & \"\"\"\" & vbCrLf & _",
+    "                     \"mkdir \"\"...\"\"\" & vbCrLf & vbCrLf",
+    "    Else",
+    "        msgConfirm = msgConfirm & vbCrLf",
+    "    End If",
+    "    msgConfirm = msgConfirm & \"Abrí CMD y presioná Ctrl + V para ejecutarlo de inmediato.\"",
+    "    ",
+    "    MsgBox msgConfirm, vbInformation, \"CMD Carpetas Copiado\"",
     "End Sub",
     "",
     "Sub EnviarPortapapelesTexto(ByVal texto As String)",
