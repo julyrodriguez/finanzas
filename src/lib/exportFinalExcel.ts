@@ -976,9 +976,9 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     const fMonto = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$E$3:$E$${lastRow},${matchExpr}),"")`;
     const fEstado = `IF(C${r}="SÍ",INDEX('Órdenes de Compra'!$G$3:$G$${lastRow},${matchExpr}),"")`;
     const fFiltro = `IF(F${r}="","",IF(F${r}<5500000,"< $5.5M (Autofirma)","≥ $5.5M (Manual)"))`;
-    const fF1 = `IF(F${r}="","",IF(F${r}<5500000,"Firma 1 Automática (Tomas)","Requiere Firma 1"))`;
-    const fDiag = `IF(F${r}="","",IF(F${r}<5500000,"Mandada (Espera 2da Firma)","Mandada (Espera 1ra Firma)"))`;
-    const fTexto = `IF(B${r}="","",IF(F${r}<5500000,"OC " & B${r} & " " & D${r} & " - Firma 1 de Tomas aplicada (Espera 2da firma)","OC " & B${r} & " " & D${r} & " - Enviada a Tomas esperando 1ra firma"))`;
+    const fF1 = `IF(F${r}="","",IF(F${r}<5500000,"Firma 1 Automática (Tomas)",IF(F${r}<=18000000,"Requiere Firma 1 (Pablo Mondelo)",IF(F${r}<=150000000,"Requiere Firma 1 (Matías)","Requiere Firma 1 (Darío)"))))`;
+    const fDiag = `IF(F${r}="","",IF(F${r}<5500000,"Mandada (Espera 2da Firma)",IF(F${r}<=18000000,"Mandada (Espera 1ra Pablo Mondelo)",IF(F${r}<=150000000,"Mandada (Espera 1ra Matías)","Mandada (Espera 1ra Darío)"))))`;
+    const fTexto = `IF(B${r}="","",IF(F${r}<5500000,"OC " & B${r} & " " & D${r} & " - Firma 1 de Tomas aplicada (Espera 2da firma)",IF(F${r}<=18000000,"OC " & B${r} & " " & D${r} & " - Excede $5.5M: esperando 1ra firma de Pablo Mondelo","OC " & B${r} & " " & D${r} & " - Excede $5.5M: esperando 1ra firma de Matías")))`;
 
     const row = wsTomas.addRow([
       "",
@@ -1910,13 +1910,23 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "                End If",
     "                ",
     "                ' Regla menor a 5.500.000: Firma 1 de Tomás es automática (< 5.5M)",
-    "                ' Si es >= 5.500.000, pasa a Mandada pero esperando la 1ra firma manual de Tomás (Firma 1 = \"No\")",
+    "                ' Si es >= 5.500.000, Tomás NO firma (su límite es $5.5M).",
+    "                ' Pasa a Mandada asignando el firmante real según el monto:",
+    "                ' - De 5.5M a 18M: Pablo Mondelo",
+    "                ' - De 18M a 150M: Matias",
+    "                ' - Más de 150M: Dario",
     "                If monto < 5500000 Then",
     "                    wsOC.Cells(rowOC, 8).Value = \"Tomas\"",
     "                    wsOC.Cells(rowOC, 9).Value = \"Sí\"",
     "                    cantAutoFirma = cantAutoFirma + 1",
+    "                ElseIf monto <= 18000000 Then",
+    "                    wsOC.Cells(rowOC, 8).Value = \"Pablo Mondelo\"",
+    "                    wsOC.Cells(rowOC, 9).Value = \"No\"",
+    "                ElseIf monto <= 150000000 Then",
+    "                    wsOC.Cells(rowOC, 8).Value = \"Matias\"",
+    "                    wsOC.Cells(rowOC, 9).Value = \"No\"",
     "                Else",
-    "                    wsOC.Cells(rowOC, 8).Value = \"Tomas\"",
+    "                    wsOC.Cells(rowOC, 8).Value = \"Dario\"",
     "                    wsOC.Cells(rowOC, 9).Value = \"No\"",
     "                End If",
     "                cantTotal = cantTotal + 1",
@@ -1928,9 +1938,9 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    On Error Resume Next: ActualizarProcesoLiberacion: On Error GoTo 0",
     "    ",
     "    MsgBox \"¡Enviadas a Tomás procesadas!\" & vbCrLf & _",
-    "           \"• Total pasadas a Mandadas: \" & cantTotal & vbCrLf & _",
+    "           \"• Total órdenes procesadas: \" & cantTotal & vbCrLf & _",
     "           \"• Con Firma 1 de Tomás automática (< $5.5M): \" & cantAutoFirma & vbCrLf & _",
-    "           \"• Esperando 1ra firma manual de Tomás (>= $5.5M): \" & (cantTotal - cantAutoFirma) & vbCrLf & _",
+    "           \"• Mayores a $5.5M (asignadas a Pablo Mondelo / Matías / Darío): \" & (cantTotal - cantAutoFirma) & vbCrLf & _",
     "           \"• Podés ver el seguimiento en 'Resumen Firmantes' y 'Proceso de Liberación'.\", vbInformation, \"Tomas Procesado\"",
     "End Sub",
     "",
