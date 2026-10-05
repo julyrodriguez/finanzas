@@ -597,28 +597,28 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     const ocNumVal = !isNaN(numOCInt) && numOCInt > 0 ? numOCInt : (o.numOC || "");
 
     let grupoId = 1;
-    let estadoLiberacion = "🔴 Sin mandar a nadie";
+    let estadoLiberacion = "● Sin mandar a nadie";
     let enviadoA = "(Sin enviar)";
-    let linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+    let linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
     let bgColor = "FEE2E2"; // Soft red
     let textColor = "991B1B";
 
     if (!f1Ok && !f2Ok) {
       if (f1Name && f1Name !== "(Sin enviar)") {
         grupoId = 3;
-        estadoLiberacion = "🟠 Enviada a 1ra Firma";
+        estadoLiberacion = "● Enviada a 1ra Firma";
         enviadoA = f1Name;
-        linkDestino = { text: "✍️ Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        linkDestino = { text: "Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
         bgColor = "FFEDD5";
         textColor = "C2410C";
       } else {
         grupoId = 1;
-        estadoLiberacion = "🔴 Sin mandar a nadie";
+        estadoLiberacion = "● Sin mandar a nadie";
         enviadoA = "(Sin enviar)";
         if (numMonto < 5500000) {
-          linkDestino = { text: "⚡ Ir a Enviados a Tomas", hyperlink: "#'Enviados a Tomas'!A1" };
+          linkDestino = { text: "Ir a Enviados a Tomas", hyperlink: "#'Enviados a Tomas'!A1" };
         } else {
-          linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+          linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
         }
         bgColor = "FEE2E2";
         textColor = "991B1B";
@@ -626,32 +626,32 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     } else if (f1Ok && !f2Ok) {
       if (f2Name && f2Name !== "(Sin enviar)") {
         grupoId = 4;
-        estadoLiberacion = "🟣 Enviada a 2da Firma";
+        estadoLiberacion = "● Enviada a 2da Firma";
         enviadoA = f2Name;
-        linkDestino = { text: "✍️ Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        linkDestino = { text: "Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
         bgColor = "F3E8FF";
         textColor = "7E22CE";
       } else {
         grupoId = 2;
-        estadoLiberacion = "🟡 Esperando envío a 2da firma";
+        estadoLiberacion = "● Esperando envío a 2da firma";
         enviadoA = "(Sin enviar a 2da)";
-        linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
         bgColor = "FEF3C7";
         textColor = "B45309";
       }
     } else if (!f1Ok && f2Ok) {
       if (f1Name && f1Name !== "(Sin enviar)") {
         grupoId = 3;
-        estadoLiberacion = "🟠 Enviada a 1ra Firma";
+        estadoLiberacion = "● Enviada a 1ra Firma";
         enviadoA = f1Name;
-        linkDestino = { text: "✍️ Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
+        linkDestino = { text: "Ir a Pegado Masivo", hyperlink: "#'Pegado Masivo (Batch)'!A1" };
         bgColor = "FFEDD5";
         textColor = "C2410C";
       } else {
         grupoId = 1;
-        estadoLiberacion = "🔴 Sin mandar a nadie";
+        estadoLiberacion = "● Sin mandar a nadie";
         enviadoA = "(Sin enviar a 1ra)";
-        linkDestino = { text: "📨 Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
+        linkDestino = { text: "Ir a Enviados a Firmar", hyperlink: "#'Enviados a Firmar'!A1" };
         bgColor = "FEE2E2";
         textColor = "991B1B";
       }
@@ -1542,6 +1542,10 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "2. QUÉ HACE CADA BOTÓN Y MACRO:",
     "• Hoja [Proceso de Liberación]:",
     "  Control en tiempo real de todas las órdenes Mandadas, ordenadas por su estado (Sin mandar a nadie, Esperando envío a 2da firma, Enviadas a 1ra o 2da firma). Cuenta con botones rápidos para saltar a cada proceso.",
+    "• Botón [🔄 ACTUALIZAR] (Hoja Proceso de Liberación):",
+    "  Vuelve a escanear 'Órdenes de Compra' y regenera la lista de liberación clasificada por estado y ordenada de mayor a menor por N° OC.",
+    "• Función [EnviarPortapapelesTexto] (Uso Interno de Macros):",
+    "  Envía texto directamente a la memoria del Portapapeles de Windows (para correos de Tomás o comandos mkdir de CMD), permitiendo pegar con Ctrl + V sin pasos manuales.",
     "• Botón [➕ NUEVA OC] (Hoja Órdenes de Compra):",
     "  Inserta una orden en estado 'Pendiente' y reordena automáticamente toda la tabla por N° OC de MAYOR A MENOR.",
     "• Botón [📁 CMD MULTICARPETAS] (Hoja Órdenes de Compra):",
@@ -2068,33 +2072,13 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    MsgBox msgConfirm, vbInformation, \"CMD Carpetas Copiado\"",
     "End Sub",
     "",
-    "Sub EnviarPortapapelesTexto(ByVal texto As String)",
-    "    Dim MSForms_DataObject As Object",
-    "    On Error Resume Next",
-    "    Set MSForms_DataObject = CreateObject(\"New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}\")",
-    "    MSForms_DataObject.SetText texto",
-    "    MSForms_DataObject.PutInClipboard",
-    "    If Err.Number <> 0 Then",
-    "        Dim fso As Object, tempFile As String, shellObj As Object",
-    "        Set fso = CreateObject(\"Scripting.FileSystemObject\")",
-    "        tempFile = Environ(\"TEMP\") & \"\\clip_temp.txt\"",
-    "        With fso.CreateTextFile(tempFile, True, False)",
-    "            .Write texto",
-    "            .Close",
-    "        End With",
-    "        Set shellObj = CreateObject(\"WScript.Shell\")",
-    "        shellObj.Run \"cmd.exe /c type \"\"\" & tempFile & \"\"\" | clip\", 0, True",
-    "        fso.DeleteFile tempFile, True",
-    "    End If",
-    "    On Error GoTo 0",
-    "End Sub",
-    "",
     "Sub ActualizarProcesoLiberacion()",
     "    Dim wsOC As Worksheet, wsProc As Worksheet",
-    "    Dim lastOCRow As Long, lastProcRow As Long, r As Long, outRow As Long",
+    "    Dim lastOCRow As Long, lastProcRow As Long, r As Long, outRow As Long, grupo As Integer",
     "    Dim ocNum As Variant, sol As String, emp As String, prov As String, mot As String",
     "    Dim monto As Double, est As String, f1 As String, f1Ok As String, f2 As String, f2Ok As String",
     "    Dim estLib As String, envA As String, linkText As String, linkSheet As String",
+    "    Dim f1Has As Boolean, f2Has As Boolean, matchGrupo As Integer",
     "    ",
     "    On Error Resume Next",
     "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
@@ -2116,92 +2100,140 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    lastOCRow = wsOC.Cells(wsOC.Rows.Count, \"C\").End(xlUp).Row",
     "    outRow = 3",
     "    ",
-    "    For r = 3 To lastOCRow",
-    "        est = Trim(wsOC.Cells(r, 7).Value)",
-    "        If est = \"Mandada\" Then",
-    "            ocNum = wsOC.Cells(r, 3).Value",
-    "            sol = wsOC.Cells(r, 2).Value",
-    "            emp = wsOC.Cells(r, 1).Value",
-    "            prov = wsOC.Cells(r, 4).Value",
-    "            mot = wsOC.Cells(r, 13).Value",
-    "            monto = Val(wsOC.Cells(r, 5).Value)",
-    "            f1 = Trim(wsOC.Cells(r, 8).Value)",
-    "            f1Ok = Trim(wsOC.Cells(r, 9).Value)",
-    "            f2 = Trim(wsOC.Cells(r, 10).Value)",
-    "            f2Ok = Trim(wsOC.Cells(r, 11).Value)",
-    "            ",
-    "            If f1Ok <> \"Sí\" And f2Ok <> \"Sí\" Then",
-    "                If f1 <> \"\" And f1 <> \"(Sin enviar)\" Then",
-    "                    estLib = \"🟠 Enviada a 1ra Firma\"",
-    "                    envA = f1",
-    "                    linkText = \"✍️ Ir a Pegado Masivo\"",
-    "                    linkSheet = \"Pegado Masivo (Batch)\"",
-    "                Else",
-    "                    estLib = \"🔴 Sin mandar a nadie\"",
-    "                    envA = \"(Sin enviar)\"",
-    "                    If monto < 5500000 Then",
-    "                        linkText = \"⚡ Ir a Enviados a Tomas\"",
-    "                        linkSheet = \"Enviados a Tomas\"",
+    "    ' 4 Grupos ordenados:",
+    "    ' 1: Sin mandar a nadie",
+    "    ' 2: Esperando envío a 2da firma",
+    "    ' 3: Enviada a 1ra Firma",
+    "    ' 4: Enviada a 2da Firma",
+    "    For grupo = 1 To 4",
+    "        For r = 3 To lastOCRow",
+    "            est = Trim(wsOC.Cells(r, 7).Value)",
+    "            If est = \"Mandada\" Then",
+    "                f1 = Trim(wsOC.Cells(r, 8).Value)",
+    "                f1Ok = Trim(wsOC.Cells(r, 9).Value)",
+    "                f2 = Trim(wsOC.Cells(r, 10).Value)",
+    "                f2Ok = Trim(wsOC.Cells(r, 11).Value)",
+    "                f1Has = (f1 <> \"\" And f1 <> \"(Sin enviar)\")",
+    "                f2Has = (f2 <> \"\" And f2 <> \"(Sin enviar)\")",
+    "                ",
+    "                matchGrupo = 0",
+    "                If f1Ok <> \"Sí\" And f2Ok <> \"Sí\" Then",
+    "                    If f1Has Then",
+    "                        matchGrupo = 3",
     "                    Else",
-    "                        linkText = \"📨 Ir a Enviados a Firmar\"",
-    "                        linkSheet = \"Enviados a Firmar\"",
+    "                        matchGrupo = 1",
+    "                    End If",
+    "                ElseIf f1Ok = \"Sí\" And f2Ok <> \"Sí\" Then",
+    "                    If f2Has Then",
+    "                        matchGrupo = 4",
+    "                    Else",
+    "                        matchGrupo = 2",
+    "                    End If",
+    "                ElseIf f1Ok <> \"Sí\" And f2Ok = \"Sí\" Then",
+    "                    If f1Has Then",
+    "                        matchGrupo = 3",
+    "                    Else",
+    "                        matchGrupo = 1",
     "                    End If",
     "                End If",
-    "            ElseIf f1Ok = \"Sí\" And f2Ok <> \"Sí\" Then",
-    "                If f2 <> \"\" And f2 <> \"(Sin enviar)\" Then",
-    "                    estLib = \"🟣 Enviada a 2da Firma\"",
-    "                    envA = f2",
-    "                    linkText = \"✍️ Ir a Pegado Masivo\"",
-    "                    linkSheet = \"Pegado Masivo (Batch)\"",
-    "                Else",
-    "                    estLib = \"🟡 Esperando envío a 2da firma\"",
-    "                    envA = \"(Sin enviar a 2da)\"",
-    "                    linkText = \"📨 Ir a Enviados a Firmar\"",
-    "                    linkSheet = \"Enviados a Firmar\"",
+    "                ",
+    "                If matchGrupo = grupo Then",
+    "                    ocNum = wsOC.Cells(r, 3).Value",
+    "                    sol = wsOC.Cells(r, 2).Value",
+    "                    emp = wsOC.Cells(r, 1).Value",
+    "                    prov = wsOC.Cells(r, 4).Value",
+    "                    mot = wsOC.Cells(r, 13).Value",
+    "                    If IsNumeric(wsOC.Cells(r, 5).Value) Then",
+    "                        monto = CDbl(wsOC.Cells(r, 5).Value)",
+    "                    Else",
+    "                        monto = 0",
+    "                    End If",
+    "                    ",
+    "                    Select Case matchGrupo",
+    "                        Case 1",
+    "                            estLib = ChrW(9679) & \" Sin mandar a nadie\"",
+    "                            envA = \"(Sin enviar)\"",
+    "                            If monto < 5500000 Then",
+    "                                linkText = \"Ir a Enviados a Tomas\"",
+    "                                linkSheet = \"Enviados a Tomas\"",
+    "                            Else",
+    "                                linkText = \"Ir a Enviados a Firmar\"",
+    "                                linkSheet = \"Enviados a Firmar\"",
+    "                            End If",
+    "                        Case 2",
+    "                            estLib = ChrW(9679) & \" Esperando envío a 2da firma\"",
+    "                            envA = \"(Sin enviar a 2da)\"",
+    "                            linkText = \"Ir a Enviados a Firmar\"",
+    "                            linkSheet = \"Enviados a Firmar\"",
+    "                        Case 3",
+    "                            estLib = ChrW(9679) & \" Enviada a 1ra Firma\"",
+    "                            envA = f1",
+    "                            linkText = \"Ir a Pegado Masivo\"",
+    "                            linkSheet = \"Pegado Masivo (Batch)\"",
+    "                        Case 4",
+    "                            estLib = ChrW(9679) & \" Enviada a 2da Firma\"",
+    "                            envA = f2",
+    "                            linkText = \"Ir a Pegado Masivo\"",
+    "                            linkSheet = \"Pegado Masivo (Batch)\"",
+    "                    End Select",
+    "                    ",
+    "                    wsProc.Cells(outRow, 1).Value = ocNum",
+    "                    wsProc.Cells(outRow, 2).Value = sol",
+    "                    wsProc.Cells(outRow, 3).Value = emp",
+    "                    wsProc.Cells(outRow, 4).Value = prov",
+    "                    wsProc.Cells(outRow, 5).Value = mot",
+    "                    wsProc.Cells(outRow, 6).Value = monto",
+    "                    wsProc.Cells(outRow, 6).NumberFormat = \"\"\"$\"\"#,##0.00;(\"\"$\"\"#,##0.00);\"\"-\"\"\"",
+    "                    wsProc.Cells(outRow, 7).Value = estLib",
+    "                    wsProc.Cells(outRow, 8).Value = envA",
+    "                    wsProc.Cells(outRow, 9).Value = f1Ok",
+    "                    wsProc.Cells(outRow, 10).Value = f2Ok",
+    "                    wsProc.Hyperlinks.Add Anchor:=wsProc.Cells(outRow, 11), Address:=\"\", SubAddress:=\"'\" & linkSheet & \"'!A1\", TextToDisplay:=linkText",
+    "                    ",
+    "                    wsProc.Cells(outRow, 1).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 2).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 3).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 4).HorizontalAlignment = xlLeft",
+    "                    wsProc.Cells(outRow, 5).HorizontalAlignment = xlLeft",
+    "                    wsProc.Cells(outRow, 6).HorizontalAlignment = xlRight",
+    "                    wsProc.Cells(outRow, 7).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 8).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 9).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 10).HorizontalAlignment = xlCenter",
+    "                    wsProc.Cells(outRow, 11).HorizontalAlignment = xlCenter",
+    "                    ",
+    "                    Select Case matchGrupo",
+    "                        Case 1",
+    "                            wsProc.Cells(outRow, 7).Interior.Color = RGB(254, 226, 226)",
+    "                            wsProc.Cells(outRow, 7).Font.Color = RGB(153, 27, 27)",
+    "                        Case 2",
+    "                            wsProc.Cells(outRow, 7).Interior.Color = RGB(254, 243, 199)",
+    "                            wsProc.Cells(outRow, 7).Font.Color = RGB(180, 83, 9)",
+    "                        Case 3",
+    "                            wsProc.Cells(outRow, 7).Interior.Color = RGB(255, 237, 213)",
+    "                            wsProc.Cells(outRow, 7).Font.Color = RGB(194, 65, 12)",
+    "                        Case 4",
+    "                            wsProc.Cells(outRow, 7).Interior.Color = RGB(243, 232, 255)",
+    "                            wsProc.Cells(outRow, 7).Font.Color = RGB(126, 34, 206)",
+    "                    End Select",
+    "                    wsProc.Cells(outRow, 7).Font.Bold = True",
+    "                    ",
+    "                    If f1Ok = \"Sí\" Then",
+    "                        wsProc.Cells(outRow, 9).Interior.Color = RGB(209, 250, 229)",
+    "                        wsProc.Cells(outRow, 9).Font.Color = RGB(4, 120, 87)",
+    "                        wsProc.Cells(outRow, 9).Font.Bold = True",
+    "                    End If",
+    "                    If f2Ok = \"Sí\" Then",
+    "                        wsProc.Cells(outRow, 10).Interior.Color = RGB(209, 250, 229)",
+    "                        wsProc.Cells(outRow, 10).Font.Color = RGB(4, 120, 87)",
+    "                        wsProc.Cells(outRow, 10).Font.Bold = True",
+    "                    End If",
+    "                    ",
+    "                    outRow = outRow + 1",
     "                End If",
-    "            Else",
-    "                estLib = \"🟢 Lista para Liberar\"",
-    "                envA = \"Completa\"",
-    "                linkText = \"✍️ Ir a Pegado Masivo\"",
-    "                linkSheet = \"Pegado Masivo (Batch)\"",
     "            End If",
-    "            ",
-    "            wsProc.Cells(outRow, 1).Value = ocNum",
-    "            wsProc.Cells(outRow, 2).Value = sol",
-    "            wsProc.Cells(outRow, 3).Value = emp",
-    "            wsProc.Cells(outRow, 4).Value = prov",
-    "            wsProc.Cells(outRow, 5).Value = mot",
-    "            wsProc.Cells(outRow, 6).Value = monto",
-    "            wsProc.Cells(outRow, 6).NumberFormat = \"\"\"$\"\"#,##0.00;(\"\"$\"\"#,##0.00);\"\"-\"\"\"",
-    "            wsProc.Cells(outRow, 7).Value = estLib",
-    "            wsProc.Cells(outRow, 8).Value = envA",
-    "            wsProc.Cells(outRow, 9).Value = f1Ok",
-    "            wsProc.Cells(outRow, 10).Value = f2Ok",
-    "            wsProc.Hyperlinks.Add Anchor:=wsProc.Cells(outRow, 11), Address:=\"\", SubAddress:=\"'\" & linkSheet & \"'!A1\", TextToDisplay:=linkText",
-    "            ",
-    "            If InStr(estLib, \"Sin mandar\") > 0 Then",
-    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(254, 226, 226)",
-    "                wsProc.Cells(outRow, 7).Font.Color = RGB(153, 27, 27)",
-    "            ElseIf InStr(estLib, \"Esperando envío\") > 0 Then",
-    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(254, 243, 199)",
-    "                wsProc.Cells(outRow, 7).Font.Color = RGB(180, 83, 9)",
-    "            ElseIf InStr(estLib, \"1ra Firma\") > 0 Then",
-    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(255, 237, 213)",
-    "                wsProc.Cells(outRow, 7).Font.Color = RGB(194, 65, 12)",
-    "            ElseIf InStr(estLib, \"2da Firma\") > 0 Then",
-    "                wsProc.Cells(outRow, 7).Interior.Color = RGB(243, 232, 255)",
-    "                wsProc.Cells(outRow, 7).Font.Color = RGB(126, 34, 206)",
-    "            End If",
-    "            wsProc.Cells(outRow, 7).Font.Bold = True",
-    "            outRow = outRow + 1",
-    "        End If",
-    "    Next r",
-    "    ",
-    "    If outRow > 3 Then",
-    "        wsProc.Range(\"A2:K\" & (outRow - 1)).Sort Key1:=wsProc.Range(\"G2\"), Order1:=xlAscending, _",
-    "                                                 Key2:=wsProc.Range(\"A2\"), Order2:=xlDescending, _",
-    "                                                 Header:=xlYes, DataOption2:=xlSortTextAsNumbers",
-    "    End If",
+    "        Next r",
+    "    Next grupo",
     "    ",
     "    Application.ScreenUpdating = True",
     "End Sub",
@@ -2239,12 +2271,15 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "End Sub",
     "",
     "Sub EnviarPortapapelesTexto(ByVal texto As String)",
-    "    Dim MSForms_DataObject As Object",
     "    On Error Resume Next",
-    "    Set MSForms_DataObject = CreateObject(\"New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}\")",
-    "    MSForms_DataObject.SetText texto",
-    "    MSForms_DataObject.PutInClipboard",
-    "    If Err.Number <> 0 Then",
+    "    Dim clipObj As Object",
+    "    Set clipObj = CreateObject(\"New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}\")",
+    "    If Not clipObj Is Nothing Then",
+    "        clipObj.SetText texto",
+    "        clipObj.PutInClipboard",
+    "    End If",
+    "    If Err.Number <> 0 Or clipObj Is Nothing Then",
+    "        Err.Clear",
     "        Dim fso As Object, tempFile As String, shellObj As Object",
     "        Set fso = CreateObject(\"Scripting.FileSystemObject\")",
     "        tempFile = Environ(\"TEMP\") & \"\\clip_temp.txt\"",
