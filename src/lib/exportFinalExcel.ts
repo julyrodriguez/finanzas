@@ -114,34 +114,64 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
   });
 
   // Fila 1: Banner Superior y Botón [➕ NUEVA ORDEN DE COMPRA]
-  wsOrdenes.mergeCells("A1:P1");
+  // Fila 1: Banner Superior y 3 Botones de Acción
+  wsOrdenes.mergeCells("A1:N1");
   const bannerOC = wsOrdenes.getCell("A1");
   bannerOC.value = "BASE DE CONTROL Y GESTIÓN DE ÓRDENES DE COMPRA";
   bannerOC.font = { name: "Segoe UI", size: 11, bold: true, color: { argb: "FF" + COLOR_HEADER_TXT } };
   bannerOC.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_NAVY } };
   bannerOC.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
 
-  wsOrdenes.mergeCells("Q1:S1");
-  const btnNuevaOC = wsOrdenes.getCell("Q1");
-  btnNuevaOC.value = "➕ NUEVA ORDEN DE COMPRA";
-  btnNuevaOC.font = { name: "Segoe UI", size: 10.5, bold: true, color: { argb: "FFFFFFFF" } };
-  btnNuevaOC.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + COLOR_EMERALD } };
+  // Botón 1: ➕ NUEVA OC (Col O y P)
+  wsOrdenes.mergeCells("O1:P1");
+  const btnNuevaOC = wsOrdenes.getCell("O1");
+  btnNuevaOC.value = "➕ NUEVA OC";
+  btnNuevaOC.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+  btnNuevaOC.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF166534" } };
   btnNuevaOC.alignment = { vertical: "middle", horizontal: "center" };
-  btnNuevaOC.border = {
-    top: { style: "medium", color: { argb: "FF14532D" } },
-    bottom: { style: "medium", color: { argb: "FF14532D" } },
-    left: { style: "medium", color: { argb: "FF14532D" } },
-    right: { style: "medium", color: { argb: "FF14532D" } },
-  };
+
+  // Botón 2: 📁 CMD MULTICARPETAS (Col Q y R)
+  wsOrdenes.mergeCells("Q1:R1");
+  const btnCMD = wsOrdenes.getCell("Q1");
+  btnCMD.value = "📁 CMD MULTICARPETAS";
+  btnCMD.font = { name: "Segoe UI", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+  btnCMD.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0284C7" } }; // Sky Blue 600
+  btnCMD.alignment = { vertical: "middle", horizontal: "center" };
+
+  // Botón 3: 📋 COPIAR TEXTO MAIL (Col S)
+  const btnMail = wsOrdenes.getCell("S1");
+  btnMail.value = "📋 COPIAR TEXTO MAIL";
+  btnMail.font = { name: "Segoe UI", size: 9.5, bold: true, color: { argb: "FFFFFFFF" } };
+  btnMail.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4338CA" } }; // Indigo 700
+  btnMail.alignment = { vertical: "middle", horizontal: "center" };
+
   wsOrdenes.getRow(1).height = 32;
 
-  // Insertar botón como Forma de dibujo (Drawing/Shape) para permitir clic derecho -> "Asignar macro..."
-  const btnImgBase64 = createButtonImage("➕ NUEVA ORDEN DE COMPRA", "#166534");
-  if (btnImgBase64) {
-    const imgId = wb.addImage({ base64: btnImgBase64, extension: "png" });
-    wsOrdenes.addImage(imgId, {
+  // Insertar los 3 botones como Formas gráficas flotantes para permitir clic derecho -> "Asignar macro..."
+  const btnImg1 = createButtonImage("➕ NUEVA OC", "#166534");
+  if (btnImg1) {
+    const id1 = wb.addImage({ base64: btnImg1, extension: "png" });
+    wsOrdenes.addImage(id1, {
+      tl: { col: 14.02, row: 0.06 },
+      ext: { width: 170, height: 30 },
+    });
+  }
+
+  const btnImg2 = createButtonImage("📁 CMD MULTICARPETAS", "#0284C7");
+  if (btnImg2) {
+    const id2 = wb.addImage({ base64: btnImg2, extension: "png" });
+    wsOrdenes.addImage(id2, {
       tl: { col: 16.02, row: 0.06 },
-      ext: { width: 230, height: 30 },
+      ext: { width: 190, height: 30 },
+    });
+  }
+
+  const btnImg3 = createButtonImage("📋 COPIAR TEXTO MAIL", "#4338CA");
+  if (btnImg3) {
+    const id3 = wb.addImage({ base64: btnImg3, extension: "png" });
+    wsOrdenes.addImage(id3, {
+      tl: { col: 18.02, row: 0.06 },
+      ext: { width: 180, height: 30 },
     });
   }
 
@@ -229,7 +259,7 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     const firmado1Str = (o.firmado1 || estadoStr === "Liberada") ? "Sí" : "No";
     const firmado2Str = (o.firmado2 || estadoStr === "Liberada") ? "Sí" : "No";
 
-    const formulaCopiar = `IF(G${rowNum}="Liberada", "OC 0" & C${rowNum} & " - " & D${rowNum}, "OC " & C${rowNum} & " " & A${rowNum} & CHAR(10) & "Proveedor: " & D${rowNum} & CHAR(10) & "Monto: " & TEXT(E${rowNum}, "$ #,##0") & CHAR(10) & "Detalle: " & M${rowNum} & CHAR(10) & "Forma de Pago: " & F${rowNum})`;
+    const formulaCopiar = `IF(G${rowNum}="Liberada", "OC 0" & C${rowNum} & " - " & D${rowNum}, "OC " & C${rowNum} & " " & A${rowNum} & CHAR(10) & "Proveedor: " & D${rowNum} & CHAR(10) & "Monto: " & TEXT(E${rowNum}, "$ #,##0") & CHAR(10) & "Detalle: " & M${rowNum} & CHAR(10) & "Forma de Pago: " & F${rowNum} & IF(P${rowNum}<>"", CHAR(10) & "Link: " & P${rowNum}, ""))`;
     const formulaCMD = `"mkdir ""OC " & C${rowNum} & " " & A${rowNum} & " " & SUBSTITUTE(D${rowNum}, """", "") & """"`;
 
     const row = wsOrdenes.addRow([
@@ -1171,8 +1201,12 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "6) ¡Listo! Podés asignar cada macro haciendo clic derecho en cada botón -> 'Asignar macro'.",
     "",
     "2. QUÉ HACE CADA BOTÓN Y MACRO:",
-    "• Botón [➕ NUEVA ORDEN DE COMPRA] (Hoja Órdenes de Compra):",
+    "• Botón [➕ NUEVA OC] (Hoja Órdenes de Compra):",
     "  Inserta una orden en la primera fila, con estado 'Pendiente' y ordenada automáticamente por N° OC.",
+    "• Botón [📁 CMD MULTICARPETAS] (Hoja Órdenes de Compra):",
+    "  Acumula los comandos mkdir de todas las órdenes (o filas filtradas) para crearlas juntas en CMD de un solo golpe.",
+    "• Botón [📋 COPIAR TEXTO MAIL] (Hoja Órdenes de Compra):",
+    "  Copia el texto de la fila seleccionada como TEXTO PURO (sin tabla de Excel) para que Outlook/Gmail lo tome como hipervínculo activo.",
     "• Botón [📨 REGISTRAR ENVÍO A FIRMAR] (Hoja Enviados a Firmar):",
     "  Pasa las órdenes pegadas a estado 'Mandada' y registra a qué firmante fueron enviadas.",
     "• Botón [⚡ PROCESAR ENVIADAS A TOMÁS] (Hoja Enviados a Tomas):",
@@ -1263,10 +1297,10 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "    ",
     "    ' Fallbacks para Celda 18 (Formato Copiar)",
     "    If wsOC.Cells(3, 18).Formula = \"\" Then",
-    "        wsOC.Cells(3, 18).Formula = \"=IF(G3=\"\"Liberada\"\", \"\"OC 0\"\" & C3 & \"\" - \"\" & D3, \"\"OC \"\" & C3 & \"\" \"\" & A3 & CHAR(10) & \"\"Proveedor: \"\" & D3 & CHAR(10) & \"\"Monto: \"\" & TEXT(E3, \"\"$ #,##0\"\") & CHAR(10) & \"\"Detalle: \"\" & M3 & CHAR(10) & \"\"Forma de Pago: \"\" & F3)\"",
+    "        wsOC.Cells(3, 18).Formula = \"=IF(G3=\"\"Liberada\"\", \"\"OC 0\"\" & C3 & \"\" - \"\" & D3, \"\"OC \"\" & C3 & \"\" \"\" & A3 & CHAR(10) & \"\"Proveedor: \"\" & D3 & CHAR(10) & \"\"Monto: \"\" & TEXT(E3, \"\"$ #,##0\"\") & CHAR(10) & \"\"Detalle: \"\" & M3 & CHAR(10) & \"\"Forma de Pago: \"\" & F3 & IF(P3<>\"\"\"\", CHAR(10) & \"\"Link: \"\" & P3, \"\"\"\"))\"",
     "    End If",
     "    If wsOC.Cells(3, 18).Formula = \"\" Then",
-    "        wsOC.Cells(3, 18).FormulaLocal = \"=SI(G3=\"\"Liberada\"\"; \"\"OC 0\"\" & C3 & \"\" - \"\" & D3; \"\"OC \"\" & C3 & \"\" \"\" & A3 & CARACTER(10) & \"\"Proveedor: \"\" & D3 & CARACTER(10) & \"\"Monto: \"\" & TEXTO(E3; \"\"$ #.##0\"\") & CARACTER(10) & \"\"Detalle: \"\" & M3 & CARACTER(10) & \"\"Forma de Pago: \"\" & F3)\"",
+    "        wsOC.Cells(3, 18).FormulaLocal = \"=SI(G3=\"\"Liberada\"\"; \"\"OC 0\"\" & C3 & \"\" - \"\" & D3; \"\"OC \"\" & C3 & \"\" \"\" & A3 & CARACTER(10) & \"\"Proveedor: \"\" & D3 & CARACTER(10) & \"\"Monto: \"\" & TEXTO(E3; \"\"$ #.##0\"\") & CARACTER(10) & \"\"Detalle: \"\" & M3 & CARACTER(10) & \"\"Forma de Pago: \"\" & F3 & SI(P3<>\"\"\"\"; CARACTER(10) & \"\"Link: \"\" & P3; \"\"\"\"))\"",
     "    End If",
     "    ",
     "    ' Fallbacks para Celda 19 (CMD Crear Carpetas)",
@@ -1455,6 +1489,109 @@ export async function exportFinalExcel(ordenes: OrdenCompra[]) {
     "           \"• Con Firma 1 de Tomás automática (< $5.5M): \" & cantAutoFirma & vbCrLf & _",
     "           \"• Esperando 1ra firma manual de Tomás (>= $5.5M): \" & (cantTotal - cantAutoFirma) & vbCrLf & _",
     "           \"• Podés ver el seguimiento en 'Resumen Firmantes'.\", vbInformation, \"Tomas Procesado\"",
+    "End Sub",
+    "",
+    "Sub CopiarFormatoParaCorreo()",
+    "    Dim wsOC As Worksheet, r As Long, texto As String, ocNum As String",
+    "    ",
+    "    On Error Resume Next",
+    "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ThisWorkbook.Sheets(\"Ordenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ActiveSheet",
+    "    On Error GoTo 0",
+    "    ",
+    "    r = ActiveCell.Row",
+    "    If r < 3 Or wsOC.Cells(r, 3).Value = \"\" Then",
+    "        r = 3 ' Si seleccionó cabecera o celda vacía, toma la primera orden",
+    "    End If",
+    "    ",
+    "    ocNum = Trim(wsOC.Cells(r, 3).Value)",
+    "    texto = wsOC.Cells(r, 18).Text",
+    "    If Trim(texto) = \"\" Then texto = wsOC.Cells(r, 18).Value",
+    "    ",
+    "    If Trim(texto) = \"\" Then",
+    "        MsgBox \"No hay texto para copiar en la fila seleccionada (Fila \" & r & \").\", vbExclamation",
+    "        Exit Sub",
+    "    End If",
+    "    ",
+    "    EnviarPortapapelesTexto texto",
+    "    ",
+    "    MsgBox \"¡Texto de OC \" & ocNum & \" copiado al portapapeles como TEXTO PURO!\" & vbCrLf & vbCrLf & _",
+    "           \"Al pegarlo en Outlook, Gmail o Teams (Ctrl + V):\" & vbCrLf & _",
+    "           \"• No tendrá bordes de celda ni formato de tabla de Excel.\" & vbCrLf & _",
+    "           \"• El enlace de SharePoint será reconocido automáticamente como link activo.\", vbInformation, \"Copiado para Correo\"",
+    "End Sub",
+    "",
+    "Sub CopiarCMDMultiCarpetas()",
+    "    Dim wsOC As Worksheet, r As Long, lastRow As Long",
+    "    Dim cmdAcumulado As String, cantCarpetas As Long, cmdFila As String",
+    "    ",
+    "    On Error Resume Next",
+    "    Set wsOC = ThisWorkbook.Sheets(\"Órdenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ThisWorkbook.Sheets(\"Ordenes de Compra\")",
+    "    If wsOC Is Nothing Then Set wsOC = ActiveSheet",
+    "    On Error GoTo 0",
+    "    ",
+    "    lastRow = wsOC.Cells(wsOC.Rows.Count, \"C\").End(xlUp).Row",
+    "    If lastRow < 3 Then",
+    "        MsgBox \"No hay órdenes cargadas en la tabla.\", vbExclamation",
+    "        Exit Sub",
+    "    End If",
+    "    ",
+    "    cmdAcumulado = \"\"",
+    "    cantCarpetas = 0",
+    "    ",
+    "    ' Recorrer filas visibles de la tabla (respeta filtros aplicados)",
+    "    For r = 3 To lastRow",
+    "        If Not wsOC.Rows(r).Hidden Then",
+    "            If wsOC.Cells(r, 7).Value <> \"Cancelada\" Then",
+    "                cmdFila = Trim(wsOC.Cells(r, 19).Text)",
+    "                If cmdFila = \"\" Then cmdFila = Trim(wsOC.Cells(r, 19).Value)",
+    "                ",
+    "                If cmdFila <> \"\" Then",
+    "                    If cmdAcumulado = \"\" Then",
+    "                        cmdAcumulado = cmdFila",
+    "                    Else",
+    "                        cmdAcumulado = cmdAcumulado & vbCrLf & cmdFila",
+    "                    End If",
+    "                    cantCarpetas = cantCarpetas + 1",
+    "                End If",
+    "            End If",
+    "        End If",
+    "    Next r",
+    "    ",
+    "    If cantCarpetas = 0 Then",
+    "        MsgBox \"No se encontraron carpetas para acumular.\", vbExclamation",
+    "        Exit Sub",
+    "    End If",
+    "    ",
+    "    EnviarPortapapelesTexto cmdAcumulado",
+    "    ",
+    "    MsgBox \"¡CMD Multi-Carpetas copiado al portapapeles!\" & vbCrLf & vbCrLf & _",
+    "           \"• Cantidad de carpetas acumuladas: \" & cantCarpetas & vbCrLf & _",
+    "           \"• Abrí CMD en tu ruta de SharePoint y presioná Ctrl + V.\" & vbCrLf & _",
+    "           \"Se crearán todas las carpetas juntas al instante.\", vbInformation, \"CMD Multi-Carpetas\"",
+    "End Sub",
+    "",
+    "Sub EnviarPortapapelesTexto(ByVal texto As String)",
+    "    Dim MSForms_DataObject As Object",
+    "    On Error Resume Next",
+    "    Set MSForms_DataObject = CreateObject(\"New:{1C3B4210-F441-11CE-B9EA-00AA006B1A69}\")",
+    "    MSForms_DataObject.SetText texto",
+    "    MSForms_DataObject.PutInClipboard",
+    "    If Err.Number <> 0 Then",
+    "        Dim fso As Object, tempFile As String, shellObj As Object",
+    "        Set fso = CreateObject(\"Scripting.FileSystemObject\")",
+    "        tempFile = Environ(\"TEMP\") & \"\\clip_temp.txt\"",
+    "        With fso.CreateTextFile(tempFile, True, False)",
+    "            .Write texto",
+    "            .Close",
+    "        End With",
+    "        Set shellObj = CreateObject(\"WScript.Shell\")",
+    "        shellObj.Run \"cmd.exe /c type \"\"\" & tempFile & \"\"\" | clip\", 0, True",
+    "        fso.DeleteFile tempFile, True",
+    "    End If",
+    "    On Error GoTo 0",
     "End Sub",
   ];
 
