@@ -19,19 +19,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
-      url: `${SITE_URL}/estadisticas`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.9,
-    },
-    {
       url: `${SITE_URL}/calendario`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
-      url: `${SITE_URL}/proceso-de-liberacion`,
       lastModified: now,
       changeFrequency: "daily",
       priority: 0.8,
@@ -58,12 +46,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${SITE_URL}/calculadora`,
       lastModified: now,
       changeFrequency: "weekly",
-      priority: 0.6,
-    },
-    {
-      url: `${SITE_URL}/seguimiento-de-ordenes`,
-      lastModified: now,
-      changeFrequency: "daily",
       priority: 0.6,
     },
     {

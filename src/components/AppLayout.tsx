@@ -9,7 +9,6 @@ import { CotizacionesTicker } from "@/components/CotizacionesTicker";
 import { 
   ShoppingBag, 
   TrendingUp, 
-  Clock, 
   ShieldCheck, 
   Building2, 
   Menu, 
@@ -22,14 +21,12 @@ import {
   Calculator, 
   ClipboardList,
   Scale,
-  BarChart3,
   FileUp,
   Moon,
   Sparkles,
   ArrowRight,
   PanelLeftClose,
   PanelLeft,
-  CalendarDays,
   Home
 } from "lucide-react";
 
@@ -93,9 +90,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     if (!loading && user && isOrdenesUser && pathname !== "/seguimiento-de-ordenes") {
       router.push("/seguimiento-de-ordenes");
     }
-    if (!loading && user && !isOrdenesUser && pathname === "/seguimiento-de-ordenes") {
-      router.push("/");
-    }
   }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
   const navigationSections: {
@@ -124,13 +118,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           name: "Órdenes de Compra",
           href: "/ordenes-de-compras",
           icon: ShoppingBag,
-          exact: false,
-          hideForOrders: true,
-        },
-        {
-          name: "Proceso de Liberación",
-          href: "/proceso-de-liberacion",
-          icon: Clock,
           exact: false,
           hideForOrders: true,
         },
@@ -187,21 +174,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       title: "Análisis & Sistemas",
       items: [
         {
-          name: "Estadísticas Mensuales",
-          href: "/estadisticas-mensuales",
-          icon: CalendarDays,
-          exact: false,
-          badge: "Nuevo",
-          hideForOrders: true,
-        },
-        {
-          name: "Estadísticas",
-          href: "/estadisticas",
-          icon: BarChart3,
-          exact: false,
-          hideForOrders: true,
-        },
-        {
           name: "Temporal",
           href: "/temporal",
           icon: FileUp,
@@ -241,7 +213,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   };
 
   const isForbiddenForOrdenes = !loading && Boolean(user) && Boolean(isOrdenesUser) && pathname !== "/seguimiento-de-ordenes";
-  const isForbiddenForOtherUsers = !loading && Boolean(user) && !isOrdenesUser && pathname === "/seguimiento-de-ordenes";
+  const isForbiddenForOtherUsers = false;
 
   if (loading || (!user && !publicRoute) || isForbiddenForOrdenes || isForbiddenForOtherUsers) {
     return (

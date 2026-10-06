@@ -3,7 +3,7 @@ import {
   FileQuestion, 
   Home, 
   ShoppingBag, 
-  BarChart3, 
+  Scale, 
   Calendar, 
   ClipboardList, 
   ArrowLeft,
@@ -22,11 +22,10 @@ export const metadata = {
 
 export default function NotFound() {
   const quickLinks = [
-    { name: "Órdenes de Compra", href: "/", icon: ShoppingBag, desc: "Gestión principal y carga" },
     { name: "Dashboard de Inicio", href: "/inicio", icon: Home, desc: "Resumen ejecutivo" },
-    { name: "Estadísticas y KPIs", href: "/estadisticas", icon: BarChart3, desc: "Métricas y evolución" },
+    { name: "Cotizaciones", href: "/cotizaciones", icon: Scale, desc: "Comparación y precios" },
     { name: "Calendario de Pagos", href: "/calendario", icon: Calendar, desc: "Fechas de vencimiento" },
-    { name: "Pendientes", href: "/pendientes", icon: ClipboardList, desc: "Órdenes por liberar" },
+    { name: "Pendientes", href: "/pendientes", icon: ClipboardList, desc: "Tareas por resolver" },
   ];
 
   return (

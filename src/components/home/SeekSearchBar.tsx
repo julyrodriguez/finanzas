@@ -148,7 +148,7 @@ export function SeekSearchBar({ onSearchSubmit, className = "" }: SeekSearchBarP
           onChange={(e) => handleChange(e.target.value)}
           onBlur={handleClose}
           onKeyDown={handleKeyDown}
-          placeholder="Buscar órdenes o cotizaciones..."
+          placeholder="Buscar cotizaciones o tareas..."
           tabIndex={isOpen ? 0 : -1}
           className={`w-full h-full bg-transparent pl-11 pr-9 text-xs sm:text-sm font-semibold text-white placeholder-slate-400 outline-none transition-opacity duration-200 ${
             isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"

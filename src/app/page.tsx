@@ -8,26 +8,12 @@ import { EyeTrackerCube } from "@/components/home/EyeTrackerCube";
 import { BeachWeatherBackdrop } from "@/components/home/BeachWeatherBackdrop";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
 import { SeekSearchBar } from "@/components/home/SeekSearchBar";
-import { OrderDetailModal } from "@/components/ordenes/OrderDetailModal";
 import { CotizacionDetailModal } from "@/components/cotizaciones/CotizacionDetailModal";
-import type { OrdenCompra, Nota } from "@/types/ordenes";
-import { useAuth } from "@/context/AuthContext";
-import { getFirebaseDb } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
-import { syncOrderToMongo } from "@/lib/serverSync";
 import { 
-  ShoppingBag, 
-  Clock, 
   Scale, 
   Percent, 
-  ArrowRight, 
-  Sparkles, 
-  ShieldCheck, 
   Building2, 
-  FileSpreadsheet,
-  Layers,
-  ChevronRight,
-  Search
+  ChevronRight
 } from "lucide-react";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -55,17 +41,13 @@ function MenuCard({
   gradientHover,
   ctaText,
 }: MenuCardProps) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <Link href={href} className="block group select-none">
       <motion.div
         whileHover={{ y: -4, scale: 1.015 }}
         whileTap={{ scale: 0.98 }}
         transition={{ duration: 0.18, ease: EASE_OUT }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className={`relative overflow-hidden rounded-2xl p-4 sm:p-4.5 border border-white/[0.08] bg-[#0d1322]/85 backdrop-blur-xl transition-all duration-300 shadow-lg group-hover:border-white/20 group-hover:shadow-xl ${gradientHover}`}
+        className={`relative overflow-hidden rounded-2xl p-4 sm:p-5 border border-white/[0.08] bg-[#0d1322]/85 backdrop-blur-xl transition-all duration-300 shadow-lg group-hover:border-white/20 group-hover:shadow-xl ${gradientHover}`}
       >
         {/* Ambient Top Glow */}
         <div 
@@ -105,17 +87,11 @@ function MenuCard({
 }
 
 export default function HomePage() {
-  const { user } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchModalQuery, setSearchModalQuery] = useState("");
 
   // Modals for detail view
-  const [selectedOrdenForDetail, setSelectedOrdenForDetail] = useState<OrdenCompra | null>(null);
   const [selectedQuoteForDetail, setSelectedQuoteForDetail] = useState<any | null>(null);
-
-  // Note state for OrderDetailModal
-  const [newNotaText, setNewNotaText] = useState("");
-  const [savingNota, setSavingNota] = useState(false);
 
   // Idle / Inactivity 1-minute detection for Giant Carita Screensaver
   const [isIdle, setIsIdle] = useState(false);
@@ -130,7 +106,7 @@ export default function HomePage() {
         clearTimeout(idleTimeoutRef.current);
       }
       // Only set idle timer when no modal is open
-      if (!isSearchOpen && !selectedOrdenForDetail && !selectedQuoteForDetail) {
+      if (!isSearchOpen && !selectedQuoteForDetail) {
         idleTimeoutRef.current = setTimeout(() => {
           setIsIdle(true);
         }, IDLE_TIME);
@@ -161,7 +137,7 @@ export default function HomePage() {
         window.removeEventListener(ev, handleActivity);
       });
     };
-  }, [isSearchOpen, selectedOrdenForDetail, selectedQuoteForDetail]);
+  }, [isSearchOpen, selectedQuoteForDetail]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -174,49 +150,6 @@ export default function HomePage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  const handleAddNota = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNotaText.trim() || !selectedOrdenForDetail || !selectedOrdenForDetail.id) return;
-
-    setSavingNota(true);
-    const now = new Date();
-    const formattedDate = `${now.toLocaleDateString("es-AR")} ${now.toLocaleTimeString("es-AR", { hour: '2-digit', minute: '2-digit' })}`;
-
-    const nuevaNota: Nota = {
-      id: "nota-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
-      texto: newNotaText.trim(),
-      autor: user?.displayName || user?.email?.split("@")[0] || "julian",
-      fecha: formattedDate,
-    };
-
-    const updatedNotas = [...(selectedOrdenForDetail.notas || []), nuevaNota];
-    const updatedOrden = { ...selectedOrdenForDetail, notas: updatedNotas };
-    setSelectedOrdenForDetail(updatedOrden);
-
-    syncOrderToMongo(updatedOrden);
-
-    const db = getFirebaseDb();
-    if (db && selectedOrdenForDetail.id) {
-      try {
-        const docRef = doc(db, "ordenes_compra", selectedOrdenForDetail.id);
-        await updateDoc(docRef, { notas: updatedNotas });
-      } catch (err) {
-        console.warn("Aviso Firebase al agregar nota:", err);
-      }
-    }
-
-    setNewNotaText("");
-    setSavingNota(false);
-  };
-
-  const handleStatusChange = (ordenId: string, updatedFields: Partial<OrdenCompra>) => {
-    if (selectedOrdenForDetail && selectedOrdenForDetail.id === ordenId) {
-      const updated = { ...selectedOrdenForDetail, ...updatedFields };
-      setSelectedOrdenForDetail(updated);
-      syncOrderToMongo(updated);
-    }
-  };
 
   return (
     <AppLayout title="Portal Principal" subtitle="Cinemark & Hoyts">
@@ -232,37 +165,25 @@ export default function HomePage() {
             Centro de Control de Compras
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 font-medium">
-            Seleccioná uno de los módulos operativos principales para acceder a la gestión
+            Seleccioná uno de los módulos operativos para acceder a la gestión
           </p>
         </div>
 
         {/* Desktop 3-Column Layout with Center Eye-Tracker Cube */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-center w-full max-w-6xl mx-auto">
           
-          {/* Left Column: 2 Cards */}
-          <div className="order-2 lg:order-1 lg:col-span-4 flex flex-col gap-4 sm:gap-4.5 max-w-[340px] w-full mx-auto z-10">
+          {/* Left Column: Cotizaciones */}
+          <div className="order-2 lg:order-1 lg:col-span-4 flex flex-col justify-center max-w-[340px] w-full mx-auto z-10">
             <MenuCard
-              href="/ordenes-de-compras"
-              title="Órdenes de Compra"
-              badge="Operaciones"
-              badgeColor="bg-blue-500/10 text-blue-400 border-blue-500/20"
-              icon={ShoppingBag}
-              iconBg="bg-blue-500/15 border-blue-500/30"
-              iconColor="text-blue-400"
-              gradientHover="group-hover:shadow-blue-500/10"
-              ctaText="Ingresar a Órdenes"
-            />
-
-            <MenuCard
-              href="/proceso-de-liberacion"
-              title="Proceso de Liberación"
-              badge="Firmas & Pago"
-              badgeColor="bg-amber-500/10 text-amber-300 border-amber-500/20"
-              icon={Clock}
-              iconBg="bg-amber-500/15 border-amber-500/30"
-              iconColor="text-amber-400"
-              gradientHover="group-hover:shadow-amber-500/10"
-              ctaText="Ver Liberaciones"
+              href="/cotizaciones"
+              title="Cotizaciones"
+              badge="Precios & IA"
+              badgeColor="bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+              icon={Scale}
+              iconBg="bg-emerald-500/15 border-emerald-500/30"
+              iconColor="text-emerald-400"
+              gradientHover="group-hover:shadow-emerald-500/10"
+              ctaText="Comparar Cotizaciones"
             />
           </div>
 
@@ -289,7 +210,7 @@ export default function HomePage() {
                 </div>
               </BeachWeatherBackdrop>
 
-              {/* Seek Search Bar below the carita (bencho.dev/blocks/seek) */}
+              {/* Seek Search Bar below the carita */}
               <div className="mt-5 flex flex-col items-center w-full">
                 <SeekSearchBar
                   onSearchSubmit={(val) => {
@@ -301,20 +222,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Right Column: 2 Cards */}
-          <div className="order-3 lg:order-3 lg:col-span-4 flex flex-col gap-4 sm:gap-4.5 max-w-[340px] w-full mx-auto z-10">
-            <MenuCard
-              href="/cotizaciones"
-              title="Cotizaciones"
-              badge="Precios & IA"
-              badgeColor="bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
-              icon={Scale}
-              iconBg="bg-emerald-500/15 border-emerald-500/30"
-              iconColor="text-emerald-400"
-              gradientHover="group-hover:shadow-emerald-500/10"
-              ctaText="Comparar Cotizaciones"
-            />
-
+          {/* Right Column: Distribución */}
+          <div className="order-3 lg:order-3 lg:col-span-4 flex flex-col justify-center max-w-[340px] w-full mx-auto z-10">
             <MenuCard
               href="/distribucion"
               title="Distribución"
@@ -340,29 +249,12 @@ export default function HomePage() {
       <HomeSearchModal
         isOpen={isSearchOpen}
         initialQuery={searchModalQuery}
-        isSubModalOpen={Boolean(selectedOrdenForDetail || selectedQuoteForDetail)}
+        isSubModalOpen={Boolean(selectedQuoteForDetail)}
         onClose={() => setIsSearchOpen(false)}
-        onSelectOC={(oc) => {
-          setSelectedOrdenForDetail(oc);
-        }}
         onSelectCotizacion={(quote) => {
           setSelectedQuoteForDetail(quote);
         }}
       />
-
-      {/* Order Detail Modal (direct view without page change) */}
-      {selectedOrdenForDetail && (
-        <OrderDetailModal
-          orden={selectedOrdenForDetail}
-          onClose={() => setSelectedOrdenForDetail(null)}
-          isOrdenesUser={true}
-          onStatusChange={handleStatusChange}
-          newNotaText={newNotaText}
-          setNewNotaText={setNewNotaText}
-          savingNota={savingNota}
-          onAddNota={handleAddNota}
-        />
-      )}
 
       {/* Cotización Detail Modal (direct view) */}
       {selectedQuoteForDetail && (
