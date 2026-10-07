@@ -35,7 +35,8 @@ import {
   RotateCcw,
   Bot,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  CheckCheck
 } from "lucide-react";
 import { QuoteAttachment } from "./CotizacionesAiChatModal";
 
@@ -631,6 +632,14 @@ export function CotizacionesImportAiModal({
     );
   };
 
+  const handleSelectAll = () => {
+    setItems((prev) => prev.map((item) => ({ ...item, selected: true })));
+  };
+
+  const handleDeselectAll = () => {
+    setItems((prev) => prev.map((item) => ({ ...item, selected: false })));
+  };
+
   const handleToggleSelectAll = () => {
     const allSelected = items.every((it) => it.selected);
     setItems((prev) => prev.map((item) => ({ ...item, selected: !allSelected })));
@@ -668,7 +677,7 @@ export function CotizacionesImportAiModal({
   };
 
   const REFINEMENT_QUICK_PROMPTS = [
-    { label: "📦 Agrupar por rubros", prompt: "Agrupá todos los ítems por sus rubros o capítulos generales principales, sumando los precios totales y dejando la especificación detallada." },
+    { label: "📦 Agrupar por rubros", prompt: "Agrupá todos los ítems por sus rubros o capítulos generales principales, sumando los precios totales y dejando la especificación detallada con el texto completo de los ítems." },
     { label: "➕ Sumar ítem faltante", prompt: "Revisá el documento original y agregá los ítems cotizados que falten en la lista con sus precios reales." },
     { label: "🧮 Calcular con 21% IVA", prompt: "Sumale el 21% de IVA a todos los precios unitarios y totales de los ítems." },
     { label: "✂️ Separar Mano de Obra y Materiales", prompt: "Separá los ítems en renglones individuales para Mano de Obra y Materiales con sus respectivos precios." },
@@ -691,9 +700,8 @@ export function CotizacionesImportAiModal({
       (it) => `${it.name} (${it.quantity} ${it.unit} a $${it.price.toLocaleString("es-AR")})`
     ).join("; ");
     
-    const suggestedName = selectedItemsToGroup.length === 2
-      ? `${selectedItemsToGroup[0].name} y ${selectedItemsToGroup[1].name}`
-      : `Grupo: ${selectedItemsToGroup[0].name} (${selectedItemsToGroup.length} ítems)`;
+    // El nombre del grupo consolida el texto completo de todos los ítems agrupados unidos por ' + '
+    const suggestedName = selectedItemsToGroup.map((it) => it.name.trim()).join(" + ");
 
     setGroupName(suggestedName);
     setGroupQuantity(1);
@@ -721,6 +729,9 @@ export function CotizacionesImportAiModal({
       ).join("; ");
       setGroupSpecification(newSpec);
 
+      const newSuggestedName = currentSelected.map((it) => it.name.trim()).join(" + ");
+      setGroupName(newSuggestedName);
+
       return next;
     });
   };
@@ -729,9 +740,10 @@ export function CotizacionesImportAiModal({
     const itemsToGroup = items.filter((it) => groupSelectedIds.has(it.id));
     if (itemsToGroup.length < 2) return;
 
+    const autoCombinedName = itemsToGroup.map((it) => it.name.trim()).join(" + ");
     const groupedItem: ExtractedItem = {
       id: `group-${Date.now()}`,
-      name: groupName.trim() || "Ítem Agrupado",
+      name: groupName.trim() || autoCombinedName || "Ítem Agrupado",
       quantity: Number(groupQuantity) || 1,
       unit: groupUnit.trim() || "GL",
       price: Number(groupPrice) || 0,
@@ -1039,7 +1051,7 @@ export function CotizacionesImportAiModal({
                 type="text"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
-                placeholder="Ej: Estructura metálica completa, Materiales sanitarios..."
+                placeholder="Ej: Ítem 1 + Ítem 2 + Ítem 3..."
                 className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none"
               />
             </div>
@@ -1867,10 +1879,22 @@ export function CotizacionesImportAiModal({
 
                     <button
                       type="button"
-                      onClick={handleToggleSelectAll}
-                      className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer ml-1"
+                      onClick={handleSelectAll}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-xl transition-colors cursor-pointer"
+                      title="Seleccionar todos los ítems"
                     >
-                      {items.every((it) => it.selected) ? "Desmarcar todos" : "Seleccionar todos"}
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Seleccionar todos</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDeselectAll}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors cursor-pointer"
+                      title="Deseleccionar todos los ítems"
+                    >
+                      <X className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Deseleccionar todos</span>
                     </button>
                   </div>
                 </div>

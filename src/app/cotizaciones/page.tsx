@@ -150,6 +150,7 @@ interface Item {
   name: string;
   baseUnit: string;
   targetQuantity: number;
+  description?: string;
 }
 
 interface QuoteDetail {
@@ -1301,7 +1302,8 @@ export default function CotizacionesPage() {
           id: targetItemId,
           name: si.name,
           baseUnit: si.unit || "U",
-          targetQuantity: si.quantity || 1
+          targetQuantity: si.quantity || 1,
+          description: si.specification || undefined
         };
         newItemsToCreate.push(newItem);
         currentItems.push(newItem);
@@ -1536,7 +1538,8 @@ export default function CotizacionesPage() {
             id: targetItemId,
             name: si.name,
             baseUnit: si.unit || "U",
-            targetQuantity: si.quantity || 1
+            targetQuantity: si.quantity || 1,
+            description: si.specification || undefined
           };
           currentItems.push(newItem);
           newItemsAdded.push(newItem);
@@ -3934,7 +3937,7 @@ export default function CotizacionesPage() {
                               >
                                 {/* Item label */}
                                 <div className="lg:col-span-3 space-y-0.5">
-                                  <h4 className="text-xs font-bold text-white truncate" title={item.name}>
+                                  <h4 className="text-xs font-bold text-white break-words leading-tight" title={item.name}>
                                     {item.name || "Ítem sin nombre"}
                                   </h4>
                                   <span className="text-[10px] text-slate-400 tabular-nums">
@@ -4425,7 +4428,7 @@ export default function CotizacionesPage() {
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="sticky top-0 bg-[#0a0e1a] z-20 border-b border-white/[0.08]">
                   <tr>
-                    <th className="py-3 px-4 font-bold text-slate-300 sticky left-0 bg-[#0a0e1a] z-30 min-w-[200px]">
+                    <th className="py-3 px-4 font-bold text-slate-300 sticky left-0 bg-[#0a0e1a] z-30 min-w-[260px] max-w-[380px]">
                       Ítem / Insumo
                     </th>
                     <th className="py-3 px-3 font-bold text-slate-400 text-center w-24">
@@ -4523,7 +4526,7 @@ export default function CotizacionesPage() {
                     })}
                   </tr>
                   <tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-[#080b15]">
-                    <th className="py-1 px-4 sticky left-0 bg-[#080b15] z-30"></th>
+                    <th className="py-1 px-4 sticky left-0 bg-[#080b15] z-30 min-w-[260px] max-w-[380px]"></th>
                     <th className="py-1 px-3 text-center"></th>
                     {providers.map((prov) => {
                       const isExcluded = excludedProviderIds.includes(prov.id);
@@ -4544,6 +4547,7 @@ export default function CotizacionesPage() {
                 <tbody className="divide-y divide-white/[0.04]">
                   {items.map((item) => {
                     const isExcluded = excludedItemIds.includes(item.id);
+                    const itemComponentSpec = item.description || (providers.map((p) => p.quotes[item.id]?.specification).find((s) => !!s && s.toLowerCase().includes("incluye:")) || undefined);
 
                     return (
                       <tr
@@ -4552,17 +4556,32 @@ export default function CotizacionesPage() {
                           isExcluded ? "opacity-40" : ""
                         }`}
                       >
-                        <td className="py-3 px-4 sticky left-0 bg-[#0d1222] z-10 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={!isExcluded}
-                            onChange={() => toggleItemInclusion(item.id)}
-                            className="rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer"
-                            title="Incluir / Excluir del total"
-                          />
-                          <span className="font-semibold text-white truncate max-w-[180px]">
-                            {item.name || "Ítem sin nombre"}
-                          </span>
+                        <td className="py-3 px-4 sticky left-0 bg-[#0d1222] z-10 min-w-[260px] max-w-[380px]">
+                          <div className="flex items-start gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={!isExcluded}
+                              onChange={() => toggleItemInclusion(item.id)}
+                              className="mt-0.5 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500 cursor-pointer shrink-0"
+                              title="Incluir / Excluir del total"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span
+                                className="font-semibold text-white text-xs leading-snug break-words block"
+                                title={item.name}
+                              >
+                                {item.name || "Ítem sin nombre"}
+                              </span>
+                              {itemComponentSpec && (
+                                <span
+                                  className="text-[10px] text-emerald-400/90 block mt-0.5 italic line-clamp-2"
+                                  title={itemComponentSpec}
+                                >
+                                  {itemComponentSpec}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3 px-3 text-center tabular-nums text-slate-400 font-mono">
                           {item.targetQuantity} {item.baseUnit}
