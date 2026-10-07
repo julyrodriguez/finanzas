@@ -19,7 +19,12 @@ import {
   FileSpreadsheet,
   Layers,
   ListOrdered,
-  Paperclip
+  Paperclip,
+  Clock,
+  CreditCard,
+  Calendar,
+  CheckCircle2,
+  Files
 } from "lucide-react";
 import { QuoteAttachment } from "./CotizacionesAiChatModal";
 
@@ -47,6 +52,169 @@ export interface ExistingQuoteItem {
   targetQuantity: number;
 }
 
+export interface ImportPayload {
+  providerName: string;
+  currency: "ARS" | "USD";
+  notes?: string;
+  deliveryTime?: string;
+  paymentTerms?: string;
+  validityPeriod?: string;
+  attachment: QuoteAttachment;
+  targetProviderId?: string;
+  selectedItems: Array<{
+    name: string;
+    unit: string;
+    quantity: number;
+    price: number;
+    discount: number;
+    specification: string;
+    presentationName: string;
+    unitsPerPresentation: number;
+    matchedItemId: string | null;
+  }>;
+}
+
+export interface BatchFileItem {
+  id: string;
+  file: File;
+  status: "pending" | "analyzing" | "done" | "error";
+  error?: string;
+  payload?: ImportPayload;
+}
+
+function parseCommercialConditions(notesText: string, extractedObj: any): { deliveryTime: string; paymentTerms: string; validityPeriod: string } {
+  let deliveryTime = extractedObj?.deliveryTime || extractedObj?.plazoEntrega || extractedObj?.plazo || "";
+  let paymentTerms = extractedObj?.paymentTerms || extractedObj?.formaPago || extractedObj?.condicionPago || extractedObj?.condiciones || "";
+  let validityPeriod = extractedObj?.validityPeriod || extractedObj?.validez || extractedObj?.vigencia || "";
+
+  if (!deliveryTime && notesText) {
+    const match = notesText.match(/(?:plazo(?:\s+de\s+entrega)?|tiempo(?:\s+de\s+entrega)?|entrega|demora)\s*[:=-]?\s*([0-9a-zA-Z\s]{2,40})(?:[.,\n;]|$)/i);
+    if (match) deliveryTime = match[1].trim();
+  }
+  if (!paymentTerms && notesText) {
+    const match = notesText.match(/(?:forma(?:\s+de\s+pago)?|condici[oó]n(?:\s+de\s+pago)?|plazo(?:\s+de\s+pago)?|pago)\s*[:=-]?\s*([0-9a-zA-Z\s]{2,40})(?:[.,\n;]|$)/i);
+    if (match) paymentTerms = match[1].trim();
+  }
+  if (!validityPeriod && notesText) {
+    const match = notesText.match(/(?:validez(?:\s+de\s+oferta)?|vigencia(?:\s+de\s+oferta)?)\s*[:=-]?\s*([0-9a-zA-Z\s]{2,40})(?:[.,\n;]|$)/i);
+    if (match) validityPeriod = match[1].trim();
+  }
+
+  return { deliveryTime, paymentTerms, validityPeriod };
+}
+
+export async function extractSingleFileToPayload(
+  file: File,
+  mode: ExtractionMode,
+  cotizacionId?: string,
+  targetProviderId?: string,
+  targetProviderName?: string,
+  existingItems: ExistingQuoteItem[] = []
+): Promise<ImportPayload> {
+  const targetQuoteId = cotizacionId || "temp_" + Date.now();
+  const baseUrl = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
+
+  const formData = new FormData();
+  formData.append("cotizacionId", targetQuoteId);
+  formData.append("extractionMode", mode);
+  if (targetProviderId) formData.append("providerId", targetProviderId);
+  if (targetProviderName) formData.append("providerName", targetProviderName);
+  if (existingItems.length > 0) formData.append("existingItems", JSON.stringify(existingItems));
+  formData.append("file", file);
+
+  const res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `Error del servidor: ${res.status}`);
+  }
+
+  const resData = await res.json();
+  if (!resData.success || !resData.data) {
+    throw new Error(resData.error || "No se pudo extraer la información del presupuesto");
+  }
+
+  const extracted = resData.data || {};
+  const finalAttachment: QuoteAttachment = resData.attachment || {
+    id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    originalName: file.name,
+    filename: file.name,
+    url: "",
+    size: file.size,
+    mimeType: file.type || "application/octet-stream"
+  };
+
+  const defaultProvider = file.name ? file.name.replace(/\.[^/.]+$/, "") : "Proveedor";
+  const isGenericProviderName = !targetProviderName || /^proveedor(\s*\d+)?$/i.test(targetProviderName.trim());
+  const finalProviderName = (!isGenericProviderName ? targetProviderName : extracted.providerName) || extracted.providerName || targetProviderName || defaultProvider;
+  const finalCurrency: "ARS" | "USD" = extracted.currency === "USD" ? "USD" : "ARS";
+  const finalNotes = extracted.notes || "";
+
+  const conditions = parseCommercialConditions(finalNotes, extracted);
+
+  let rawItems: any[] = [];
+  if (Array.isArray(extracted.items)) {
+    rawItems = extracted.items;
+  } else if (extracted.items && typeof extracted.items === "object") {
+    rawItems = Object.values(extracted.items);
+  } else if (Array.isArray(extracted)) {
+    rawItems = extracted;
+  }
+
+  const usedMatchedIds = new Set<string>();
+  const selectedItems = rawItems.map((it: any, index: number) => {
+    const itemObj = (it && typeof it === "object") ? it : { name: String(it) };
+    const parsedPrice = typeof itemObj.price === "number"
+      ? itemObj.price
+      : parseFloat(String(itemObj.price || "").replace(/[^0-9.-]/g, "")) || 0;
+    const parsedQty = mode === "general"
+      ? 1
+      : (typeof itemObj.quantity === "number" ? itemObj.quantity : parseFloat(String(itemObj.quantity || "")) || 1);
+    const parsedDiscount = typeof itemObj.discount === "number"
+      ? itemObj.discount
+      : parseFloat(String(itemObj.discount || "")) || 0;
+    const parsedUnits = typeof itemObj.unitsPerPresentation === "number"
+      ? itemObj.unitsPerPresentation
+      : parseFloat(String(itemObj.unitsPerPresentation || "")) || 1;
+
+    let initialMatchedId = itemObj.matchedItemId || null;
+    if (initialMatchedId) {
+      if (usedMatchedIds.has(initialMatchedId)) {
+        initialMatchedId = null;
+      } else {
+        usedMatchedIds.add(initialMatchedId);
+      }
+    }
+
+    return {
+      name: itemObj.name || `Ítem ${index + 1}`,
+      unit: itemObj.unit || "U",
+      quantity: parsedQty,
+      price: parsedPrice,
+      discount: parsedDiscount,
+      specification: itemObj.specification || "",
+      presentationName: itemObj.presentationName || "",
+      unitsPerPresentation: parsedUnits,
+      matchedItemId: initialMatchedId
+    };
+  });
+
+  return {
+    providerName: finalProviderName,
+    currency: finalCurrency,
+    notes: finalNotes,
+    deliveryTime: conditions.deliveryTime,
+    paymentTerms: conditions.paymentTerms,
+    validityPeriod: conditions.validityPeriod,
+    attachment: finalAttachment,
+    targetProviderId,
+    selectedItems
+  };
+}
+
 interface CotizacionesImportAiModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -54,24 +222,8 @@ interface CotizacionesImportAiModalProps {
   existingItems: ExistingQuoteItem[];
   targetProviderId?: string;
   targetProviderName?: string;
-  onConfirmImport: (payload: {
-    providerName: string;
-    currency: "ARS" | "USD";
-    notes?: string;
-    attachment: QuoteAttachment;
-    targetProviderId?: string;
-    selectedItems: Array<{
-      name: string;
-      unit: string;
-      quantity: number;
-      price: number;
-      discount: number;
-      specification: string;
-      presentationName: string;
-      unitsPerPresentation: number;
-      matchedItemId: string | null;
-    }>;
-  }) => Promise<void> | void;
+  onConfirmImport: (payload: ImportPayload) => Promise<void> | void;
+  onConfirmBatchImport?: (payloads: ImportPayload[]) => Promise<void> | void;
 }
 
 export function CotizacionesImportAiModal({
@@ -81,13 +233,14 @@ export function CotizacionesImportAiModal({
   existingItems,
   targetProviderId,
   targetProviderName,
-  onConfirmImport
+  onConfirmImport,
+  onConfirmBatchImport
 }: CotizacionesImportAiModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [extractionMode, setExtractionMode] = useState<ExtractionMode>("general");
   const [cachedResults, setCachedResults] = useState<{
-    general?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; attachment?: QuoteAttachment };
-    detailed?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; attachment?: QuoteAttachment };
+    general?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; deliveryTime?: string; paymentTerms?: string; validityPeriod?: string; attachment?: QuoteAttachment };
+    detailed?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; deliveryTime?: string; paymentTerms?: string; validityPeriod?: string; attachment?: QuoteAttachment };
   }>({});
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,8 +250,15 @@ export function CotizacionesImportAiModal({
   const [providerName, setProviderName] = useState<string>("");
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
   const [notes, setNotes] = useState<string>("");
+  const [deliveryTime, setDeliveryTime] = useState<string>("");
+  const [paymentTerms, setPaymentTerms] = useState<string>("");
+  const [validityPeriod, setValidityPeriod] = useState<string>("");
   const [items, setItems] = useState<ExtractedItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Batch mode state
+  const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
+  const [batchQueue, setBatchQueue] = useState<BatchFileItem[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,9 +270,14 @@ export function CotizacionesImportAiModal({
     setProviderName("");
     setCurrency("ARS");
     setNotes("");
+    setDeliveryTime("");
+    setPaymentTerms("");
+    setValidityPeriod("");
     setItems([]);
     setIsSubmitting(false);
     setCachedResults({});
+    setIsBatchMode(false);
+    setBatchQueue([]);
   };
 
   const handleClose = () => {
@@ -120,18 +285,104 @@ export function CotizacionesImportAiModal({
     onClose();
   };
 
+  const handleFilesSelected = async (fileList: FileList | File[]) => {
+    const fileArray = Array.from(fileList);
+    if (fileArray.length === 0) return;
+
+    if (fileArray.length === 1) {
+      setIsBatchMode(false);
+      await processFileWithMode(fileArray[0], extractionMode);
+    } else {
+      setIsBatchMode(true);
+      setError(null);
+      const queue: BatchFileItem[] = fileArray.map((f, i) => ({
+        id: `batch-${Date.now()}-${i}`,
+        file: f,
+        status: "pending"
+      }));
+      setBatchQueue(queue);
+      processBatchQueue(queue, extractionMode);
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      await processFileWithMode(selectedFile, extractionMode);
+    if (e.target.files && e.target.files.length > 0) {
+      await handleFilesSelected(e.target.files);
     }
   };
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const droppedFile = e.dataTransfer.files?.[0];
-    if (droppedFile) {
-      await processFileWithMode(droppedFile, extractionMode);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await handleFilesSelected(e.dataTransfer.files);
+    }
+  };
+
+  const processBatchQueue = async (queue: BatchFileItem[], mode: ExtractionMode) => {
+    setIsAnalyzing(true);
+    let updatedQueue = [...queue];
+
+    for (let i = 0; i < updatedQueue.length; i++) {
+      const current = updatedQueue[i];
+      updatedQueue = updatedQueue.map((item, idx) =>
+        idx === i ? { ...item, status: "analyzing" } : item
+      );
+      setBatchQueue(updatedQueue);
+
+      try {
+        const payload = await extractSingleFileToPayload(
+          current.file,
+          mode,
+          cotizacionId,
+          undefined,
+          undefined,
+          existingItems
+        );
+
+        updatedQueue = updatedQueue.map((item, idx) =>
+          idx === i ? { ...item, status: "done", payload } : item
+        );
+        setBatchQueue(updatedQueue);
+      } catch (err: any) {
+        console.error(`Error procesando archivo ${current.file.name}:`, err);
+        updatedQueue = updatedQueue.map((item, idx) =>
+          idx === i
+            ? { ...item, status: "error", error: err.message || "Error al procesar con IA" }
+            : item
+        );
+        setBatchQueue(updatedQueue);
+      }
+    }
+
+    setIsAnalyzing(false);
+  };
+
+  const handleConfirmBatch = async () => {
+    const readyItems = batchQueue.filter((item) => item.status === "done" && item.payload);
+    if (readyItems.length === 0) {
+      setError("No hay presupuestos analizados listos para importar");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payloads = readyItems.map((item) => item.payload!);
+      if (onConfirmBatchImport) {
+        const promise = onConfirmBatchImport(payloads);
+        handleClose();
+        Promise.resolve(promise).catch((err) => {
+          console.warn("Aviso al guardar importación masiva:", err);
+        });
+      } else {
+        for (const p of payloads) {
+          await onConfirmImport(p);
+        }
+        handleClose();
+      }
+    } catch (err: any) {
+      setError(err.message || "Error al importar el lote de presupuestos");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -147,6 +398,9 @@ export function CotizacionesImportAiModal({
       setProviderName(targetProviderName || cached.providerName);
       setCurrency(cached.currency);
       setNotes(cached.notes);
+      setDeliveryTime(cached.deliveryTime || "");
+      setPaymentTerms(cached.paymentTerms || "");
+      setValidityPeriod(cached.validityPeriod || "");
       if (cached.attachment) setAttachment(cached.attachment);
       setExtractionMode(mode);
       return;
@@ -214,9 +468,14 @@ export function CotizacionesImportAiModal({
       const finalCurrency: "ARS" | "USD" = extracted.currency === "USD" ? "USD" : "ARS";
       const finalNotes = extracted.notes || "";
 
+      const conditions = parseCommercialConditions(finalNotes, extracted);
+
       setProviderName(finalProviderName);
       setCurrency(finalCurrency);
       setNotes(finalNotes);
+      setDeliveryTime(conditions.deliveryTime);
+      setPaymentTerms(conditions.paymentTerms);
+      setValidityPeriod(conditions.validityPeriod);
 
       // Extracción robusta de items (array o diccionario)
       let rawItems: any[] = [];
@@ -283,6 +542,9 @@ export function CotizacionesImportAiModal({
           providerName: finalProviderName,
           currency: finalCurrency,
           notes: finalNotes,
+          deliveryTime: conditions.deliveryTime,
+          paymentTerms: conditions.paymentTerms,
+          validityPeriod: conditions.validityPeriod,
           attachment: finalAttachment
         }
       }));
@@ -351,6 +613,9 @@ export function CotizacionesImportAiModal({
         providerName: providerName.trim() || targetProviderName || "Proveedor",
         currency,
         notes,
+        deliveryTime: deliveryTime.trim() || undefined,
+        paymentTerms: paymentTerms.trim() || undefined,
+        validityPeriod: validityPeriod.trim() || undefined,
         attachment,
         targetProviderId,
         selectedItems: []
@@ -381,6 +646,9 @@ export function CotizacionesImportAiModal({
         providerName: providerName.trim() || "Proveedor Importado",
         currency,
         notes,
+        deliveryTime: deliveryTime.trim() || undefined,
+        paymentTerms: paymentTerms.trim() || undefined,
+        validityPeriod: validityPeriod.trim() || undefined,
         attachment,
         targetProviderId,
         selectedItems: selectedItems.map((it) => ({
@@ -444,7 +712,7 @@ export function CotizacionesImportAiModal({
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Mode Selector before upload */}
-          {!attachment && !isAnalyzing && (
+          {!attachment && !isAnalyzing && !isBatchMode && (
             <div className="bg-[#101726]/80 border border-white/10 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
@@ -510,8 +778,8 @@ export function CotizacionesImportAiModal({
             </div>
           )}
 
-          {/* File Upload / Status area */}
-          {!attachment && !isAnalyzing && (
+          {/* File Upload Dropzone */}
+          {!attachment && !isAnalyzing && !isBatchMode && (
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
@@ -521,7 +789,8 @@ export function CotizacionesImportAiModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.txt"
+                multiple
+                accept=".pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.txt,.doc,.docx"
                 className="hidden"
                 onChange={handleFileChange}
               />
@@ -529,20 +798,162 @@ export function CotizacionesImportAiModal({
                 <Upload className="w-8 h-8" />
               </div>
               <h3 className="text-base font-semibold text-white mb-1">
-                Arrastrá o seleccioná el presupuesto del proveedor
+                Arrastrá uno o varios presupuestos de proveedores
               </h3>
               <p className="text-xs text-gray-400 max-w-md mx-auto mb-4">
-                Soporta <strong>PDF</strong>, planillas <strong>Excel (.xlsx, .xls)</strong>, correos <strong>.EML</strong> (incluyendo Excels o PDFs adjuntos dentro del correo) o imágenes de listas de precios.
+                Soporta <strong>PDF</strong>, planillas <strong>Excel (.xlsx, .xls)</strong>, correos <strong>.EML</strong> (incluyendo adjuntos) o documentos. Podés soltar varios archivos juntos para cargarlos en masa con IA.
               </p>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-500/20">
-                <Sparkles className="w-3.5 h-3.5" />
-                Examinar archivo en tu equipo
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-xl text-xs font-semibold border border-emerald-500/20">
+                <Files className="w-3.5 h-3.5" />
+                Examinar uno o varios archivos
               </div>
             </div>
           )}
 
-          {/* Loading Animation */}
-          {isAnalyzing && (
+          {/* Batch Mode View (Idea 3) */}
+          {isBatchMode && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-[#111928] border border-white/10 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl">
+                    <Files className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>Carga Masiva de Presupuestos</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {batchQueue.filter((b) => b.status === "done").length} de {batchQueue.length} listos
+                      </span>
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {isAnalyzing
+                        ? "La IA está leyendo y procesando los presupuestos uno por uno..."
+                        : "Extracción finalizada. Revisá el listado y hacé clic en importar para agregarlos a la cotización."}
+                    </p>
+                  </div>
+                </div>
+
+                {!isAnalyzing && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer self-start sm:self-center"
+                  >
+                    Cargar otros archivos
+                  </button>
+                )}
+              </div>
+
+              {/* Batch List */}
+              <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                {batchQueue.map((item) => {
+                  const isDone = item.status === "done";
+                  const isErr = item.status === "error";
+                  const isCurrentAnalyzing = item.status === "analyzing";
+                  const payload = item.payload;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3.5 rounded-2xl border transition-all ${
+                        isDone
+                          ? "bg-[#0f1728] border-emerald-500/30 shadow-sm"
+                          : isErr
+                          ? "bg-rose-950/20 border-rose-500/30"
+                          : isCurrentAnalyzing
+                          ? "bg-indigo-950/20 border-indigo-500/40 animate-pulse"
+                          : "bg-[#090d16]/50 border-white/5 opacity-60"
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`p-2 rounded-xl shrink-0 ${
+                              isDone
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : isErr
+                                ? "bg-rose-500/20 text-rose-400"
+                                : isCurrentAnalyzing
+                                ? "bg-indigo-500/20 text-indigo-400"
+                                : "bg-white/5 text-gray-400"
+                            }`}
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="w-4 h-4" />
+                            ) : isErr ? (
+                              <AlertCircle className="w-4 h-4" />
+                            ) : isCurrentAnalyzing ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Clock className="w-4 h-4" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-white truncate max-w-xs">
+                                {isDone && payload ? payload.providerName : item.file.name}
+                              </span>
+                              {isDone && payload && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/10 text-slate-300 font-mono">
+                                  {payload.currency}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-400 truncate">
+                              {item.file.name} • {(item.file.size / 1024).toFixed(0)} KB
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                          {isDone && payload && (
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                              <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold">
+                                {payload.selectedItems.length} ítems
+                              </span>
+                              {payload.deliveryTime && (
+                                <span className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 border border-white/5 hidden md:inline">
+                                  ⏱️ {payload.deliveryTime}
+                                </span>
+                              )}
+                              {payload.paymentTerms && (
+                                <span className="px-2 py-0.5 rounded-lg bg-white/5 text-gray-300 border border-white/5 hidden md:inline">
+                                  💳 {payload.paymentTerms}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {isCurrentAnalyzing && (
+                            <span className="text-xs text-indigo-300 font-semibold flex items-center gap-1">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Analizando con IA...
+                            </span>
+                          )}
+
+                          {isErr && (
+                            <span className="text-xs text-rose-400 font-semibold" title={item.error}>
+                              Error en lectura
+                            </span>
+                          )}
+
+                          {item.status === "pending" && (
+                            <span className="text-xs text-gray-500">
+                              En cola
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Loading Animation for Single File */}
+          {isAnalyzing && !isBatchMode && (
             <div className="py-16 text-center space-y-4">
               <div className="relative w-16 h-16 mx-auto">
                 <Loader2 className="w-16 h-16 text-emerald-400 animate-spin" />
@@ -553,14 +964,14 @@ export function CotizacionesImportAiModal({
               <div>
                 <h3 className="text-base font-semibold text-white">Leyendo presupuesto o correo con IA...</h3>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
-                  Extrayendo nombre del proveedor, moneda, ítems cotizados, unidades, descripciones y precios desde el documento o planilla adjunta.
+                  Extrayendo nombre del proveedor, moneda, condiciones comerciales, ítems cotizados y precios unitarios.
                 </p>
               </div>
             </div>
           )}
 
           {/* Error Message */}
-          {error && (
+          {error && !isBatchMode && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 text-red-400 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -580,7 +991,7 @@ export function CotizacionesImportAiModal({
           )}
 
           {/* Results: Provider Details and Items */}
-          {attachment && !isAnalyzing && (
+          {attachment && !isAnalyzing && !isBatchMode && (
             <div className="space-y-6">
               {/* File badge & Re-upload button */}
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#111928] border border-white/10 rounded-2xl">
@@ -650,12 +1061,64 @@ export function CotizacionesImportAiModal({
                 </div>
               </div>
 
+              {/* Commercial Conditions (Idea 5) */}
+              <div className="p-3.5 bg-[#0d1422]/90 border border-white/10 rounded-2xl space-y-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-200">
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Condiciones Comerciales Detectadas</span>
+                  <span className="text-[10px] text-gray-400 font-normal">
+                    (Editables - se usarán en la comparativa y el resumen)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-emerald-400" />
+                      Plazo de Entrega
+                    </label>
+                    <input
+                      type="text"
+                      value={deliveryTime}
+                      onChange={(e) => setDeliveryTime(e.target.value)}
+                      placeholder="Ej: Inmediata, 7 días..."
+                      className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                      <CreditCard className="w-3 h-3 text-indigo-400" />
+                      Forma de Pago
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentTerms}
+                      onChange={(e) => setPaymentTerms(e.target.value)}
+                      placeholder="Ej: 30 días, Contado..."
+                      className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-400 mb-1 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-amber-400" />
+                      Validez de Oferta
+                    </label>
+                    <input
+                      type="text"
+                      value={validityPeriod}
+                      onChange={(e) => setValidityPeriod(e.target.value)}
+                      placeholder="Ej: 15 días, Hasta 31/10..."
+                      className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Conditions / Notes */}
               {notes && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-1.5">
                     <Info className="w-3.5 h-3.5 text-blue-400" />
-                    Condiciones / Notas detectadas
+                    Otras Notas detectadas en el documento
                   </label>
                   <input
                     type="text"
@@ -884,7 +1347,34 @@ export function CotizacionesImportAiModal({
             Cancelar
           </button>
 
-          {attachment && !isAnalyzing && (
+          {/* Batch Mode Footer Actions */}
+          {isBatchMode && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleConfirmBatch}
+                disabled={isSubmitting || isAnalyzing || batchQueue.filter((b) => b.status === "done").length === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Importando proveedores...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                    <span>
+                      Importar los {batchQueue.filter((b) => b.status === "done").length} Proveedores a la Cotización
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Single-file Footer Actions */}
+          {attachment && !isAnalyzing && !isBatchMode && (
             <div className="flex flex-wrap items-center gap-2">
               {/* Option to only attach file without autocargando items */}
               <button

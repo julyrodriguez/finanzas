@@ -76,11 +76,12 @@ import {
   Send,
   XCircle,
   Clock,
-  Loader2
+  Loader2,
+  CreditCard
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
-import { CotizacionesImportAiModal } from "@/components/cotizaciones/CotizacionesImportAiModal";
+import { CotizacionesImportAiModal, ImportPayload } from "@/components/cotizaciones/CotizacionesImportAiModal";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -106,6 +107,10 @@ interface Provider {
   id: string;
   name: string;
   quotes: Record<string, QuoteDetail>; // key is itemId
+  deliveryTime?: string;
+  paymentTerms?: string;
+  validityPeriod?: string;
+  notes?: string;
 }
 
 interface SavedQuotation {
@@ -1187,25 +1192,8 @@ export default function CotizacionesPage() {
   // IA PRESUPUESTOS / PDF IMPORT LOGIC
   // -----------------------------------------------------
 
-  const handleConfirmImportAi = async (payload: {
-    providerName: string;
-    currency: "ARS" | "USD";
-    notes?: string;
-    attachment: QuoteAttachment;
-    targetProviderId?: string;
-    selectedItems: Array<{
-      name: string;
-      unit: string;
-      quantity: number;
-      price: number;
-      discount: number;
-      specification: string;
-      presentationName: string;
-      unitsPerPresentation: number;
-      matchedItemId: string | null;
-    }>;
-  }) => {
-    const { providerName, currency, notes: quoteNotes, attachment: newAttachment, targetProviderId, selectedItems } = payload;
+  const handleConfirmImportAi = async (payload: ImportPayload) => {
+    const { providerName, currency, notes: quoteNotes, deliveryTime, paymentTerms, validityPeriod, attachment: newAttachment, targetProviderId, selectedItems } = payload;
 
     const providerId = targetProviderId || `prov-${Date.now()}`;
 
@@ -1270,7 +1258,11 @@ export default function CotizacionesPage() {
           return {
             ...p,
             name: providerName || p.name,
-            quotes: updatedQuotes
+            quotes: updatedQuotes,
+            ...(deliveryTime ? { deliveryTime } : {}),
+            ...(paymentTerms ? { paymentTerms } : {}),
+            ...(validityPeriod ? { validityPeriod } : {}),
+            ...(quoteNotes ? { notes: quoteNotes } : {})
           };
         }
         if (newItemsToCreate.length > 0) {
@@ -1330,7 +1322,11 @@ export default function CotizacionesPage() {
       const newProvider: Provider = {
         id: providerId,
         name: providerName,
-        quotes: newProviderQuotes
+        quotes: newProviderQuotes,
+        deliveryTime,
+        paymentTerms,
+        validityPeriod,
+        notes: quoteNotes
       };
 
       updatedProviders.push(newProvider);
@@ -1419,6 +1415,173 @@ export default function CotizacionesPage() {
           ? `Precios cargados con éxito para "${providerName}" (${selectedItems.length} ítems)`
           : `Proveedor "${providerName}" creado con éxito (${selectedItems.length} ítems)`
       );
+    }
+  };
+
+  const handleConfirmBatchImportAi = async (payloads: ImportPayload[]) => {
+    if (!payloads || payloads.length === 0) return;
+
+    let currentItems = [...items];
+    let currentProviders = [...providers];
+    let currentAttachments = [...attachments];
+
+    // Mapa normalizado de nombres a ID para reutilizar filas en la matriz
+    const normalizedNameToItemId: Record<string, string> = {};
+    currentItems.forEach((it) => {
+      const norm = it.name.trim().toLowerCase().replace(/[\s\-_]+/g, " ");
+      normalizedNameToItemId[norm] = it.id;
+    });
+
+    const newItemsAdded: Item[] = [];
+
+    payloads.forEach((payload, pIndex) => {
+      const providerId = `prov-${Date.now()}-${pIndex}`;
+      const providerName = payload.providerName || `Proveedor ${currentProviders.length + 1}`;
+
+      if (payload.attachment) {
+        currentAttachments.push({
+          ...payload.attachment,
+          providerId,
+          providerName
+        });
+      }
+
+      const providerQuotes: Record<string, QuoteDetail> = {};
+
+      payload.selectedItems.forEach((si, sIndex) => {
+        const norm = si.name.trim().toLowerCase().replace(/[\s\-_]+/g, " ");
+        let targetItemId = si.matchedItemId || normalizedNameToItemId[norm];
+
+        if (!targetItemId) {
+          targetItemId = `item-${Date.now()}-${pIndex}-${sIndex}`;
+          const newItem: Item = {
+            id: targetItemId,
+            name: si.name,
+            baseUnit: si.unit || "U",
+            targetQuantity: si.quantity || 1
+          };
+          currentItems.push(newItem);
+          newItemsAdded.push(newItem);
+          normalizedNameToItemId[norm] = targetItemId;
+        }
+
+        providerQuotes[targetItemId] = {
+          currency: payload.currency,
+          presentationType: si.presentationName ? "package" : "base",
+          presentationName: si.presentationName || "",
+          unitsPerPresentation: si.unitsPerPresentation || 1,
+          price: si.price,
+          discount: si.discount || 0,
+          specification: si.specification || ""
+        };
+      });
+
+      const fullProviderQuotes: Record<string, QuoteDetail> = {};
+      currentItems.forEach((it) => {
+        if (providerQuotes[it.id]) {
+          fullProviderQuotes[it.id] = providerQuotes[it.id];
+        } else {
+          fullProviderQuotes[it.id] = {
+            currency: payload.currency,
+            presentationType: "base",
+            presentationName: "",
+            unitsPerPresentation: 1,
+            price: 0,
+            discount: 0
+          };
+        }
+      });
+
+      const newProv: Provider = {
+        id: providerId,
+        name: providerName,
+        quotes: fullProviderQuotes,
+        deliveryTime: payload.deliveryTime,
+        paymentTerms: payload.paymentTerms,
+        validityPeriod: payload.validityPeriod,
+        notes: payload.notes
+      };
+
+      currentProviders.push(newProv);
+    });
+
+    if (newItemsAdded.length > 0) {
+      currentProviders = currentProviders.map((p) => {
+        const quotes = { ...p.quotes };
+        newItemsAdded.forEach((ni) => {
+          if (!quotes[ni.id]) {
+            quotes[ni.id] = {
+              currency: baseCurrency,
+              presentationType: "base",
+              presentationName: "",
+              unitsPerPresentation: 1,
+              price: 0,
+              discount: 0
+            };
+          }
+        });
+        return { ...p, quotes };
+      });
+    }
+
+    setItems(currentItems);
+    setProviders(currentProviders);
+    setAttachments(currentAttachments);
+
+    if (currentQuoteId) {
+      syncCotizacionToMongo({
+        id: currentQuoteId,
+        name: quoteName,
+        notes,
+        exchangeRate,
+        baseCurrency,
+        useRealLots,
+        items: currentItems,
+        providers: currentProviders,
+        status,
+        categoria: quoteCategoria,
+        winningProviderId,
+        attachments: currentAttachments
+      });
+
+      try {
+        const db = getFirebaseDb();
+        if (db && !currentQuoteId.startsWith("local-")) {
+          const cleanProviders = JSON.parse(JSON.stringify(currentProviders));
+          const cleanItems = JSON.parse(JSON.stringify(currentItems));
+          const cleanAttachments = JSON.parse(JSON.stringify(currentAttachments));
+          updateDoc(doc(db, "cotizaciones", currentQuoteId), {
+            name: quoteName,
+            items: cleanItems,
+            providers: cleanProviders,
+            attachments: cleanAttachments,
+            updatedAt: serverTimestamp()
+          }).catch((err) => console.warn("⚠️ Error saving batch AI quotes to Firebase:", err));
+
+          triggerAiSummaryUpdate(currentQuoteId, currentAttachments);
+        }
+      } catch (fbErr) {
+        console.warn("⚠️ Firebase batch AI import update ignored:", fbErr);
+      }
+
+      setSavedQuotations((prev) =>
+        prev.map((q) =>
+          q.id === currentQuoteId || q.firebaseId === currentQuoteId
+            ? {
+                ...q,
+                name: quoteName,
+                items: currentItems,
+                providers: currentProviders,
+                attachments: currentAttachments
+              }
+            : q
+        )
+      );
+    }
+
+    showToast(`Se importaron ${payloads.length} proveedores en masa con éxito`, "success");
+    if (currentItems.length > 0) {
+      setActiveTab("comparador");
     }
   };
 
@@ -2383,6 +2546,78 @@ export default function CotizacionesPage() {
     }
   };
 
+  const handleCopyWhatsAppSummary = async () => {
+    try {
+      const activeProviders = providers.filter((p) => !excludedProviderIds.includes(p.id));
+      if (activeProviders.length === 0) {
+        showToast("No hay proveedores activos para el resumen", "error");
+        return;
+      }
+      const activeItems = items.filter((it) => !excludedItemIds.includes(it.id));
+      if (activeItems.length === 0) {
+        showToast("No hay ítems cargados en la cotización", "error");
+        return;
+      }
+
+      const sortedComparisons = [...providerCostComparisons].filter((c) =>
+        activeProviders.some((p) => p.id === c.providerId)
+      );
+
+      const winnerCost = sortedComparisons[0];
+      const winnerProv = winnerCost ? activeProviders.find((p) => p.id === winnerCost.providerId) : null;
+      const runnerUpCost = sortedComparisons[1];
+
+      const savings = (runnerUpCost && winnerCost) ? (runnerUpCost.totalBC - winnerCost.totalBC) : 0;
+      const savingsPct = (runnerUpCost && runnerUpCost.totalBC > 0) ? Math.round((savings / runnerUpCost.totalBC) * 100) : 0;
+
+      let msg = `📊 *RESUMEN DE COTIZACIÓN*\n`;
+      msg += `📌 *${quoteName || "Comparativa de Precios"}*\n`;
+      msg += `📦 *Ítems evaluados:* ${activeItems.length} insumos\n`;
+      msg += `👥 *Proveedores cotizados:* ${activeProviders.length}\n\n`;
+
+      if (winnerProv && winnerCost) {
+        msg += `🏆 *OPCIÓN MÁS CONVENIENTE: ${winnerProv.name.toUpperCase()}*\n`;
+        msg += `💰 *Total General:* ${formatCurrencyValue(winnerCost.totalBC, baseCurrency)}\n`;
+        if (savings > 0) {
+          msg += `📉 *Ahorro vs 2do:* ${formatCurrencyValue(savings, baseCurrency)} (${savingsPct}%)\n`;
+        }
+        if (winnerProv.deliveryTime) {
+          msg += `⏱️ *Plazo de entrega:* ${winnerProv.deliveryTime}\n`;
+        }
+        if (winnerProv.paymentTerms) {
+          msg += `💳 *Forma de pago:* ${winnerProv.paymentTerms}\n`;
+        }
+        if (winnerProv.validityPeriod) {
+          msg += `🗓️ *Validez de oferta:* ${winnerProv.validityPeriod}\n`;
+        }
+        msg += `\n`;
+      }
+
+      msg += `📋 *RANKING DE OFERTAS:*\n`;
+      sortedComparisons.forEach((comp, idx) => {
+        const prov = activeProviders.find((p) => p.id === comp.providerId);
+        if (!prov) return;
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "▫️";
+        let line = `${medal} *${prov.name}*: ${formatCurrencyValue(comp.totalBC, baseCurrency)}`;
+        const termsParts: string[] = [];
+        if (prov.deliveryTime) termsParts.push(`Entrega: ${prov.deliveryTime}`);
+        if (prov.paymentTerms) termsParts.push(`Pago: ${prov.paymentTerms}`);
+        if (termsParts.length > 0) {
+          line += ` _(${termsParts.join(" • ")})_`;
+        }
+        msg += `${line}\n`;
+      });
+
+      msg += `\nGenerado con *Vacas Locas Finanzas*`;
+
+      await navigator.clipboard.writeText(msg);
+      showToast("¡Resumen para WhatsApp copiado al portapapeles!", "success");
+    } catch (err: any) {
+      console.error("Error al copiar resumen WhatsApp:", err);
+      showToast("No se pudo copiar el resumen", "error");
+    }
+  };
+
   return (
     <AppLayout title="Cotizaciones" subtitle="Comparativa inteligente de proveedores, unidades y monedas integradas">
       {/* Toast Notification Container */}
@@ -3217,6 +3452,63 @@ export default function CotizacionesPage() {
                       </div>
                     </div>
 
+                    {/* Provider Commercial Terms Inputs (Idea 5) */}
+                    <div className="px-4 sm:px-5 py-2 bg-[#080b15]/70 border-b border-white/[0.04] flex flex-wrap items-center gap-3 text-xs">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                        <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase">Entrega:</span>
+                        <input
+                          type="text"
+                          value={prov.deliveryTime || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProviders((prev) =>
+                              prev.map((p) => (p.id === prov.id ? { ...p, deliveryTime: val } : p))
+                            );
+                          }}
+                          placeholder="Plazo de entrega..."
+                          disabled={isLocked}
+                          className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 text-xs text-white placeholder-slate-600 focus:outline-none flex-1 truncate py-0.5"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                        <CreditCard className="w-3 h-3 text-indigo-400 shrink-0" />
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase">Pago:</span>
+                        <input
+                          type="text"
+                          value={prov.paymentTerms || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProviders((prev) =>
+                              prev.map((p) => (p.id === prov.id ? { ...p, paymentTerms: val } : p))
+                            );
+                          }}
+                          placeholder="Forma de pago..."
+                          disabled={isLocked}
+                          className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-indigo-500 text-xs text-white placeholder-slate-600 focus:outline-none flex-1 truncate py-0.5"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-1 min-w-[130px]">
+                        <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase">Validez:</span>
+                        <input
+                          type="text"
+                          value={prov.validityPeriod || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProviders((prev) =>
+                              prev.map((p) => (p.id === prov.id ? { ...p, validityPeriod: val } : p))
+                            );
+                          }}
+                          placeholder="Validez oferta..."
+                          disabled={isLocked}
+                          className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-amber-500 text-xs text-white placeholder-slate-600 focus:outline-none flex-1 truncate py-0.5"
+                        />
+                      </div>
+                    </div>
+
                     {/* Provider Attached Files Bar */}
                     {(() => {
                       const provAttachments = attachments.filter(
@@ -3549,6 +3841,30 @@ export default function CotizacionesPage() {
                             </span>
                           )}
                         </p>
+
+                        {/* Commercial terms badges for winner (Idea 5) */}
+                        {(bestProv?.deliveryTime || bestProv?.paymentTerms || bestProv?.validityPeriod) && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                            {bestProv.deliveryTime && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 font-medium">
+                                <Clock className="w-3 h-3 text-emerald-400" />
+                                <span>Entrega: {bestProv.deliveryTime}</span>
+                              </span>
+                            )}
+                            {bestProv.paymentTerms && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/25 font-medium">
+                                <CreditCard className="w-3 h-3 text-indigo-400" />
+                                <span>Pago: {bestProv.paymentTerms}</span>
+                              </span>
+                            )}
+                            {bestProv.validityPeriod && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 font-medium">
+                                <Calendar className="w-3 h-3 text-amber-400" />
+                                <span>Validez: {bestProv.validityPeriod}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -3633,6 +3949,16 @@ export default function CotizacionesPage() {
               >
                 {convertCurrencies ? "Convertido a Moneda Base" : "Moneda Original"}
               </button>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleCopyWhatsAppSummary}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                title="Copiar resumen ejecutivo para enviar por WhatsApp"
+              >
+                <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Resumen WhatsApp</span>
+              </motion.button>
 
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -3995,6 +4321,95 @@ export default function CotizacionesPage() {
               </table>
             </div>
           </div>
+
+          {/* Commercial Conditions Side-by-Side Comparison (Idea 5) */}
+          {providers.some((p) => p.deliveryTime || p.paymentTerms || p.validityPeriod) && (
+            <div className="rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] p-5 shadow-2xl backdrop-blur-xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                    <Scale className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      Comparativa de Condiciones Comerciales
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Plazos de entrega, formas de pago y validez de oferta de cada proveedor
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {providers
+                  .filter((p) => !excludedProviderIds.includes(p.id))
+                  .map((prov) => {
+                    const isWinner = prov.id === cheapestProviderId;
+                    return (
+                      <div
+                        key={prov.id}
+                        className={`p-4 rounded-2xl border transition-all ${
+                          isWinner
+                            ? "bg-emerald-500/[0.07] border-emerald-500/30 shadow-lg shadow-emerald-500/5"
+                            : "bg-[#080b15]/70 border-white/[0.06]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-white/[0.05]">
+                          <h5 className="font-bold text-xs text-white truncate flex items-center gap-1.5">
+                            {isWinner && <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                            <span>{prov.name}</span>
+                          </h5>
+                          {isWinner && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                              Más Conveniente
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-2.5 text-xs">
+                          <div className="flex items-start gap-2">
+                            <Clock className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-semibold uppercase">
+                                Plazo de Entrega
+                              </span>
+                              <span className="text-slate-200 font-medium">
+                                {prov.deliveryTime || "No especificado"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <CreditCard className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" />
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-semibold uppercase">
+                                Forma de Pago
+                              </span>
+                              <span className="text-slate-200 font-medium">
+                                {prov.paymentTerms || "No especificada"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2">
+                            <Calendar className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+                            <div>
+                              <span className="text-[10px] text-slate-400 block font-semibold uppercase">
+                                Validez de Oferta
+                              </span>
+                              <span className="text-slate-200 font-medium">
+                                {prov.validityPeriod || "No especificada"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </motion.div>
@@ -4782,6 +5197,7 @@ export default function CotizacionesPage() {
         targetProviderId={importAiTargetProviderId}
         targetProviderName={importAiTargetProviderName}
         onConfirmImport={handleConfirmImportAi}
+        onConfirmBatchImport={handleConfirmBatchImportAi}
       />
     </AppLayout>
   );
