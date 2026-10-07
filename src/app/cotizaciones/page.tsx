@@ -187,33 +187,10 @@ export default function CotizacionesPage() {
   };
 
   // Items State
-  const [items, setItems] = useState<Item[]>([
-    { id: "item-1", name: "Resma de Papel A4 75g", baseUnit: "U", targetQuantity: 30 },
-    { id: "item-2", name: "Café Express en Grano", baseUnit: "kg", targetQuantity: 15 },
-    { id: "item-3", name: "Azúcar Común Tipo A", baseUnit: "kg", targetQuantity: 50 }
-  ]);
+  const [items, setItems] = useState<Item[]>([]);
 
   // Providers State
-  const [providers, setProviders] = useState<Provider[]>([
-    {
-      id: "prov-1",
-      name: "Distribuidora Alfa",
-      quotes: {
-        "item-1": { currency: "ARS", presentationType: "package", presentationName: "Pack x 5", unitsPerPresentation: 5, price: 6500, discount: 0 },
-        "item-2": { currency: "USD", presentationType: "base", presentationName: "", unitsPerPresentation: 1, price: 18.5, discount: 5 },
-        "item-3": { currency: "ARS", presentationType: "package", presentationName: "Bolsa x 10kg", unitsPerPresentation: 10, price: 11000, discount: 0 }
-      }
-    },
-    {
-      id: "prov-2",
-      name: "Insumos Express",
-      quotes: {
-        "item-1": { currency: "ARS", presentationType: "base", presentationName: "", unitsPerPresentation: 1, price: 1400, discount: 2 },
-        "item-2": { currency: "ARS", presentationType: "base", presentationName: "", unitsPerPresentation: 1, price: 25000, discount: 0 },
-        "item-3": { currency: "ARS", presentationType: "base", presentationName: "", unitsPerPresentation: 1, price: 1200, discount: 3 }
-      }
-    }
-  ]);
+  const [providers, setProviders] = useState<Provider[]>([]);
 
   // Saved Quotations list
   const [savedQuotations, setSavedQuotations] = useState<SavedQuotation[]>([]);
@@ -692,10 +669,6 @@ export default function CotizacionesPage() {
 
   // Delete Provider
   const handleDeleteProvider = (id: string) => {
-    if (providers.length <= 1) {
-      showToast("Debe haber al menos un proveedor", "error");
-      return;
-    }
     setProviders(providers.filter(p => p.id !== id));
     if (winningProviderId === id) {
       setWinningProviderId("");
@@ -915,18 +888,8 @@ export default function CotizacionesPage() {
     setQuotePendienteTitulo("");
     setAttachments([]);
     setHasActiveQuote(true);
-    setItems([
-      { id: "item-1", name: "Insumo nuevo", baseUnit: "U", targetQuantity: 1 }
-    ]);
-    setProviders([
-      {
-        id: "prov-1",
-        name: "Proveedor A",
-        quotes: {
-          "item-1": { currency: "ARS", presentationType: "base", presentationName: "", unitsPerPresentation: 1, price: 0, discount: 0 }
-        }
-      }
-    ]);
+    setItems([]);
+    setProviders([]);
     setActiveTab("editor");
     showToast("Formulario limpio para nueva cotización", "info");
   };
@@ -1255,9 +1218,16 @@ export default function CotizacionesPage() {
     let currentItems = [...items];
     const newItemsToCreate: Item[] = [];
     const itemQuoteAssignments: Record<string, QuoteDetail> = {};
+    const seenMatchedItemIds = new Set<string>();
 
     selectedItems.forEach((si, idx) => {
       let targetItemId = si.matchedItemId;
+
+      // Salvaguarda: si dos líneas del documento apuntan al mismo ítem existente en este mismo lote,
+      // la segunda se crea como un ítem nuevo para evitar sobrescribir y perder información
+      if (targetItemId && seenMatchedItemIds.has(targetItemId)) {
+        targetItemId = null;
+      }
 
       if (!targetItemId) {
         targetItemId = `item-${Date.now()}-${idx}`;
@@ -1269,6 +1239,8 @@ export default function CotizacionesPage() {
         };
         newItemsToCreate.push(newItem);
         currentItems.push(newItem);
+      } else {
+        seenMatchedItemIds.add(targetItemId);
       }
 
       itemQuoteAssignments[targetItemId] = {
@@ -1925,6 +1897,10 @@ export default function CotizacionesPage() {
       showToast("No hay proveedores activos para exportar (están todos excluidos)", "error");
       return;
     }
+    if (activeItems.length === 0) {
+      showToast("No hay ítems activos para exportar", "error");
+      return;
+    }
 
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
@@ -2230,6 +2206,11 @@ export default function CotizacionesPage() {
         showToast("No hay proveedores activos para copiar (están todos excluidos)", "error");
         return;
       }
+      const activeItems = items.filter(it => !excludedItemIds.includes(it.id));
+      if (activeItems.length === 0) {
+        showToast("No hay ítems activos para copiar", "error");
+        return;
+      }
 
       let tsv = "";
       let html = `<table style="border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10pt; border: 1px solid #cbd5e1;">`;
@@ -2264,7 +2245,6 @@ export default function CotizacionesPage() {
       html += `</tr>`;
 
       // Active Item Rows (Excluded items are completely omitted from Excel output)
-      const activeItems = items.filter(item => !excludedItemIds.includes(item.id));
       activeItems.forEach((item, idx) => {
         const bgRow = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
         const row = [
@@ -2907,7 +2887,7 @@ export default function CotizacionesPage() {
                         <motion.button
                           whileTap={{ scale: 0.9 }}
                           onClick={() => handleDeleteItem(item.id)}
-                          disabled={isLocked || items.length === 1}
+                          disabled={isLocked}
                           className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-20 cursor-pointer"
                           title="Eliminar ítem"
                         >
@@ -2916,76 +2896,89 @@ export default function CotizacionesPage() {
                       </td>
                     </tr>
                   ))}
+                  {items.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-xs text-slate-500">
+                        No hay ítems cargados en esta cotización. Hacé clic en <strong>&quot;+ Agregar Ítem&quot;</strong> o cargá un presupuesto con <strong>IA</strong>.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile View Cards */}
             <div className="block md:hidden space-y-3">
-              {items.map((item, idx) => (
-                <div key={item.id} className="p-3.5 bg-[#080b15] border border-white/[0.06] rounded-2xl space-y-2.5">
-                  <div className="flex justify-between items-center pb-2 border-b border-white/[0.06]">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-bold text-slate-400">Ítem #{idx + 1}</span>
+              {items.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 border border-white/[0.06] rounded-2xl bg-[#080b15]">
+                  No hay ítems cargados en esta cotización. Hacé clic en <strong>&quot;+ Agregar Ítem&quot;</strong>.
+                </div>
+              ) : (
+                items.map((item, idx) => (
+                  <div key={item.id} className="p-3.5 bg-[#080b15] border border-white/[0.06] rounded-2xl space-y-2.5">
+                    <div className="flex justify-between items-center pb-2 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-slate-400">Ítem #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => moveItem(idx, -1)}
+                          disabled={isLocked || idx === 0}
+                          className="p-1 text-slate-500 disabled:opacity-20"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveItem(idx, 1)}
+                          disabled={isLocked || idx === items.length - 1}
+                          className="p-1 text-slate-500 disabled:opacity-20"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </div>
                       <button
-                        type="button"
-                        onClick={() => moveItem(idx, -1)}
-                        disabled={isLocked || idx === 0}
-                        className="p-1 text-slate-500 disabled:opacity-20"
+                        onClick={() => handleDeleteItem(item.id)}
+                        disabled={isLocked}
+                        className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-20"
                       >
-                        <ChevronUp className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveItem(idx, 1)}
-                        disabled={isLocked || idx === items.length - 1}
-                        className="p-1 text-slate-500 disabled:opacity-20"
-                      >
-                        <ChevronDown className="w-3 h-3" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <button
-                      onClick={() => handleDeleteItem(item.id)}
-                      disabled={isLocked || items.length === 1}
-                      className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-20"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
 
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
-                    placeholder="Nombre del insumo..."
-                    disabled={isLocked}
-                    className="w-full bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  />
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={item.baseUnit}
-                      onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
-                      disabled={isLocked}
-                      className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-xs text-white outline-none"
-                    >
-                      {DEFAULT_UNITS.map((opt) => (
-                        <option key={opt.value} value={opt.value} className="bg-[#0b0f19]">
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
                     <input
-                      type="number"
-                      value={item.targetQuantity || ""}
-                      onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
-                      placeholder="Cantidad"
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => handleUpdateItem(item.id, "name", e.target.value)}
+                      placeholder="Nombre del insumo..."
                       disabled={isLocked}
-                      className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-white outline-none"
+                      className="w-full bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs text-white outline-none"
                     />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={item.baseUnit}
+                        onChange={(e) => handleUpdateItem(item.id, "baseUnit", e.target.value)}
+                        disabled={isLocked}
+                        className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-2.5 py-1.5 text-xs text-white outline-none"
+                      >
+                        {DEFAULT_UNITS.map((opt) => (
+                          <option key={opt.value} value={opt.value} className="bg-[#0b0f19]">
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        value={item.targetQuantity || ""}
+                        onChange={(e) => handleUpdateItem(item.id, "targetQuantity", e.target.value)}
+                        placeholder="Cantidad"
+                        disabled={isLocked}
+                        className="bg-[#0a0e1a] border border-white/[0.08] rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-white outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -3042,7 +3035,15 @@ export default function CotizacionesPage() {
 
             {/* Providers List Accordion */}
             <div className="space-y-4">
-              {providers.map((prov, pIdx) => {
+              {providers.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 border border-white/[0.06] rounded-3xl bg-[#080b15]/60 space-y-2">
+                  <p>No hay proveedores agregados todavía en esta cotización.</p>
+                  <p className="text-[11px] text-slate-400">
+                    Podés hacer clic en <strong>&quot;Añadir Proveedor&quot;</strong> para cargarlo a mano o en <strong>&quot;Agregar Proveedor por IA&quot;</strong> para leer un presupuesto en PDF o Excel.
+                  </p>
+                </div>
+              ) : (
+                providers.map((prov, pIdx) => {
                 const totalData = providerTotals.find((t) => t.providerId === prov.id);
                 const isMinimized = minimizedProviders[prov.id] ?? true;
 
@@ -3206,7 +3207,7 @@ export default function CotizacionesPage() {
                           <button
                             type="button"
                             onClick={() => handleDeleteProvider(prov.id)}
-                            disabled={isLocked || providers.length === 1}
+                            disabled={isLocked}
                             className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-20 cursor-pointer"
                             title="Eliminar proveedor"
                           >
@@ -3284,8 +3285,13 @@ export default function CotizacionesPage() {
                     {/* Provider Items Pricing Body */}
                     {!isMinimized && (
                       <div className="p-4 sm:p-5 space-y-3">
-                        <div className="grid grid-cols-1 gap-3">
-                          {items.map((item) => {
+                        {items.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-slate-500 bg-[#080b15] border border-white/[0.04] rounded-2xl">
+                            No hay ítems cargados en esta cotización. Podés agregar ítems en la Sección 1 de arriba o importar un presupuesto por IA.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-3">
+                            {items.map((item) => {
                             const quote = prov.quotes[item.id] || {
                               currency: "ARS",
                               presentationType: "base",
@@ -3481,11 +3487,13 @@ export default function CotizacionesPage() {
                             );
                           })}
                         </div>
+                      )}
                       </div>
                     )}
                   </div>
                 );
-              })}
+              })
+            )}
             </div>
           </div>
         </motion.div>
@@ -3563,8 +3571,29 @@ export default function CotizacionesPage() {
             })()
           )}
 
-          {/* Matrix Toolbar & Filters */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+          {items.length === 0 || providers.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                <Scale className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-white">Comparativa de Cotizaciones vacía</h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Para ver la tabla comparativa y calcular las ofertas más convenientes, agregá al menos un ítem y un proveedor en el Editor.
+              </p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("editor")}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Ir al Editor de Cotización
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Matrix Toolbar & Filters */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
             {/* Highlight Options */}
             <div className="flex flex-wrap items-center gap-1 bg-[#080b15] p-1 rounded-2xl border border-white/[0.06]">
               <span className="text-[10px] font-bold text-slate-500 uppercase px-2">Destacar:</span>
@@ -3966,7 +3995,9 @@ export default function CotizacionesPage() {
               </table>
             </div>
           </div>
-        </motion.div>
+        </>
+      )}
+    </motion.div>
       )}
 
       {/* ============================================================
