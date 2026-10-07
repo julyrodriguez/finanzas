@@ -82,8 +82,66 @@ import {
 import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
 import { CotizacionesImportAiModal, ImportPayload } from "@/components/cotizaciones/CotizacionesImportAiModal";
+import { CotizacionesRequestModal } from "@/components/cotizaciones/CotizacionesRequestModal";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
+// Visual traffic-light status for offer validity (Idea 4 - purely visual, no blocking)
+function getValidityStatus(validityPeriod?: string): {
+  status: "urgent" | "expired" | "valid" | "none";
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+} {
+  if (!validityPeriod || !validityPeriod.trim()) {
+    return {
+      status: "none",
+      label: "Sin fecha",
+      badgeClass: "bg-white/[0.04] text-slate-400 border-white/[0.08]",
+      dotClass: "bg-slate-500"
+    };
+  }
+
+  const v = validityPeriod.toLowerCase().trim();
+
+  // Urgent: today, 24h, 48h, 1 day, 2 days, immediate
+  if (
+    v.includes("hoy") ||
+    v.includes("24 h") ||
+    v.includes("24h") ||
+    v.includes("48 h") ||
+    v.includes("48h") ||
+    v.includes("1 d") ||
+    v.includes("2 d") ||
+    v.includes("inmediat") ||
+    v.includes("pronto")
+  ) {
+    return {
+      status: "urgent",
+      label: "Vence pronto",
+      badgeClass: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+      dotClass: "bg-amber-400"
+    };
+  }
+
+  // Expired
+  if (v.includes("vencid") || v.includes("caduc") || v.includes("expir")) {
+    return {
+      status: "expired",
+      label: "Oferta vencida",
+      badgeClass: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+      dotClass: "bg-rose-400"
+    };
+  }
+
+  // Valid / Normal
+  return {
+    status: "valid",
+    label: "Vigente",
+    badgeClass: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    dotClass: "bg-emerald-400"
+  };
+}
 
 // Types definition
 interface Item {
@@ -171,6 +229,7 @@ export default function CotizacionesPage() {
   const [isImportAiModalOpen, setIsImportAiModalOpen] = useState<boolean>(false);
   const [importAiTargetProviderId, setImportAiTargetProviderId] = useState<string | undefined>(undefined);
   const [importAiTargetProviderName, setImportAiTargetProviderName] = useState<string | undefined>(undefined);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
 
   const toggleMinimizeProvider = (providerId: string) => {
     setMinimizedProviders((prev) => {
@@ -2014,6 +2073,111 @@ export default function CotizacionesPage() {
     return map;
   }, [providers, items, excludedItemIds, excludedProviderIds, exchangeRate, baseCurrency]);
 
+  // Canasta Óptima Multiproveedor (Split Order - Idea 1)
+  const optimalBasket = useMemo(() => {
+    const activeProviders = providers.filter((p) => !excludedProviderIds.includes(p.id));
+    const activeItems = items.filter((it) => !excludedItemIds.includes(it.id));
+
+    if (activeProviders.length < 2 || activeItems.length < 2) {
+      return null;
+    }
+
+    const itemAssignments: Array<{
+      item: Item;
+      provider: Provider;
+      totalCostBC: number;
+    }> = [];
+
+    const providerGroups: Record<
+      string,
+      { provider: Provider; itemsCount: number; totalBC: number; itemNames: string[] }
+    > = {};
+
+    let totalOptimalBC = 0;
+
+    for (const item of activeItems) {
+      let minCost = Infinity;
+      let chosenProv: Provider | null = null;
+
+      for (const prov of activeProviders) {
+        const quote = prov.quotes[item.id];
+        if (!quote || quote.price <= 0) continue;
+
+        const { totalBaseCurrency } = calculateTotalCost(
+          quote,
+          item.targetQuantity,
+          exchangeRate,
+          baseCurrency,
+          useRealLots
+        );
+
+        if (totalBaseCurrency > 0 && totalBaseCurrency < minCost) {
+          minCost = totalBaseCurrency;
+          chosenProv = prov;
+        }
+      }
+
+      if (chosenProv && minCost < Infinity) {
+        itemAssignments.push({
+          item,
+          provider: chosenProv,
+          totalCostBC: minCost
+        });
+        totalOptimalBC += minCost;
+
+        if (!providerGroups[chosenProv.id]) {
+          providerGroups[chosenProv.id] = {
+            provider: chosenProv,
+            itemsCount: 0,
+            totalBC: 0,
+            itemNames: []
+          };
+        }
+        providerGroups[chosenProv.id].itemsCount += 1;
+        providerGroups[chosenProv.id].totalBC += minCost;
+        providerGroups[chosenProv.id].itemNames.push(item.name || "Ítem");
+      }
+    }
+
+    if (itemAssignments.length !== activeItems.length) {
+      return null;
+    }
+
+    const uniqueProviderCount = Object.keys(providerGroups).length;
+    if (uniqueProviderCount <= 1) {
+      return null;
+    }
+
+    const bestSingleCost = cheapestProviderId
+      ? providerCostComparisons.find((c) => c.providerId === cheapestProviderId)?.totalBC || 0
+      : 0;
+
+    const extraSavings = bestSingleCost > totalOptimalBC ? bestSingleCost - totalOptimalBC : 0;
+    const extraSavingsPct = bestSingleCost > 0 ? Math.round((extraSavings / bestSingleCost) * 100) : 0;
+
+    if (extraSavings <= 0) {
+      return null;
+    }
+
+    return {
+      totalOptimalBC,
+      extraSavings,
+      extraSavingsPct,
+      providerGroups: Object.values(providerGroups),
+      itemAssignments
+    };
+  }, [
+    items,
+    providers,
+    excludedItemIds,
+    excludedProviderIds,
+    exchangeRate,
+    baseCurrency,
+    useRealLots,
+    cheapestProviderId,
+    providerCostComparisons
+  ]);
+
 
 
   // Move items order in comparative matrix and export
@@ -2618,6 +2782,33 @@ export default function CotizacionesPage() {
     }
   };
 
+  const handleCopyOptimalBasketWhatsApp = async () => {
+    if (!optimalBasket) return;
+    try {
+      let msg = `💡 *CANASTA ÓPTIMA MULTIPROVEEDOR (COMPRA DIVIDIDA)*\n`;
+      msg += `📌 *${quoteName || "Comparativa de Precios"}*\n\n`;
+      msg += `💰 *Total Compra Mixta:* ${formatCurrencyValue(optimalBasket.totalOptimalBC, baseCurrency)}\n`;
+      msg += `📉 *Ahorro adicional:* ${formatCurrencyValue(optimalBasket.extraSavings, baseCurrency)} (${optimalBasket.extraSavingsPct}% menos vs mejor proveedor único)\n\n`;
+      msg += `📋 *CÓMO DIVIDIR LA COMPRA:*\n`;
+
+      optimalBasket.providerGroups.forEach((group) => {
+        msg += `\n🔹 *${group.provider.name}* (${group.itemsCount} ${group.itemsCount === 1 ? "ítem" : "ítems"} • ${formatCurrencyValue(group.totalBC, baseCurrency)}):\n`;
+        const provItems = optimalBasket.itemAssignments.filter((a) => a.provider.id === group.provider.id);
+        provItems.forEach((pi) => {
+          msg += `  • ${pi.item.name} (${pi.item.targetQuantity} ${pi.item.baseUnit}): ${formatCurrencyValue(pi.totalCostBC, baseCurrency)}\n`;
+        });
+      });
+
+      msg += `\nGenerado con *Vacas Locas Finanzas*`;
+
+      await navigator.clipboard.writeText(msg);
+      showToast("¡Canasta óptima copiada para WhatsApp!", "success");
+    } catch (e) {
+      console.error("Error al copiar canasta óptima:", e);
+      showToast("Error al copiar canasta", "error");
+    }
+  };
+
   return (
     <AppLayout title="Cotizaciones" subtitle="Comparativa inteligente de proveedores, unidades y monedas integradas">
       {/* Toast Notification Container */}
@@ -2761,6 +2952,18 @@ export default function CotizacionesPage() {
             >
               <Save className="w-3.5 h-3.5" />
               <span>Guardar</span>
+            </motion.button>
+          )}
+
+          {hasActiveQuote && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setIsRequestModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+              title="Pedir presupuesto a proveedores con redactor formal"
+            >
+              <Send className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Pedir Presupuesto</span>
             </motion.button>
           )}
 
@@ -3506,6 +3709,15 @@ export default function CotizacionesPage() {
                           disabled={isLocked}
                           className="bg-transparent border-b border-transparent hover:border-white/10 focus:border-amber-500 text-xs text-white placeholder-slate-600 focus:outline-none flex-1 truncate py-0.5"
                         />
+                        {prov.validityPeriod && prov.validityPeriod.trim() !== "" && (() => {
+                          const st = getValidityStatus(prov.validityPeriod);
+                          return (
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${st.badgeClass} shrink-0`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${st.dotClass} ${st.status === "urgent" ? "animate-pulse" : ""}`} />
+                              <span>{st.label}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -3858,9 +4070,18 @@ export default function CotizacionesPage() {
                               </span>
                             )}
                             {bestProv.validityPeriod && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 font-medium">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 font-medium">
                                 <Calendar className="w-3 h-3 text-amber-400" />
                                 <span>Validez: {bestProv.validityPeriod}</span>
+                                {(() => {
+                                  const st = getValidityStatus(bestProv.validityPeriod);
+                                  return (
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-bold border ${st.badgeClass} ml-0.5`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${st.dotClass} ${st.status === "urgent" ? "animate-pulse" : ""}`} />
+                                      <span>{st.label}</span>
+                                    </span>
+                                  );
+                                })()}
                               </span>
                             )}
                           </div>
@@ -3885,6 +4106,77 @@ export default function CotizacionesPage() {
                 </div>
               );
             })()
+          )}
+
+          {/* Canasta Óptima Multiproveedor / Split Order Card (Idea 1) */}
+          {optimalBasket && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-5 rounded-3xl bg-gradient-to-r from-violet-950/40 via-purple-900/30 to-indigo-950/40 border border-purple-500/30 shadow-xl backdrop-blur-xl space-y-4"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 shrink-0">
+                    <Sparkles className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-white">Canasta Óptima Multiproveedor</h4>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-bold">
+                        Ahorro extra del {optimalBasket.extraSavingsPct}%
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Dividiendo la compra según el proveedor más barato en cada ítem, gastás{" "}
+                      <span className="font-bold text-purple-300">
+                        {formatCurrencyValue(optimalBasket.totalOptimalBC, baseCurrency)}
+                      </span>{" "}
+                      (ahorrás{" "}
+                      <span className="font-bold text-emerald-400">
+                        {formatCurrencyValue(optimalBasket.extraSavings, baseCurrency)}
+                      </span>{" "}
+                      vs el ganador único).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleCopyOptimalBasketWhatsApp}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                    title="Copiar desglose de canasta óptima para WhatsApp"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-purple-300" />
+                    <span>Copiar Canasta</span>
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* Providers breakdown pills */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                {optimalBasket.providerGroups.map((group) => (
+                  <div
+                    key={group.provider.id}
+                    className="p-3 rounded-2xl bg-black/30 border border-white/[0.06] space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-white truncate">{group.provider.name}</span>
+                      <span className="text-xs font-mono font-bold text-purple-300 shrink-0">
+                        {formatCurrencyValue(group.totalBC, baseCurrency)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>{group.itemsCount} {group.itemsCount === 1 ? "ítem" : "ítems"}</span>
+                      <span className="text-slate-500 truncate max-w-[150px]" title={group.itemNames.join(", ")}>
+                        {group.itemNames.join(", ")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
           )}
 
           {items.length === 0 || providers.length === 0 ? (
@@ -4394,13 +4686,24 @@ export default function CotizacionesPage() {
 
                           <div className="flex items-start gap-2">
                             <Calendar className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-                            <div>
+                            <div className="flex-1">
                               <span className="text-[10px] text-slate-400 block font-semibold uppercase">
                                 Validez de Oferta
                               </span>
-                              <span className="text-slate-200 font-medium">
-                                {prov.validityPeriod || "No especificada"}
-                              </span>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className="text-slate-200 font-medium">
+                                  {prov.validityPeriod || "No especificada"}
+                                </span>
+                                {prov.validityPeriod && prov.validityPeriod.trim() !== "" && (() => {
+                                  const st = getValidityStatus(prov.validityPeriod);
+                                  return (
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border ${st.badgeClass}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${st.dotClass} ${st.status === "urgent" ? "animate-pulse" : ""}`} />
+                                      <span>{st.label}</span>
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -5198,6 +5501,20 @@ export default function CotizacionesPage() {
         targetProviderName={importAiTargetProviderName}
         onConfirmImport={handleConfirmImportAi}
         onConfirmBatchImport={handleConfirmBatchImportAi}
+      />
+
+      {/* Cotizaciones Formal Request / Email Generator Modal (Idea 5) */}
+      <CotizacionesRequestModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        quoteName={quoteName}
+        existingItems={items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          baseUnit: it.baseUnit,
+          targetQuantity: it.targetQuantity,
+        }))}
+        providerNames={providers.map((p) => p.name)}
       />
     </AppLayout>
   );
