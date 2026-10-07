@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   X,
   Sparkles,
@@ -24,7 +26,16 @@ import {
   CreditCard,
   Calendar,
   CheckCircle2,
-  Files
+  Files,
+  MessageSquare,
+  Send,
+  Boxes,
+  Split,
+  Undo2,
+  RotateCcw,
+  Bot,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { QuoteAttachment } from "./CotizacionesAiChatModal";
 
@@ -43,6 +54,16 @@ export interface ExtractedItem {
   unitsPerPresentation: number;
   matchedItemId: string | null;
   selected: boolean;
+  isGrouped?: boolean;
+  groupedChildren?: ExtractedItem[];
+}
+
+export interface AiChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  itemsSnapshotCount?: number;
 }
 
 export interface ExistingQuoteItem {
@@ -260,7 +281,34 @@ export function CotizacionesImportAiModal({
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
   const [batchQueue, setBatchQueue] = useState<BatchFileItem[]>([]);
 
+  // Chat & AI prompt refinement state
+  const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
+  const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState<string>("");
+  const [isRefiningAi, setIsRefiningAi] = useState<boolean>(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
+  const [itemsHistory, setItemsHistory] = useState<Array<{ items: ExtractedItem[]; label: string; timestamp: string }>>([]);
+  const [initialItems, setInitialItems] = useState<ExtractedItem[]>([]);
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Manual Item Grouping state
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
+  const [groupSelectedIds, setGroupSelectedIds] = useState<Set<string>>(new Set());
+  const [groupName, setGroupName] = useState<string>("");
+  const [groupQuantity, setGroupQuantity] = useState<number>(1);
+  const [groupUnit, setGroupUnit] = useState<string>("GL");
+  const [groupPrice, setGroupPrice] = useState<number>(0);
+  const [groupSpecification, setGroupSpecification] = useState<string>("");
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll chat al recibir nuevos mensajes
+  useEffect(() => {
+    if (isAiChatOpen) {
+      chatMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, isAiChatOpen]);
 
   const handleReset = () => {
     setFile(null);
@@ -278,6 +326,16 @@ export function CotizacionesImportAiModal({
     setCachedResults({});
     setIsBatchMode(false);
     setBatchQueue([]);
+    setIsAiChatOpen(false);
+    setChatMessages([]);
+    setChatInput("");
+    setIsRefiningAi(false);
+    setRefineError(null);
+    setItemsHistory([]);
+    setInitialItems([]);
+    setIsGroupModalOpen(false);
+    setGroupSelectedIds(new Set());
+    setExpandedGroupIds(new Set());
   };
 
   const handleClose = () => {
@@ -395,6 +453,8 @@ export function CotizacionesImportAiModal({
     if (cachedResults[mode]) {
       const cached = cachedResults[mode]!;
       setItems(cached.items);
+      setInitialItems(cached.items);
+      setItemsHistory([{ items: cached.items, label: `Modo ${mode === "general" ? "General" : "Detallado"}`, timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) }]);
       setProviderName(targetProviderName || cached.providerName);
       setCurrency(cached.currency);
       setNotes(cached.notes);
@@ -533,6 +593,8 @@ export function CotizacionesImportAiModal({
       });
 
       setItems(formattedItems);
+      setInitialItems(formattedItems);
+      setItemsHistory([{ items: formattedItems, label: `Modo ${mode === "general" ? "General" : "Detallado"}`, timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) }]);
 
       // Guardar en caché para permitir alternar modos instantáneamente
       setCachedResults((prev) => ({
@@ -605,6 +667,242 @@ export function CotizacionesImportAiModal({
     );
   };
 
+  const REFINEMENT_QUICK_PROMPTS = [
+    { label: "📦 Agrupar por rubros", prompt: "Agrupá todos los ítems por sus rubros o capítulos generales principales, sumando los precios totales y dejando la especificación detallada." },
+    { label: "➕ Sumar ítem faltante", prompt: "Revisá el documento original y agregá los ítems cotizados que falten en la lista con sus precios reales." },
+    { label: "🧮 Calcular con 21% IVA", prompt: "Sumale el 21% de IVA a todos los precios unitarios y totales de los ítems." },
+    { label: "✂️ Separar Mano de Obra y Materiales", prompt: "Separá los ítems en renglones individuales para Mano de Obra y Materiales con sus respectivos precios." },
+    { label: "🏷️ Aplicar 10% Descuento", prompt: "Aplicá un 10% de descuento a todos los precios de los ítems." }
+  ];
+
+  const handleOpenGroupModal = (selectedItemIds?: string[]) => {
+    const idsToGroup = selectedItemIds || items.filter((it) => it.selected).map((it) => it.id);
+    if (idsToGroup.length < 2) return;
+
+    const selectedItemsToGroup = items.filter((it) => idsToGroup.includes(it.id));
+    const newSet = new Set(idsToGroup);
+    setGroupSelectedIds(newSet);
+
+    const totalPriceSum = selectedItemsToGroup.reduce(
+      (acc, it) => acc + (it.totalPrice || (it.price * it.quantity)),
+      0
+    );
+    const autoSpec = "Incluye: " + selectedItemsToGroup.map(
+      (it) => `${it.name} (${it.quantity} ${it.unit} a $${it.price.toLocaleString("es-AR")})`
+    ).join("; ");
+    
+    const suggestedName = selectedItemsToGroup.length === 2
+      ? `${selectedItemsToGroup[0].name} y ${selectedItemsToGroup[1].name}`
+      : `Grupo: ${selectedItemsToGroup[0].name} (${selectedItemsToGroup.length} ítems)`;
+
+    setGroupName(suggestedName);
+    setGroupQuantity(1);
+    setGroupUnit("GL");
+    setGroupPrice(totalPriceSum);
+    setGroupSpecification(autoSpec);
+    setIsGroupModalOpen(true);
+  };
+
+  const handleToggleItemGroupSelection = (id: string) => {
+    setGroupSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+
+      const currentSelected = items.filter((it) => next.has(it.id));
+      const newTotal = currentSelected.reduce(
+        (acc, it) => acc + (it.totalPrice || (it.price * it.quantity)),
+        0
+      );
+      setGroupPrice(newTotal);
+
+      const newSpec = "Incluye: " + currentSelected.map(
+        (it) => `${it.name} (${it.quantity} ${it.unit} a $${it.price.toLocaleString("es-AR")})`
+      ).join("; ");
+      setGroupSpecification(newSpec);
+
+      return next;
+    });
+  };
+
+  const handleConfirmGroup = () => {
+    const itemsToGroup = items.filter((it) => groupSelectedIds.has(it.id));
+    if (itemsToGroup.length < 2) return;
+
+    const groupedItem: ExtractedItem = {
+      id: `group-${Date.now()}`,
+      name: groupName.trim() || "Ítem Agrupado",
+      quantity: Number(groupQuantity) || 1,
+      unit: groupUnit.trim() || "GL",
+      price: Number(groupPrice) || 0,
+      totalPrice: (Number(groupPrice) || 0) * (Number(groupQuantity) || 1),
+      discount: 0,
+      specification: groupSpecification.trim(),
+      presentationName: "",
+      unitsPerPresentation: 1,
+      matchedItemId: null,
+      selected: true,
+      isGrouped: true,
+      groupedChildren: itemsToGroup
+    };
+
+    const firstIndex = items.findIndex((it) => groupSelectedIds.has(it.id));
+    const newItems = items.filter((it) => !groupSelectedIds.has(it.id));
+    newItems.splice(firstIndex >= 0 ? firstIndex : newItems.length, 0, groupedItem);
+
+    setItemsHistory((prev) => [...prev, { items: newItems, label: `Agrupación: "${groupedItem.name}"`, timestamp: new Date().toLocaleTimeString("es-AR") }]);
+    setItems(newItems);
+    setIsGroupModalOpen(false);
+    setGroupSelectedIds(new Set());
+  };
+
+  const handleUngroupItem = (groupedItemId: string) => {
+    const targetIndex = items.findIndex((it) => it.id === groupedItemId);
+    if (targetIndex === -1) return;
+    const target = items[targetIndex];
+    if (!target.isGrouped || !target.groupedChildren || target.groupedChildren.length === 0) return;
+
+    const newItems = [...items];
+    newItems.splice(targetIndex, 1, ...target.groupedChildren);
+
+    setItemsHistory((prev) => [...prev, { items: newItems, label: `Desagrupación de "${target.name}"`, timestamp: new Date().toLocaleTimeString("es-AR") }]);
+    setItems(newItems);
+  };
+
+  const handleToggleExpandGroup = (groupId: string) => {
+    setExpandedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const handleSendAiPrompt = async (promptToSend?: string) => {
+    const promptText = (promptToSend || chatInput).trim();
+    if (!promptText || isRefiningAi) return;
+
+    const userMessage: AiChatMessage = {
+      id: `msg-${Date.now()}-user`,
+      role: "user",
+      content: promptText,
+      timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+    };
+
+    const newHistory = [...chatMessages, userMessage];
+    setChatMessages(newHistory);
+    setChatInput("");
+    setIsRefiningAi(true);
+    setRefineError(null);
+    setIsAiChatOpen(true);
+
+    try {
+      const extractUrl = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
+      const refineUrl = process.env.NEXT_PUBLIC_COTIZACIONES_REFINE || extractUrl.replace(/extract-items$/, "refine-items");
+
+      const payload = {
+        cotizacionId: cotizacionId || "temp_" + Date.now(),
+        attachment,
+        currentItems: items,
+        providerName,
+        currency,
+        notes,
+        deliveryTime,
+        paymentTerms,
+        validityPeriod,
+        prompt: promptText,
+        chatHistory: newHistory.slice(-6).map((m) => ({ role: m.role, content: m.content }))
+      };
+
+      const res = await fetch(refineUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Error del servidor: ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.data) {
+        throw new Error(data.error || "No se pudo actualizar los ítems con IA");
+      }
+
+      if (data.data.providerName) setProviderName(data.data.providerName);
+      if (data.data.currency) setCurrency(data.data.currency);
+      if (data.data.deliveryTime !== undefined) setDeliveryTime(data.data.deliveryTime);
+      if (data.data.paymentTerms !== undefined) setPaymentTerms(data.data.paymentTerms);
+      if (data.data.validityPeriod !== undefined) setValidityPeriod(data.data.validityPeriod);
+      if (data.data.notes !== undefined) setNotes(data.data.notes);
+
+      const rawUpdatedItems = Array.isArray(data.data.items) ? data.data.items : [];
+      const formattedUpdated: ExtractedItem[] = rawUpdatedItems.map((it: any, idx: number) => {
+        const p = parseFloat(it.price) || 0;
+        const q = parseFloat(it.quantity) || 1;
+        const t = parseFloat(it.totalPrice) || (p * q);
+        return {
+          id: it.id || `ref-${Date.now()}-${idx}`,
+          name: (it.name || `Ítem ${idx + 1}`).trim(),
+          quantity: q,
+          unit: it.unit || "U",
+          price: p,
+          totalPrice: t,
+          discount: parseFloat(it.discount) || 0,
+          specification: it.specification || "",
+          presentationName: it.presentationName || "",
+          unitsPerPresentation: parseFloat(it.unitsPerPresentation) || 1,
+          matchedItemId: it.matchedItemId || null,
+          selected: true
+        };
+      });
+
+      setItemsHistory((prev) => [
+        ...prev,
+        { items: formattedUpdated, label: promptText, timestamp: new Date().toLocaleTimeString("es-AR") }
+      ]);
+      setItems(formattedUpdated);
+
+      const aiMessage: AiChatMessage = {
+        id: `msg-${Date.now()}-ai`,
+        role: "assistant",
+        content: data.reply || "He actualizado los ítems y precios según tu indicación.",
+        timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+        itemsSnapshotCount: formattedUpdated.length
+      };
+      setChatMessages([...newHistory, aiMessage]);
+
+    } catch (err: any) {
+      console.error("Error refinando con IA:", err);
+      setRefineError(err.message || "Error al comunicarse con la IA");
+      const errMessage: AiChatMessage = {
+        id: `msg-${Date.now()}-err`,
+        role: "assistant",
+        content: `⚠️ Hubo un error al procesar tu instrucción: ${err.message || "Error desconocido"}. Podés reintentar o escribirlo de otra forma.`,
+        timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+      };
+      setChatMessages([...newHistory, errMessage]);
+    } finally {
+      setIsRefiningAi(false);
+    }
+  };
+
+  const handleUndoLastHistory = () => {
+    if (itemsHistory.length <= 1) return;
+    const newHistory = [...itemsHistory];
+    newHistory.pop();
+    const previous = newHistory[newHistory.length - 1];
+    setItemsHistory(newHistory);
+    setItems(previous.items);
+  };
+
+  const handleRestoreInitialItems = () => {
+    if (initialItems.length === 0) return;
+    setItems(initialItems);
+    setItemsHistory((prev) => [...prev, { items: initialItems, label: "Restaurado al original", timestamp: new Date().toLocaleTimeString("es-AR") }]);
+  };
+
   const handleAttachOnly = async () => {
     if (!attachment) return;
     setIsSubmitting(true);
@@ -675,13 +973,353 @@ export function CotizacionesImportAiModal({
     }
   };
 
+  const renderGroupModal = () => {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+        <div className="w-full max-w-lg bg-[#0e1626] border border-white/10 rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                <Boxes className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Agrupar Ítems Seleccionados</h3>
+                <p className="text-[11px] text-gray-400">Consolidar varios renglones en un único ítem con precio total</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsGroupModalOpen(false)}
+              className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-3.5 pr-1">
+            {/* Lista de ítems a incluir */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1.5">
+                Ítems incluidos en el grupo ({groupSelectedIds.size} seleccionados):
+              </label>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto bg-[#070b12] p-2.5 rounded-xl border border-white/10">
+                {items.map((it) => {
+                  const isChecked = groupSelectedIds.has(it.id);
+                  return (
+                    <label
+                      key={it.id}
+                      className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                        isChecked ? "bg-emerald-500/10 text-white" : "hover:bg-white/5 text-gray-400 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleItemGroupSelection(it.id)}
+                          className="rounded border-white/20 text-emerald-500 focus:ring-0 cursor-pointer"
+                        />
+                        <span className="truncate">{it.name}</span>
+                      </div>
+                      <span className="font-mono text-emerald-400 text-[11px] shrink-0 ml-2 font-medium">
+                        {currency === "USD" ? "u$s" : "$"} {(it.totalPrice || it.price * it.quantity).toLocaleString("es-AR")}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Nombre del grupo */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1">
+                Nombre del ítem agrupado:
+              </label>
+              <input
+                type="text"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="Ej: Estructura metálica completa, Materiales sanitarios..."
+                className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Cantidad y Unidad */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Cantidad:</label>
+                <input
+                  type="number"
+                  value={groupQuantity}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 1;
+                    setGroupQuantity(val);
+                  }}
+                  className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-300 mb-1">Unidad:</label>
+                <input
+                  type="text"
+                  value={groupUnit}
+                  onChange={(e) => setGroupUnit(e.target.value)}
+                  placeholder="GL, U, Kit..."
+                  className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Precio consolidado */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center justify-between">
+                <span>Precio unitario consolidado:</span>
+                <span className="text-[10px] text-gray-400 font-normal">Suma automática de precios</span>
+              </label>
+              <div className="flex items-center bg-[#080d17] border border-white/10 rounded-xl px-3 py-2">
+                <span className="text-xs text-gray-400 mr-2 font-mono">{currency === "USD" ? "u$s" : "$"}</span>
+                <input
+                  type="number"
+                  value={groupPrice || ""}
+                  onChange={(e) => setGroupPrice(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-transparent text-sm font-bold font-mono text-emerald-400 focus:outline-none"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* Detalle o especificación */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-1">
+                Especificación / Detalle de componentes:
+              </label>
+              <textarea
+                value={groupSpecification}
+                onChange={(e) => setGroupSpecification(e.target.value)}
+                rows={2}
+                className="w-full bg-[#080d17] border border-white/10 focus:border-emerald-500 rounded-xl p-2.5 text-xs text-gray-300 placeholder-gray-500 focus:outline-none resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => setIsGroupModalOpen(false)}
+              className="px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmGroup}
+              disabled={groupSelectedIds.size < 2 || !groupName.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:cursor-not-allowed"
+            >
+              <Boxes className="w-3.5 h-3.5" />
+              <span>Confirmar Agrupación ({groupSelectedIds.size} ítems)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAiChatPanel = () => {
+    return (
+      <div className="w-full lg:w-96 xl:w-[420px] border-t lg:border-t-0 lg:border-l border-white/10 bg-[#090e18] flex flex-col shrink-0 h-96 lg:h-auto overflow-hidden">
+        {/* Chat Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0f1728]/90 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="p-1.5 bg-gradient-to-tr from-purple-500 to-indigo-500 rounded-lg text-white shadow-sm shadow-purple-500/20">
+              <Sparkles className="w-4 h-4 text-yellow-200" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>Asistente IA de Ajustes</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-purple-500/20 text-purple-300 font-mono">Chat</span>
+              </h3>
+              <p className="text-[10px] text-gray-400 truncate">Aclarale lo que faltó o pedile cambios</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            {itemsHistory.length > 1 && (
+              <button
+                type="button"
+                onClick={handleUndoLastHistory}
+                className="p-1.5 text-gray-400 hover:text-amber-300 hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                title="Deshacer último ajuste"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsAiChatOpen(false)}
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+              title="Ocultar chat"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Suggestion Pills */}
+        <div className="p-2.5 border-b border-white/5 bg-[#070b13]/60 shrink-0">
+          <p className="text-[10px] font-semibold text-gray-400 mb-1.5 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-purple-400" />
+            <span>Sugerencias rápidas:</span>
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {REFINEMENT_QUICK_PROMPTS.map((qp, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleSendAiPrompt(qp.prompt)}
+                disabled={isRefiningAi}
+                className="text-[10px] px-2 py-0.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 rounded-md transition-all cursor-pointer disabled:opacity-40 text-left"
+              >
+                {qp.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Messages History */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+          {chatMessages.length === 0 ? (
+            <div className="p-3.5 bg-purple-500/5 border border-purple-500/15 rounded-2xl space-y-2 text-gray-300">
+              <div className="flex items-center gap-1.5 text-purple-300 font-bold">
+                <Bot className="w-4 h-4 text-purple-400" />
+                <span>¡Hola! ¿Qué necesitás ajustar?</span>
+              </div>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Leí el documento y cargué los ítems en el formulario. Si querés que:
+              </p>
+              <ul className="text-[11px] text-gray-400 space-y-1 list-disc list-inside">
+                <li><strong>Agrupe</strong> ítems (ej: &quot;Agrupame los perfiles y sumá sus precios&quot;)</li>
+                <li><strong>Agregue</strong> algún ítem que no vi en el PDF (ej: &quot;Faltó la mano de obra&quot;)</li>
+                <li><strong>Recalcule</strong> precios con IVA o flete (ej: &quot;Sumale el 21% de IVA a los precios&quot;)</li>
+                <li><strong>Separe</strong> mano de obra y materiales</li>
+              </ul>
+              <p className="text-[11px] text-purple-300 font-medium">
+                Escribí acá tu prompt y recalcularé todos los ítems y precios automáticamente.
+              </p>
+            </div>
+          ) : (
+            chatMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+              >
+                <div
+                  className={`max-w-[90%] p-2.5 rounded-2xl ${
+                    msg.role === "user"
+                      ? "bg-purple-600 text-white rounded-br-none"
+                      : "bg-[#131c2e] border border-white/10 text-gray-200 rounded-bl-none shadow-sm"
+                  }`}
+                >
+                  {msg.role === "assistant" ? (
+                    <div className="space-y-1.5">
+                      <div className="text-[11px] leading-relaxed prose prose-invert prose-xs max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      </div>
+                      {msg.itemsSnapshotCount !== undefined && (
+                        <div className="mt-1 pt-1 border-t border-white/10 flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Formulario actualizado ({msg.itemsSnapshotCount} ítems)</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] leading-relaxed">{msg.content}</p>
+                  )}
+                </div>
+                <span className="text-[9px] text-gray-500 mt-0.5 px-1">{msg.timestamp}</span>
+              </div>
+            ))
+          )}
+
+          {isRefiningAi && (
+            <div className="p-3 bg-purple-950/20 border border-purple-500/25 rounded-2xl flex items-center gap-2.5 text-xs text-purple-300 animate-pulse">
+              <Loader2 className="w-4 h-4 animate-spin text-purple-400 shrink-0" />
+              <span className="text-[11px]">Consultando documento y recalculando ítems...</span>
+            </div>
+          )}
+
+          {refineError && (
+            <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl text-[11px] text-red-400 flex items-start gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p>{refineError}</p>
+              </div>
+            </div>
+          )}
+
+          <div ref={chatMessagesEndRef} />
+        </div>
+
+        {/* Chat Input Bar */}
+        <div className="p-2.5 border-t border-white/10 bg-[#0c121e] shrink-0 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendAiPrompt();
+                }
+              }}
+              placeholder="Escribí una instrucción para la IA..."
+              disabled={isRefiningAi}
+              className="flex-1 bg-[#070b12] border border-white/10 focus:border-purple-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => handleSendAiPrompt()}
+              disabled={isRefiningAi || !chatInput.trim()}
+              className="p-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-xl transition-all cursor-pointer disabled:cursor-not-allowed shrink-0"
+              title="Enviar instrucción"
+            >
+              {isRefiningAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* History controls */}
+          {itemsHistory.length > 1 && (
+            <div className="flex items-center justify-between text-[10px] text-gray-400 px-1 pt-0.5">
+              <button
+                type="button"
+                onClick={handleUndoLastHistory}
+                className="hover:text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <Undo2 className="w-3 h-3" />
+                <span>Deshacer último cambio</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreInitialItems}
+                className="hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Restaurar original</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const selectedCount = items.filter((it) => it.selected).length;
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="flex flex-col w-full h-full sm:h-[90vh] max-w-4xl bg-[#0b101b] border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden">
+      <div className={`flex flex-col w-full h-full sm:h-[90vh] ${attachment && isAiChatOpen ? "max-w-6xl" : "max-w-4xl"} bg-[#0b101b] border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-200`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-[#101726]/90 shrink-0">
           <div className="flex items-center gap-3">
@@ -710,7 +1348,8 @@ export function CotizacionesImportAiModal({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Mode Selector before upload */}
           {!attachment && !isAnalyzing && !isBatchMode && (
             <div className="bg-[#101726]/80 border border-white/10 rounded-2xl p-4 space-y-3">
@@ -1143,7 +1782,7 @@ export function CotizacionesImportAiModal({
                     </span>
                   </div>
 
-                  {/* Mode switcher pills directly in results */}
+                  {/* Action buttons and mode switcher pills */}
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="inline-flex items-center bg-[#070b13] p-1 rounded-xl border border-white/10 text-xs">
                       <button
@@ -1172,14 +1811,58 @@ export function CotizacionesImportAiModal({
                       </button>
                     </div>
 
+                    {/* Botón Agrupar Seleccionados */}
+                    {selectedCount >= 2 && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenGroupModal()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-xl transition-all cursor-pointer shadow-sm shadow-emerald-500/20 animate-in fade-in"
+                        title={`Agrupar los ${selectedCount} ítems seleccionados en un único ítem`}
+                      >
+                        <Boxes className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Agrupar ({selectedCount})</span>
+                      </button>
+                    )}
+
+                    {/* Botón Chat con IA */}
+                    <button
+                      type="button"
+                      onClick={() => setIsAiChatOpen(!isAiChatOpen)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                        isAiChatOpen
+                          ? "bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-sm shadow-purple-500/20"
+                          : "bg-gradient-to-r from-purple-500/15 to-indigo-500/15 hover:from-purple-500/25 hover:to-indigo-500/25 text-purple-300 hover:text-white border-purple-500/30 hover:border-purple-500/50"
+                      }`}
+                      title="Abrir chat para pedirle cambios, agrupaciones o correcciones a la IA"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                      <span>{isAiChatOpen ? "Ocultar Chat IA" : "Chat con IA"}</span>
+                      {chatMessages.length > 0 && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Botón Deshacer */}
+                    {itemsHistory.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleUndoLastHistory}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-colors cursor-pointer"
+                        title="Deshacer el último cambio de la IA o agrupación"
+                      >
+                        <Undo2 className="w-3.5 h-3.5" />
+                        <span>Deshacer</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleResetAllToNewItems}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-lg transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-xl transition-colors cursor-pointer"
                       title="Configura todas las líneas leídas para que se creen como ítems nuevos en lugar de asignarse a ítems existentes"
                     >
                       <Plus className="w-3.5 h-3.5 text-emerald-400 stroke-[2.5]" />
-                      <span>Crear ítems nuevos a todas las líneas</span>
+                      <span>Crear nuevas</span>
                     </button>
 
                     <button
@@ -1188,6 +1871,53 @@ export function CotizacionesImportAiModal({
                       className="text-xs text-gray-400 hover:text-white transition-colors cursor-pointer ml-1"
                     >
                       {items.every((it) => it.selected) ? "Desmarcar todos" : "Seleccionar todos"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barra de Prompt Rápido para Ajustes con IA */}
+                <div className="p-3 bg-gradient-to-r from-purple-950/20 via-indigo-950/20 to-[#0d1424] border border-purple-500/25 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-200 shrink-0">
+                    <Sparkles className="w-4 h-4 text-yellow-300 animate-pulse" />
+                    <span>Ajustar con IA:</span>
+                  </div>
+                  <div className="flex-1 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendAiPrompt();
+                        }
+                      }}
+                      placeholder="Pedile a la IA: 'Agrupá los caños y codos en un solo renglón', 'Faltó el flete de $50.000', 'Sumá 21% IVA'..."
+                      className="flex-1 bg-[#080d17] border border-white/10 focus:border-purple-500 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                      disabled={isRefiningAi}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSendAiPrompt()}
+                      disabled={isRefiningAi || !chatInput.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-500/20 cursor-pointer disabled:cursor-not-allowed shrink-0"
+                    >
+                      {isRefiningAi ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>Enviar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAiChatOpen(!isAiChatOpen)}
+                      className={`p-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer shrink-0 ${
+                        isAiChatOpen ? "bg-purple-500/20 text-purple-200 border-purple-500/40" : "bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border-white/10"
+                      }`}
+                      title="Ver historial del chat y sugerencias de la IA"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -1239,13 +1969,32 @@ export function CotizacionesImportAiModal({
                             <div className="flex-1 min-w-0 space-y-2.5">
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 {/* Item Name */}
-                                <input
-                                  type="text"
-                                  value={item.name}
-                                  onChange={(e) => handleUpdateItemField(index, "name", e.target.value)}
-                                  className="font-semibold text-sm text-white bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none flex-1 truncate"
-                                  placeholder="Nombre del ítem"
-                                />
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  {item.isGrouped && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0">
+                                      <Boxes className="w-3 h-3 text-emerald-400" />
+                                      <span>Agrupado ({item.groupedChildren?.length || 0})</span>
+                                    </span>
+                                  )}
+                                  <input
+                                    type="text"
+                                    value={item.name}
+                                    onChange={(e) => handleUpdateItemField(index, "name", e.target.value)}
+                                    className="font-semibold text-sm text-white bg-transparent border-b border-transparent hover:border-white/10 focus:border-emerald-500 focus:outline-none flex-1 truncate"
+                                    placeholder="Nombre del ítem"
+                                  />
+                                  {item.isGrouped && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUngroupItem(item.id)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
+                                      title="Desagrupar este ítem y restaurar las líneas originales"
+                                    >
+                                      <Split className="w-3 h-3 text-amber-400" />
+                                      <span>Desagrupar</span>
+                                    </button>
+                                  )}
+                                </div>
 
                                 {/* Unit Price and Presentation */}
                                 <div className="flex items-center gap-2 shrink-0">
@@ -1325,6 +2074,36 @@ export function CotizacionesImportAiModal({
                                   )}
                                 </div>
                               </div>
+
+                              {/* Sub-items preview for grouped items */}
+                              {item.isGrouped && item.groupedChildren && item.groupedChildren.length > 0 && (
+                                <div className="mt-1 pt-1 border-t border-white/5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleExpandGroup(item.id)}
+                                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    <span>{expandedGroupIds.has(item.id) ? "Ocultar" : "Ver"} los {item.groupedChildren.length} ítems agrupados en este renglón</span>
+                                    {expandedGroupIds.has(item.id) ? (
+                                      <ChevronUp className="w-3 h-3" />
+                                    ) : (
+                                      <ChevronDown className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                  {expandedGroupIds.has(item.id) && (
+                                    <div className="space-y-1 mt-1.5 pl-2 border-l-2 border-emerald-500/30">
+                                      {item.groupedChildren.map((child, cIdx) => (
+                                        <div key={child.id || cIdx} className="text-[11px] text-gray-300 flex items-center justify-between bg-black/25 p-1.5 rounded-lg border border-white/5">
+                                          <span className="truncate">• {child.name} ({child.quantity} {child.unit})</span>
+                                          <span className="font-mono text-emerald-400 ml-2 shrink-0 font-medium">
+                                            {currency === "USD" ? "u$s" : "$"} {(child.totalPrice || child.price * child.quantity).toLocaleString("es-AR")}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1335,6 +2114,10 @@ export function CotizacionesImportAiModal({
               </div>
             </div>
           )}
+          </div>
+
+          {/* AI Chat Drawer / Panel on the right */}
+          {attachment && !isAnalyzing && !isBatchMode && isAiChatOpen && renderAiChatPanel()}
         </div>
 
         {/* Modal Footer */}
@@ -1414,6 +2197,9 @@ export function CotizacionesImportAiModal({
           )}
         </div>
       </div>
+
+      {/* Modal de Agrupación de Ítems */}
+      {isGroupModalOpen && renderGroupModal()}
     </div>
   );
 }
