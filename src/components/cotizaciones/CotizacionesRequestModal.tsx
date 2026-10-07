@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   X,
   Mail,
@@ -15,7 +15,9 @@ import {
   Clock,
   Loader2,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  Layers,
+  PackageCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -24,6 +26,141 @@ export interface ItemForRequest {
   name: string;
   baseUnit: string;
   targetQuantity: number;
+}
+
+export interface ExtractedArticle {
+  quantity: string;
+  unit: string;
+  description: string;
+}
+
+function capitalizeFirst(str: string): string {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function extractArticlesFromText(text: string): ExtractedArticle[] {
+  if (!text || !text.trim()) return [];
+
+  // Split on newlines, commas, semicolons, and coordinating conjunctions
+  const segments = text
+    .split(/\n|,|;|\b(?:y|e|además|ademas|también|tambien|más|mas)\b/i)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const articles: ExtractedArticle[] = [];
+
+  const unitMap: Record<string, string> = {
+    bolsa: "Bolsas",
+    bolsas: "Bolsas",
+    u: "Unidades",
+    un: "Unidades",
+    unidad: "Unidades",
+    unidades: "Unidades",
+    barra: "Barras",
+    barras: "Barras",
+    varilla: "Varillas",
+    varillas: "Varillas",
+    kg: "kg",
+    kilo: "kg",
+    kilos: "kg",
+    l: "Litros",
+    lt: "Litros",
+    lts: "Litros",
+    litro: "Litros",
+    litros: "Litros",
+    m: "Metros",
+    mt: "Metros",
+    mts: "Metros",
+    metro: "Metros",
+    metros: "Metros",
+    m2: "m²",
+    m3: "m³",
+    pack: "Packs",
+    packs: "Packs",
+    caja: "Cajas",
+    cajas: "Cajas",
+    paquete: "Paquetes",
+    paquetes: "Paquetes",
+    palet: "Pallets",
+    pallet: "Pallets",
+    pallets: "Pallets",
+    rollo: "Rollos",
+    rollos: "Rollos",
+    tira: "Tiras",
+    tiras: "Tiras",
+    tubo: "Tubos",
+    tubos: "Tubos",
+    malla: "Mallas",
+    mallas: "Mallas",
+    placa: "Placas",
+    placas: "Placas",
+    hoja: "Hojas",
+    hojas: "Hojas"
+  };
+
+  for (let seg of segments) {
+    // Clean introductory conversational filler
+    seg = seg.replace(/^(?:hola|buenas|che|porfa|por favor|necesito|preciso|pasame|mandame|cotizame|presupuestame|precio de|precios de|valores de|valor de|tenes|tienen|queria saber si tenes|queria pedirte|pedir|comprar|conseguir|para)\s+/i, "").trim();
+    // Clean trailing filler
+    seg = seg.replace(/\s+(?:porfa|por favor|a la brevedad|lo antes posible|urgente|gracias|muchas gracias|saludos)$/i, "").trim();
+
+    if (!seg || seg.length < 2) continue;
+
+    // Pattern 1: [quantity] [unit] [de/del] [description]  (e.g., "50 bolsas de cemento loma negra", "10 barras hierro")
+    const matchWithUnit = seg.match(/^(\d+(?:[.,]\d+)?)\s*([a-zA-Z³²°]{1,12})\s+(?:de\s+|del\s+)?(.+)$/i);
+    if (matchWithUnit) {
+      const qty = matchWithUnit[1];
+      const candidateUnit = matchWithUnit[2].toLowerCase();
+      const rest = matchWithUnit[3].trim();
+
+      if (unitMap[candidateUnit]) {
+        articles.push({
+          quantity: qty,
+          unit: unitMap[candidateUnit],
+          description: capitalizeFirst(rest)
+        });
+        continue;
+      }
+    }
+
+    // Pattern 2: [quantity] [description] (e.g., "10 hierros del 8", "100 ladrillos del 18")
+    const matchSimpleQty = seg.match(/^(\d+(?:[.,]\d+)?)\s+(?:de\s+|del\s+)?(.+)$/i);
+    if (matchSimpleQty) {
+      const qty = matchSimpleQty[1];
+      const desc = matchSimpleQty[2].trim();
+      articles.push({
+        quantity: qty,
+        unit: "Unidades",
+        description: capitalizeFirst(desc)
+      });
+      continue;
+    }
+
+    // Pattern 3: [description] [quantity] [unit] (e.g., "pintura latex blanca 20 litros")
+    const matchTrailingQty = seg.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([a-zA-Z³²°]{1,12})$/i);
+    if (matchTrailingQty) {
+      const desc = matchTrailingQty[1].trim();
+      const qty = matchTrailingQty[2];
+      const candidateUnit = matchTrailingQty[3].toLowerCase();
+
+      articles.push({
+        quantity: qty,
+        unit: unitMap[candidateUnit] || candidateUnit.toUpperCase(),
+        description: capitalizeFirst(desc)
+      });
+      continue;
+    }
+
+    // Fallback: item without explicit leading quantity
+    articles.push({
+      quantity: "1",
+      unit: "Unidad",
+      description: capitalizeFirst(seg)
+    });
+  }
+
+  return articles;
 }
 
 interface CotizacionesRequestModalProps {
@@ -60,7 +197,10 @@ export function CotizacionesRequestModal({
   const [whatsappBody, setWhatsappBody] = useState<string>("");
   const [copiedType, setCopiedType] = useState<"email" | "whatsapp" | null>(null);
 
-  if (!isOpen) return null;
+  // Identified articles in real time
+  const detectedArticles = useMemo(() => {
+    return activeTab === "rough" ? extractArticlesFromText(roughText) : [];
+  }, [roughText, activeTab]);
 
   const handleToggleItem = (id: string) => {
     setSelectedItemIds((prev) => {
@@ -92,27 +232,26 @@ export function CotizacionesRequestModal({
       const chosen = existingItems.filter((it) => selectedItemIds.has(it.id));
       if (chosen.length > 0) {
         itemsListText = chosen
-          .map((it) => `• ${it.name}: ${it.targetQuantity} ${it.baseUnit}`)
+          .map((it, idx) => `${idx + 1}. ${it.targetQuantity} ${it.baseUnit} - ${it.name}`)
           .join("\n");
         waItemsText = chosen
           .map((it) => `• *${it.targetQuantity} ${it.baseUnit}* ${it.name}`)
           .join("\n");
       }
-    }
-
-    if (!itemsListText && roughText.trim()) {
-      // Split lines or commas from rough text
-      const lines = roughText
-        .split(/\n|,|;/)
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0);
-
-      itemsListText = lines.map((l) => `• ${l}`).join("\n");
-      waItemsText = lines.map((l) => `• ${l}`).join("\n");
+    } else {
+      const extracted = extractArticlesFromText(roughText);
+      if (extracted.length > 0) {
+        itemsListText = extracted
+          .map((art, idx) => `${idx + 1}. ${art.quantity} ${art.unit} - ${art.description}`)
+          .join("\n");
+        waItemsText = extracted
+          .map((art) => `• *${art.quantity} ${art.unit}* ${art.description}`)
+          .join("\n");
+      }
     }
 
     if (!itemsListText) {
-      itemsListText = "• [Detalle de materiales y cantidades a cotizar]";
+      itemsListText = "1. [Especificar artículos, cantidades y unidades a cotizar]";
       waItemsText = "• [Materiales a cotizar]";
     }
 
@@ -120,7 +259,7 @@ export function CotizacionesRequestModal({
 
     const email = `${supplier === "Estimados" ? "Estimados," : `Estimados señores de ${supplier},`}
 
-Por medio de la presente, nos comunicamos desde el área de Compras para solicitarles cotización formal para los siguientes insumos requeridos para ${project}:
+Por medio de la presente, nos comunicamos desde el área de Compras para solicitarles formalmente cotización de los siguientes artículos requeridos para ${project}:
 
 DETALLE DE MATERIALES SOLICITADOS:
 ${itemsListText}
@@ -153,35 +292,60 @@ ${location ? `📍 Lugar de entrega: ${location}\n` : ""}${urgency ? `⏱️ Pla
     const localDraft = generateLocalFormalDraft();
 
     try {
-      // Try Gemini AI enhancement via streaming/POST endpoint if online
       const apiEndpoint = process.env.NEXT_PUBLIC_COTIZACIONES_API || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/chat";
 
-      const promptContent = `Actúa como un Responsable de Compras y Suministros profesional.
-Convierte la siguiente solicitud informal de insumos en un correo formal de negocios para solicitar presupuesto a proveedores.
+      const extractedForAi = activeTab === "rough" ? extractArticlesFromText(roughText) : [];
+      const extractedSummary = extractedForAi
+        .map((a) => `${a.quantity} ${a.unit} de ${a.description}`)
+        .join("; ");
 
-DATOS:
-- Texto informal del usuario: "${roughText.trim() || "Insumos seleccionados"}"
-- Ítems seleccionados: ${
-        activeTab === "items"
-          ? existingItems
-              .filter((it) => selectedItemIds.has(it.id))
-              .map((it) => `${it.targetQuantity} ${it.baseUnit} de ${it.name}`)
-              .join(", ")
-          : "Los mencionados en el texto"
-      }
-- Proyecto / Obra: "${destinationRef.trim() || "Obra / Proyecto"}"
+      const promptContent = `Actúa como un Responsable de Compras y Abastecimiento senior.
+Tu objetivo es redactar una Solicitud Formal de Cotización a proveedores, transformando las notas informales del usuario en un pedido formal, pulcro e impecable.
+
+REGLA CRÍTICA Y OBLIGATORIA:
+DEBES IDENTIFICAR, EXTRAER Y NORMALIZAR CADA UNO DE LOS ARTÍCULOS O MATERIALES SOLICITADOS A PARTIR DEL TEXTO INFORMAL DEL USUARIO.
+- NO copies frases informales del usuario como "hola necesito", "pasame precio de", etc.
+- En la sección "DETALLE DE MATERIALES SOLICITADOS", debes listar CADA ARTÍCULO COMO UN ÍTEM INDIVIDUAL numerado con:
+  [Número]. [Cantidad] [Unidad de Medida] - [Descripción Clara / Especificación del Material]
+  Ejemplo:
+  1. 50 Bolsas (x 50kg) - Cemento Portland Loma Negra
+  2. 10 Barras (x 12m) - Hierro aletado ADN 420 Ø 8 mm
+  3. 2 m³ - Arena gruesa limpia
+
+DATOS DEL PEDIDO:
+- Texto informal del usuario: "${roughText.trim()}"
+${extractedSummary ? `- Artículos detectados preliminarmente: ${extractedSummary}` : ""}
+${
+  activeTab === "items" && existingItems.length > 0
+    ? `- Ítems seleccionados de la cotización: ${existingItems
+        .filter((it) => selectedItemIds.has(it.id))
+        .map((it) => `${it.targetQuantity} ${it.baseUnit} de ${it.name}`)
+        .join(", ")}`
+    : ""
+}
+- Obra / Proyecto de destino: "${destinationRef.trim() || "Obra / Proyecto"}"
 - Proveedor destinatario: "${targetSupplier.trim() || "Proveedor"}"
-- Lugar de entrega: "${deliveryLocation.trim() || "A coordinar"}"
-- Plazo de entrega requerido: "${deliveryUrgency.trim() || "Normal"}"
+- Lugar y condición de entrega: "${deliveryLocation.trim() || "A coordinar en destino"}"
+- Plazo de entrega requerido: "${deliveryUrgency.trim() || "A convenir"}"
 
-INSTRUCCIONES DE SALIDA:
-Devuelve EXACTAMENTE este formato dividido con separadores:
+FORMATO OBLIGATORIO DE RESPUESTA:
+Devuelve ÚNICAMENTE las siguientes tres secciones delimitadas por los tags exactos:
+
 ===ASUNTO===
-[Asunto formal y conciso del correo]
+[Asunto formal, conciso y profesional, ej: Solicitud de Cotización de Materiales - Proyecto X]
 ===CORREO===
-[Cuerpo formal del correo con saludo, tabla/viñetas claras de materiales, condiciones comerciales requeridas y firma]
+[Cuerpo formal del correo:
+- Saludo protocolar al proveedor
+- Párrafo formal solicitando cotización para la obra/proyecto
+- DETALLE DE MATERIALES SOLICITADOS (lista numerada de cada artículo individual normalizado con cantidad y unidad)
+- CONDICIONES REQUERIDAS (plazo de entrega, lugar, formas de pago, vigencia de precios e indicación de IVA)
+- Cierre formal y firma de Compras]
 ===WHATSAPP===
-[Versión sintética, profesional y ordenada para enviar por WhatsApp con viñetas]`;
+[Versión para WhatsApp sintética, prolija y ejecutiva:
+- Saludo cordial
+- Mención del proyecto
+- Lista con viñetas en negrita de los materiales: • *Cantidad Unidad* Descripción
+- Plazo, lugar y solicitud de precios unitarios]`;
 
       const res = await fetch(apiEndpoint, {
         method: "POST",
@@ -200,11 +364,39 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
       });
 
       if (res.ok) {
-        const textResponse = await res.text();
-        if (textResponse && textResponse.includes("===CORREO===")) {
-          const subjectMatch = textResponse.match(/===ASUNTO===([\s\S]*?)===CORREO===/);
-          const emailMatch = textResponse.match(/===CORREO===([\s\S]*?)===WHATSAPP===/);
-          const waMatch = textResponse.match(/===WHATSAPP===([\s\S]*)$/);
+        let fullText = "";
+        const reader = res.body?.getReader();
+        if (reader) {
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data:")) continue;
+              const dataStr = trimmed.replace(/^data:\s*/, "");
+              if (dataStr === "[DONE]") break;
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.text) fullText += parsed.text;
+                else if (parsed.content) fullText += parsed.content;
+              } catch {
+                fullText += dataStr;
+              }
+            }
+          }
+        } else {
+          fullText = await res.text();
+        }
+
+        if (fullText && fullText.includes("===CORREO===")) {
+          const subjectMatch = fullText.match(/===ASUNTO===([\s\S]*?)===CORREO===/);
+          const emailMatch = fullText.match(/===CORREO===([\s\S]*?)===WHATSAPP===/);
+          const waMatch = fullText.match(/===WHATSAPP===([\s\S]*)$/);
 
           const aiSubject = subjectMatch ? subjectMatch[1].trim() : localDraft.subject;
           const aiEmail = emailMatch ? emailMatch[1].trim() : localDraft.email;
@@ -254,6 +446,8 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
     window.open(`https://wa.me/?text=${textEnc}`, "_blank");
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="flex flex-col w-full h-full sm:h-[90vh] max-w-4xl bg-[#0b101b] border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden">
@@ -271,7 +465,7 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
                 </span>
               </h2>
               <p className="text-xs text-gray-400">
-                Escribí lo que necesitás &quot;así nomás&quot; y la IA te genera un correo formal y mensaje de WhatsApp para enviar
+                Escribí lo que necesitás &quot;así nomás&quot; y la IA desglosa los artículos y te arma el correo formal
               </p>
             </div>
           </div>
@@ -319,7 +513,7 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
 
             <span className="text-[11px] text-slate-400 px-2 hidden sm:inline">
               {activeTab === "rough"
-                ? "Tipeá lo que necesitás sin preocuparte por el formato"
+                ? "Tipeá lo que necesitás: detectará automáticamente cada artículo"
                 : "Elegí qué productos de la lista querés presupuestar"}
             </span>
           </div>
@@ -379,11 +573,11 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
 
           {/* Mode 1: Rough Textarea */}
           {activeTab === "rough" && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="block text-xs font-bold text-slate-200 flex items-center justify-between">
                 <span>Escribí tu pedido de materiales:</span>
                 <span className="text-[11px] text-slate-400 font-normal">
-                  La IA detecta cantidades, unidades y redacta formalmente
+                  Identifica artículos, cantidades y unidades automáticamente
                 </span>
               </label>
               <textarea
@@ -393,6 +587,34 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
                 placeholder="Ej: Che pasame precio de 20 bolsas de cemento loma negra, 10 varillas del 10 y 2 m3 de arena para entregar el viernes en pilar con descarga..."
                 className="w-full bg-[#080d17] border border-white/10 focus:border-indigo-500 rounded-2xl p-3.5 text-xs text-white placeholder-slate-500 focus:outline-none leading-relaxed resize-none"
               />
+
+              {/* Detected Articles Live Preview */}
+              {detectedArticles.length > 0 && (
+                <div className="p-3 rounded-2xl bg-indigo-950/25 border border-indigo-500/25 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-indigo-300">
+                    <span className="flex items-center gap-1.5">
+                      <PackageCheck className="w-4 h-4 text-emerald-400" />
+                      <span>Artículos identificados para el detalle ({detectedArticles.length}):</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Se incluirán numerados y normalizados en el correo
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {detectedArticles.map((art, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-xs text-slate-200"
+                      >
+                        <span className="font-mono font-bold text-indigo-300">
+                          {art.quantity} {art.unit}
+                        </span>
+                        <span className="text-white font-medium">{art.description}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -465,7 +687,7 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
               {isGenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Redactando solicitud formal con IA...</span>
+                  <span>Desglosando artículos y redactando correo formal...</span>
                 </>
               ) : (
                 <>
@@ -485,7 +707,7 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
             >
               {/* Email Result Card */}
               <div className="p-4 rounded-2xl bg-[#080d17] border border-white/10 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/06">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2 text-xs font-bold text-white">
                     <Mail className="w-4 h-4 text-indigo-400" />
                     <span>Versión Correo Electrónico Formal</span>
@@ -522,22 +744,39 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
                   </div>
                 </div>
 
-                <div className="space-y-2 text-xs">
-                  <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.05] font-mono text-[11px] text-slate-300">
-                    <strong className="text-slate-400">Asunto:</strong> {emailSubject}
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                      Asunto
+                    </label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      className="w-full bg-[#060912] border border-white/5 focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs text-white font-semibold outline-none"
+                    />
                   </div>
-                  <pre className="p-3.5 rounded-xl bg-[#0b101b] border border-white/[0.05] font-sans text-xs text-slate-200 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
-                    {emailBody}
-                  </pre>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                      Cuerpo del Correo (con desglose formal de materiales)
+                    </label>
+                    <textarea
+                      rows={10}
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                      className="w-full bg-[#060912] border border-white/5 focus:border-indigo-500 rounded-xl p-3 text-xs text-slate-200 outline-none leading-relaxed font-mono resize-y"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* WhatsApp Result Card */}
               <div className="p-4 rounded-2xl bg-[#080d17] border border-white/10 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/06">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2 text-xs font-bold text-white">
                     <MessageSquare className="w-4 h-4 text-emerald-400" />
-                    <span>Versión Mensaje de WhatsApp</span>
+                    <span>Versión Sintética para WhatsApp</span>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -553,7 +792,7 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
                         </>
                       ) : (
                         <>
-                          <Share2 className="w-3.5 h-3.5" />
+                          <Clipboard className="w-3.5 h-3.5" />
                           <span>Copiar WhatsApp</span>
                         </>
                       )}
@@ -562,29 +801,32 @@ Devuelve EXACTAMENTE este formato dividido con separadores:
                     <button
                       type="button"
                       onClick={handleOpenWhatsApp}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-xs font-semibold transition-colors cursor-pointer"
-                      title="Abrir chat en WhatsApp Web"
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#25D366]/20 hover:bg-[#25D366]/30 text-[#25D366] border border-[#25D366]/40 text-xs font-semibold transition-colors cursor-pointer"
+                      title="Abrir chat de WhatsApp Web con el texto pre-cargado"
                     >
-                      <ExternalLink className="w-3 h-3 text-emerald-400" />
+                      <Share2 className="w-3 h-3" />
                       <span>Abrir WhatsApp</span>
                     </button>
                   </div>
                 </div>
 
-                <pre className="p-3.5 rounded-xl bg-[#0b101b] border border-white/[0.05] font-sans text-xs text-slate-200 whitespace-pre-wrap leading-relaxed max-h-44 overflow-y-auto">
-                  {whatsappBody}
-                </pre>
+                <textarea
+                  rows={5}
+                  value={whatsappBody}
+                  onChange={(e) => setWhatsappBody(e.target.value)}
+                  className="w-full bg-[#060912] border border-white/5 focus:border-emerald-500/50 rounded-xl p-3 text-xs text-slate-200 outline-none leading-relaxed font-mono resize-y"
+                />
               </div>
             </motion.div>
           )}
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end px-5 py-3 border-t border-white/10 bg-[#101726]/90 shrink-0">
+        <div className="px-5 py-3 border-t border-white/10 bg-[#101726]/80 flex items-center justify-end shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
           >
             Cerrar
           </button>

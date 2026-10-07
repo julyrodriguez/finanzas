@@ -83,6 +83,7 @@ import * as XLSX from "xlsx";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
 import { CotizacionesImportAiModal, ImportPayload } from "@/components/cotizaciones/CotizacionesImportAiModal";
 import { CotizacionesRequestModal } from "@/components/cotizaciones/CotizacionesRequestModal";
+import { CotizacionesSummaryModal } from "@/components/cotizaciones/CotizacionesSummaryModal";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -192,6 +193,7 @@ interface SavedQuotation {
   pendienteId?: string;
   pendienteTitulo?: string;
   attachments?: QuoteAttachment[];
+  aiSummary?: string;
 }
 
 const DEFAULT_UNITS = [
@@ -230,6 +232,9 @@ export default function CotizacionesPage() {
   const [importAiTargetProviderId, setImportAiTargetProviderId] = useState<string | undefined>(undefined);
   const [importAiTargetProviderName, setImportAiTargetProviderName] = useState<string | undefined>(undefined);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
+  const [aiSummary, setAiSummary] = useState<string>("");
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
+  const [activeSummaryText, setActiveSummaryText] = useState<string>("");
 
   const toggleMinimizeProvider = (providerId: string) => {
     setMinimizedProviders((prev) => {
@@ -811,7 +816,8 @@ export default function CotizacionesPage() {
       categoria: finalCategoria,
       pendienteId: quotePendienteId.trim(),
       pendienteTitulo: quotePendienteTitulo.trim(),
-      attachments: attachments || []
+      attachments: attachments || [],
+      aiSummary: aiSummary || undefined
     };
 
     const db = getFirebaseDb();
@@ -951,6 +957,8 @@ export default function CotizacionesPage() {
     setQuotePendienteId("");
     setQuotePendienteTitulo("");
     setAttachments([]);
+    setAiSummary("");
+    setActiveSummaryText("");
     setHasActiveQuote(true);
     setItems([]);
     setProviders([]);
@@ -972,6 +980,17 @@ export default function CotizacionesPage() {
     setItems(quote.items || []);
     setProviders(quote.providers || []);
     setAttachments(quote.attachments || []);
+    setAiSummary(quote.aiSummary || "");
+    if (qId && !quote.aiSummary && !String(qId).startsWith("local-") && !String(qId).startsWith("temp_")) {
+      fetch(`https://apivacas.jariel.com.ar/api/cotizaciones-ia/summary/${encodeURIComponent(qId)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.summary) {
+            setAiSummary(data.summary);
+          }
+        })
+        .catch(() => {});
+    }
     let loadedStatus: "borrador" | "enviada" | "finalizada" | "cancelada" = "borrador";
     if (quote.status) {
       loadedStatus = quote.status as "borrador" | "enviada" | "finalizada" | "cancelada";
@@ -2710,6 +2729,148 @@ export default function CotizacionesPage() {
     }
   };
 
+  const buildExecutiveSummaryText = () => {
+    const activeProviders = providers.filter((p) => !excludedProviderIds.includes(p.id));
+    if (activeProviders.length === 0) return "";
+    const activeItems = items.filter((it) => !excludedItemIds.includes(it.id));
+    if (activeItems.length === 0) return "";
+
+    const sortedComparisons = [...providerCostComparisons].filter((c) =>
+      activeProviders.some((p) => p.id === c.providerId)
+    );
+
+    const winnerCost = sortedComparisons[0];
+    const winnerProv = winnerCost ? activeProviders.find((p) => p.id === winnerCost.providerId) : null;
+    const runnerUpCost = sortedComparisons[1];
+    const runnerUpProv = runnerUpCost ? activeProviders.find((p) => p.id === runnerUpCost.providerId) : null;
+
+    const savings = (runnerUpCost && winnerCost) ? (runnerUpCost.totalBC - winnerCost.totalBC) : 0;
+    const savingsPct = (runnerUpCost && runnerUpCost.totalBC > 0) ? Math.round((savings / runnerUpCost.totalBC) * 100) : 0;
+
+    const DIVIDER = "────────────────────────────";
+
+    let msg = `📊 *RESUMEN EJECUTIVO DE COTIZACIÓN*\n`;
+    msg += `${DIVIDER}\n`;
+    msg += `📌 *Proyecto:* ${quoteName || "Comparativa de Precios"}\n`;
+    msg += `📅 *Fecha:* ${new Date().toLocaleDateString("es-AR")}\n`;
+    if (quoteCategoria) {
+      msg += `📁 *Rubro:* ${quoteCategoria}\n`;
+    }
+    msg += `👥 *Proveedores evaluados:* ${activeProviders.length}\n`;
+    msg += `📦 *Ítems cotizados:* ${activeItems.length} insumos\n`;
+    msg += `💵 *Moneda de análisis:* ${baseCurrency} (TC: $${exchangeRate.toLocaleString("es-AR")})\n`;
+
+    if (winnerProv && winnerCost) {
+      msg += `\n🏆 *OPCIÓN MÁS CONVENIENTE: ${winnerProv.name.toUpperCase()}*\n`;
+      msg += `💰 *Total General:* ${formatCurrencyValue(winnerCost.totalBC, baseCurrency)}\n`;
+      if (savings > 0) {
+        msg += `📉 *Ahorro vs 2do (${runnerUpProv?.name || "2da opción"}):* ${formatCurrencyValue(savings, baseCurrency)} (${savingsPct}%)\n`;
+      }
+      const winnerValidity = getValidityStatus(winnerProv.validityPeriod);
+      const valIcon = winnerValidity.status === "valid" ? "🟢" : winnerValidity.status === "urgent" ? "🟡" : winnerValidity.status === "expired" ? "🔴" : "⚪";
+      if (winnerProv.deliveryTime) {
+        msg += `⏱️ *Plazo de entrega:* ${winnerProv.deliveryTime}\n`;
+      }
+      if (winnerProv.paymentTerms) {
+        msg += `💳 *Forma de pago:* ${winnerProv.paymentTerms}\n`;
+      }
+      if (winnerProv.validityPeriod) {
+        msg += `🗓️ *Validez oferta:* ${winnerProv.validityPeriod} (${valIcon} ${winnerValidity.label})\n`;
+      }
+    }
+
+    // Ranking de Ofertas
+    msg += `\n${DIVIDER}\n`;
+    msg += `📋 *RANKING DE OFERTAS:*\n`;
+    sortedComparisons.forEach((comp, idx) => {
+      const prov = activeProviders.find((p) => p.id === comp.providerId);
+      if (!prov) return;
+      const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+      const diffPct = (idx > 0 && winnerCost && winnerCost.totalBC > 0)
+        ? ` (+${Math.round(((comp.totalBC - winnerCost.totalBC) / winnerCost.totalBC) * 100)}%)`
+        : "";
+      let line = `${medal} *${prov.name}*: ${formatCurrencyValue(comp.totalBC, baseCurrency)}${diffPct}`;
+      const termsParts: string[] = [];
+      if (prov.deliveryTime) termsParts.push(`Entrega: ${prov.deliveryTime}`);
+      if (prov.paymentTerms) termsParts.push(`Pago: ${prov.paymentTerms}`);
+      if (prov.validityPeriod) {
+        const v = getValidityStatus(prov.validityPeriod);
+        termsParts.push(`Validez: ${prov.validityPeriod} [${v.label}]`);
+      }
+      if (termsParts.length > 0) {
+        line += `\n   └ _${termsParts.join(" • ")}_`;
+      }
+      msg += `${line}\n`;
+    });
+
+    // Detalle de ítems cotizados ("detalles del resumen generado")
+    if (activeItems.length > 0) {
+      msg += `\n${DIVIDER}\n`;
+      msg += `📦 *DETALLE DE ÍTEMS Y MEJOR PRECIO:*\n`;
+      activeItems.forEach((it) => {
+        let minItemCost = Infinity;
+        let minProvName = "";
+        activeProviders.forEach((p) => {
+          const q = p.quotes[it.id];
+          if (q && q.price > 0) {
+            const { totalBaseCurrency } = calculateTotalCost(
+              q,
+              it.targetQuantity,
+              exchangeRate,
+              baseCurrency,
+              useRealLots
+            );
+            if (totalBaseCurrency > 0 && totalBaseCurrency < minItemCost) {
+              minItemCost = totalBaseCurrency;
+              minProvName = p.name;
+            }
+          }
+        });
+
+        if (minItemCost < Infinity) {
+          msg += `• *${it.name}* (${it.targetQuantity} ${it.baseUnit})\n`;
+          msg += `   └ Mejor: *${minProvName}* → ${formatCurrencyValue(minItemCost, baseCurrency)}\n`;
+        } else {
+          msg += `• *${it.name}* (${it.targetQuantity} ${it.baseUnit}) _[Sin cotización]_\n`;
+        }
+      });
+    }
+
+    // Canasta Óptima Multiproveedor (si aplica)
+    if (optimalBasket) {
+      msg += `\n${DIVIDER}\n`;
+      msg += `💡 *OPCIÓN ALTERNATIVA: CANASTA ÓPTIMA (COMPRA DIVIDIDA)*\n`;
+      msg += `💰 *Total Compra Mixta:* ${formatCurrencyValue(optimalBasket.totalOptimalBC, baseCurrency)}\n`;
+      msg += `📉 *Ahorro adicional:* ${formatCurrencyValue(optimalBasket.extraSavings, baseCurrency)} (${optimalBasket.extraSavingsPct}% menos vs ganador único)\n`;
+      msg += `📋 *Cómo dividir la compra:*\n`;
+      optimalBasket.providerGroups.forEach((g) => {
+        msg += `  • *${g.provider.name}* (${g.itemsCount} ${g.itemsCount === 1 ? "ítem" : "ítems"} • ${formatCurrencyValue(g.totalBC, baseCurrency)}): ${g.itemNames.join(", ")}\n`;
+      });
+    }
+
+    // Observaciones y Resumen IA si existen
+    const cleanAiSummary = aiSummary ? aiSummary.replace(/```markdown|```|#+\s*/g, "").trim() : "";
+    if (cleanAiSummary || notes.trim()) {
+      msg += `\n${DIVIDER}\n`;
+      msg += `📝 *OBSERVACIONES / CONCLUSIONES:*\n`;
+      if (notes.trim()) {
+        msg += `• *Notas internas:* ${notes.trim()}\n`;
+      }
+      if (cleanAiSummary) {
+        const summaryLines = cleanAiSummary
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0 && !l.startsWith("|") && !l.startsWith("---") && !l.startsWith("!"));
+        const conciseLines = summaryLines.slice(0, 4);
+        if (conciseLines.length > 0) {
+          msg += `• ${conciseLines.join("\n• ")}\n`;
+        }
+      }
+    }
+
+    return msg.trim();
+  };
+
   const handleCopyWhatsAppSummary = async () => {
     try {
       const activeProviders = providers.filter((p) => !excludedProviderIds.includes(p.id));
@@ -2723,59 +2884,12 @@ export default function CotizacionesPage() {
         return;
       }
 
-      const sortedComparisons = [...providerCostComparisons].filter((c) =>
-        activeProviders.some((p) => p.id === c.providerId)
-      );
-
-      const winnerCost = sortedComparisons[0];
-      const winnerProv = winnerCost ? activeProviders.find((p) => p.id === winnerCost.providerId) : null;
-      const runnerUpCost = sortedComparisons[1];
-
-      const savings = (runnerUpCost && winnerCost) ? (runnerUpCost.totalBC - winnerCost.totalBC) : 0;
-      const savingsPct = (runnerUpCost && runnerUpCost.totalBC > 0) ? Math.round((savings / runnerUpCost.totalBC) * 100) : 0;
-
-      let msg = `📊 *RESUMEN DE COTIZACIÓN*\n`;
-      msg += `📌 *${quoteName || "Comparativa de Precios"}*\n`;
-      msg += `📦 *Ítems evaluados:* ${activeItems.length} insumos\n`;
-      msg += `👥 *Proveedores cotizados:* ${activeProviders.length}\n\n`;
-
-      if (winnerProv && winnerCost) {
-        msg += `🏆 *OPCIÓN MÁS CONVENIENTE: ${winnerProv.name.toUpperCase()}*\n`;
-        msg += `💰 *Total General:* ${formatCurrencyValue(winnerCost.totalBC, baseCurrency)}\n`;
-        if (savings > 0) {
-          msg += `📉 *Ahorro vs 2do:* ${formatCurrencyValue(savings, baseCurrency)} (${savingsPct}%)\n`;
-        }
-        if (winnerProv.deliveryTime) {
-          msg += `⏱️ *Plazo de entrega:* ${winnerProv.deliveryTime}\n`;
-        }
-        if (winnerProv.paymentTerms) {
-          msg += `💳 *Forma de pago:* ${winnerProv.paymentTerms}\n`;
-        }
-        if (winnerProv.validityPeriod) {
-          msg += `🗓️ *Validez de oferta:* ${winnerProv.validityPeriod}\n`;
-        }
-        msg += `\n`;
-      }
-
-      msg += `📋 *RANKING DE OFERTAS:*\n`;
-      sortedComparisons.forEach((comp, idx) => {
-        const prov = activeProviders.find((p) => p.id === comp.providerId);
-        if (!prov) return;
-        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "▫️";
-        let line = `${medal} *${prov.name}*: ${formatCurrencyValue(comp.totalBC, baseCurrency)}`;
-        const termsParts: string[] = [];
-        if (prov.deliveryTime) termsParts.push(`Entrega: ${prov.deliveryTime}`);
-        if (prov.paymentTerms) termsParts.push(`Pago: ${prov.paymentTerms}`);
-        if (termsParts.length > 0) {
-          line += ` _(${termsParts.join(" • ")})_`;
-        }
-        msg += `${line}\n`;
-      });
-
-      msg += `\nGenerado con *Vacas Locas Finanzas*`;
+      const msg = buildExecutiveSummaryText();
+      setActiveSummaryText(msg);
 
       await navigator.clipboard.writeText(msg);
-      showToast("¡Resumen para WhatsApp copiado al portapapeles!", "success");
+      showToast("¡Resumen ejecutivo copiado para WhatsApp!", "success");
+      setIsSummaryModalOpen(true);
     } catch (err: any) {
       console.error("Error al copiar resumen WhatsApp:", err);
       showToast("No se pudo copiar el resumen", "error");
@@ -2786,7 +2900,9 @@ export default function CotizacionesPage() {
     if (!optimalBasket) return;
     try {
       let msg = `💡 *CANASTA ÓPTIMA MULTIPROVEEDOR (COMPRA DIVIDIDA)*\n`;
-      msg += `📌 *${quoteName || "Comparativa de Precios"}*\n\n`;
+      msg += `────────────────────────────\n`;
+      msg += `📌 *${quoteName || "Comparativa de Precios"}*\n`;
+      msg += `📅 *Fecha:* ${new Date().toLocaleDateString("es-AR")}\n\n`;
       msg += `💰 *Total Compra Mixta:* ${formatCurrencyValue(optimalBasket.totalOptimalBC, baseCurrency)}\n`;
       msg += `📉 *Ahorro adicional:* ${formatCurrencyValue(optimalBasket.extraSavings, baseCurrency)} (${optimalBasket.extraSavingsPct}% menos vs mejor proveedor único)\n\n`;
       msg += `📋 *CÓMO DIVIDIR LA COMPRA:*\n`;
@@ -2798,8 +2914,6 @@ export default function CotizacionesPage() {
           msg += `  • ${pi.item.name} (${pi.item.targetQuantity} ${pi.item.baseUnit}): ${formatCurrencyValue(pi.totalCostBC, baseCurrency)}\n`;
         });
       });
-
-      msg += `\nGenerado con *Vacas Locas Finanzas*`;
 
       await navigator.clipboard.writeText(msg);
       showToast("¡Canasta óptima copiada para WhatsApp!", "success");
@@ -5469,6 +5583,7 @@ export default function CotizacionesPage() {
         onUploadAttachment={handleUploadAttachment}
         onDeleteAttachment={handleDeleteAttachment}
         onSummaryUpdated={(newSummary) => {
+          setAiSummary(newSummary);
           if (currentQuoteId) {
             syncCotizacionToMongo({ id: currentQuoteId, aiSummary: newSummary });
             try {
@@ -5515,6 +5630,15 @@ export default function CotizacionesPage() {
           targetQuantity: it.targetQuantity,
         }))}
         providerNames={providers.map((p) => p.name)}
+      />
+
+      {/* Cotizaciones Executive Summary Modal for WhatsApp */}
+      <CotizacionesSummaryModal
+        isOpen={isSummaryModalOpen}
+        onClose={() => setIsSummaryModalOpen(false)}
+        summaryText={activeSummaryText || buildExecutiveSummaryText()}
+        quoteName={quoteName}
+        onCopySuccess={() => showToast("¡Resumen copiado al portapapeles!", "success")}
       />
     </AppLayout>
   );
