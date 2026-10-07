@@ -21,7 +21,9 @@ import {
   ChevronUp,
   Sparkles,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Zap,
+  Cpu
 } from "lucide-react";
 
 export interface QuoteAttachment {
@@ -106,6 +108,7 @@ export function CotizacionesAiChatModal({
   const [isFilesExpanded, setIsFilesExpanded] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedProviderForUpload, setSelectedProviderForUpload] = useState<string>("");
+  const [processingMethod, setProcessingMethod] = useState<"heavy" | "light">("heavy");
 
   // Estados de Resumen Ejecutivo
   const [activeTab, setActiveTab] = useState<"chat" | "summary">("chat");
@@ -195,7 +198,8 @@ export function CotizacionesAiChatModal({
           quoteName,
           items,
           providers,
-          attachments
+          attachments,
+          processingMethod
         })
       });
       if (res.ok) {
@@ -294,6 +298,7 @@ export function CotizacionesAiChatModal({
         attachments,
         aiSummary: summary,
         modelName: "gemini-3.5-flash-lite",
+        processingMethod,
         messages: newHistory.map((m) => ({
           role: m.role,
           content: m.content
@@ -466,19 +471,50 @@ export function CotizacionesAiChatModal({
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleRefreshSummary}
-            disabled={isGeneratingSummary || isLoadingSummary || attachments.length === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-gray-300 hover:text-white rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
-            title="Generar o actualizar el informe amplio consolidado de todos los presupuestos"
-          >
-            <RefreshCw className={`w-3 h-3 text-emerald-400 ${isGeneratingSummary || isLoadingSummary ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">
-              {isGeneratingSummary ? "Generando resumen..." : isLoadingSummary ? "Cargando..." : "Actualizar Resumen"}
-            </span>
-            <span className="sm:hidden">{isGeneratingSummary || isLoadingSummary ? "..." : "Actualizar"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center bg-[#070b13] p-0.5 rounded-xl border border-white/10 text-xs">
+              <button
+                type="button"
+                onClick={() => setProcessingMethod("heavy")}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                  processingMethod === "heavy"
+                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm"
+                    : "text-gray-400 hover:text-white"
+                }`}
+                title="Método Pesado: Multimodal nativo (Base64)"
+              >
+                <Cpu className="w-3 h-3" />
+                <span className="hidden sm:inline">Pesado</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setProcessingMethod("light")}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                  processingMethod === "light"
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                    : "text-gray-400 hover:text-white"
+                }`}
+                title="Método Ligero: Conversión a Markdown con MarkItDown"
+              >
+                <Zap className="w-3 h-3" />
+                <span className="hidden sm:inline">Ligero (MD)</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRefreshSummary}
+              disabled={isGeneratingSummary || isLoadingSummary || attachments.length === 0}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-gray-300 hover:text-white rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed shrink-0"
+              title="Generar o actualizar el informe amplio consolidado de todos los presupuestos"
+            >
+              <RefreshCw className={`w-3 h-3 text-emerald-400 ${isGeneratingSummary || isLoadingSummary ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">
+                {isGeneratingSummary ? "Generando resumen..." : isLoadingSummary ? "Cargando..." : "Actualizar Resumen"}
+              </span>
+              <span className="sm:hidden">{isGeneratingSummary || isLoadingSummary ? "..." : "Actualizar"}</span>
+            </button>
+          </div>
         </div>
 
         {activeTab === "summary" ? (

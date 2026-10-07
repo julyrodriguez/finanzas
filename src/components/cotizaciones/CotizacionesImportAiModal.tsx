@@ -36,11 +36,14 @@ import {
   Bot,
   ChevronDown,
   ChevronUp,
-  CheckCheck
+  CheckCheck,
+  Zap,
+  Cpu
 } from "lucide-react";
 import { QuoteAttachment } from "./CotizacionesAiChatModal";
 
 export type ExtractionMode = "general" | "detailed";
+export type ProcessingMethod = "heavy" | "light";
 
 export interface ExtractedItem {
   id: string;
@@ -128,6 +131,7 @@ function parseCommercialConditions(notesText: string, extractedObj: any): { deli
 export async function extractSingleFileToPayload(
   file: File,
   mode: ExtractionMode,
+  method: ProcessingMethod = "heavy",
   cotizacionId?: string,
   targetProviderId?: string,
   targetProviderName?: string,
@@ -139,12 +143,13 @@ export async function extractSingleFileToPayload(
   const formData = new FormData();
   formData.append("cotizacionId", targetQuoteId);
   formData.append("extractionMode", mode);
+  formData.append("processingMethod", method);
   if (targetProviderId) formData.append("providerId", targetProviderId);
   if (targetProviderName) formData.append("providerName", targetProviderName);
   if (existingItems.length > 0) formData.append("existingItems", JSON.stringify(existingItems));
   formData.append("file", file);
 
-  const res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}`, {
+  const res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}&processingMethod=${method}`, {
     method: "POST",
     body: formData
   });
@@ -260,10 +265,17 @@ export function CotizacionesImportAiModal({
 }: CotizacionesImportAiModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [extractionMode, setExtractionMode] = useState<ExtractionMode>("general");
-  const [cachedResults, setCachedResults] = useState<{
-    general?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; deliveryTime?: string; paymentTerms?: string; validityPeriod?: string; attachment?: QuoteAttachment };
-    detailed?: { items: ExtractedItem[]; providerName: string; currency: "ARS" | "USD"; notes: string; deliveryTime?: string; paymentTerms?: string; validityPeriod?: string; attachment?: QuoteAttachment };
-  }>({});
+  const [processingMethod, setProcessingMethod] = useState<ProcessingMethod>("heavy");
+  const [cachedResults, setCachedResults] = useState<Record<string, {
+    items: ExtractedItem[];
+    providerName: string;
+    currency: "ARS" | "USD";
+    notes: string;
+    deliveryTime?: string;
+    paymentTerms?: string;
+    validityPeriod?: string;
+    attachment?: QuoteAttachment;
+  }>>({});
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -350,7 +362,7 @@ export function CotizacionesImportAiModal({
 
     if (fileArray.length === 1) {
       setIsBatchMode(false);
-      await processFileWithMode(fileArray[0], extractionMode);
+      await processFileWithMode(fileArray[0], extractionMode, undefined, processingMethod);
     } else {
       setIsBatchMode(true);
       setError(null);
@@ -360,7 +372,7 @@ export function CotizacionesImportAiModal({
         status: "pending"
       }));
       setBatchQueue(queue);
-      processBatchQueue(queue, extractionMode);
+      processBatchQueue(queue, extractionMode, processingMethod);
     }
   };
 
@@ -377,7 +389,11 @@ export function CotizacionesImportAiModal({
     }
   };
 
-  const processBatchQueue = async (queue: BatchFileItem[], mode: ExtractionMode) => {
+  const processBatchQueue = async (
+    queue: BatchFileItem[],
+    mode: ExtractionMode,
+    method: ProcessingMethod = processingMethod
+  ) => {
     setIsAnalyzing(true);
     let updatedQueue = [...queue];
 
@@ -392,6 +408,7 @@ export function CotizacionesImportAiModal({
         const payload = await extractSingleFileToPayload(
           current.file,
           mode,
+          method,
           cotizacionId,
           undefined,
           undefined,
@@ -448,14 +465,18 @@ export function CotizacionesImportAiModal({
   const processFileWithMode = async (
     targetFile: File | null,
     mode: ExtractionMode,
-    currentAttachment?: QuoteAttachment | null
+    currentAttachment?: QuoteAttachment | null,
+    targetMethod?: ProcessingMethod
   ) => {
-    // 1. Si ya tenemos cacheado el resultado de este modo, cambiamos al instante sin request de red
-    if (cachedResults[mode]) {
-      const cached = cachedResults[mode]!;
+    const activeMethod = targetMethod || processingMethod;
+    const cacheKey = `${mode}_${activeMethod}`;
+
+    // 1. Si ya tenemos cacheado el resultado de este modo y método, cambiamos al instante sin request de red
+    if (cachedResults[cacheKey]) {
+      const cached = cachedResults[cacheKey]!;
       setItems(cached.items);
       setInitialItems(cached.items);
-      setItemsHistory([{ items: cached.items, label: `Modo ${mode === "general" ? "General" : "Detallado"}`, timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) }]);
+      setItemsHistory([{ items: cached.items, label: `Modo ${mode === "general" ? "General" : "Detallado"} (${activeMethod === "light" ? "Ligero" : "Pesado"})`, timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) }]);
       setProviderName(targetProviderName || cached.providerName);
       setCurrency(cached.currency);
       setNotes(cached.notes);
@@ -464,11 +485,13 @@ export function CotizacionesImportAiModal({
       setValidityPeriod(cached.validityPeriod || "");
       if (cached.attachment) setAttachment(cached.attachment);
       setExtractionMode(mode);
+      setProcessingMethod(activeMethod);
       return;
     }
 
     if (targetFile) setFile(targetFile);
     setExtractionMode(mode);
+    setProcessingMethod(activeMethod);
     setIsAnalyzing(true);
     setError(null);
 
@@ -481,23 +504,25 @@ export function CotizacionesImportAiModal({
         const formData = new FormData();
         formData.append("cotizacionId", targetQuoteId);
         formData.append("extractionMode", mode);
+        formData.append("processingMethod", activeMethod);
         if (targetProviderId) formData.append("providerId", targetProviderId);
         if (targetProviderName) formData.append("providerName", targetProviderName);
         if (existingItems.length > 0) formData.append("existingItems", JSON.stringify(existingItems));
         formData.append("file", targetFile);
 
-        res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}`, {
+        res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}&processingMethod=${activeMethod}`, {
           method: "POST",
           body: formData
         });
       } else if (currentAttachment || attachment) {
         const att = currentAttachment || attachment!;
-        res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}`, {
+        res = await fetch(`${baseUrl}?cotizacionId=${encodeURIComponent(targetQuoteId)}&extractionMode=${mode}&processingMethod=${activeMethod}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             cotizacionId: targetQuoteId,
             extractionMode: mode,
+            processingMethod: activeMethod,
             attachment: att,
             providerId: targetProviderId,
             providerName: targetProviderName,
@@ -597,10 +622,10 @@ export function CotizacionesImportAiModal({
       setInitialItems(formattedItems);
       setItemsHistory([{ items: formattedItems, label: `Modo ${mode === "general" ? "General" : "Detallado"}`, timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) }]);
 
-      // Guardar en caché para permitir alternar modos instantáneamente
+      // Guardar en caché para permitir alternar modos y métodos instantáneamente
       setCachedResults((prev) => ({
         ...prev,
-        [mode]: {
+        [cacheKey]: {
           items: formattedItems,
           providerName: finalProviderName,
           currency: finalCurrency,
@@ -823,6 +848,7 @@ export function CotizacionesImportAiModal({
         paymentTerms,
         validityPeriod,
         prompt: promptText,
+        processingMethod,
         chatHistory: newHistory.slice(-6).map((m) => ({ role: m.role, content: m.content }))
       };
 
@@ -1429,6 +1455,76 @@ export function CotizacionesImportAiModal({
             </div>
           )}
 
+          {/* Processing Method Selector before upload */}
+          {!attachment && !isAnalyzing && !isBatchMode && (
+            <div className="bg-[#101726]/80 border border-white/10 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-amber-400" />
+                  ¿Qué método de lectura querés usar para los archivos?
+                </span>
+                <span className="text-[11px] text-gray-400 hidden sm:inline">
+                  Elegí entre lectura multimodal directa o conversión a Markdown
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setProcessingMethod("light")}
+                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    processingMethod === "light"
+                      ? "bg-amber-500/10 border-amber-500/40 shadow-sm shadow-amber-500/10"
+                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${processingMethod === "light" ? "bg-amber-500/20 text-amber-400" : "bg-white/5 text-gray-400"}`}>
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <span className={`text-xs font-bold ${processingMethod === "light" ? "text-amber-300" : "text-white"}`}>
+                        Método Ligero (Markdown)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Nuevo • Rápido
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Convierte PDFs, Office, HTML y correos a <strong>Markdown estructurado con Microsoft MarkItDown</strong>. Menor consumo de tokens y mayor velocidad.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setProcessingMethod("heavy")}
+                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    processingMethod === "heavy"
+                      ? "bg-blue-500/10 border-blue-500/40 shadow-sm shadow-blue-500/10"
+                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${processingMethod === "heavy" ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-gray-400"}`}>
+                        <Cpu className="w-4 h-4" />
+                      </div>
+                      <span className={`text-xs font-bold ${processingMethod === "heavy" ? "text-blue-300" : "text-white"}`}>
+                        Método Pesado (Multimodal)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      Original
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    Envía los documentos originales completos en <strong>Base64 / Binario directo</strong> al LLM. Máxima fidelidad visual para planos, fotos o tipografías complejas.
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* File Upload Dropzone */}
           {!attachment && !isAnalyzing && !isBatchMode && (
             <div
@@ -1445,6 +1541,39 @@ export function CotizacionesImportAiModal({
                 className="hidden"
                 onChange={handleFileChange}
               />
+
+              {/* Selector rápido directo dentro de la card de subida */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1.5 p-1 bg-[#0b101b] border border-white/10 rounded-xl mb-4 text-xs"
+              >
+                <span className="text-[11px] text-gray-400 px-2 font-medium">Método de lectura:</span>
+                <button
+                  type="button"
+                  onClick={() => setProcessingMethod("heavy")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
+                    processingMethod === "heavy"
+                      ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  <Cpu className="w-3 h-3" />
+                  <span>Método Pesado</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProcessingMethod("light")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
+                    processingMethod === "light"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  <Zap className="w-3 h-3" />
+                  <span>Método Ligero (Markdown)</span>
+                </button>
+              </div>
+
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
                 <Upload className="w-8 h-8" />
               </div>
@@ -1614,7 +1743,20 @@ export function CotizacionesImportAiModal({
               </div>
               <div>
                 <h3 className="text-base font-semibold text-white">Leyendo presupuesto o correo con IA...</h3>
-                <p className="text-xs text-gray-400 max-w-sm mx-auto mt-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold mt-2 border bg-white/5 border-white/10">
+                  {processingMethod === "light" ? (
+                    <>
+                      <Zap className="w-3 h-3 text-amber-400" />
+                      <span className="text-amber-300">Método Ligero (MarkItDown)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Cpu className="w-3 h-3 text-blue-400" />
+                      <span className="text-blue-300">Método Pesado (Multimodal)</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto mt-2">
                   Extrayendo nombre del proveedor, moneda, condiciones comerciales, ítems cotizados y precios unitarios.
                 </p>
               </div>
@@ -1655,13 +1797,23 @@ export function CotizacionesImportAiModal({
                     ) : attachment.filename.endsWith(".xlsx") || attachment.filename.endsWith(".xls") || attachment.filename.endsWith(".csv") ? (
                       <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                     ) : (
-                      <FileText className="w-4 h-4 text-emerald-400" />
+                      <Paperclip className="w-4 h-4 text-gray-400" />
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate max-w-xs sm:max-w-md">
-                      {attachment.originalName}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-white truncate max-w-xs sm:max-w-md">
+                        {attachment.originalName || attachment.filename}
+                      </p>
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        processingMethod === "light"
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                          : "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                      }`}>
+                        {processingMethod === "light" ? <Zap className="w-2.5 h-2.5" /> : <Cpu className="w-2.5 h-2.5" />}
+                        {processingMethod === "light" ? "Método Ligero" : "Método Pesado"}
+                      </span>
+                    </div>
                     <p className="text-[11px] text-gray-400">
                       {(attachment.size / 1024).toFixed(1)} KB • Procesado con IA
                     </p>
@@ -1799,7 +1951,7 @@ export function CotizacionesImportAiModal({
                     <div className="inline-flex items-center bg-[#070b13] p-1 rounded-xl border border-white/10 text-xs">
                       <button
                         type="button"
-                        onClick={() => processFileWithMode(file, "general", attachment)}
+                        onClick={() => processFileWithMode(file, "general", attachment, processingMethod)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                           extractionMode === "general"
                             ? "bg-emerald-500 text-white shadow-sm font-semibold"
@@ -1811,7 +1963,7 @@ export function CotizacionesImportAiModal({
                       </button>
                       <button
                         type="button"
-                        onClick={() => processFileWithMode(file, "detailed", attachment)}
+                        onClick={() => processFileWithMode(file, "detailed", attachment, processingMethod)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                           extractionMode === "detailed"
                             ? "bg-emerald-500 text-white shadow-sm font-semibold"
@@ -1820,6 +1972,36 @@ export function CotizacionesImportAiModal({
                       >
                         <ListOrdered className="w-3.5 h-3.5" />
                         Subítems Detallados
+                      </button>
+                    </div>
+
+                    {/* Method Switcher pills */}
+                    <div className="inline-flex items-center bg-[#070b13] p-1 rounded-xl border border-white/10 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => processFileWithMode(file, extractionMode, attachment, "heavy")}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                          processingMethod === "heavy"
+                            ? "bg-blue-500 text-white shadow-sm font-semibold"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                        title="Método Pesado: Multimodal nativo (Base64)"
+                      >
+                        <Cpu className="w-3.5 h-3.5" />
+                        Pesado
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => processFileWithMode(file, extractionMode, attachment, "light")}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                          processingMethod === "light"
+                            ? "bg-amber-500 text-white shadow-sm font-semibold"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                        title="Método Ligero: Conversión a Markdown con MarkItDown"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        Ligero (MD)
                       </button>
                     </div>
 
