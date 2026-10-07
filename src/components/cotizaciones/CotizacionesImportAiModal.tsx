@@ -102,8 +102,6 @@ export function CotizacionesImportAiModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen) return null;
-
   const handleReset = () => {
     setFile(null);
     setIsAnalyzing(false);
@@ -318,19 +316,14 @@ export function CotizacionesImportAiModal({
     setItems((prev) => prev.map((item) => ({ ...item, matchedItemId: null })));
   };
 
-  const duplicateMatchedCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    items.forEach((it) => {
-      if (it.selected && it.matchedItemId) {
-        counts[it.matchedItemId] = (counts[it.matchedItemId] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [items]);
+  const duplicateMatchedCounts: Record<string, number> = {};
+  items.forEach((it) => {
+    if (it.selected && it.matchedItemId) {
+      duplicateMatchedCounts[it.matchedItemId] = (duplicateMatchedCounts[it.matchedItemId] || 0) + 1;
+    }
+  });
 
-  const hasDuplicateMatches = React.useMemo(() => {
-    return Object.values(duplicateMatchedCounts).some((c) => c > 1);
-  }, [duplicateMatchedCounts]);
+  const hasDuplicateMatches = Object.values(duplicateMatchedCounts).some((c) => c > 1);
 
   const handleUpdateItemField = (index: number, field: keyof ExtractedItem, value: any) => {
     setItems((prev) =>
@@ -415,6 +408,8 @@ export function CotizacionesImportAiModal({
   };
 
   const selectedCount = items.filter((it) => it.selected).length;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
