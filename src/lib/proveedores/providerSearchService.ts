@@ -105,6 +105,58 @@ function classifySource(sourceUrl: string, companyName?: string): {
   }
 }
 
+function sanitizeSearchTerm(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/["'«»“”]/g, " ")
+    .replace(/&/g, " y ")
+    .replace(/[\/\\#,+()$~%.^:*?<>{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseJsonRobustly(rawText: string): any {
+  if (!rawText || typeof rawText !== "string") return null;
+  try {
+    return JSON.parse(rawText.trim());
+  } catch (e0) {}
+
+  const mdRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  let match: RegExpExecArray | null;
+  const blocks: string[] = [];
+  while ((match = mdRegex.exec(rawText)) !== null) {
+    blocks.push(match[1]);
+  }
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    try {
+      return JSON.parse(blocks[i].trim());
+    } catch (e1) {}
+  }
+
+  const lastBrace = rawText.lastIndexOf("}");
+  if (lastBrace !== -1) {
+    let depth = 0;
+    let start = -1;
+    for (let i = lastBrace; i >= 0; i--) {
+      if (rawText[i] === "}") depth++;
+      else if (rawText[i] === "{") {
+        depth--;
+        if (depth === 0) {
+          start = i;
+          break;
+        }
+      }
+    }
+    if (start !== -1) {
+      try {
+        return JSON.parse(rawText.substring(start, lastBrace + 1));
+      } catch (e2) {}
+    }
+  }
+
+  return null;
+}
+
 /**
  * Realiza una búsqueda web a través de DuckDuckGo HTML con parseo robusto
  */
@@ -308,18 +360,31 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
   // Si no se usó Firecrawl o falló, ejecutar Búsqueda Multicriterio Profunda
   if (rawItems.length === 0) {
     const isDeep = profundidad !== "rapida";
-    logs.push(`Iniciando búsqueda multicriterio ${isDeep ? "exhaustiva (4 etapas)" : "rápida"} para "${rubro}" en "${zona}", Argentina...`);
+    logs.push(`Iniciando búsqueda multicriterio ${isDeep ? "exhaustiva" : "rápida"} para "${rubro}" en "${zona}", Argentina...`);
+    const cleanRubro = sanitizeSearchTerm(rubro);
+    const cleanZona = sanitizeSearchTerm(zona);
 
     // Consultas variadas y profundas para abarcar empresas directas, cámaras y directorios comerciales
     const queries = [
-      { q: `proveedores empresas "${rubro}" "${zona}" argentina contacto email`, tag: "Empresas Directas" },
-      { q: `servicios de ${rubro} en "${zona}" argentina clientes nosotros portfolio`, tag: "Servicios & Clientes" },
+      { q: `proveedores empresas ${cleanRubro} ${cleanZona} argentina contacto email`, tag: "Empresas Directas" },
+      { q: `servicios ${cleanRubro} ${cleanZona} argentina clientes nosotros portfolio`, tag: "Servicios & Clientes" },
     ];
+
+    const subTerms = cleanRubro.split(/\s+y\s+|\s*,\s*|\s+e\s+/i).map((t) => t.trim()).filter((t) => t.length > 2);
+    if (subTerms.length > 1) {
+      for (const sub of subTerms) {
+        queries.push({
+          q: `proveedores empresas contratistas ${sub} ${cleanZona} argentina contacto`,
+          tag: `Especialidad: ${sub}`,
+        });
+      }
+    }
 
     if (isDeep) {
       queries.push(
-        { q: `directorio comercial empresas "${rubro}" "${zona}" argentina telefono`, tag: "Directorios Comerciales" },
-        { q: `camara empresas contratistas ${rubro} "${zona}" argentina presupuestos`, tag: "Cámaras & Registros" }
+        { q: `directorio comercial empresas ${cleanRubro} ${cleanZona} argentina telefono`, tag: "Directorios Comerciales" },
+        { q: `camara empresas contratistas ${cleanRubro} ${cleanZona} argentina`, tag: "Cámaras Sectoriales" },
+        { q: `empresas de ${cleanRubro} en ${cleanZona} presupuestos contacto`, tag: "Presupuestos B2B" }
       );
     }
 
@@ -461,7 +526,7 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
       ]);
 
       const text = response.response.text();
-      const parsed = JSON.parse(text);
+      const parsed = parseJsonRobustly(text);
 
       if (parsed && Array.isArray(parsed.proveedores) && parsed.proveedores.length > 0) {
         proveedoresResult = parsed.proveedores.map((p: any, idx: number) => {
@@ -511,18 +576,15 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
           };
         });
 
-        logs.push(`¡Éxito! Se consolidaron ${proveedoresResult.length} proveedores estructurados con trazabilidad de origen.`);
+        logs.push(`¡Éxito! Se consolidaron ${proveedoresResult.length} proveedores estructurados con Gemini (${modelName}).`);
         break;
       }
     } catch (err: any) {
       console.warn(`Error con modelo ${modelName}:`, err.message);
-      if (err.message.includes("leaked") || err.message.includes("Forbidden") || err.message.includes("API key")) {
-        logs.push("⚠️ La clave de Gemini fue reportada como filtrada (403 Forbidden). Podés ingresar una clave nueva en Configuración (⚙️) para habilitar el formateo por IA.");
-        break; // No tiene sentido probar 5 modelos más con la misma clave bloqueada
-      } else if (err.message.includes("429") || err.message.includes("quota")) {
+      if (err.message.includes("429") || err.message.includes("quota")) {
         logs.push(`Límite de cuota temporal en ${modelName}. Probando alternativa...`);
       } else {
-        logs.push(`Modelo ${modelName} omitido: ${err.message.slice(0, 60)}...`);
+        logs.push(`Modelo ${modelName} omitido (${err.message.slice(0, 60)}...). Probando siguiente alternativa...`);
       }
     }
   }
