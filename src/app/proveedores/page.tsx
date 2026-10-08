@@ -7,6 +7,7 @@ import { ProveedorCard } from "@/components/proveedores/ProveedorCard";
 import { ProveedorSearchForm } from "@/components/proveedores/ProveedorSearchForm";
 import { ProveedorDraftEmailModal } from "@/components/proveedores/ProveedorDraftEmailModal";
 import { ProveedorSkillsModal } from "@/components/proveedores/ProveedorSkillsModal";
+import { ProveedorAiChatModal } from "@/components/proveedores/ProveedorAiChatModal";
 import { exportToExcel } from "@/lib/exportToExcel";
 import { 
   Building2, 
@@ -54,6 +55,10 @@ export default function ProveedoresPage() {
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [chatInitialQuery, setChatInitialQuery] = useState("");
+  const [currentRubro, setCurrentRubro] = useState("");
+  const [currentZona, setCurrentZona] = useState("");
   const [draftTargetProveedores, setDraftTargetProveedores] = useState<Proveedor[]>([]);
   const [copiedAllEmails, setCopiedAllEmails] = useState(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
@@ -146,6 +151,8 @@ export default function ProveedoresPage() {
     setShowLogs(true);
     setLastQuery(`${params.rubro} en ${params.zona}`);
     setLastEngine(params.engine);
+    setCurrentRubro(params.rubro);
+    setCurrentZona(params.zona);
     setCurrentStepMessage(`Iniciando búsqueda multicriterio para "${params.rubro}"...`);
 
     const apiEndpoint = process.env.NEXT_PUBLIC_PROVEEDORES_API || "https://apivacas.jariel.com.ar/api/proveedores-ia/search";
@@ -187,6 +194,25 @@ export default function ProveedoresPage() {
       setIsLoading(false);
       setCurrentStepMessage("");
     }
+  };
+
+  const handleInvestigateProvider = (prov: Proveedor) => {
+    setChatInitialQuery(`Buscame más info de ${prov.nombre}`);
+    setIsChatModalOpen(true);
+  };
+
+  const handleOpenChatFree = (customPrompt?: string) => {
+    setChatInitialQuery(customPrompt || "");
+    setIsChatModalOpen(true);
+  };
+
+  const handleAddNewProveedores = (newOnes: Proveedor[]) => {
+    setProveedores((prev) => {
+      const existingNames = new Set(prev.map((p) => p.nombre.toLowerCase().trim()));
+      const filteredNew = newOnes.filter((p) => !existingNames.has(p.nombre.toLowerCase().trim()));
+      return [...filteredNew, ...prev];
+    });
+    setActiveTab("search");
   };
 
   // List of items currently displayed based on activeTab
@@ -519,6 +545,16 @@ export default function ProveedoresPage() {
                   <span>Excel (.xlsx)</span>
                 </button>
 
+                {/* AI Copilot Button in toolbar */}
+                <button
+                  onClick={() => handleOpenChatFree()}
+                  className="px-3 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm shadow-blue-500/10"
+                  title="Abrir Asistente IA de Proveedores"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Consultar IA</span>
+                </button>
+
                 {/* Draft RFP Email */}
                 <button
                   onClick={handleOpenDraftForSelected}
@@ -532,6 +568,45 @@ export default function ProveedoresPage() {
                 </button>
               </div>
             </div>
+
+            {/* Interactive Post-Search Copilot Banner */}
+            {activeTab === "search" && proveedores.length > 0 && (
+              <div className="p-4 sm:p-4.5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900/90 border border-blue-500/25 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-lg shadow-blue-950/20">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 shadow-inner">
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                      <span>Asistente Inteligente de Compras & Proveedores</span>
+                      <span className="text-[10px] font-semibold text-blue-300 bg-blue-500/15 px-2 py-0.5 rounded-full border border-blue-500/20">
+                        IA Activa
+                      </span>
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Podés pedirle más antecedentes de una empresa o que busque <strong>nuevas opciones distintas</strong> a estas.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto shrink-0 flex-wrap">
+                  <button
+                    onClick={() => handleOpenChatFree("Buscá nuevas empresas que no sean las que busco recién y traeme opciones distintas")}
+                    className="flex-1 md:flex-none px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20 active:scale-[0.98] cursor-pointer"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Buscar Nuevas Distintas</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenChatFree()}
+                    className="flex-1 md:flex-none px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/10 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Preguntar a la IA</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Providers Grid */}
             {filteredList.length > 0 ? (
@@ -549,6 +624,7 @@ export default function ProveedoresPage() {
                       onToggleSave={handleToggleSave}
                       onToggleSelect={handleToggleSelect}
                       onDraftEmail={handleOpenDraftForSingle}
+                      onInvestigate={handleInvestigateProvider}
                     />
                   );
                 })}
@@ -601,6 +677,19 @@ export default function ProveedoresPage() {
 
       </div>
 
+      {/* Floating Copilot Launcher Button */}
+      {proveedores.length > 0 && (
+        <button
+          onClick={() => handleOpenChatFree()}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs sm:text-sm font-bold shadow-2xl shadow-blue-600/40 border border-blue-400/30 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
+          title="Abrir Asistente IA de Proveedores"
+        >
+          <Sparkles className="w-4 h-4 text-blue-200 animate-pulse" />
+          <span>Asistente IA</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        </button>
+      )}
+
       {/* Modals */}
       <ProveedorSkillsModal
         isOpen={isSkillsModalOpen}
@@ -615,6 +704,20 @@ export default function ProveedoresPage() {
         isOpen={isDraftModalOpen}
         onClose={() => setIsDraftModalOpen(false)}
         selectedProveedores={draftTargetProveedores}
+      />
+
+      <ProveedorAiChatModal
+        isOpen={isChatModalOpen}
+        onClose={() => {
+          setIsChatModalOpen(false);
+          setChatInitialQuery("");
+        }}
+        currentProveedores={proveedores}
+        rubro={currentRubro || lastQuery.split(" en ")[0] || ""}
+        zona={currentZona || lastQuery.split(" en ")[1] || ""}
+        geminiApiKey={geminiApiKey}
+        initialQuery={chatInitialQuery}
+        onAddNewProveedores={handleAddNewProveedores}
       />
     </AppLayout>
   );

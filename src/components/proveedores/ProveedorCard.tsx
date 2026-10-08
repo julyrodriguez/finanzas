@@ -18,7 +18,8 @@ import {
   Users, 
   ExternalLink,
   Compass,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles
 } from "lucide-react";
 
 interface ProveedorCardProps {
@@ -28,6 +29,7 @@ interface ProveedorCardProps {
   onToggleSave?: (proveedor: Proveedor) => void;
   onToggleSelect?: (proveedor: Proveedor) => void;
   onDraftEmail?: (proveedor: Proveedor) => void;
+  onInvestigate?: (proveedor: Proveedor) => void;
 }
 
 export function ProveedorCard({
@@ -37,6 +39,7 @@ export function ProveedorCard({
   onToggleSave,
   onToggleSelect,
   onDraftEmail,
+  onInvestigate,
 }: ProveedorCardProps) {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
@@ -136,20 +139,33 @@ export function ProveedorCard({
             </div>
           </div>
 
-          {/* Bookmark save toggle */}
-          {onToggleSave && (
-            <button
-              onClick={() => onToggleSave(proveedor)}
-              className={`p-2 rounded-xl border transition-all active:scale-[0.92] cursor-pointer shrink-0 ${
-                isSaved
-                  ? "bg-amber-500/15 border-amber-500/30 text-amber-400 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10"
-                  : "bg-slate-800/50 border-white/[0.08] text-slate-400 hover:text-white hover:bg-slate-800"
-              }`}
-              title={isSaved ? "Quitar de guardados" : "Guardar en favoritos"}
-            >
-              {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-            </button>
-          )}
+          {/* Top right actions: AI investigate & Bookmark */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onInvestigate && (
+              <button
+                onClick={() => onInvestigate(proveedor)}
+                className="p-2 rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 transition-all active:scale-[0.92] cursor-pointer"
+                title={`Investigar ${proveedor.nombre} con IA`}
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Bookmark save toggle */}
+            {onToggleSave && (
+              <button
+                onClick={() => onToggleSave(proveedor)}
+                className={`p-2 rounded-xl border transition-all active:scale-[0.92] cursor-pointer shrink-0 ${
+                  isSaved
+                    ? "bg-amber-500/15 border-amber-500/30 text-amber-400 hover:bg-amber-500/25 shadow-sm shadow-amber-500/10"
+                    : "bg-slate-800/50 border-white/[0.08] text-slate-400 hover:text-white hover:bg-slate-800"
+                }`}
+                title={isSaved ? "Quitar de guardados" : "Guardar en favoritos"}
+              >
+                {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Informacion de sus trabajos / servicios */}
@@ -261,15 +277,31 @@ export function ProveedorCard({
           )}
         </div>
 
-        {/* Primary CTA */}
-        {onDraftEmail && proveedor.email && (
-          <button
-            onClick={() => onDraftEmail(proveedor)}
-            className="w-full mt-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-[0.98] cursor-pointer"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>Redactar Solicitud de Cotización</span>
-          </button>
+        {/* Action CTAs */}
+        {(onInvestigate || (onDraftEmail && proveedor.email)) && (
+          <div className="flex items-center gap-2 mt-1">
+            {onInvestigate && (
+              <button
+                onClick={() => onInvestigate(proveedor)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/25 hover:border-blue-500/40 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer shadow-sm shadow-blue-500/5"
+                title={`Consultar antecedentes y más info de ${proveedor.nombre} con IA`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>Más Info IA</span>
+              </button>
+            )}
+
+            {onDraftEmail && proveedor.email && (
+              <button
+                onClick={() => onDraftEmail(proveedor)}
+                className={`${onInvestigate ? "flex-1" : "w-full"} flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-[0.98] cursor-pointer`}
+                title="Redactar correo de cotización para este proveedor"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{onInvestigate ? "Cotizar" : "Redactar Solicitud"}</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
