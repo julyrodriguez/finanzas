@@ -25,7 +25,11 @@ import {
   ChevronUp, 
   Sparkles,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  X,
+  FileSpreadsheet,
+  CheckCircle2,
+  Clock
 } from "lucide-react";
 
 export default function ProveedoresPage() {
@@ -37,7 +41,7 @@ export default function ProveedoresPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentStepMessage, setCurrentStepMessage] = useState("");
   const [searchLogs, setSearchLogs] = useState<string[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
+  const [showLogs, setShowLogs] = useState(true);
   const [lastQuery, setLastQuery] = useState("");
   const [lastEngine, setLastEngine] = useState<SearchEngineType>("hybrid");
 
@@ -52,6 +56,7 @@ export default function ProveedoresPage() {
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
   const [draftTargetProveedores, setDraftTargetProveedores] = useState<Proveedor[]>([]);
   const [copiedAllEmails, setCopiedAllEmails] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
 
   // Load saved state from localStorage on mount
   useEffect(() => {
@@ -138,8 +143,10 @@ export default function ProveedoresPage() {
     setSearchLogs([]);
     setSelectedIds(new Set());
     setActiveTab("search");
+    setShowLogs(true);
     setLastQuery(`${params.rubro} en ${params.zona}`);
     setLastEngine(params.engine);
+    setCurrentStepMessage(`Iniciando búsqueda multicriterio para "${params.rubro}"...`);
 
     const apiEndpoint = process.env.NEXT_PUBLIC_PROVEEDORES_API || "https://apivacas.jariel.com.ar/api/proveedores-ia/search";
 
@@ -211,6 +218,14 @@ export default function ProveedoresPage() {
     setTimeout(() => setCopiedAllEmails(false), 2000);
   };
 
+  // Copy Logs
+  const handleCopyLogs = () => {
+    if (searchLogs.length === 0) return;
+    navigator.clipboard.writeText(searchLogs.join("\n"));
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
   // Export to Excel
   const handleExportExcel = () => {
     if (filteredList.length === 0) return;
@@ -265,42 +280,52 @@ export default function ProveedoresPage() {
               <Building2 className="w-3.5 h-3.5" />
               <span>Compras & Contrataciones • Cadena Cinemark & Hoyts</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Buscador de Proveedores con IA & Web Scraping
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+              Buscador Inteligente de Proveedores con IA
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Localizá empresas y contratistas por rubro y zona, con extracción automática de antecedentes, clientes con los que trabajaron y correos de contacto directo.
+            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
+              Localizá empresas, contratistas y talleres por rubro y zona, con extracción automática de obras realizadas, clientes atendidos y canales directos de cotización.
             </p>
           </div>
 
-          {/* Tab Switcher */}
-          <div className="flex items-center p-1 bg-slate-950/80 rounded-2xl border border-white/[0.08] self-start md:self-auto">
+          {/* Segmented Tab Switcher */}
+          <div className="flex items-center p-1 bg-slate-950/90 rounded-2xl border border-white/[0.08] self-start md:self-auto shadow-inner">
             <button
               onClick={() => setActiveTab("search")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                 activeTab === "search"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/20"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <Search className="w-3.5 h-3.5" />
-              <span>Búsqueda Activa {proveedores.length > 0 && `(${proveedores.length})`}</span>
+              <span>Búsqueda Activa</span>
+              {proveedores.length > 0 && (
+                <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-white/20 text-white leading-tight">
+                  {proveedores.length}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setActiveTab("saved")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                 activeTab === "saved"
-                  ? "bg-amber-600 text-white shadow-md shadow-amber-600/20"
+                  ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-md shadow-amber-600/20"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <Bookmark className="w-3.5 h-3.5" />
-              <span>Mis Guardados ({savedProveedores.length})</span>
+              <span>Mis Guardados</span>
+              {savedProveedores.length > 0 && (
+                <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-white/20 text-white leading-tight">
+                  {savedProveedores.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
 
-        {/* Search Prompt Form (Always visible or in Search Tab) */}
+        {/* Search Prompt Form */}
         {activeTab === "search" && (
           <ProveedorSearchForm
             onSearch={handleSearch}
@@ -311,25 +336,36 @@ export default function ProveedoresPage() {
           />
         )}
 
-        {/* Optional Search Logs Dropdown */}
+        {/* Live Terminal / Search Logs */}
         {searchLogs.length > 0 && activeTab === "search" && (
-          <div className="bg-[#0b111e]/90 border border-white/[0.06] rounded-2xl overflow-hidden">
-            <button
-              onClick={() => setShowLogs(!showLogs)}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors"
-            >
-              <span className="flex items-center gap-2">
+          <div className="bg-[#090e18]/90 border border-white/[0.08] rounded-2xl overflow-hidden shadow-xl transition-all">
+            <div className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-950/60 border-b border-white/[0.04]">
+              <button
+                onClick={() => setShowLogs(!showLogs)}
+                className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white transition-colors cursor-pointer"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <Terminal className="w-3.5 h-3.5 text-blue-400" />
                 <span>Registro del Agente IA & Rastreo Web ({searchLogs.length} eventos)</span>
-              </span>
-              {showLogs ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
+                {showLogs ? <ChevronUp className="w-3.5 h-3.5 text-slate-500" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-500" />}
+              </button>
+
+              <button
+                onClick={handleCopyLogs}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
+                title="Copiar log completo"
+              >
+                {copiedLogs ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                <span>{copiedLogs ? "Copiado" : "Copiar"}</span>
+              </button>
+            </div>
+
             {showLogs && (
-              <div className="p-4 border-t border-white/[0.06] bg-slate-950/70 font-mono text-xs text-slate-300 space-y-1.5 max-h-48 overflow-y-auto">
+              <div className="p-4 bg-slate-950/80 font-mono text-xs text-slate-300 space-y-1.5 max-h-48 overflow-y-auto">
                 {searchLogs.map((log, idx) => (
-                  <div key={idx} className="flex items-start gap-2">
-                    <span className="text-blue-500 font-bold select-none">›</span>
-                    <span>{log}</span>
+                  <div key={idx} className="flex items-start gap-2.5">
+                    <span className="text-cyan-400 font-bold select-none text-[10px] pt-0.5">›</span>
+                    <span className="leading-relaxed">{log}</span>
                   </div>
                 ))}
               </div>
@@ -337,68 +373,101 @@ export default function ProveedoresPage() {
           </div>
         )}
 
+        {/* Loading Skeletons */}
+        {isLoading && (
+          <div className="space-y-4 pt-2 animate-in fade-in duration-300">
+            <div className="flex items-center gap-2 text-sm text-blue-400 font-medium">
+              <Sparkles className="w-4 h-4 animate-spin text-blue-400" />
+              <span>Extrayendo candidatos y estructurando proveedores con IA...</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="p-5 sm:p-6 rounded-2xl bg-[#0d1424]/60 border border-white/[0.06] space-y-4 animate-pulse">
+                  <div className="flex items-center justify-between">
+                    <div className="h-5 w-44 bg-slate-800 rounded-lg" />
+                    <div className="h-6 w-20 bg-slate-800 rounded-full" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-12 bg-slate-800/60 rounded-xl" />
+                    <div className="h-12 bg-slate-800/60 rounded-xl" />
+                  </div>
+                  <div className="h-9 bg-slate-800/40 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Results Header, Metrics & Toolbar */}
-        {currentList.length > 0 && (
+        {!isLoading && currentList.length > 0 && (
           <div className="space-y-4 pt-2">
             {/* Metric Summary Badges */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3.5 rounded-2xl bg-[#0b111e] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-base">
                   {totalFound}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Total Encontrados</div>
-                  <div className="text-sm font-bold text-white">Proveedores</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Total Localizados</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Proveedores</div>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#0b111e] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base">
                   {totalWithEmail}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Canales Directos</div>
-                  <div className="text-sm font-bold text-white">Con Correo</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Canales Directos</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Con Correo</div>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#0b111e] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold">
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-base">
                   {verifiedCount}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Alta Confiabilidad</div>
-                  <div className="text-sm font-bold text-white">Verificados</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Alta Confiabilidad</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Verificados</div>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#0b111e] border border-white/[0.06] flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-base">
                   {savedProveedores.length}
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Favoritos</div>
-                  <div className="text-sm font-bold text-white">Guardados</div>
+                  <div className="text-[11px] text-slate-400 font-medium">Favoritos</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Guardados</div>
                 </div>
               </div>
             </div>
 
             {/* Filtering & Action Toolbar */}
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#0b111e] border border-white/[0.08]">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-b from-[#0d1424]/95 to-[#080d18]/95 border border-white/[0.08] shadow-lg">
               {/* Left: Search input & checkbox */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
                 <div className="relative flex-1 max-w-md">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Filtrar por nombre, cliente o trabajo..."
-                    className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    placeholder="Filtrar por nombre, cliente o especialidad..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950/70 border border-white/[0.08] hover:border-white/15 focus:border-blue-500/70 text-xs text-white placeholder-slate-500 focus:outline-none transition-all"
                   />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-0.5 rounded cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none px-2 py-1 rounded-lg hover:bg-white/5 transition-colors">
                   <input
                     type="checkbox"
                     checked={onlyWithEmail}
@@ -415,7 +484,7 @@ export default function ProveedoresPage() {
                 {selectedIds.size === filteredList.length && filteredList.length > 0 ? (
                   <button
                     onClick={handleDeselectAll}
-                    className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Deseleccionar</span>
@@ -423,7 +492,7 @@ export default function ProveedoresPage() {
                 ) : (
                   <button
                     onClick={() => handleSelectAll(filteredList)}
-                    className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    className="px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   >
                     <CheckSquare className="w-3.5 h-3.5" />
                     <span>Seleccionar Todo</span>
@@ -433,28 +502,28 @@ export default function ProveedoresPage() {
                 {/* Copy All Emails */}
                 <button
                   onClick={handleCopyAllEmails}
-                  className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   title="Copiar lista de correos separados por coma"
                 >
-                  {copiedAllEmails ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedAllEmails ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedAllEmails ? "Copiados" : "Copiar Correos"}</span>
                 </button>
 
                 {/* Export Excel */}
                 <button
                   onClick={handleExportExcel}
-                  className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 hover:text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  className="px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 hover:text-emerald-200 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm shadow-emerald-500/10"
                   title="Descargar planilla Excel (.xlsx)"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Excel (.xlsx)</span>
                 </button>
 
                 {/* Draft RFP Email */}
                 <button
                   onClick={handleOpenDraftForSelected}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-                  title="Redactar correo de solicitud de presupuesto para los proveedores seleccionados"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/25 active:scale-[0.98] cursor-pointer"
+                  title="Redactar correo formal de solicitud de presupuesto"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>
@@ -485,13 +554,13 @@ export default function ProveedoresPage() {
                 })}
               </div>
             ) : (
-              <div className="p-12 text-center rounded-2xl bg-[#0b111e] border border-white/[0.06] text-slate-400 space-y-2">
+              <div className="p-12 text-center rounded-2xl bg-[#0b111e]/90 border border-white/[0.08] text-slate-400 space-y-2">
                 <AlertCircle className="w-8 h-8 text-slate-500 mx-auto" />
                 <div className="text-sm font-semibold text-slate-300">
                   Ningún proveedor coincide con los filtros aplicados
                 </div>
                 <p className="text-xs text-slate-500">
-                  Probá desactivando "Solo con correo confirmado" o modificando el término de búsqueda.
+                  Probá desactivando "Solo con correo confirmado" o modificando el término en el buscador.
                 </p>
               </div>
             )}
@@ -500,16 +569,16 @@ export default function ProveedoresPage() {
 
         {/* Empty State for Search tab when no search made */}
         {activeTab === "search" && proveedores.length === 0 && !isLoading && (
-          <div className="p-8 sm:p-12 rounded-3xl bg-[#0b111e]/60 border border-white/[0.06] text-center space-y-4 max-w-2xl mx-auto">
+          <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-[#0d1424]/60 to-[#070b14]/60 border border-white/[0.06] text-center space-y-4 max-w-2xl mx-auto shadow-xl">
             <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
               <Sparkles className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-bold text-white">
-                Búsqueda Rápida de Nuevos Proveedores
+              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                Búsqueda Inteligente de Nuevos Proveedores
               </h3>
-              <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mt-1">
-                Completá el rubro y la zona arriba para que el motor busque proveedores activos, extraiga qué trabajos realizan, clientes con los que trabajaron y sus correos de cotización.
+              <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
+                Ingresá el rubro y la zona geográfica en el prompt superior para que la IA rastree la web, extraiga experiencia, clientes previos y canales de cotización.
               </p>
             </div>
           </div>
@@ -517,13 +586,13 @@ export default function ProveedoresPage() {
 
         {/* Empty State for Saved tab when no saved items */}
         {activeTab === "saved" && savedProveedores.length === 0 && (
-          <div className="p-12 rounded-3xl bg-[#0b111e]/60 border border-white/[0.06] text-center space-y-4 max-w-md mx-auto">
+          <div className="p-12 rounded-3xl bg-gradient-to-b from-[#0d1424]/60 to-[#070b14]/60 border border-white/[0.06] text-center space-y-4 max-w-md mx-auto shadow-xl">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
               <Bookmark className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">No tenés proveedores guardados</h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <h3 className="text-base font-bold text-white tracking-tight">No tenés proveedores guardados</h3>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                 Hacé clic en el ícono de marcador de cualquier tarjeta para guardar proveedores en tu lista permanente.
               </p>
             </div>

@@ -265,7 +265,7 @@ export function CotizacionesImportAiModal({
 }: CotizacionesImportAiModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [extractionMode, setExtractionMode] = useState<ExtractionMode>("general");
-  const [processingMethod, setProcessingMethod] = useState<ProcessingMethod>("heavy");
+  const [processingMethod, setProcessingMethod] = useState<ProcessingMethod>("light");
   const [cachedResults, setCachedResults] = useState<Record<string, {
     items: ExtractedItem[];
     providerName: string;
@@ -1455,76 +1455,6 @@ export function CotizacionesImportAiModal({
             </div>
           )}
 
-          {/* Processing Method Selector before upload */}
-          {!attachment && !isAnalyzing && !isBatchMode && (
-            <div className="bg-[#101726]/80 border border-white/10 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
-                  <Zap className="w-4 h-4 text-amber-400" />
-                  ¿Qué método de lectura querés usar para los archivos?
-                </span>
-                <span className="text-[11px] text-gray-400 hidden sm:inline">
-                  Elegí entre lectura multimodal directa o conversión a Markdown
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setProcessingMethod("light")}
-                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    processingMethod === "light"
-                      ? "bg-amber-500/10 border-amber-500/40 shadow-sm shadow-amber-500/10"
-                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-lg ${processingMethod === "light" ? "bg-amber-500/20 text-amber-400" : "bg-white/5 text-gray-400"}`}>
-                        <Zap className="w-4 h-4" />
-                      </div>
-                      <span className={`text-xs font-bold ${processingMethod === "light" ? "text-amber-300" : "text-white"}`}>
-                        Método Ligero (Markdown)
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Nuevo • Rápido
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Convierte PDFs, Office, HTML y correos a <strong>Markdown estructurado con Microsoft MarkItDown</strong>. Menor consumo de tokens y mayor velocidad.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setProcessingMethod("heavy")}
-                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    processingMethod === "heavy"
-                      ? "bg-blue-500/10 border-blue-500/40 shadow-sm shadow-blue-500/10"
-                      : "bg-white/[0.02] border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-lg ${processingMethod === "heavy" ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-gray-400"}`}>
-                        <Cpu className="w-4 h-4" />
-                      </div>
-                      <span className={`text-xs font-bold ${processingMethod === "heavy" ? "text-blue-300" : "text-white"}`}>
-                        Método Pesado (Multimodal)
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                      Original
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
-                    Envía los documentos originales completos en <strong>Base64 / Binario directo</strong> al LLM. Máxima fidelidad visual para planos, fotos o tipografías complejas.
-                  </p>
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* File Upload Dropzone */}
           {!attachment && !isAnalyzing && !isBatchMode && (
             <div
@@ -1541,38 +1471,6 @@ export function CotizacionesImportAiModal({
                 className="hidden"
                 onChange={handleFileChange}
               />
-
-              {/* Selector rápido directo dentro de la card de subida */}
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-1.5 p-1 bg-[#0b101b] border border-white/10 rounded-xl mb-4 text-xs"
-              >
-                <span className="text-[11px] text-gray-400 px-2 font-medium">Método de lectura:</span>
-                <button
-                  type="button"
-                  onClick={() => setProcessingMethod("heavy")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
-                    processingMethod === "heavy"
-                      ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  <Cpu className="w-3 h-3" />
-                  <span>Método Pesado</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProcessingMethod("light")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
-                    processingMethod === "light"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  <Zap className="w-3 h-3" />
-                  <span>Método Ligero (Markdown)</span>
-                </button>
-              </div>
 
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
                 <Upload className="w-8 h-8" />
@@ -1743,18 +1641,9 @@ export function CotizacionesImportAiModal({
               </div>
               <div>
                 <h3 className="text-base font-semibold text-white">Leyendo presupuesto o correo con IA...</h3>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold mt-2 border bg-white/5 border-white/10">
-                  {processingMethod === "light" ? (
-                    <>
-                      <Zap className="w-3 h-3 text-amber-400" />
-                      <span className="text-amber-300">Método Ligero (MarkItDown)</span>
-                    </>
-                  ) : (
-                    <>
-                      <Cpu className="w-3 h-3 text-blue-400" />
-                      <span className="text-blue-300">Método Pesado (Multimodal)</span>
-                    </>
-                  )}
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold mt-2 border bg-amber-500/10 border-amber-500/30 text-amber-300">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Conversión Markdown estructurada (MarkItDown)</span>
                 </div>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto mt-2">
                   Extrayendo nombre del proveedor, moneda, condiciones comerciales, ítems cotizados y precios unitarios.
@@ -1805,13 +1694,9 @@ export function CotizacionesImportAiModal({
                       <p className="text-xs font-semibold text-white truncate max-w-xs sm:max-w-md">
                         {attachment.originalName || attachment.filename}
                       </p>
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                        processingMethod === "light"
-                          ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                          : "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                      }`}>
-                        {processingMethod === "light" ? <Zap className="w-2.5 h-2.5" /> : <Cpu className="w-2.5 h-2.5" />}
-                        {processingMethod === "light" ? "Método Ligero" : "Método Pesado"}
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-amber-500/15 text-amber-300 border-amber-500/30">
+                        <Zap className="w-2.5 h-2.5" />
+                        Markdown IA
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-400">
@@ -1935,15 +1820,23 @@ export function CotizacionesImportAiModal({
 
               {/* Extracted Items Section */}
               <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Package className="w-4 h-4 text-emerald-400" />
-                    <h3 className="text-sm font-bold text-white">
-                      {extractionMode === "general" ? "Rubros Generales" : "Ítems Detallados"} ({items.length})
-                    </h3>
-                    <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      {selectedCount} seleccionados
-                    </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5 leading-none">
+                        <span>{extractionMode === "general" ? "Rubros Generales" : "Ítems Detallados"}</span>
+                        <span className="text-xs font-semibold text-slate-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 leading-none">
+                          {items.length}
+                        </span>
+                      </h3>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 leading-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span>{selectedCount} seleccionados</span>
+                      </span>
+                    </div>
                   </div>
 
                   {/* Action buttons and mode switcher pills */}
@@ -1951,7 +1844,7 @@ export function CotizacionesImportAiModal({
                     <div className="inline-flex items-center bg-[#070b13] p-1 rounded-xl border border-white/10 text-xs">
                       <button
                         type="button"
-                        onClick={() => processFileWithMode(file, "general", attachment, processingMethod)}
+                        onClick={() => processFileWithMode(file, "general", attachment, "light")}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                           extractionMode === "general"
                             ? "bg-emerald-500 text-white shadow-sm font-semibold"
@@ -1963,7 +1856,7 @@ export function CotizacionesImportAiModal({
                       </button>
                       <button
                         type="button"
-                        onClick={() => processFileWithMode(file, "detailed", attachment, processingMethod)}
+                        onClick={() => processFileWithMode(file, "detailed", attachment, "light")}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                           extractionMode === "detailed"
                             ? "bg-emerald-500 text-white shadow-sm font-semibold"
@@ -1972,36 +1865,6 @@ export function CotizacionesImportAiModal({
                       >
                         <ListOrdered className="w-3.5 h-3.5" />
                         Subítems Detallados
-                      </button>
-                    </div>
-
-                    {/* Method Switcher pills */}
-                    <div className="inline-flex items-center bg-[#070b13] p-1 rounded-xl border border-white/10 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => processFileWithMode(file, extractionMode, attachment, "heavy")}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                          processingMethod === "heavy"
-                            ? "bg-blue-500 text-white shadow-sm font-semibold"
-                            : "text-gray-400 hover:text-white"
-                        }`}
-                        title="Método Pesado: Multimodal nativo (Base64)"
-                      >
-                        <Cpu className="w-3.5 h-3.5" />
-                        Pesado
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => processFileWithMode(file, extractionMode, attachment, "light")}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
-                          processingMethod === "light"
-                            ? "bg-amber-500 text-white shadow-sm font-semibold"
-                            : "text-gray-400 hover:text-white"
-                        }`}
-                        title="Método Ligero: Conversión a Markdown con MarkItDown"
-                      >
-                        <Zap className="w-3.5 h-3.5" />
-                        Ligero (MD)
                       </button>
                     </div>
 
