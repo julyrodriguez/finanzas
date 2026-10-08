@@ -27,7 +27,8 @@ import {
   ArrowRight,
   PanelLeftClose,
   PanelLeft,
-  Home
+  Home,
+  Briefcase
 } from "lucide-react";
 
 interface AppLayoutProps {
@@ -153,6 +154,14 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           icon: Scale,
           exact: false,
           hideForOrders: true,
+        },
+        {
+          name: "Proveedores",
+          href: "/proveedores",
+          icon: Briefcase,
+          exact: false,
+          hideForOrders: true,
+          badge: "IA",
         },
         {
           name: "Distribución",
