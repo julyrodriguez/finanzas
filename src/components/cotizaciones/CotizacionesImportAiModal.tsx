@@ -293,6 +293,7 @@ export function CotizacionesImportAiModal({
   // Batch mode state
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
   const [batchQueue, setBatchQueue] = useState<BatchFileItem[]>([]);
+  const [batchHistory, setBatchHistory] = useState<Array<{ queue: BatchFileItem[]; label: string; timestamp: string }>>([]);
 
   // Chat & AI prompt refinement state
   const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
@@ -840,7 +841,7 @@ export function CotizacionesImportAiModal({
     setRefineError(null);
     setIsAiChatOpen(true);
 
-    // MODO LOTE / MULTI-PROVEEDOR: Chatear y consultar sobre todos los presupuestos cargados
+    // MODO LOTE / MULTI-PROVEEDOR: Chatear, consultar y MODIFICAR presupuestos cargados
     if (isBatchMode) {
       const readyBatch = batchQueue.filter((b) => b.status === "done" && b.payload);
       if (readyBatch.length === 0) {
@@ -859,88 +860,103 @@ export function CotizacionesImportAiModal({
         selectedItems: b.payload!.selectedItems
       }));
 
-      const assistantMsgId = `msg-${Date.now()}-ai`;
-      const placeholderAssistant: AiChatMessage = {
-        id: assistantMsgId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
-      };
-      setChatMessages([...newHistory, placeholderAssistant]);
-
       try {
-        const apiEndpoint = process.env.NEXT_PUBLIC_COTIZACIONES_API || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/chat";
-        const response = await fetch(apiEndpoint, {
+        const extractUrl = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
+        const refineBatchUrl = extractUrl.replace(/extract-items$/, "refine-batch");
+
+        const response = await fetch(refineBatchUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             cotizacionId: cotizacionId || "temp_" + Date.now(),
-            quoteName: "Carga Masiva de Presupuestos",
             batchProviders,
-            modelName: "gemini-3.5-flash-lite",
-            processingMethod,
-            messages: newHistory.map((m) => ({ role: m.role, content: m.content }))
+            prompt: promptText,
+            chatHistory: newHistory.slice(-6).map((m) => ({ role: m.role, content: m.content }))
           })
         });
 
         if (!response.ok) {
-          throw new Error(`Error en el servidor: ${response.status} ${response.statusText}`);
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || `Error del servidor: ${response.status}`);
         }
 
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No se pudo leer la respuesta de la IA");
-
-        const decoder = new TextDecoder();
-        let accumulatedContent = "";
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data:")) continue;
-            const dataStr = trimmed.replace(/^data:\s*/, "");
-            if (dataStr === "[DONE]") break;
-
-            try {
-              const parsed = JSON.parse(dataStr);
-              if (parsed.error) {
-                accumulatedContent += `\n\n⚠️ Error: ${parsed.error}`;
-              } else if (parsed.text) {
-                accumulatedContent += parsed.text;
-              }
-            } catch {
-              accumulatedContent += dataStr;
-            }
-
-            setChatMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId
-                  ? { ...msg, content: accumulatedContent }
-                  : msg
-              )
-            );
-          }
+        const resData = await response.json();
+        if (!resData.success || !resData.data) {
+          throw new Error(resData.error || "No se pudo procesar la solicitud con IA");
         }
-      } catch (err: any) {
-        console.error("Error en chat masivo con IA:", err);
-        setRefineError(err.message || "Error al comunicarse con la IA");
-        setChatMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  content: `⚠️ Hubo un error al procesar tu consulta: ${err.message || "Error desconocido"}. Podés reintentar.`
+
+        const { reply, hasModifications, updatedBatch } = resData.data;
+
+        // Si la IA realizó modificaciones en ítems o proveedores, actualizamos la cola del lote en vivo
+        if (hasModifications && Array.isArray(updatedBatch) && updatedBatch.length > 0) {
+          setBatchHistory((prev) => [
+            ...prev,
+            { queue: [...batchQueue], label: promptText, timestamp: new Date().toLocaleTimeString("es-AR") }
+          ]);
+
+          setBatchQueue((prevQueue) => {
+            let readyIdx = 0;
+            return prevQueue.map((item) => {
+              if (item.status !== "done" || !item.payload) return item;
+              const updatedProv = updatedBatch[readyIdx++];
+              if (!updatedProv) return item;
+
+              const formattedItems: ExtractedItem[] = (updatedProv.items || []).map((it: any, iIdx: number) => {
+                const p = parseFloat(it.price) || 0;
+                const q = parseFloat(it.quantity) || 1;
+                const t = parseFloat(it.totalPrice) || (p * q);
+                return {
+                  id: it.id || `batch-${Date.now()}-${readyIdx}-${iIdx}`,
+                  name: (it.name || `Ítem ${iIdx + 1}`).trim(),
+                  quantity: q,
+                  unit: it.unit || "U",
+                  price: p,
+                  totalPrice: t,
+                  discount: parseFloat(it.discount) || 0,
+                  specification: it.specification || "",
+                  presentationName: it.presentationName || "",
+                  unitsPerPresentation: parseFloat(it.unitsPerPresentation) || 1,
+                  matchedItemId: it.matchedItemId || null,
+                  selected: true
+                };
+              });
+
+              return {
+                ...item,
+                payload: {
+                  ...item.payload,
+                  providerName: updatedProv.providerName || item.payload.providerName,
+                  currency: updatedProv.currency || item.payload.currency,
+                  deliveryTime: updatedProv.deliveryTime !== undefined ? updatedProv.deliveryTime : item.payload.deliveryTime,
+                  paymentTerms: updatedProv.paymentTerms !== undefined ? updatedProv.paymentTerms : item.payload.paymentTerms,
+                  validityPeriod: updatedProv.validityPeriod !== undefined ? updatedProv.validityPeriod : item.payload.validityPeriod,
+                  notes: updatedProv.notes !== undefined ? updatedProv.notes : item.payload.notes,
+                  selectedItems: formattedItems.length > 0 ? formattedItems : item.payload.selectedItems
                 }
-              : msg
-          )
-        );
+              };
+            });
+          });
+        }
+
+        const aiMessage: AiChatMessage = {
+          id: `msg-${Date.now()}-ai`,
+          role: "assistant",
+          content: reply || "Presupuestos analizados correctamente.",
+          timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+          itemsSnapshotCount: hasModifications ? updatedBatch.length : undefined
+        };
+        setChatMessages([...newHistory, aiMessage]);
+
+      } catch (err: any) {
+        console.error("Error en refine-batch con IA:", err);
+        setRefineError(err.message || "Error al comunicarse con la IA");
+        const errMessage: AiChatMessage = {
+          id: `msg-${Date.now()}-err`,
+          role: "assistant",
+          content: `⚠️ Hubo un error al procesar tu instrucción: ${err.message || "Error desconocido"}. Podés reintentar.`,
+          timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+        };
+        setChatMessages([...newHistory, errMessage]);
       } finally {
         setIsRefiningAi(false);
       }
@@ -1042,6 +1058,15 @@ export function CotizacionesImportAiModal({
   };
 
   const handleUndoLastHistory = () => {
+    if (isBatchMode) {
+      if (batchHistory.length === 0) return;
+      const newHistory = [...batchHistory];
+      const previous = newHistory.pop()!;
+      setBatchHistory(newHistory);
+      setBatchQueue(previous.queue);
+      return;
+    }
+
     if (itemsHistory.length <= 1) return;
     const newHistory = [...itemsHistory];
     newHistory.pop();
@@ -1298,7 +1323,7 @@ export function CotizacionesImportAiModal({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {!isBatchMode && itemsHistory.length > 1 && (
+            {(isBatchMode ? batchHistory.length > 0 : itemsHistory.length > 1) && (
               <button
                 type="button"
                 onClick={handleUndoLastHistory}
@@ -1403,7 +1428,11 @@ export function CotizacionesImportAiModal({
                       {msg.itemsSnapshotCount !== undefined && (
                         <div className="mt-1 pt-1 border-t border-white/10 flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
                           <CheckCircle2 className="w-3 h-3" />
-                          <span>Formulario actualizado ({msg.itemsSnapshotCount} ítems)</span>
+                          <span>
+                            {isBatchMode
+                              ? `Presupuestos del lote actualizados (${msg.itemsSnapshotCount} proveedores modificados)`
+                              : `Formulario actualizado (${msg.itemsSnapshotCount} ítems)`}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1464,24 +1493,26 @@ export function CotizacionesImportAiModal({
           </div>
 
           {/* History controls */}
-          {itemsHistory.length > 1 && (
+          {(isBatchMode ? batchHistory.length > 0 : itemsHistory.length > 1) && (
             <div className="flex items-center justify-between text-[10px] text-gray-400 px-1 pt-0.5">
               <button
                 type="button"
                 onClick={handleUndoLastHistory}
                 className="hover:text-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
               >
-                <Undo2 className="w-3 h-3" />
-                <span>Deshacer último cambio</span>
+                <Undo2 className="w-3.5 h-3.5" />
+                <span>Deshacer último cambio de IA</span>
               </button>
-              <button
-                type="button"
-                onClick={handleRestoreInitialItems}
-                className="hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Restaurar original</span>
-              </button>
+              {!isBatchMode && (
+                <button
+                  type="button"
+                  onClick={handleRestoreInitialItems}
+                  className="hover:text-white flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restaurar original</span>
+                </button>
+              )}
             </div>
           )}
         </div>
