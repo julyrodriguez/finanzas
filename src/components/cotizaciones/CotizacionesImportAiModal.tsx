@@ -37,6 +37,7 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCheck,
+  Trash2,
   Zap,
   Cpu
 } from "lucide-react";
@@ -87,6 +88,7 @@ export interface ImportPayload {
   attachment: QuoteAttachment;
   targetProviderId?: string;
   selectedItems: Array<{
+    id?: string;
     name: string;
     unit: string;
     quantity: number;
@@ -314,6 +316,7 @@ export function CotizacionesImportAiModal({
   const [groupPrice, setGroupPrice] = useState<number>(0);
   const [groupSpecification, setGroupSpecification] = useState<string>("");
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+  const [expandedBatchIds, setExpandedBatchIds] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -350,6 +353,7 @@ export function CotizacionesImportAiModal({
     setIsGroupModalOpen(false);
     setGroupSelectedIds(new Set());
     setExpandedGroupIds(new Set());
+    setExpandedBatchIds(new Set());
   };
 
   const handleClose = () => {
@@ -706,11 +710,14 @@ export function CotizacionesImportAiModal({
     { label: "📦 Agrupar por rubros", prompt: "Agrupá todos los ítems por sus rubros o capítulos generales principales, sumando los precios totales y dejando la especificación detallada con el texto completo de los ítems." },
     { label: "➕ Sumar ítem faltante", prompt: "Revisá el documento original y agregá los ítems cotizados que falten en la lista con sus precios reales." },
     { label: "🧮 Calcular con 21% IVA", prompt: "Sumale el 21% de IVA a todos los precios unitarios y totales de los ítems." },
+    { label: "🗑️ Quitar ítems sin precio", prompt: "Sacá los ítems que tengan precio 0 o no correspondan a la cotización y dejá solo los cotizados." },
     { label: "✂️ Separar Mano de Obra y Materiales", prompt: "Separá los ítems en renglones individuales para Mano de Obra y Materiales con sus respectivos precios." },
     { label: "🏷️ Aplicar 10% Descuento", prompt: "Aplicá un 10% de descuento a todos los precios de los ítems." }
   ];
 
   const BATCH_QUICK_PROMPTS = [
+    { label: "🏷️ Unificar nombres entre proveedores", prompt: "Unificá los nombres de los ítems equivalentes entre todos los proveedores para que tengan exactamente el mismo nombre y coincidan fila por fila." },
+    { label: "🧮 Sumar 21% IVA a todos", prompt: "Sumale el 21% de IVA a todos los precios y totales de los proveedores de este lote." },
     { label: "📊 Comparar presupuestos cargados", prompt: "Generá una tabla comparativa con los precios y totales de los proveedores de este lote, indicando cuál es más conveniente." },
     { label: "🏆 ¿Cuál conviene según precio y plazos?", prompt: "¿Cuál de los proveedores cargados resulta más económico en total y cuál ofrece mejores plazos de entrega y forma de pago?" },
     { label: "🔍 Diferencias y faltantes entre ellos", prompt: "Analizá si los proveedores presupuestaron los mismos ítems o si alguno omitió productos o cotizó presentaciones diferentes." },
@@ -823,6 +830,45 @@ export function CotizacionesImportAiModal({
     });
   };
 
+  const handleToggleExpandBatch = (id: string) => {
+    setExpandedBatchIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleDeleteBatchItem = (batchId: string, itemIndex: number) => {
+    setBatchHistory((prev) => [
+      ...prev,
+      { queue: [...batchQueue], label: "Eliminar ítem manual", timestamp: new Date().toLocaleTimeString("es-AR") }
+    ]);
+    setBatchQueue((prevQueue) =>
+      prevQueue.map((item) => {
+        if (item.id !== batchId || !item.payload) return item;
+        const updatedItems = item.payload.selectedItems.filter((_, i) => i !== itemIndex);
+        return {
+          ...item,
+          payload: {
+            ...item.payload,
+            selectedItems: updatedItems
+          }
+        };
+      })
+    );
+  };
+
+  const handleDeleteSingleItem = (index: number) => {
+    const itemToDelete = items[index];
+    const newItems = items.filter((_, i) => i !== index);
+    setItemsHistory((prev) => [
+      ...prev,
+      { items: newItems, label: `Eliminado: "${itemToDelete.name}"`, timestamp: new Date().toLocaleTimeString("es-AR") }
+    ]);
+    setItems(newItems);
+  };
+
   const handleSendAiPrompt = async (promptToSend?: string) => {
     const promptText = (promptToSend || chatInput).trim();
     if (!promptText || isRefiningAi) return;
@@ -850,7 +896,9 @@ export function CotizacionesImportAiModal({
         return;
       }
 
-      const batchProviders = readyBatch.map((b) => ({
+      const batchProviders = readyBatch.map((b, idx) => ({
+        batchId: b.id,
+        providerIndex: idx,
         providerName: b.payload!.providerName,
         currency: b.payload!.currency,
         deliveryTime: b.payload!.deliveryTime,
@@ -895,10 +943,14 @@ export function CotizacionesImportAiModal({
           ]);
 
           setBatchQueue((prevQueue) => {
-            let readyIdx = 0;
             return prevQueue.map((item) => {
               if (item.status !== "done" || !item.payload) return item;
-              const updatedProv = updatedBatch[readyIdx++];
+              const updatedProv = updatedBatch.find(
+                (ub: any) =>
+                  (ub.batchId && ub.batchId === item.id) ||
+                  (ub.providerName && ub.providerName.toLowerCase().trim() === item.payload!.providerName.toLowerCase().trim())
+              ) || updatedBatch[readyBatch.findIndex((rb) => rb.id === item.id)];
+
               if (!updatedProv) return item;
 
               const formattedItems: ExtractedItem[] = (updatedProv.items || []).map((it: any, iIdx: number) => {
@@ -906,7 +958,7 @@ export function CotizacionesImportAiModal({
                 const q = parseFloat(it.quantity) || 1;
                 const t = parseFloat(it.totalPrice) || (p * q);
                 return {
-                  id: it.id || `batch-${Date.now()}-${readyIdx}-${iIdx}`,
+                  id: it.id || `batch-${Date.now()}-${item.id}-${iIdx}`,
                   name: (it.name || `Ítem ${iIdx + 1}`).trim(),
                   quantity: q,
                   unit: it.unit || "U",
@@ -931,7 +983,7 @@ export function CotizacionesImportAiModal({
                   paymentTerms: updatedProv.paymentTerms !== undefined ? updatedProv.paymentTerms : item.payload.paymentTerms,
                   validityPeriod: updatedProv.validityPeriod !== undefined ? updatedProv.validityPeriod : item.payload.validityPeriod,
                   notes: updatedProv.notes !== undefined ? updatedProv.notes : item.payload.notes,
-                  selectedItems: formattedItems.length > 0 ? formattedItems : item.payload.selectedItems
+                  selectedItems: formattedItems
                 }
               };
             });
@@ -1813,6 +1865,51 @@ export function CotizacionesImportAiModal({
                           )}
                         </div>
                       </div>
+
+                      {isDone && payload && payload.selectedItems && payload.selectedItems.length > 0 && (
+                        <div className="mt-2.5 pt-2 border-t border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleExpandBatch(item.id)}
+                            className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <span>{expandedBatchIds.has(item.id) ? "Ocultar ítems" : "Ver / Modificar ítems"} ({payload.selectedItems.length})</span>
+                            {expandedBatchIds.has(item.id) ? (
+                              <ChevronUp className="w-3 h-3" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3" />
+                            )}
+                          </button>
+                          {expandedBatchIds.has(item.id) && (
+                            <div className="space-y-1.5 mt-2 pl-2 border-l-2 border-emerald-500/30 max-h-48 overflow-y-auto pr-1">
+                              {payload.selectedItems.map((sItem, sIdx) => (
+                                <div
+                                  key={sItem.id || `batch-item-${sIdx}`}
+                                  className="flex items-center justify-between text-[11px] text-gray-300 bg-black/25 px-2.5 py-1.5 rounded-lg border border-white/5 hover:border-white/10 transition-colors"
+                                >
+                                  <span className="truncate flex-1 font-medium">{sItem.name}</span>
+                                  <div className="flex items-center gap-2 ml-2 shrink-0">
+                                    <span className="text-gray-400 font-mono text-[10px]">
+                                      {sItem.quantity} {sItem.unit}
+                                    </span>
+                                    <span className="font-mono text-emerald-400 font-medium">
+                                      {payload.currency === "USD" ? "u$s" : "$"} {sItem.price.toLocaleString("es-AR")}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteBatchItem(item.id, sIdx)}
+                                      className="p-1 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                                      title="Eliminar este ítem antes de cargar"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2279,6 +2376,15 @@ export function CotizacionesImportAiModal({
                                       <span>{item.quantity} {item.unit}</span>
                                     )}
                                   </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSingleItem(index)}
+                                    className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                                    title="Eliminar este ítem"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                               </div>
 
