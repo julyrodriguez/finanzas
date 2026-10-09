@@ -14,14 +14,24 @@ import {
   Square, 
   Search,
   MessageSquare,
-  Flame,
   Palette,
-  Maximize2,
   Clock,
   Calendar,
-  X
+  X,
+  Cloud,
+  CheckCircle2,
+  Loader2
 } from "lucide-react";
 import { EyeTrackerCube } from "./EyeTrackerCube";
+import { getFirebaseDb } from "@/lib/firebase";
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  setDoc, 
+  deleteDoc, 
+  onSnapshot 
+} from "firebase/firestore";
 
 export interface PinnedNote {
   id: string;
@@ -44,7 +54,7 @@ const NOTE_COLORS = {
     text: "text-amber-950",
     header: "text-amber-900",
     placeholder: "placeholder-amber-800/40",
-    shadow: "shadow-amber-500/15",
+    shadow: "shadow-amber-500/20",
     tagBg: "bg-amber-400/30 text-amber-950"
   },
   blue: {
@@ -53,7 +63,7 @@ const NOTE_COLORS = {
     text: "text-sky-950",
     header: "text-sky-900",
     placeholder: "placeholder-sky-800/40",
-    shadow: "shadow-sky-500/15",
+    shadow: "shadow-sky-500/20",
     tagBg: "bg-sky-400/30 text-sky-950"
   },
   green: {
@@ -62,7 +72,7 @@ const NOTE_COLORS = {
     text: "text-emerald-950",
     header: "text-emerald-900",
     placeholder: "placeholder-emerald-800/40",
-    shadow: "shadow-emerald-500/15",
+    shadow: "shadow-emerald-500/20",
     tagBg: "bg-emerald-400/30 text-emerald-950"
   },
   pink: {
@@ -71,7 +81,7 @@ const NOTE_COLORS = {
     text: "text-pink-950",
     header: "text-pink-900",
     placeholder: "placeholder-pink-800/40",
-    shadow: "shadow-pink-500/15",
+    shadow: "shadow-pink-500/20",
     tagBg: "bg-pink-400/30 text-pink-950"
   },
   purple: {
@@ -80,7 +90,7 @@ const NOTE_COLORS = {
     text: "text-purple-950",
     header: "text-purple-900",
     placeholder: "placeholder-purple-800/40",
-    shadow: "shadow-purple-500/15",
+    shadow: "shadow-purple-500/20",
     tagBg: "bg-purple-400/30 text-purple-950"
   },
   orange: {
@@ -89,59 +99,30 @@ const NOTE_COLORS = {
     text: "text-orange-950",
     header: "text-orange-900",
     placeholder: "placeholder-orange-800/40",
-    shadow: "shadow-orange-500/15",
+    shadow: "shadow-orange-500/20",
     tagBg: "bg-orange-400/30 text-orange-950"
   }
 };
 
 const CHALK_COLORS = [
-  { id: "white", name: "Tiza Blanca", color: "#f8fafc", bg: "bg-slate-100" },
-  { id: "yellow", name: "Tiza Amarilla", color: "#fef08a", bg: "bg-yellow-300" },
-  { id: "cyan", name: "Tiza Celeste", color: "#7dd3fc", bg: "bg-sky-300" },
-  { id: "mint", name: "Tiza Menta", color: "#86efac", bg: "bg-emerald-300" },
-  { id: "pink", name: "Tiza Rosa", color: "#f472b6", bg: "bg-pink-400" },
-  { id: "orange", name: "Tiza Naranja", color: "#fdba74", bg: "bg-amber-400" }
+  { id: "white", name: "Tiza Blanca", color: "#f8fafc" },
+  { id: "yellow", name: "Tiza Amarilla", color: "#fef08a" },
+  { id: "cyan", name: "Tiza Celeste", color: "#7dd3fc" },
+  { id: "mint", name: "Tiza Menta", color: "#86efac" },
+  { id: "pink", name: "Tiza Rosa", color: "#f472b6" },
+  { id: "orange", name: "Tiza Naranja", color: "#fdba74" }
 ];
 
 const CARITA_GREETINGS = [
   "¡Bienvenido a tu Pizarrón de Control! 📌",
   "¡Anotá tus ideas antes de que se escapen! ✏️",
   "Pizarrón limpio = Día productivo 🧽",
-  "¡Clavá una nota con un pin para no olvidarte! 📌",
+  "¡Clavá una nota con un pin en el medio! 📌",
   "Dibujá o escribí lo que quieras en la pizarra ✨",
   "Supervisando compras y cotizaciones 🕵️‍♂️"
 ];
 
-const INITIAL_NOTES: PinnedNote[] = [
-  {
-    id: "note-init-1",
-    title: "📋 Recordatorio Licitación",
-    content: "Revisar comparativa de limpieza sedes Cinemark & Hoyts. Validar plazos de entrega y condiciones de pago.",
-    color: "yellow",
-    pinColor: "red",
-    rotation: -2.5,
-    x: 40,
-    y: 35,
-    createdAt: "Hoy",
-    tag: "Prioritario",
-    checklist: [
-      { id: "c1", text: "Pedir ajuste de IVA en CleanX", done: true },
-      { id: "c2", text: "Validar plazos de entrega", done: false }
-    ]
-  },
-  {
-    id: "note-init-2",
-    title: "💡 Ideas & Mejoras",
-    content: "Pizarrón interactivo operativo. Podés escribir con tiza, borrar con el borrador o clavar notas con chinchetas.",
-    color: "blue",
-    pinColor: "gold",
-    rotation: 1.8,
-    x: 320,
-    y: 50,
-    createdAt: "Hoy",
-    tag: "Tip"
-  }
-];
+const API_BASE_URL = "https://apivacas.jariel.com.ar/api/pizarron/notes";
 
 interface BlackboardHubProps {
   onOpenSearch?: () => void;
@@ -156,30 +137,20 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
   const [chalkColor, setChalkColor] = useState<string>("#f8fafc");
   const [chalkWidth, setChalkWidth] = useState<number>(4);
   const [hasChalkStrokes, setHasChalkStrokes] = useState<boolean>(false);
-  const strokeHistoryRef = useRef<ImageData[]>([]);
 
-  // Pinned Notes State
-  const [notes, setNotes] = useState<PinnedNote[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("finanzas_blackboard_notes");
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.warn("Error cargando notas de pizarra:", e);
-      }
-    }
-    return INITIAL_NOTES;
-  });
-
+  // Pinned Notes State (Sin notas hardcodeadas)
+  const [notes, setNotes] = useState<PinnedNote[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [activeNoteColor, setActiveNoteColor] = useState<keyof typeof NOTE_COLORS>("yellow");
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isLoadedFromDb, setIsLoadedFromDb] = useState<boolean>(false);
 
   // Carita State
   const [caritaSpeech, setCaritaSpeech] = useState<string>(CARITA_GREETINGS[0]);
   const [isSpeechVisible, setIsSpeechVisible] = useState<boolean>(true);
   const [caritaMood, setCaritaMood] = useState<"normal" | "thinking" | "searching">("normal");
 
-  // Time & Date state for blackboard header
+  // Time & Date state
   const [currentTime, setCurrentTime] = useState<string>("");
   const [currentDate, setCurrentDate] = useState<string>("");
 
@@ -194,14 +165,143 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Save notes to localStorage
+  // Sync to Backend (MongoDB + Firebase Firestore)
+  const syncNoteToBackend = useCallback(async (note: PinnedNote) => {
+    // 1. MongoDB API
+    try {
+      fetch(API_BASE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(note)
+      }).catch((e) => console.warn("Aviso sync MongoDB nota:", e));
+    } catch (e) {}
+
+    // 2. Firebase Firestore
+    try {
+      const db = getFirebaseDb();
+      if (db) {
+        const docRef = doc(db, "pizarron_notas", note.id);
+        await setDoc(docRef, note, { merge: true });
+      }
+    } catch (e) {
+      console.warn("Aviso sync Firebase nota:", e);
+    }
+  }, []);
+
+  const deleteNoteFromBackend = useCallback(async (noteId: string) => {
+    // 1. MongoDB API
+    try {
+      fetch(`${API_BASE_URL}/${encodeURIComponent(noteId)}`, {
+        method: "DELETE"
+      }).catch((e) => console.warn("Aviso delete MongoDB nota:", e));
+    } catch (e) {}
+
+    // 2. Firebase Firestore
+    try {
+      const db = getFirebaseDb();
+      if (db) {
+        const docRef = doc(db, "pizarron_notas", noteId);
+        await deleteDoc(docRef);
+      }
+    } catch (e) {
+      console.warn("Aviso delete Firebase nota:", e);
+    }
+  }, []);
+
+  // Cargar notas desde la BD al iniciar
+  useEffect(() => {
+    let isMounted = true;
+    setIsSyncing(true);
+
+    const loadNotesFromDb = async () => {
+      let loaded = false;
+
+      // 1. Intentar desde MongoDB
+      try {
+        const res = await fetch(API_BASE_URL);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.notes)) {
+            if (isMounted) {
+              setNotes(data.notes);
+              loaded = true;
+              setIsLoadedFromDb(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("MongoDB notas no disponible, probando Firebase:", err);
+      }
+
+      // 2. Fallback con Firebase Firestore
+      if (!loaded) {
+        try {
+          const db = getFirebaseDb();
+          if (db) {
+            const colRef = collection(db, "pizarron_notas");
+            const snapshot = await getDocs(colRef);
+            if (!isMounted) return;
+            const fbNotes: PinnedNote[] = [];
+            snapshot.forEach((d) => {
+              fbNotes.push({ id: d.id, ...d.data() } as PinnedNote);
+            });
+            setNotes(fbNotes);
+            setIsLoadedFromDb(true);
+            loaded = true;
+          }
+        } catch (fbErr) {
+          console.warn("Firebase notas error:", fbErr);
+        }
+      }
+
+      // 3. Fallback localStorage si ambas BD fallaron
+      if (!loaded && typeof window !== "undefined") {
+        try {
+          const local = localStorage.getItem("finanzas_blackboard_notes");
+          if (local && isMounted) {
+            setNotes(JSON.parse(local));
+          }
+        } catch (e) {}
+      }
+
+      if (isMounted) {
+        setIsSyncing(false);
+      }
+    };
+
+    loadNotesFromDb();
+
+    // Listener Firestore en tiempo real si está disponible
+    let unsubscribe: (() => void) | undefined = undefined;
+    try {
+      const db = getFirebaseDb();
+      if (db) {
+        const colRef = collection(db, "pizarron_notas");
+        unsubscribe = onSnapshot(colRef, (snapshot) => {
+          if (!isMounted) return;
+          const liveNotes: PinnedNote[] = [];
+          snapshot.forEach((d) => {
+            liveNotes.push({ id: d.id, ...d.data() } as PinnedNote);
+          });
+          if (liveNotes.length > 0) {
+            setNotes(liveNotes);
+          }
+        }, (err) => console.warn("Firestore snapshot listener aviso:", err));
+      }
+    } catch (e) {}
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Save notes to localStorage as backup
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("finanzas_blackboard_notes", JSON.stringify(notes));
-      } catch (e) {
-        console.warn("Error guardando notas de pizarra:", e);
-      }
+      } catch (e) {}
     }
   }, [notes]);
 
@@ -214,7 +314,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     const rect = board.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    // Handle high DPI
     canvas.width = rect.width * dpr;
     canvas.height = rect.height * dpr;
     canvas.style.width = `${rect.width}px`;
@@ -245,7 +344,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
   useEffect(() => {
     initCanvas();
     const handleResize = () => {
-      // Re-init with preserve
       const canvas = canvasRef.current;
       if (!canvas) return;
       const prevData = canvas.toDataURL();
@@ -277,7 +375,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     }
   };
 
-  // Chalk Drawing Handlers with realistic particle jitter
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -323,18 +420,18 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
 
-    // 1. Base chalk stroke with soft opacity
+    // Base chalk stroke
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
-    ctx.globalAlpha = 0.72;
-    ctx.shadowBlur = 1.5;
+    ctx.globalAlpha = 0.75;
+    ctx.shadowBlur = 1.8;
     ctx.shadowColor = color;
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
     ctx.stroke();
 
-    // 2. Chalk dust micro-particles for realistic rough blackboard texture
+    // Chalk micro-particles
     const dist = Math.hypot(x1 - x0, y1 - y0);
     const steps = Math.max(1, Math.floor(dist / 3));
     ctx.fillStyle = color;
@@ -391,7 +488,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     saveCanvasState();
   };
 
-  // Clear chalk board with wipe effect
   const handleClearChalkboard = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -405,17 +501,28 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     triggerCaritaSpeech("✨ ¡Pizarrón de tiza limpiado por completo!");
   };
 
-  // Pinned Notes Operations
+  // Pinned Notes Operations: Clavar en el MEDIO de la pantalla
   const handleAddNote = (color: keyof typeof NOTE_COLORS = activeNoteColor) => {
     const colorsList: (keyof typeof NOTE_COLORS)[] = ["yellow", "blue", "green", "pink", "purple", "orange"];
     const chosenColor = color || colorsList[Math.floor(Math.random() * colorsList.length)];
     const pinColors: ("red" | "gold" | "blue" | "emerald")[] = ["red", "gold", "blue", "emerald"];
     const chosenPin = pinColors[Math.floor(Math.random() * pinColors.length)];
 
-    const randomRot = (Math.random() * 6 - 3); // between -3 and +3 deg
+    const randomRot = Math.random() * 5 - 2.5;
+
+    // Calcular posición EXACTA en el MEDIO del pizarrón
     const board = boardRef.current;
-    const maxX = board ? Math.max(20, board.clientWidth - 280) : 300;
-    const maxY = board ? Math.max(20, board.clientHeight - 260) : 200;
+    const boardWidth = board ? board.clientWidth : window.innerWidth;
+    const boardHeight = board ? board.clientHeight : window.innerHeight;
+    const noteWidth = 275;
+    const noteHeight = 190;
+
+    // Jitter suave para que si clavas varias no queden 100% superpuestas
+    const jitterX = (Math.random() - 0.5) * 50;
+    const jitterY = (Math.random() - 0.5) * 50;
+
+    const centerX = Math.max(20, Math.floor((boardWidth - noteWidth) / 2 + jitterX));
+    const centerY = Math.max(70, Math.floor((boardHeight - noteHeight) / 2 + jitterY));
 
     const newNote: PinnedNote = {
       id: `note-${Date.now()}`,
@@ -424,26 +531,33 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
       color: chosenColor,
       pinColor: chosenPin,
       rotation: Number(randomRot.toFixed(1)),
-      x: Math.floor(Math.random() * (maxX - 40)) + 40,
-      y: Math.floor(Math.random() * (maxY - 60)) + 60,
+      x: centerX,
+      y: centerY,
       createdAt: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
       checklist: []
     };
 
     setNotes((prev) => [...prev, newNote]);
     setSelectedNoteId(newNote.id);
-    triggerCaritaSpeech("📌 ¡Nota clavada con éxito!");
+    syncNoteToBackend(newNote);
+    triggerCaritaSpeech("📌 ¡Nota clavada en el centro de la pizarra!");
   };
 
   const handleDeleteNote = (id: string) => {
     setNotes((prev) => prev.filter((n) => n.id !== id));
     if (selectedNoteId === id) setSelectedNoteId(null);
-    triggerCaritaSpeech("🗑️ Nota desclavada de la pizarra");
+    deleteNoteFromBackend(id);
+    triggerCaritaSpeech("🗑️ Nota desclavada y borrada de la BD");
   };
 
   const handleUpdateNote = (id: string, updates: Partial<PinnedNote>) => {
     setNotes((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
+      prev.map((n) => {
+        if (n.id !== id) return n;
+        const updated = { ...n, ...updates };
+        syncNoteToBackend(updated);
+        return updated;
+      })
     );
   };
 
@@ -452,13 +566,15 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
       prev.map((n) => {
         if (n.id !== noteId) return n;
         const currentList = n.checklist || [];
-        return {
+        const updated = {
           ...n,
           checklist: [
             ...currentList,
             { id: `chk-${Date.now()}`, text: "", done: false }
           ]
         };
+        syncNoteToBackend(updated);
+        return updated;
       })
     );
   };
@@ -467,12 +583,14 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     setNotes((prev) =>
       prev.map((n) => {
         if (n.id !== noteId) return n;
-        return {
+        const updated = {
           ...n,
           checklist: (n.checklist || []).map((c) =>
             c.id === checkId ? { ...c, done: !c.done } : c
           )
         };
+        syncNoteToBackend(updated);
+        return updated;
       })
     );
   };
@@ -481,12 +599,14 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     setNotes((prev) =>
       prev.map((n) => {
         if (n.id !== noteId) return n;
-        return {
+        const updated = {
           ...n,
           checklist: (n.checklist || []).map((c) =>
             c.id === checkId ? { ...c, text } : c
           )
         };
+        syncNoteToBackend(updated);
+        return updated;
       })
     );
   };
@@ -495,10 +615,12 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     setNotes((prev) =>
       prev.map((n) => {
         if (n.id !== noteId) return n;
-        return {
+        const updated = {
           ...n,
           checklist: (n.checklist || []).filter((c) => c.id !== checkId)
         };
+        syncNoteToBackend(updated);
+        return updated;
       })
     );
   };
@@ -517,13 +639,13 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
   };
 
   return (
-    <div className="relative w-full max-w-6xl mx-auto flex flex-col space-y-4 select-none">
-      {/* Blackboard Wooden / Dark Metal Outer Frame */}
+    <div className="relative w-full h-full flex flex-col select-none">
+      {/* Pizarrón que ocupa la pantalla completa */}
       <div 
         ref={boardRef}
-        className="relative w-full min-h-[640px] sm:min-h-[720px] rounded-3xl border-8 sm:border-[12px] border-[#2a1d12] bg-[#0c141d] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col transition-all"
+        className="relative w-full h-full flex-1 rounded-2xl border-4 sm:border-8 border-[#26190e] bg-[#0c141d] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col transition-all"
         style={{
-          boxShadow: "inset 0 0 100px rgba(0,0,0,0.85), 0 20px 50px rgba(0,0,0,0.9)",
+          boxShadow: "inset 0 0 100px rgba(0,0,0,0.85), 0 20px 50px rgba(0,0,0,0.95)",
           backgroundImage: "radial-gradient(ellipse at 50% 25%, #162434 0%, #0c141d 65%, #070c12 100%)"
         }}
       >
@@ -537,11 +659,11 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
           }}
         />
 
-        {/* Blackboard Chalk Border Grid Line / Top Header Bar */}
-        <div className="relative z-20 flex flex-wrap items-center justify-between px-5 sm:px-8 py-3.5 border-b border-white/10 bg-black/35 backdrop-blur-md">
-          {/* Left: Chalkboard Header / Clock */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-mono text-xs">
+        {/* Top Header Bar Integrada */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between px-4 sm:px-6 py-2.5 border-b border-white/10 bg-black/40 backdrop-blur-md">
+          {/* Left: Clock & Sync indicator */}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-slate-300 font-mono text-xs">
               <Calendar className="w-3.5 h-3.5 text-yellow-300" />
               <span>{currentDate || "Hoy"}</span>
               <span className="text-white/20">•</span>
@@ -549,15 +671,22 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
               <span className="font-bold text-white">{currentTime}</span>
             </div>
 
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold">
-              <Sparkles className="w-3 h-3 text-yellow-300" />
-              <span>Hub Pizarrón</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <span className="hidden sm:inline">BD Conectada</span>
             </div>
+
+            {isSyncing && (
+              <span className="text-slate-400 text-[10px] font-mono flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                <span>Sincronizando...</span>
+              </span>
+            )}
           </div>
 
-          {/* Right: Quick Search Button & Notes counter */}
+          {/* Right: Notes count & Quick Search */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-slate-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+            <span className="text-[11px] font-mono text-slate-300 bg-white/10 px-2.5 py-1 rounded-lg border border-white/10">
               📌 {notes.length} {notes.length === 1 ? "nota" : "notas"}
             </span>
 
@@ -576,37 +705,38 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
           </div>
         </div>
 
-        {/* Center Canvas Area: Where Chalk Drawing Happens */}
-        <canvas
-          ref={canvasRef}
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
-          className={`absolute inset-0 z-10 w-full h-full ${
-            activeTool === "chalk"
-              ? "cursor-crosshair"
-              : activeTool === "eraser"
-              ? "cursor-cell"
-              : "cursor-default pointer-events-none"
-          }`}
-          style={{ touchAction: "none" }}
-        />
+        {/* ÁREA COMPLETA UNIFICADA DE LA PIZARRA */}
+        <div className="relative flex-1 w-full h-full overflow-hidden">
+          {/* 1. Canvas Layer (Z-10): Dibuja y escribe tiza en TODA la superficie */}
+          <canvas
+            ref={canvasRef}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+            className={`absolute inset-0 z-10 w-full h-full ${
+              activeTool === "chalk"
+                ? "cursor-crosshair"
+                : activeTool === "eraser"
+                ? "cursor-cell"
+                : "cursor-default pointer-events-none"
+            }`}
+            style={{ touchAction: "none" }}
+          />
 
-        {/* Mascot Center Header Shelf: EyeTrackerCube looking over the blackboard */}
-        <div className="relative z-30 flex flex-col items-center justify-center pt-4 pb-2 pointer-events-none">
-          <div className="relative pointer-events-auto flex flex-col items-center group">
-            {/* Speech Bubble from Carita */}
+          {/* 2. Carita Mascot Layer (Z-20): Perched in center top without any blocking shelf */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex flex-col items-center select-none">
+            {/* Speech Bubble */}
             <AnimatePresence>
               {isSpeechVisible && caritaSpeech && (
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.85 }}
-                  className="absolute -top-12 z-40 px-4 py-1.5 rounded-2xl bg-white/95 text-slate-900 text-xs font-bold shadow-xl border border-white/40 flex items-center gap-2 max-w-xs text-center"
+                  className="absolute -top-11 z-40 px-3.5 py-1.5 rounded-2xl bg-white/95 text-slate-900 text-xs font-bold shadow-2xl border border-white/40 flex items-center gap-2 max-w-xs text-center"
                 >
                   <span>{caritaSpeech}</span>
                   <button
@@ -619,7 +749,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                   >
                     <X className="w-3 h-3" />
                   </button>
-                  {/* Bubble triangle pointer */}
                   <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white/95 rotate-45" />
                 </motion.div>
               )}
@@ -632,191 +761,183 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
               title="¡Hacé clic en la carita para interactuar!"
             >
               <EyeTrackerCube
-                size={135}
+                size={120}
                 follow={85}
                 bounce={40}
                 mood={caritaMood}
               />
             </div>
+          </div>
 
-            {/* Subtle Wooden Mascot Shelf Rim */}
-            <div className="w-40 h-2 bg-gradient-to-r from-transparent via-[#8b5a2b] to-transparent rounded-full opacity-60 shadow-md mt-1" />
+          {/* 3. Pinned Notes Layer (Z-30): Cubre el 100% de la pizarra SIN franjas ni clipping */}
+          <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
+            <AnimatePresence>
+              {notes.map((note) => {
+                const theme = NOTE_COLORS[note.color] || NOTE_COLORS.yellow;
+                const isSelected = selectedNoteId === note.id;
+
+                return (
+                  <motion.div
+                    key={note.id}
+                    drag
+                    dragMomentum={false}
+                    initial={{ opacity: 0, scale: 0.6, rotate: note.rotation }}
+                    animate={{ 
+                      opacity: 1, 
+                      scale: isSelected ? 1.02 : 1, 
+                      rotate: note.rotation,
+                      x: note.x,
+                      y: note.y
+                    }}
+                    exit={{ opacity: 0, scale: 0.3, y: note.y + 40, transition: { duration: 0.2 } }}
+                    onDragEnd={(_, info) => {
+                      const newX = Math.max(10, note.x + info.offset.x);
+                      const newY = Math.max(10, note.y + info.offset.y);
+                      handleUpdateNote(note.id, { x: newX, y: newY });
+                    }}
+                    onClick={() => setSelectedNoteId(note.id)}
+                    style={{ position: "absolute", left: 0, top: 0 }}
+                    className={`pointer-events-auto w-64 sm:w-72 rounded-2xl p-4 border ${theme.border} ${theme.bg} ${theme.shadow} shadow-2xl transition-shadow group select-text cursor-grab active:cursor-grabbing`}
+                  >
+                    {/* Chincheta Metálica en el centro superior */}
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-40">
+                      <div 
+                        className={`w-5 h-5 rounded-full border-2 border-white/80 shadow-md flex items-center justify-center ${
+                          note.pinColor === "gold"
+                            ? "bg-gradient-to-tr from-amber-500 to-yellow-300"
+                            : note.pinColor === "blue"
+                            ? "bg-gradient-to-tr from-blue-600 to-sky-300"
+                            : note.pinColor === "emerald"
+                            ? "bg-gradient-to-tr from-emerald-600 to-teal-300"
+                            : "bg-gradient-to-tr from-rose-600 to-red-400"
+                        }`}
+                      >
+                        <div className="w-1.5 h-1.5 bg-white/90 rounded-full" />
+                      </div>
+                      <div className="w-2.5 h-1 bg-black/30 rounded-full blur-[1px] mt-0.5" />
+                    </div>
+
+                    {/* Encabezado de la Nota */}
+                    <div className="flex items-start justify-between gap-2 pt-1 mb-2">
+                      <input
+                        type="text"
+                        value={note.title}
+                        onChange={(e) => handleUpdateNote(note.id, { title: e.target.value })}
+                        placeholder="Título de la nota..."
+                        className={`font-black text-sm bg-transparent border-none focus:outline-none flex-1 truncate ${theme.header} ${theme.placeholder}`}
+                      />
+
+                      <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const colorsList: (keyof typeof NOTE_COLORS)[] = ["yellow", "blue", "green", "pink", "purple", "orange"];
+                            const curIdx = colorsList.indexOf(note.color);
+                            const nextColor = colorsList[(curIdx + 1) % colorsList.length];
+                            handleUpdateNote(note.id, { color: nextColor });
+                          }}
+                          className="p-1 text-slate-700 hover:text-black rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
+                          title="Cambiar color de Post-it"
+                        >
+                          <Palette className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNote(note.id);
+                          }}
+                          className="p-1 text-slate-700 hover:text-rose-600 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
+                          title="Desclavar y borrar nota"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cuerpo de la Nota */}
+                    <textarea
+                      value={note.content}
+                      onChange={(e) => handleUpdateNote(note.id, { content: e.target.value })}
+                      placeholder="Escribí acá tu nota, recordatorio o pendientes..."
+                      rows={3}
+                      className={`w-full text-xs font-medium bg-transparent resize-none focus:outline-none leading-relaxed ${theme.text} ${theme.placeholder}`}
+                    />
+
+                    {/* Lista de Tareas / Checklist */}
+                    {note.checklist && note.checklist.length > 0 && (
+                      <div className="space-y-1 mt-2 pt-2 border-t border-black/10">
+                        {note.checklist.map((chk) => (
+                          <div key={chk.id} className="flex items-center gap-1.5 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleChecklistItem(note.id, chk.id)}
+                              className="cursor-pointer text-slate-700 hover:text-black"
+                            >
+                              {chk.done ? (
+                                <CheckSquare className="w-3.5 h-3.5 text-emerald-800" />
+                              ) : (
+                                <Square className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <input
+                              type="text"
+                              value={chk.text}
+                              onChange={(e) => handleUpdateChecklistText(note.id, chk.id, e.target.value)}
+                              placeholder="Ítem de lista..."
+                              className={`flex-1 bg-transparent border-none text-xs focus:outline-none ${theme.text} ${
+                                chk.done ? "line-through opacity-60" : ""
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteChecklistItem(note.id, chk.id)}
+                              className="text-slate-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Pie de Nota */}
+                    <div className="flex items-center justify-between pt-2 mt-2 border-t border-black/5 text-[10px] text-slate-700/80 font-mono">
+                      <button
+                        type="button"
+                        onClick={() => handleAddChecklistItem(note.id)}
+                        className="inline-flex items-center gap-1 hover:underline text-slate-800 font-semibold cursor-pointer"
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                        <span>Agregar tarea</span>
+                      </button>
+                      <span>{note.createdAt}</span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Pinned Notes Layer (Z-20, draggable Post-it notes with pins) */}
-        <div className="relative z-20 flex-1 w-full h-full pointer-events-none overflow-hidden p-4">
-          <AnimatePresence>
-            {notes.map((note) => {
-              const theme = NOTE_COLORS[note.color] || NOTE_COLORS.yellow;
-              const isSelected = selectedNoteId === note.id;
-
-              return (
-                <motion.div
-                  key={note.id}
-                  drag={activeTool === "pointer"}
-                  dragMomentum={false}
-                  initial={{ opacity: 0, scale: 0.7, rotate: note.rotation }}
-                  animate={{ 
-                    opacity: 1, 
-                    scale: isSelected ? 1.02 : 1, 
-                    rotate: note.rotation,
-                    x: note.x,
-                    y: note.y
-                  }}
-                  exit={{ opacity: 0, scale: 0.4, y: note.y + 60, transition: { duration: 0.2 } }}
-                  onDragEnd={(_, info) => {
-                    handleUpdateNote(note.id, {
-                      x: Math.max(10, note.x + info.offset.x),
-                      y: Math.max(10, note.y + info.offset.y)
-                    });
-                  }}
-                  onClick={() => setSelectedNoteId(note.id)}
-                  style={{ position: "absolute", left: 0, top: 0 }}
-                  className={`pointer-events-auto w-64 sm:w-72 rounded-2xl p-4 border ${theme.border} ${theme.bg} ${theme.shadow} shadow-2xl transition-shadow group select-text cursor-grab active:cursor-grabbing`}
-                >
-                  {/* Realistic Metallic Pushpin at top center */}
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30">
-                    <div 
-                      className={`w-5 h-5 rounded-full border-2 border-white/80 shadow-md flex items-center justify-center ${
-                        note.pinColor === "gold"
-                          ? "bg-gradient-to-tr from-amber-500 to-yellow-300"
-                          : note.pinColor === "blue"
-                          ? "bg-gradient-to-tr from-blue-600 to-sky-300"
-                          : note.pinColor === "emerald"
-                          ? "bg-gradient-to-tr from-emerald-600 to-teal-300"
-                          : "bg-gradient-to-tr from-rose-600 to-red-400"
-                      }`}
-                    >
-                      <div className="w-1.5 h-1.5 bg-white/90 rounded-full" />
-                    </div>
-                    {/* Pin shadow */}
-                    <div className="w-2.5 h-1 bg-black/30 rounded-full blur-[1px] mt-0.5" />
-                  </div>
-
-                  {/* Note Header: Title & Pin Controls */}
-                  <div className="flex items-start justify-between gap-2 pt-1 mb-2">
-                    <input
-                      type="text"
-                      value={note.title}
-                      onChange={(e) => handleUpdateNote(note.id, { title: e.target.value })}
-                      placeholder="Título de la nota..."
-                      className={`font-black text-sm bg-transparent border-none focus:outline-none flex-1 truncate ${theme.header} ${theme.placeholder}`}
-                    />
-
-                    <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-                      {/* Color Picker trigger for Note */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const colorsList: (keyof typeof NOTE_COLORS)[] = ["yellow", "blue", "green", "pink", "purple", "orange"];
-                          const curIdx = colorsList.indexOf(note.color);
-                          const nextColor = colorsList[(curIdx + 1) % colorsList.length];
-                          handleUpdateNote(note.id, { color: nextColor });
-                        }}
-                        className="p-1 text-slate-700 hover:text-black rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
-                        title="Cambiar color de Post-it"
-                      >
-                        <Palette className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Unpin / Delete Note */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteNote(note.id);
-                        }}
-                        className="p-1 text-slate-700 hover:text-rose-600 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
-                        title="Desclavar y borrar nota"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Note Body: Textarea */}
-                  <textarea
-                    value={note.content}
-                    onChange={(e) => handleUpdateNote(note.id, { content: e.target.value })}
-                    placeholder="Escribí acá tu nota, recordatorio o pendientes..."
-                    rows={3}
-                    className={`w-full text-xs font-medium bg-transparent resize-none focus:outline-none leading-relaxed ${theme.text} ${theme.placeholder}`}
-                  />
-
-                  {/* Optional Checklist items */}
-                  {note.checklist && note.checklist.length > 0 && (
-                    <div className="space-y-1 mt-2 pt-2 border-t border-black/10">
-                      {note.checklist.map((chk) => (
-                        <div key={chk.id} className="flex items-center gap-1.5 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleChecklistItem(note.id, chk.id)}
-                            className="cursor-pointer text-slate-700 hover:text-black"
-                          >
-                            {chk.done ? (
-                              <CheckSquare className="w-3.5 h-3.5 text-emerald-800" />
-                            ) : (
-                              <Square className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          <input
-                            type="text"
-                            value={chk.text}
-                            onChange={(e) => handleUpdateChecklistText(note.id, chk.id, e.target.value)}
-                            placeholder="Ítem de lista..."
-                            className={`flex-1 bg-transparent border-none text-xs focus:outline-none ${theme.text} ${
-                              chk.done ? "line-through opacity-60" : ""
-                            }`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteChecklistItem(note.id, chk.id)}
-                            className="text-slate-500 hover:text-rose-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Note Footer: Add checklist item + timestamp */}
-                  <div className="flex items-center justify-between pt-2 mt-2 border-t border-black/5 text-[10px] text-slate-700/80 font-mono">
-                    <button
-                      type="button"
-                      onClick={() => handleAddChecklistItem(note.id)}
-                      className="inline-flex items-center gap-1 hover:underline text-slate-800 font-semibold cursor-pointer"
-                    >
-                      <Plus className="w-2.5 h-2.5" />
-                      <span>Agregar tarea</span>
-                    </button>
-                    <span>{note.createdAt}</span>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-
-        {/* Bottom Wooden Tray (Ledge) with Real Chalk Sticks & Eraser */}
+        {/* Bottom Wooden Tray (Ledge) */}
         <div 
-          className="relative z-30 px-4 sm:px-8 py-3 bg-gradient-to-t from-[#2a1d12] via-[#3a281a] to-[#22160d] border-t-4 border-[#1c120a] shadow-2xl flex flex-wrap items-center justify-between gap-3"
+          className="relative z-40 px-4 sm:px-6 py-2.5 bg-gradient-to-t from-[#26190e] via-[#352417] to-[#1f140b] border-t-4 border-[#170e07] shadow-2xl flex flex-wrap items-center justify-between gap-3 shrink-0"
           style={{
-            boxShadow: "inset 0 4px 12px rgba(255,255,255,0.06), 0 -8px 25px rgba(0,0,0,0.7)"
+            boxShadow: "inset 0 4px 12px rgba(255,255,255,0.06), 0 -8px 25px rgba(0,0,0,0.8)"
           }}
         >
-          {/* Left: Tools Selector (Tiza, Borrador, Puntero) */}
+          {/* Herramientas (Tiza, Borrador, Mover Notas) */}
           <div className="flex items-center gap-2">
-            {/* Tiza Mode */}
             <button
               type="button"
               onClick={() => {
                 setActiveTool("chalk");
                 triggerCaritaSpeech("✏️ Modo Tiza: Dibujá o escribí en el pizarrón.");
               }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTool === "chalk"
                   ? "bg-white/20 text-white border border-white/40 shadow-inner scale-105"
                   : "bg-black/30 hover:bg-black/50 text-slate-300 border border-white/10"
@@ -826,14 +947,13 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
               <span>Tiza</span>
             </button>
 
-            {/* Borrador Mode */}
             <button
               type="button"
               onClick={() => {
                 setActiveTool("eraser");
-                triggerCaritaSpeech("🧽 Modo Borrador: Arrastrá para borrar trazos de tiza.");
+                triggerCaritaSpeech("🧽 Modo Borrador: Arrastrá para borrar trazos.");
               }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTool === "eraser"
                   ? "bg-amber-400/25 text-amber-200 border border-amber-400/40 shadow-inner scale-105"
                   : "bg-black/30 hover:bg-black/50 text-slate-300 border border-white/10"
@@ -843,14 +963,13 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
               <span>Borrador</span>
             </button>
 
-            {/* Puntero / Mover Notas Mode */}
             <button
               type="button"
               onClick={() => {
                 setActiveTool("pointer");
-                triggerCaritaSpeech("🖐️ Modo Mover: Arrastrá y ordená tus notas clavadas.");
+                triggerCaritaSpeech("🖐️ Modo Mover: Arrastrá tus notas por toda la pizarra.");
               }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeTool === "pointer"
                   ? "bg-sky-400/25 text-sky-200 border border-sky-400/40 shadow-inner scale-105"
                   : "bg-black/30 hover:bg-black/50 text-slate-300 border border-white/10"
@@ -860,17 +979,17 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
             </button>
           </div>
 
-          {/* Center: Chalk Color Palette & Size (visible when chalk active) */}
+          {/* Paleta de Colores de Tiza */}
           {activeTool === "chalk" && (
-            <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-xl border border-white/10">
-              <span className="text-[10px] font-mono text-slate-400 hidden sm:inline">Color de tiza:</span>
+            <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+              <span className="text-[10px] font-mono text-slate-400 hidden sm:inline">Tiza:</span>
               <div className="flex items-center gap-1.5">
                 {CHALK_COLORS.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => setChalkColor(c.color)}
-                    className={`w-5 h-5 rounded-full transition-transform cursor-pointer border ${
+                    className={`w-4.5 h-4.5 rounded-full transition-transform cursor-pointer border ${
                       chalkColor === c.color ? "scale-125 border-white shadow-md ring-2 ring-white/30" : "border-black/40 hover:scale-110"
                     }`}
                     style={{ backgroundColor: c.color }}
@@ -879,7 +998,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                 ))}
               </div>
 
-              {/* Stroke size selector */}
               <div className="flex items-center gap-1 ml-2 border-l border-white/15 pl-2">
                 {[
                   { w: 3, label: "Fina" },
@@ -903,9 +1021,8 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
             </div>
           )}
 
-          {/* Right: Actions (+ Clavar Nota, Limpiar Tiza) */}
+          {/* Acciones: Limpiar Tiza y + Clavar Nota */}
           <div className="flex items-center gap-2">
-            {/* Limpiar Pizarrón de tiza */}
             {hasChalkStrokes && (
               <button
                 type="button"
@@ -918,7 +1035,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
               </button>
             )}
 
-            {/* + Clavar Nota Pin */}
+            {/* + Clavar Nota: Coloca en el CENTRO */}
             <button
               type="button"
               onClick={() => handleAddNote(activeNoteColor)}

@@ -8,7 +8,6 @@ import { BeachWeatherBackdrop } from "@/components/home/BeachWeatherBackdrop";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
 import { BlackboardHub } from "@/components/home/BlackboardHub";
 import { CotizacionDetailModal } from "@/components/cotizaciones/CotizacionDetailModal";
-import { Building2 } from "lucide-react";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -78,32 +77,10 @@ export default function HomePage() {
   }, []);
 
   return (
-    <AppLayout title="Portal Principal" subtitle="Cinemark & Hoyts">
-      <div className="relative w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col justify-center min-h-[calc(100vh-130px)] space-y-5 sm:space-y-6">
-        
-        {/* Executive Header */}
-        <div className="text-center max-w-2xl mx-auto space-y-1.5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold tracking-wide">
-            <Building2 className="w-3.5 h-3.5" />
-            <span>Cinemark & Hoyts • Hub Principal</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Centro de Control & Pizarrón
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 font-medium">
-            Escribí ideas, dibujá con tiza, borrá con borrador y clavá notas con chinchetas
-          </p>
-        </div>
-
-        {/* The Animated Blackboard Hub (Centerpiece with Carita Mascot) */}
-        <div className="w-full">
-          <BlackboardHub onOpenSearch={() => setIsSearchOpen(true)} />
-        </div>
-
-        {/* Subtle Bottom Footnote */}
-        <div className="text-center text-[11px] text-slate-500 font-medium">
-          Plataforma Corporativa de Compras • Cinemark & Hoyts Argentina
-        </div>
+    <AppLayout title="Pizarrón Principal" subtitle="Cinemark & Hoyts">
+      {/* Pizarrón ocupando la pestaña completa */}
+      <div className="w-full h-[calc(100vh-68px)] overflow-hidden flex flex-col p-1.5 sm:p-2.5">
+        <BlackboardHub onOpenSearch={() => setIsSearchOpen(true)} />
       </div>
 
       {/* Intelligent Search Modal with Thinking/Searching Carita in Background */}
