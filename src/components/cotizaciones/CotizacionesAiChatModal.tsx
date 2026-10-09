@@ -46,15 +46,32 @@ interface ChatMessage {
   timestamp: string;
 }
 
+export interface QuoteDetailContext {
+  currency: "ARS" | "USD";
+  presentationType: "base" | "package";
+  presentationName: string;
+  unitsPerPresentation: number;
+  price: number;
+  discount: number;
+  specification?: string;
+}
+
 interface ItemContext {
+  id?: string;
   name: string;
   targetQuantity?: number;
   baseUnit?: string;
+  description?: string;
 }
 
 interface ProviderContext {
   id: string;
   name: string;
+  quotes?: Record<string, QuoteDetailContext>;
+  deliveryTime?: string;
+  paymentTerms?: string;
+  validityPeriod?: string;
+  notes?: string;
 }
 
 interface CotizacionesAiChatModalProps {
@@ -64,6 +81,9 @@ interface CotizacionesAiChatModalProps {
   quoteName: string;
   items: ItemContext[];
   providers: ProviderContext[];
+  exchangeRate?: number;
+  baseCurrency?: "ARS" | "USD";
+  useRealLots?: boolean;
   attachments: QuoteAttachment[];
   onUploadAttachment: (file: File, providerId?: string, providerName?: string) => Promise<void>;
   onDeleteAttachment: (attachment: QuoteAttachment) => Promise<void>;
@@ -96,6 +116,9 @@ export function CotizacionesAiChatModal({
   quoteName,
   items,
   providers,
+  exchangeRate,
+  baseCurrency,
+  useRealLots,
   attachments,
   onUploadAttachment,
   onDeleteAttachment,
@@ -295,6 +318,9 @@ export function CotizacionesAiChatModal({
         quoteName,
         items,
         providers,
+        exchangeRate,
+        baseCurrency,
+        useRealLots,
         attachments,
         aiSummary: summary,
         modelName: "gemini-3.5-flash-lite",

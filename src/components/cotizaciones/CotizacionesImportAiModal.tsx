@@ -709,6 +709,13 @@ export function CotizacionesImportAiModal({
     { label: "🏷️ Aplicar 10% Descuento", prompt: "Aplicá un 10% de descuento a todos los precios de los ítems." }
   ];
 
+  const BATCH_QUICK_PROMPTS = [
+    { label: "📊 Comparar presupuestos cargados", prompt: "Generá una tabla comparativa con los precios y totales de los proveedores de este lote, indicando cuál es más conveniente." },
+    { label: "🏆 ¿Cuál conviene según precio y plazos?", prompt: "¿Cuál de los proveedores cargados resulta más económico en total y cuál ofrece mejores plazos de entrega y forma de pago?" },
+    { label: "🔍 Diferencias y faltantes entre ellos", prompt: "Analizá si los proveedores presupuestaron los mismos ítems o si alguno omitió productos o cotizó presentaciones diferentes." },
+    { label: "💡 Sugerir contraoferta / negociación", prompt: "En base a las diferencias de precios y plazos de estos presupuestos, proponé una estrategia de contraoferta o negociación." }
+  ];
+
   const handleOpenGroupModal = (selectedItemIds?: string[]) => {
     const idsToGroup = selectedItemIds || items.filter((it) => it.selected).map((it) => it.id);
     if (idsToGroup.length < 2) return;
@@ -833,6 +840,114 @@ export function CotizacionesImportAiModal({
     setRefineError(null);
     setIsAiChatOpen(true);
 
+    // MODO LOTE / MULTI-PROVEEDOR: Chatear y consultar sobre todos los presupuestos cargados
+    if (isBatchMode) {
+      const readyBatch = batchQueue.filter((b) => b.status === "done" && b.payload);
+      if (readyBatch.length === 0) {
+        setRefineError("Esperá a que la IA termine de analizar los presupuestos para chatear sobre ellos.");
+        setIsRefiningAi(false);
+        return;
+      }
+
+      const batchProviders = readyBatch.map((b) => ({
+        providerName: b.payload!.providerName,
+        currency: b.payload!.currency,
+        deliveryTime: b.payload!.deliveryTime,
+        paymentTerms: b.payload!.paymentTerms,
+        validityPeriod: b.payload!.validityPeriod,
+        notes: b.payload!.notes,
+        selectedItems: b.payload!.selectedItems
+      }));
+
+      const assistantMsgId = `msg-${Date.now()}-ai`;
+      const placeholderAssistant: AiChatMessage = {
+        id: assistantMsgId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+      };
+      setChatMessages([...newHistory, placeholderAssistant]);
+
+      try {
+        const apiEndpoint = process.env.NEXT_PUBLIC_COTIZACIONES_API || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/chat";
+        const response = await fetch(apiEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cotizacionId: cotizacionId || "temp_" + Date.now(),
+            quoteName: "Carga Masiva de Presupuestos",
+            batchProviders,
+            modelName: "gemini-3.5-flash-lite",
+            processingMethod,
+            messages: newHistory.map((m) => ({ role: m.role, content: m.content }))
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error en el servidor: ${response.status} ${response.statusText}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("No se pudo leer la respuesta de la IA");
+
+        const decoder = new TextDecoder();
+        let accumulatedContent = "";
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const dataStr = trimmed.replace(/^data:\s*/, "");
+            if (dataStr === "[DONE]") break;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.error) {
+                accumulatedContent += `\n\n⚠️ Error: ${parsed.error}`;
+              } else if (parsed.text) {
+                accumulatedContent += parsed.text;
+              }
+            } catch {
+              accumulatedContent += dataStr;
+            }
+
+            setChatMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? { ...msg, content: accumulatedContent }
+                  : msg
+              )
+            );
+          }
+        }
+      } catch (err: any) {
+        console.error("Error en chat masivo con IA:", err);
+        setRefineError(err.message || "Error al comunicarse con la IA");
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  content: `⚠️ Hubo un error al procesar tu consulta: ${err.message || "Error desconocido"}. Podés reintentar.`
+                }
+              : msg
+          )
+        );
+      } finally {
+        setIsRefiningAi(false);
+      }
+      return;
+    }
+
+    // MODO INDIVIDUAL: Refinar y mutar ítems del formulario
     try {
       const extractUrl = process.env.NEXT_PUBLIC_COTIZACIONES_EXTRACT || "https://apivacas.jariel.com.ar/api/cotizaciones-ia/extract-items";
       const refineUrl = process.env.NEXT_PUBLIC_COTIZACIONES_REFINE || extractUrl.replace(/extract-items$/, "refine-items");
@@ -1174,14 +1289,16 @@ export function CotizacionesImportAiModal({
             </div>
             <div>
               <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>Asistente IA de Ajustes</span>
+                <span>{isBatchMode ? `Chat Lote (${batchQueue.filter((b) => b.status === "done").length} presupuestos)` : "Asistente IA de Ajustes"}</span>
                 <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-purple-500/20 text-purple-300 font-mono">Chat</span>
               </h3>
-              <p className="text-[10px] text-gray-400 truncate">Aclarale lo que faltó o pedile cambios</p>
+              <p className="text-[10px] text-gray-400 truncate">
+                {isBatchMode ? "Compará precios, condiciones y hacé consultas del lote" : "Aclarale lo que faltó o pedile cambios"}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            {itemsHistory.length > 1 && (
+            {!isBatchMode && itemsHistory.length > 1 && (
               <button
                 type="button"
                 onClick={handleUndoLastHistory}
@@ -1209,7 +1326,7 @@ export function CotizacionesImportAiModal({
             <span>Sugerencias rápidas:</span>
           </p>
           <div className="flex flex-wrap gap-1">
-            {REFINEMENT_QUICK_PROMPTS.map((qp, i) => (
+            {(isBatchMode ? BATCH_QUICK_PROMPTS : REFINEMENT_QUICK_PROMPTS).map((qp, i) => (
               <button
                 key={i}
                 type="button"
@@ -1226,24 +1343,45 @@ export function CotizacionesImportAiModal({
         {/* Messages History */}
         <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
           {chatMessages.length === 0 ? (
-            <div className="p-3.5 bg-purple-500/5 border border-purple-500/15 rounded-2xl space-y-2 text-gray-300">
-              <div className="flex items-center gap-1.5 text-purple-300 font-bold">
-                <Bot className="w-4 h-4 text-purple-400" />
-                <span>¡Hola! ¿Qué necesitás ajustar?</span>
+            isBatchMode ? (
+              <div className="p-3.5 bg-purple-500/5 border border-purple-500/15 rounded-2xl space-y-2 text-gray-300">
+                <div className="flex items-center gap-1.5 text-purple-300 font-bold">
+                  <Bot className="w-4 h-4 text-purple-400" />
+                  <span>¡Hola! Analicé los presupuestos del lote</span>
+                </div>
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  Tengo en memoria los {batchQueue.filter((b) => b.status === "done").length} presupuestos analizados con sus ítems, cantidades, precios unitarios, monedas y condiciones. Podés preguntarme:
+                </p>
+                <ul className="text-[11px] text-gray-400 space-y-1 list-disc list-inside">
+                  <li><strong>Comparar</strong> qué proveedor cotizó más económico en total o por ítem</li>
+                  <li><strong>Detectar</strong> si alguno omitió productos o cotizó presentaciones diferentes</li>
+                  <li><strong>Verificar</strong> plazos de entrega y condiciones de pago ofrecidas</li>
+                  <li><strong>Sugerir</strong> contraofertas o alternativas de compra combinada</li>
+                </ul>
+                <p className="text-[11px] text-purple-300 font-medium">
+                  Escribí acá tu consulta o hacé clic en una sugerencia rápida.
+                </p>
               </div>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
-                Leí el documento y cargué los ítems en el formulario. Si querés que:
-              </p>
-              <ul className="text-[11px] text-gray-400 space-y-1 list-disc list-inside">
-                <li><strong>Agrupe</strong> ítems (ej: &quot;Agrupame los perfiles y sumá sus precios&quot;)</li>
-                <li><strong>Agregue</strong> algún ítem que no vi en el PDF (ej: &quot;Faltó la mano de obra&quot;)</li>
-                <li><strong>Recalcule</strong> precios con IVA o flete (ej: &quot;Sumale el 21% de IVA a los precios&quot;)</li>
-                <li><strong>Separe</strong> mano de obra y materiales</li>
-              </ul>
-              <p className="text-[11px] text-purple-300 font-medium">
-                Escribí acá tu prompt y recalcularé todos los ítems y precios automáticamente.
-              </p>
-            </div>
+            ) : (
+              <div className="p-3.5 bg-purple-500/5 border border-purple-500/15 rounded-2xl space-y-2 text-gray-300">
+                <div className="flex items-center gap-1.5 text-purple-300 font-bold">
+                  <Bot className="w-4 h-4 text-purple-400" />
+                  <span>¡Hola! ¿Qué necesitás ajustar?</span>
+                </div>
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  Leí el documento y cargué los ítems en el formulario. Si querés que:
+                </p>
+                <ul className="text-[11px] text-gray-400 space-y-1 list-disc list-inside">
+                  <li><strong>Agrupe</strong> ítems (ej: &quot;Agrupame los perfiles y sumá sus precios&quot;)</li>
+                  <li><strong>Agregue</strong> algún ítem que no vi en el PDF (ej: &quot;Faltó la mano de obra&quot;)</li>
+                  <li><strong>Recalcule</strong> precios con IVA o flete (ej: &quot;Sumale el 21% de IVA a los precios&quot;)</li>
+                  <li><strong>Separe</strong> mano de obra y materiales</li>
+                </ul>
+                <p className="text-[11px] text-purple-300 font-medium">
+                  Escribí acá tu prompt y recalcularé todos los ítems y precios automáticamente.
+                </p>
+              </div>
+            )
           ) : (
             chatMessages.map((msg) => (
               <div
@@ -1357,7 +1495,7 @@ export function CotizacionesImportAiModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className={`flex flex-col w-full h-full sm:h-[90vh] ${attachment && isAiChatOpen ? "max-w-6xl" : "max-w-4xl"} bg-[#0b101b] border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-200`}>
+      <div className={`flex flex-col w-full h-full sm:h-[90vh] ${(attachment || isBatchMode) && isAiChatOpen ? "max-w-6xl" : "max-w-4xl"} bg-[#0b101b] border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-200`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-[#101726]/90 shrink-0">
           <div className="flex items-center gap-3">
@@ -1511,15 +1649,36 @@ export function CotizacionesImportAiModal({
                   </div>
                 </div>
 
-                {!isAnalyzing && (
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer self-start sm:self-center"
-                  >
-                    Cargar otros archivos
-                  </button>
-                )}
+                <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
+                  {batchQueue.some((b) => b.status === "done") && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiChatOpen(!isAiChatOpen)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                        isAiChatOpen
+                          ? "bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-sm shadow-purple-500/20"
+                          : "bg-gradient-to-r from-purple-500/15 to-indigo-500/15 hover:from-purple-500/25 hover:to-indigo-500/25 text-purple-300 hover:text-white border-purple-500/30 hover:border-purple-500/50"
+                      }`}
+                      title="Abrir chat para comparar o consultar los presupuestos analizados con IA"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                      <span>{isAiChatOpen ? "Ocultar Chat IA" : "Chat con IA"}</span>
+                      {chatMessages.length > 0 && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                      )}
+                    </button>
+                  )}
+
+                  {!isAnalyzing && (
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                    >
+                      Cargar otros archivos
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Batch List */}
@@ -2186,7 +2345,7 @@ export function CotizacionesImportAiModal({
           </div>
 
           {/* AI Chat Drawer / Panel on the right */}
-          {attachment && !isAnalyzing && !isBatchMode && isAiChatOpen && renderAiChatPanel()}
+          {!isAnalyzing && isAiChatOpen && ((!isBatchMode && Boolean(attachment)) || (isBatchMode && batchQueue.some((b) => b.status === "done"))) && renderAiChatPanel()}
         </div>
 
         {/* Modal Footer */}
@@ -2202,6 +2361,17 @@ export function CotizacionesImportAiModal({
           {/* Batch Mode Footer Actions */}
           {isBatchMode && (
             <div className="flex items-center gap-2">
+              {batchQueue.some((b) => b.status === "done") && (
+                <button
+                  type="button"
+                  onClick={() => setIsAiChatOpen(!isAiChatOpen)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl transition-colors cursor-pointer"
+                  title="Abrir chat para comparar o consultar los presupuestos analizados con IA"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                  <span>{isAiChatOpen ? "Ocultar Chat" : "Consultar Chat IA"}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleConfirmBatch}

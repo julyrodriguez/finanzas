@@ -5596,8 +5596,25 @@ export default function CotizacionesPage() {
         onClose={() => setIsAiChatOpen(false)}
         cotizacionId={currentQuoteId || "general"}
         quoteName={quoteName}
-        items={items.map((it) => ({ name: it.name, targetQuantity: it.targetQuantity, baseUnit: it.baseUnit }))}
-        providers={providers.map((p) => ({ id: p.id, name: p.name }))}
+        items={items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          targetQuantity: it.targetQuantity,
+          baseUnit: it.baseUnit,
+          description: it.description
+        }))}
+        providers={providers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          quotes: p.quotes,
+          deliveryTime: p.deliveryTime,
+          paymentTerms: p.paymentTerms,
+          validityPeriod: p.validityPeriod,
+          notes: p.notes
+        }))}
+        exchangeRate={exchangeRate}
+        baseCurrency={baseCurrency}
+        useRealLots={useRealLots}
         attachments={attachments}
         onUploadAttachment={handleUploadAttachment}
         onDeleteAttachment={handleDeleteAttachment}
