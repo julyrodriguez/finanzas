@@ -208,8 +208,8 @@ export default function ProveedoresPage() {
 
   const handleAddNewProveedores = (newOnes: Proveedor[]) => {
     setProveedores((prev) => {
-      const existingNames = new Set(prev.map((p) => p.nombre.toLowerCase().trim()));
-      const filteredNew = newOnes.filter((p) => !existingNames.has(p.nombre.toLowerCase().trim()));
+      const existingNames = new Set(prev.map((p) => (p.nombre || "").toLowerCase().trim()));
+      const filteredNew = newOnes.filter((p) => !existingNames.has((p.nombre || "").toLowerCase().trim()));
       return [...filteredNew, ...prev];
     });
     setActiveTab("search");
@@ -220,13 +220,26 @@ export default function ProveedoresPage() {
 
   // Filtered list based on search term & email filter
   const filteredList = useMemo(() => {
+    const s = (searchTerm || "").toLowerCase().trim();
+    if (!currentList || !Array.isArray(currentList)) return [];
+
     return currentList.filter((p) => {
+      if (!p) return false;
+      const nombre = (p.nombre || "").toLowerCase();
+      const rubro = (p.rubro || "").toLowerCase();
+      const zona = (p.zona || "").toLowerCase();
+      const pais = (p.pais || "").toLowerCase();
+      const desc = (p.descripcion_trabajos || "").toLowerCase();
+      const clientes = (p.clientes_proyectos || "").toLowerCase();
+
       const matchesText =
-        p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.rubro.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.zona.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.descripcion_trabajos.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.clientes_proyectos.toLowerCase().includes(searchTerm.toLowerCase());
+        !s ||
+        nombre.includes(s) ||
+        rubro.includes(s) ||
+        zona.includes(s) ||
+        pais.includes(s) ||
+        desc.includes(s) ||
+        clientes.includes(s);
 
       const matchesEmail = onlyWithEmail ? Boolean(p.email) : true;
 

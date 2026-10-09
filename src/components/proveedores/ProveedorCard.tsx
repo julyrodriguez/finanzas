@@ -126,6 +126,15 @@ export function ProveedorCard({
               </div>
 
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {proveedor?.es_argentina !== false && (!proveedor?.pais || String(proveedor.pais).toLowerCase() === "argentina") ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-300 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/25 shadow-sm" title="Proveedor radicado en Argentina">
+                    <span>🇦🇷 Argentina</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs text-amber-300 font-bold bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/40 shadow-sm" title={`Proveedor radicado en el exterior: ${proveedor.pais || "Exterior"}`}>
+                    <span>⚠️ {proveedor.pais || "Exterior"}</span>
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1 text-xs text-blue-300 font-semibold bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-500/20">
                   <Briefcase className="w-3 h-3 text-blue-400" />
                   <span>{proveedor.rubro}</span>

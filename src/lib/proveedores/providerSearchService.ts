@@ -28,6 +28,90 @@ const DISALLOWED_DOMAINS = [
   "linkedin.com/login",
 ];
 
+export function isForeignDomain(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    if (
+      host.endsWith(".com.co") ||
+      host.endsWith(".net.co") ||
+      host.endsWith(".org.co") ||
+      host.endsWith(".edu.co") ||
+      host.endsWith(".gov.co") ||
+      host.endsWith(".com.mx") ||
+      host.endsWith(".com.cl") ||
+      host.endsWith(".com.pe") ||
+      host.endsWith(".es") ||
+      host.includes("eldirectorio.co") ||
+      host.includes("amarillascolombia") ||
+      host.includes("paginasamarillas.com.co") ||
+      host.includes("directoriodeempresas.co") ||
+      host.startsWith("co.kompass.") ||
+      host.startsWith("co.cylex.") ||
+      host.startsWith("colombia.proveedores.")
+    ) {
+      return true;
+    }
+    if (host.endsWith(".co") && !host.endsWith(".com.ar") && !host.endsWith(".co.ar")) {
+      if (host.includes("directorio") || host.includes("empresa") || host.includes("comercio") || host.includes("amarilla")) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeGeoTarget(zona: string): {
+  isArgentinaTarget: boolean;
+  searchGeoSuffix: string;
+  specificZone: string;
+  ddgRegion: string;
+} {
+  const clean = (zona || "").toLowerCase().trim();
+  const isArgentina =
+    !clean ||
+    clean.includes("todo el pa") ||
+    clean.includes("toda argentina") ||
+    clean.includes("nacional") ||
+    clean.includes("caba") ||
+    clean.includes("gba") ||
+    clean.includes("buenos aires") ||
+    clean.includes("capital federal") ||
+    clean.includes("cordoba") ||
+    clean.includes("córdoba") ||
+    clean.includes("mendoza") ||
+    clean.includes("rosario") ||
+    clean.includes("santa fe") ||
+    clean.includes("neuquen") ||
+    clean.includes("neuquén") ||
+    clean.includes("salta") ||
+    clean.includes("tucuman") ||
+    clean.includes("tucumán") ||
+    clean.includes("argentina");
+
+  let searchGeoSuffix = "Argentina";
+  let specificZone = zona;
+
+  if (clean.includes("todo el pa") || clean.includes("nacional")) {
+    searchGeoSuffix = 'Argentina "cobertura nacional"';
+    specificZone = "Todo el país (Argentina)";
+  } else if (clean.includes("caba") || clean.includes("gba") || clean.includes("buenos aires")) {
+    searchGeoSuffix = 'Argentina ("CABA" OR "Buenos Aires" OR "GBA")';
+    specificZone = "CABA y GBA, Argentina";
+  } else if (isArgentina) {
+    searchGeoSuffix = `${zona} Argentina`;
+    specificZone = `${zona}, Argentina`;
+  }
+
+  return {
+    isArgentinaTarget: isArgentina,
+    searchGeoSuffix,
+    specificZone,
+    ddgRegion: isArgentina ? "ar-es" : "wt-wt",
+  };
+}
+
 interface RawSearchItem {
   title: string;
   url: string;
@@ -40,6 +124,9 @@ interface ScrapedContactInfo {
   emails: string[];
   phones: string[];
   pageSnippet: string;
+  detectedPais: string;
+  esArgentina: boolean;
+  detectedCity?: string;
 }
 
 /**
@@ -66,6 +153,13 @@ function classifySource(sourceUrl: string, companyName?: string): {
     ) {
       return {
         fuente_nombre: `Directorio Empresarial (${host})`,
+        tipo_fuente: "directorio_empresarial",
+      };
+    }
+
+    if (host.includes("mercadolibre")) {
+      return {
+        fuente_nombre: `Mercado Libre Servicios (${host})`,
         tipo_fuente: "directorio_empresarial",
       };
     }
@@ -158,12 +252,21 @@ function parseJsonRobustly(rawText: string): any {
 }
 
 /**
- * Realiza una búsqueda web a través de DuckDuckGo HTML con parseo robusto
+ * Realiza una búsqueda web a través de DuckDuckGo HTML con parseo robusto y regionalización
  */
-async function searchWebDuckDuckGo(query: string, maxResults = 10, queryTag = ""): Promise<RawSearchItem[]> {
+async function searchWebDuckDuckGo(
+  query: string,
+  maxResults = 10,
+  queryTag = "",
+  region = "ar-es",
+  filterForeign = true
+): Promise<RawSearchItem[]> {
   try {
     const params = new URLSearchParams();
     params.append("q", query);
+    if (region) {
+      params.append("kl", region);
+    }
 
     const res = await fetch("https://html.duckduckgo.com/html/", {
       method: "POST",
@@ -198,7 +301,9 @@ async function searchWebDuckDuckGo(query: string, maxResults = 10, queryTag = ""
       }
 
       const isDisallowed = DISALLOWED_DOMAINS.some((d) => rawUrl.toLowerCase().includes(d));
-      if (!isDisallowed && rawUrl.startsWith("http")) {
+      const isForeign = filterForeign && isForeignDomain(rawUrl);
+
+      if (!isDisallowed && !isForeign && rawUrl.startsWith("http")) {
         let title = "";
         try {
           const u = new URL(rawUrl);
@@ -224,7 +329,7 @@ async function searchWebDuckDuckGo(query: string, maxResults = 10, queryTag = ""
 }
 
 /**
- * Escanea un sitio web para extraer correos electrónicos, teléfonos y mención de clientes
+ * Escanea un sitio web para extraer correos electrónicos, teléfonos, antecedentes y país de radicación
  */
 async function scrapeSiteContacts(url: string): Promise<ScrapedContactInfo> {
   const result: ScrapedContactInfo = {
@@ -232,6 +337,8 @@ async function scrapeSiteContacts(url: string): Promise<ScrapedContactInfo> {
     emails: [],
     phones: [],
     pageSnippet: "",
+    detectedPais: "Argentina",
+    esArgentina: true,
   };
 
   try {
@@ -241,14 +348,48 @@ async function scrapeSiteContacts(url: string): Promise<ScrapedContactInfo> {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml",
       },
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(4000),
     });
 
     if (!res.ok) return result;
 
     const html = await res.text();
+    const textOnly = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]*>/g, " ");
+    const textLower = textOnly.toLowerCase();
+    const urlLower = url.toLowerCase();
 
-    // Regex para detectar correos electrónicos válidos
+    // Detección de Colombia u otros países en el HTML
+    const isColHost = isForeignDomain(url);
+    const colKeywords = [
+      "bogotá", "bogota", "medellín", "medellin", "cali", "barranquilla", "bucaramanga",
+      "cartagena", "cundinamarca", "antioquia", "valle del cauca", "colombia"
+    ];
+    const hasColMarkers = colKeywords.filter((k) => textLower.includes(k));
+    const hasColNit = textLower.includes("nit ") || textLower.includes("nit:") || textLower.includes("nit.");
+    const hasColPhone = /\+57\s*\d|\(57\)\s*\d|60[1-5]\s*\d{7}/.test(textOnly);
+
+    if (isColHost || hasColPhone || (hasColMarkers.length >= 2 && hasColNit) || (textLower.includes("colombia") && hasColMarkers.length >= 1)) {
+      result.detectedPais = "Colombia";
+      result.esArgentina = false;
+      result.detectedCity = hasColMarkers[0] || "Colombia";
+    }
+
+    // Detección explícita de Argentina
+    const argKeywords = [
+      "buenos aires", "caba", "capital federal", "gran buenos aires", "gba",
+      "córdoba", "rosario", "santa fe", "mendoza", "neuquén", "salta", "tucumán",
+      "cuit", "afip", "arca", "argentina"
+    ];
+    const hasArgMarkers = argKeywords.filter((k) => textLower.includes(k));
+    const hasArgPhone = /\+54\s*9?|\b011\s*\d|\(011\)|\b11\s*\d{4}\s*\d{4}/.test(textOnly);
+
+    if (urlLower.includes(".com.ar") || urlLower.endsWith(".ar") || hasArgPhone || (hasArgMarkers.length > 0 && !hasColPhone)) {
+      result.detectedPais = "Argentina";
+      result.esArgentina = true;
+      result.detectedCity = hasArgMarkers[0] ? hasArgMarkers[0].toUpperCase() : "Argentina";
+    }
+
+    // Regex para correos válidos
     const emailMatches = html.match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g) || [];
     const validEmails = Array.from(new Set(emailMatches))
       .filter((e) => {
@@ -267,7 +408,7 @@ async function scrapeSiteContacts(url: string): Promise<ScrapedContactInfo> {
       .slice(0, 3);
     result.emails = validEmails;
 
-    // Regex para teléfonos argentinos comunes
+    // Teléfonos
     const phoneMatches = html.match(/(?:\+?54[\s-]?(?:9[\s-]?)?)?(?:0?[1-9]\d{1,3}[\s-]?)?\d{3,4}[\s-]?\d{3,4}/g) || [];
     const cleanPhones = Array.from(new Set(phoneMatches))
       .map((p) => p.replace(/\s+/g, " ").trim())
@@ -275,8 +416,7 @@ async function scrapeSiteContacts(url: string): Promise<ScrapedContactInfo> {
       .slice(0, 2);
     result.phones = cleanPhones;
 
-    // Buscar párrafos o secciones que hablen de clientes, obras o servicios
-    const textOnly = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]*>/g, " ");
+    // Antecedentes / obras
     const matchesClients = textOnly.match(/(?:clientes|trabajos|servicios|proyectos|obras|experiencia)[\s\S]{50,250}/gi);
     if (matchesClients && matchesClients.length > 0 && matchesClients[0]) {
       result.pageSnippet = matchesClients[0].replace(/\s+/g, " ").trim();
@@ -344,13 +484,22 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
   let engineUsed: SearchEngineType = engine;
   let rawItems: RawSearchItem[] = [];
 
+  const geoInfo = normalizeGeoTarget(zona);
+  const cleanRubro = sanitizeSearchTerm(rubro);
+  const isDeep = profundidad !== "rapida";
+
+  if (geoInfo.isArgentinaTarget) {
+    logs.push(`Filtro geográfico activo: Priorizando estrictamente Argentina (${geoInfo.specificZone}) y bloqueando dominios extranjeros.`);
+  }
+
   // Paso 1: Obtener resultados web según el motor y la profundidad
   if (engine === "firecrawl" && apiKeyToUse) {
     try {
-      logs.push(`Consultando API de Firecrawl (Búsqueda profunda para "${rubro}" en "${zona}")...`);
-      const searchQuery = `proveedores empresas contratistas ${rubro} ${zona} argentina contacto presupuestos`;
-      rawItems = await searchWithFirecrawl(searchQuery, apiKeyToUse, 15);
-      logs.push(`Firecrawl indexó ${rawItems.length} fuentes web y directorios.`);
+      logs.push(`Consultando API de Firecrawl (Búsqueda profunda para "${rubro}" en "${geoInfo.specificZone}")...`);
+      const searchQuery = `proveedores empresas contratistas ${cleanRubro} ${geoInfo.searchGeoSuffix} contacto presupuestos`;
+      const fcItems = await searchWithFirecrawl(searchQuery, apiKeyToUse, 15);
+      rawItems = fcItems.filter((it) => !geoInfo.isArgentinaTarget || !isForeignDomain(it.url));
+      logs.push(`Firecrawl indexó ${rawItems.length} fuentes web y directorios verificados.`);
     } catch (err: any) {
       logs.push(`Aviso Firecrawl (${err.message}). Activando fallback al Motor Híbrido Multicriterio.`);
       engineUsed = "hybrid";
@@ -359,22 +508,22 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
 
   // Si no se usó Firecrawl o falló, ejecutar Búsqueda Multicriterio Profunda
   if (rawItems.length === 0) {
-    const isDeep = profundidad !== "rapida";
-    logs.push(`Iniciando búsqueda multicriterio ${isDeep ? "exhaustiva" : "rápida"} para "${rubro}" en "${zona}", Argentina...`);
-    const cleanRubro = sanitizeSearchTerm(rubro);
-    const cleanZona = sanitizeSearchTerm(zona);
+    logs.push(`Iniciando búsqueda multicriterio ${isDeep ? "exhaustiva" : "rápida"} para "${rubro}" en "${geoInfo.specificZone}"...`);
 
-    // Consultas variadas y profundas para abarcar empresas directas, cámaras y directorios comerciales
+    // Consultas dirigidas a Argentina con anclas geográficas fuertes
     const queries = [
-      { q: `proveedores empresas ${cleanRubro} ${cleanZona} argentina contacto email`, tag: "Empresas Directas" },
-      { q: `servicios ${cleanRubro} ${cleanZona} argentina clientes nosotros portfolio`, tag: "Servicios & Clientes" },
+      { q: `proveedores empresas "${cleanRubro}" ${geoInfo.searchGeoSuffix} contacto email`, tag: "Empresas Directas" },
+      { q: `servicios contratistas "${cleanRubro}" ${geoInfo.specificZone} clientes nosotros`, tag: "Servicios Locales" },
+      { q: `"${cleanRubro}" Argentina site:com.ar contacto presupuesto`, tag: "Empresas .com.ar" },
+      { q: `site:servicios.mercadolibre.com.ar "${cleanRubro}" ${geoInfo.searchGeoSuffix}`, tag: "Mercado Libre Servicios" },
+      { q: `site:mercadolibre.com.ar/servicios "${cleanRubro}" Argentina`, tag: "Mercado Libre Servicios Arg" },
     ];
 
     const subTerms = cleanRubro.split(/\s+y\s+|\s*,\s*|\s+e\s+/i).map((t) => t.trim()).filter((t) => t.length > 2);
     if (subTerms.length > 1) {
       for (const sub of subTerms) {
         queries.push({
-          q: `proveedores empresas contratistas ${sub} ${cleanZona} argentina contacto`,
+          q: `proveedores contratistas "${sub}" ${geoInfo.searchGeoSuffix} contacto`,
           tag: `Especialidad: ${sub}`,
         });
       }
@@ -382,27 +531,37 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
 
     if (isDeep) {
       queries.push(
-        { q: `directorio comercial empresas ${cleanRubro} ${cleanZona} argentina telefono`, tag: "Directorios Comerciales" },
-        { q: `camara empresas contratistas ${cleanRubro} ${cleanZona} argentina`, tag: "Cámaras Sectoriales" },
-        { q: `empresas de ${cleanRubro} en ${cleanZona} presupuestos contacto`, tag: "Presupuestos B2B" }
+        { q: `"mercadolibre.com.ar" empresas proveedores "${cleanRubro}" Argentina`, tag: "Mercado Libre Proveedores" },
+        { q: `directorio comercial empresas "${cleanRubro}" Argentina "Buenos Aires" OR CABA telefono`, tag: "Directorios Comerciales" },
+        { q: `camara empresas contratistas "${cleanRubro}" Argentina`, tag: "Cámaras Sectoriales" },
+        { q: `presupuesto cotizacion "${cleanRubro}" empresas ${geoInfo.specificZone}`, tag: "Presupuestos B2B" },
+        { q: `proveedores de "${cleanRubro}" en Argentina guia comercial`, tag: "Guías Argentinas" }
       );
     }
 
-    logs.push(`Ejecutando consultas paralelas en la web para ${queries.map((q) => q.tag).join(", ")}...`);
+    logs.push(`Ejecutando consultas paralelas para ${queries.map((q) => q.tag).join(", ")}...`);
 
     const queryBatches = await Promise.all(
-      queries.map((q) => searchWebDuckDuckGo(q.q, isDeep ? 9 : 6, q.tag))
+      queries.map((q) => searchWebDuckDuckGo(q.q, isDeep ? 9 : 6, q.tag, geoInfo.ddgRegion, geoInfo.isArgentinaTarget))
     );
 
-    // Unificar y desduplicar por dominio
+    // Unificar y desduplicar (permitiendo publicaciones múltiples de Mercado Libre)
     const seenDomains = new Set<string>();
+    const seenMlUrls = new Set<string>();
     const combined: RawSearchItem[] = [];
 
     for (const batch of queryBatches) {
       for (const item of batch) {
         try {
-          const domain = new URL(item.url).hostname.replace(/^www\./, "");
-          if (!seenDomains.has(domain)) {
+          const u = new URL(item.url);
+          const domain = u.hostname.replace(/^www\./, "");
+          if (domain.includes("mercadolibre")) {
+            const cleanPath = u.pathname;
+            if (!seenMlUrls.has(cleanPath) && seenMlUrls.size < 6) {
+              seenMlUrls.add(cleanPath);
+              combined.push(item);
+            }
+          } else if (!seenDomains.has(domain)) {
             seenDomains.add(domain);
             combined.push(item);
           }
@@ -412,16 +571,64 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
       }
     }
 
-    rawItems = combined.slice(0, isDeep ? 22 : 10);
-    logs.push(`Se localizaron ${rawItems.length} portales, empresas y directorios únicos.`);
+    // Investigar a fondo en la web a los proveedores detectados en Mercado Libre
+    const mlItems = combined.filter((it) => it.url.toLowerCase().includes("mercadolibre"));
+    if (mlItems.length > 0) {
+      logs.push(`Detectadas ${mlItems.length} publicaciones en Mercado Libre. Investigando a los proveedores en la web...`);
+
+      const mlInvestigateQueries: { q: string; tag: string }[] = [];
+      for (const mlItem of mlItems.slice(0, 4)) {
+        const cleanTitle = mlItem.title
+          .replace(/mercado\s*libre/gi, "")
+          .replace(/servicio\s*de/gi, "")
+          .replace(/encontr[aá]/gi, "")
+          .replace(/\b(caba|gba|buenos aires|argentina)\b/gi, "")
+          .replace(/[-|–•]/g, " ")
+          .trim();
+
+        const companyMatch = mlItem.snippet.match(/(?:somos|empresa|contacto|taller|servicios)\s+([A-ZÁÉÍÓÚÑ][a-záéíóúñA-Z0-9\s]{3,25})/i);
+        const candidateName = companyMatch ? companyMatch[1].trim() : cleanTitle.split(" ").slice(0, 4).join(" ");
+
+        if (candidateName && candidateName.length > 3) {
+          mlInvestigateQueries.push({
+            q: `"${candidateName}" Argentina contacto telefono web`,
+            tag: `Investigación Web ML (${candidateName})`,
+          });
+        }
+      }
+
+      if (mlInvestigateQueries.length > 0) {
+        const mlWebResults = await Promise.all(
+          mlInvestigateQueries.map((iq) =>
+            searchWebDuckDuckGo(iq.q, 3, iq.tag, geoInfo.ddgRegion, geoInfo.isArgentinaTarget)
+          )
+        );
+
+        for (const batch of mlWebResults) {
+          for (const item of batch) {
+            try {
+              const u = new URL(item.url);
+              const domain = u.hostname.replace(/^www\./, "");
+              if (!seenDomains.has(domain) && !domain.includes("mercadolibre")) {
+                seenDomains.add(domain);
+                combined.push(item);
+                logs.push(`Proveedor investigado en la web: ${item.title} (${domain})`);
+              }
+            } catch {}
+          }
+        }
+      }
+    }
+
+    rawItems = combined.slice(0, isDeep ? 28 : 15);
+    logs.push(`Se localizaron ${rawItems.length} portales, empresas y publicaciones únicas verificadas.`);
   }
 
-  // Paso 2: Escaneo en lotes de los sitios más prometedores para extraer datos de contacto y antecedentes
-  const scrapeLimit = profundidad === "rapida" ? 5 : 12;
+  // Paso 2: Escaneo en lotes de los sitios más prometedores
+  const scrapeLimit = isDeep ? 16 : 8;
   const scrapeTargets = rawItems.slice(0, scrapeLimit);
-  logs.push(`Extrayendo información de contacto y antecedentes directamente del HTML de ${scrapeTargets.length} sitios webs...`);
+  logs.push(`Inspeccionando a fondo información de contacto y antecedentes de ${scrapeTargets.length} sitios webs...`);
 
-  // Ejecutar scraping en 2 bloques para no saturar conexiones
   const half = Math.ceil(scrapeTargets.length / 2);
   const batchA = await Promise.all(scrapeTargets.slice(0, half).map((item) => scrapeSiteContacts(item.url)));
   const batchB = await Promise.all(scrapeTargets.slice(half).map((item) => scrapeSiteContacts(item.url)));
@@ -432,8 +639,8 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
     contactMap.set(c.url, c);
   }
 
-  // Paso 3: Armar contexto amplio para Gemini
-  let evidenceText = `CONSULTA DE BÚSQUEDA EXHAUSTIVA:\n- Rubro: ${rubro}\n- Zona: ${zona}\n`;
+  // Paso 3: Armar contexto amplio para Gemini con alerta de país
+  let evidenceText = `CONSULTA DE BÚSQUEDA EXHAUSTIVA:\n- Rubro: ${rubro}\n- Zona: ${zona} (${geoInfo.specificZone})\n`;
   if (especificaciones) {
     evidenceText += `- Requerimientos especiales: ${especificaciones}\n`;
   }
@@ -445,8 +652,10 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
     const phonesStr = scraped?.phones.length ? `Teléfonos extraídos: ${scraped.phones.join(", ")}` : "";
     const extraSnippet = scraped?.pageSnippet ? `Sección cartera/obras: ${scraped.pageSnippet}` : "";
     const classification = classifySource(item.url);
+    const paisDet = scraped?.detectedPais || "Argentina";
+    const avisoPais = scraped?.esArgentina === false ? ` ⚠️ [AVISO: PAÍS ${paisDet.toUpperCase()}]` : ` [PAÍS: ${paisDet.toUpperCase()}]`;
 
-    evidenceText += `\n[Fuente ${idx + 1} - ${item.queryTag || classification.tipo_fuente}]:\n`;
+    evidenceText += `\n[Fuente ${idx + 1} - ${item.queryTag || classification.tipo_fuente}]${avisoPais}:\n`;
     evidenceText += `Título: ${item.title}\n`;
     evidenceText += `URL de Origen (Fuente): ${item.url}\n`;
     evidenceText += `Tipo de Fuente: ${classification.tipo_fuente} (${classification.fuente_nombre})\n`;
@@ -456,7 +665,7 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
     if (extraSnippet) evidenceText += `${extraSnippet}\n`;
   });
 
-  // Paso 4: Síntesis con Gemini (si hay clave disponible)
+  // Paso 4: Síntesis con Gemini
   const geminiKey = params.geminiApiKey || process.env.GEMINI_API_KEY || "";
   let proveedoresResult: Proveedor[] = [];
 
@@ -465,26 +674,52 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
   } else {
     const genAI = new GoogleGenerativeAI(geminiKey);
 
-  const systemPrompt = `
-Sos un analista senior de Compras y Contrataciones corporativas para la cadena Cinemark & Hoyts Argentina.
+    const systemPrompt = `
+Sos un analista senior de Compras y Contrataciones corporativas para la cadena Cinemark & Hoyts ARGENTINA.
 Tu misión es extraer y estructurar una lista AMPLIA y EXHAUSTIVA de TODOS los proveedores reales identificados en la evidencia web para "${rubro}" en "${zona}".
 Buscá incluir entre 8 y 20 proveedores diferentes si la evidencia lo permite.
 
-REGLAS ESTRICTAS DE EXTRACCIÓN:
-1. Extraé proveedores reales basándote en la evidencia web. NO inventes nombres ficticios.
-2. Para CADA proveedor debes reportar obligatoriamente:
-   - "nombre": Nombre comercial o razón social de la empresa.
-   - "rubro": Especialidad o categoría exacta.
-   - "zona": Cobertura geográfica (ej. "${zona}", o localidades específicas encontradas).
-   - "descripcion_trabajos": Resumen detallado de qué trabajos realiza, servicios específicos, capacidad operativa y tecnología/equipos.
-   - "clientes_proyectos": Con quién trabajó, clientes corporativos, obras o marcas atendidas (si no está explícito en la web, indicar "Cartera comercial de locales y empresas en la región").
-   - "email": Correo electrónico de contacto/ventas para cotizar. Si figura en la evidencia, usalo. Si no figura, sugerí uno corporativo o dejá vacío "".
-   - "telefono": Teléfono o WhatsApp de contacto.
-   - "sitio_web": URL oficial de la empresa (o perfil comercial).
-   - "fuente": URL EXACTA de la fuente de donde se extrajo la información (OBLIGATORIO: tomala de 'URL de Origen' en la evidencia).
-   - "fuente_nombre": Nombre claro y legible de la fuente (ej: "Sitio Web Oficial (empresa.com.ar)", "Directorio Proveedores.com", "Guía Comercial LeadSet AI").
-   - "tipo_fuente": "sitio_oficial" | "directorio_empresarial" | "guia_b2b" | "camara_sectorial" | "web".
-   - "confiabilidad": "alta" (web propia, email claro y experiencia) | "media" | "baja".
+🚨 REGLAS ESTRICTAS DE VALIDACIÓN GEOGRÁFICA Y DE PAÍS:
+1. LA EMPRESA CONTRATANTE ES CINEMARK & HOYTS EN ARGENTINA:
+   - "Todo el país" significa TODA LA REPÚBLICA ARGENTINA (cobertura nacional en Argentina).
+   - "CABA y GBA" significa Ciudad de Buenos Aires y Conurbano Bonaerense, ARGENTINA.
+2. PRIORIDAD ABSOLUTA: PROVEEDORES RADICADOS EN ARGENTINA.
+   - Da máxima prioridad a proveedores locales con sede, teléfonos (+54, 011, etc.), CUIT, dominios .ar/.com.ar o presencia en Argentina.
+3. FILTRO ESTRICTO CONTRA FALSOS POSITIVOS DE COLOMBIA U OTROS PAÍSES:
+   - NO mezcles proveedores de Colombia (Bogotá, Medellín, Cali, teléfonos +57, dominios .co/.com.co, NIT) ni de otros países.
+   - Si una fuente de la evidencia es de Colombia u otro país, DESCÁRTALA en favor de proveedores de Argentina.
+   - Si la evidencia contiene proveedores argentinos y extranjeros, selecciona ÚNICAMENTE los de Argentina.
+4. SI EXCEPCIONALMENTE SE DETECTA UN PROVEEDOR EXTRANJERO RELEVANTE (ej. fabricante internacional directo de insumos especializados):
+   - Debes ser 100% EXPLÍCITO Y ESPECÍFICO:
+     * "pais": Indica el país exacto (ej. "Colombia", "Chile", "México", "España" o "Internacional").
+     * "es_argentina": false.
+     * "zona": Antepone el país y la ciudad (ej. "[Colombia] Bogotá", "[Exterior] Santiago de Chile").
+   - Para proveedores de Argentina:
+     * "pais": "Argentina".
+     * "es_argentina": true.
+     * "zona": Cobertura en Argentina (ej. "${zona}", "CABA y GBA", "Córdoba", etc.).
+5. INTEGRACIÓN Y VALIDACIÓN DE MERCADO LIBRE Y WEB:
+   - Encontrarás publicaciones de Mercado Libre Argentina (servicios.mercadolibre.com.ar o mercadolibre.com.ar) e investigaciones web complementarias de cada una.
+   - NUNCA coloques "Mercado Libre" como el nombre de la empresa proveedora.
+   - IDENTIFICA LA EMPRESA O CONTRATISTA REAL: Extrae la razón social, nombre comercial, taller o titular detrás de la publicación.
+   - Si la investigación web asociada aportó su sitio web oficial, teléfono directo (+54...) o correo corporativo, CONSOLÍDALOS prioritariamente en el registro.
+   - Si la única fuente es la publicación de Mercado Libre, indica en "fuente" el enlace de Mercado Libre, en "fuente_nombre" "Mercado Libre Servicios (Argentina)", y en "tipo_fuente" "directorio_empresarial".
+
+CAMPOS OBLIGATORIOS PARA CADA PROVEEDOR:
+- "nombre": Nombre comercial o razón social de la empresa.
+- "rubro": Especialidad o categoría exacta.
+- "pais": "Argentina" si es local, o el país exacto si es del exterior (ej. "Colombia").
+- "es_argentina": boolean (true o false).
+- "zona": Cobertura geográfica precisa.
+- "descripcion_trabajos": Resumen detallado de trabajos que realiza, servicios específicos y capacidad operativa.
+- "clientes_proyectos": Con quién trabajó, clientes corporativos, obras o marcas atendidas.
+- "email": Correo corporativo de contacto/ventas.
+- "telefono": Teléfono o WhatsApp de contacto con código de área (+54...).
+- "sitio_web": URL oficial de la empresa (o perfil comercial).
+- "fuente": URL EXACTA de la fuente de donde se extrajo la información.
+- "fuente_nombre": Nombre claro y legible de la fuente.
+- "tipo_fuente": "sitio_oficial" | "directorio_empresarial" | "guia_b2b" | "camara_sectorial" | "web".
+- "confiabilidad": "alta" | "media" | "baja".
 
 FORMATO DE SALIDA (JSON ÚNICAMENTE):
 {
@@ -492,6 +727,8 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
     {
       "nombre": "string",
       "rubro": "string",
+      "pais": "string",
+      "es_argentina": boolean,
       "zona": "string",
       "descripcion_trabajos": "string",
       "clientes_proyectos": "string",
@@ -507,87 +744,138 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
 }
 `;
 
-  let proveedoresResult: Proveedor[] = [];
+    for (const modelName of CANDIDATE_MODELS) {
+      try {
+        logs.push(`Estructurando y validando proveedores con Gemini (${modelName})...`);
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.15,
+          },
+        });
 
-  for (const modelName of CANDIDATE_MODELS) {
-    try {
-      logs.push(`Estructurando y validando todos los proveedores con Gemini (${modelName})...`);
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.15,
-        },
-      });
+        const response = await model.generateContent([
+          { text: systemPrompt },
+          { text: evidenceText },
+        ]);
 
-      const response = await model.generateContent([
-        { text: systemPrompt },
-        { text: evidenceText },
-      ]);
+        const text = response.response.text();
+        const parsed = parseJsonRobustly(text);
 
-      const text = response.response.text();
-      const parsed = parseJsonRobustly(text);
+        if (parsed && Array.isArray(parsed.proveedores) && parsed.proveedores.length > 0) {
+          proveedoresResult = parsed.proveedores.map((p: any, idx: number) => {
+            let sourceUrl = p.fuente || "";
+            if (!sourceUrl || !sourceUrl.startsWith("http")) {
+              const matchingItem = rawItems.find(
+                (r) =>
+                  r.title.toLowerCase().includes((p.nombre || "").toLowerCase()) ||
+                  r.url.toLowerCase().includes((p.nombre || "").toLowerCase().replace(/\s+/g, ""))
+              );
+              sourceUrl = matchingItem ? matchingItem.url : (p.sitio_web || rawItems[idx % rawItems.length]?.url || "");
+            }
 
-      if (parsed && Array.isArray(parsed.proveedores) && parsed.proveedores.length > 0) {
-        proveedoresResult = parsed.proveedores.map((p: any, idx: number) => {
-          // Asignar o validar fuente de origen
-          let sourceUrl = p.fuente || "";
-          if (!sourceUrl || !sourceUrl.startsWith("http")) {
-            // Emparejar con rawItems
-            const matchingItem = rawItems.find(
-              (r) =>
-                r.title.toLowerCase().includes((p.nombre || "").toLowerCase()) ||
-                r.url.toLowerCase().includes((p.nombre || "").toLowerCase().replace(/\s+/g, ""))
-            );
-            sourceUrl = matchingItem ? matchingItem.url : (p.sitio_web || rawItems[idx % rawItems.length]?.url || "");
-          }
+            const classification = classifySource(sourceUrl, p.nombre);
 
-          const classification = classifySource(sourceUrl, p.nombre);
+            let finalEmail = p.email || "";
+            let finalPhone = p.telefono || "";
+            let finalPais = p.pais || "Argentina";
+            let finalEsArgentina = typeof p.es_argentina === "boolean" ? p.es_argentina : true;
 
-          // Verificar si teníamos email o teléfono scrapeado para esa URL
-          let finalEmail = p.email || "";
-          let finalPhone = p.telefono || "";
+            for (const [sUrl, sc] of contactMap.entries()) {
+              const sameSite =
+                (p.sitio_web && sUrl.includes(new URL(p.sitio_web).hostname)) ||
+                (sourceUrl && sUrl.includes(new URL(sourceUrl).hostname));
+              if (sameSite) {
+                if (!finalEmail && sc.emails.length > 0) finalEmail = sc.emails[0];
+                if (!finalPhone && sc.phones.length > 0) finalPhone = sc.phones[0];
+                if (!sc.esArgentina) {
+                  finalPais = sc.detectedPais;
+                  finalEsArgentina = false;
+                }
+              }
+            }
 
-          for (const [sUrl, sc] of contactMap.entries()) {
-            const sameSite =
-              (p.sitio_web && sUrl.includes(new URL(p.sitio_web).hostname)) ||
-              (sourceUrl && sUrl.includes(new URL(sourceUrl).hostname));
-            if (sameSite) {
-              if (!finalEmail && sc.emails.length > 0) finalEmail = sc.emails[0];
-              if (!finalPhone && sc.phones.length > 0) finalPhone = sc.phones[0];
+            // Detección determinista adicional para evitar cualquier escape de Colombia
+            const checkStr = `${p.nombre} ${sourceUrl} ${p.sitio_web || ""} ${finalPhone} ${p.zona || ""} ${p.descripcion_trabajos || ""}`.toLowerCase();
+            if (
+              checkStr.includes("+57") ||
+              checkStr.includes(".com.co") ||
+              checkStr.includes("eldirectorio.co") ||
+              checkStr.includes("bogotá") ||
+              checkStr.includes("bogota") ||
+              checkStr.includes("medellín") ||
+              checkStr.includes("medellin") ||
+              checkStr.includes("cali,") ||
+              checkStr.includes("barranquilla") ||
+              checkStr.includes("colombia")
+            ) {
+              finalPais = "Colombia";
+              finalEsArgentina = false;
+              if (!p.zona?.toLowerCase().includes("colombia")) {
+                p.zona = `[Colombia] ${p.zona || "Bogotá"}`;
+              }
+            } else if (
+              checkStr.includes(".com.ar") ||
+              checkStr.includes(".ar/") ||
+              checkStr.includes("+54") ||
+              checkStr.includes("caba") ||
+              checkStr.includes("buenos aires") ||
+              checkStr.includes("gba") ||
+              checkStr.includes("argentina")
+            ) {
+              finalPais = "Argentina";
+              finalEsArgentina = true;
+            }
+
+            return {
+              id: `prov-${Date.now()}-${idx + 1}`,
+              nombre: p.nombre || `Proveedor ${idx + 1}`,
+              rubro: p.rubro || rubro,
+              zona: p.zona || zona,
+              pais: finalPais,
+              es_argentina: finalEsArgentina,
+              descripcion_trabajos: p.descripcion_trabajos || "Servicios y provisión en el rubro.",
+              clientes_proyectos: p.clientes_proyectos || "Empresas y locales comerciales de la región.",
+              email: finalEmail,
+              telefono: finalPhone,
+              sitio_web: p.sitio_web || sourceUrl,
+              fuente: sourceUrl,
+              fuente_nombre: p.fuente_nombre || classification.fuente_nombre,
+              tipo_fuente: p.tipo_fuente || classification.tipo_fuente,
+              confiabilidad: p.confiabilidad || (finalEmail ? "alta" : "media"),
+              fecha_busqueda: new Date().toISOString(),
+            };
+          });
+
+          // Si el usuario buscaba en Argentina, priorizamos proveedores argentinos
+          if (geoInfo.isArgentinaTarget) {
+            const argentinos = proveedoresResult.filter((p) => p.es_argentina);
+            const extranjeros = proveedoresResult.filter((p) => !p.es_argentina);
+
+            if (argentinos.length >= 3) {
+              proveedoresResult = argentinos;
+              logs.push(`Filtro estricto: Se validaron ${argentinos.length} proveedores radicados en Argentina (falsos positivos descartados).`);
+            } else {
+              proveedoresResult = [...argentinos, ...extranjeros];
+              if (extranjeros.length > 0) {
+                logs.push(`Aviso: Se incluyen ${extranjeros.length} proveedores del exterior, claramente señalizados.`);
+              }
             }
           }
 
-          return {
-            id: `prov-${Date.now()}-${idx + 1}`,
-            nombre: p.nombre || `Proveedor ${idx + 1}`,
-            rubro: p.rubro || rubro,
-            zona: p.zona || zona,
-            descripcion_trabajos: p.descripcion_trabajos || "Servicios y provisión en el rubro.",
-            clientes_proyectos: p.clientes_proyectos || "Empresas y locales comerciales de la región.",
-            email: finalEmail,
-            telefono: finalPhone,
-            sitio_web: p.sitio_web || sourceUrl,
-            fuente: sourceUrl,
-            fuente_nombre: p.fuente_nombre || classification.fuente_nombre,
-            tipo_fuente: p.tipo_fuente || classification.tipo_fuente,
-            confiabilidad: p.confiabilidad || (finalEmail ? "alta" : "media"),
-            fecha_busqueda: new Date().toISOString(),
-          };
-        });
-
-        logs.push(`¡Éxito! Se consolidaron ${proveedoresResult.length} proveedores estructurados con Gemini (${modelName}).`);
-        break;
-      }
-    } catch (err: any) {
-      console.warn(`Error con modelo ${modelName}:`, err.message);
-      if (err.message.includes("429") || err.message.includes("quota")) {
-        logs.push(`Límite de cuota temporal en ${modelName}. Probando alternativa...`);
-      } else {
-        logs.push(`Modelo ${modelName} omitido (${err.message.slice(0, 60)}...). Probando siguiente alternativa...`);
+          logs.push(`¡Éxito! Se consolidaron ${proveedoresResult.length} proveedores estructurados con Gemini (${modelName}).`);
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Error con modelo ${modelName}:`, err.message);
+        if (err.message.includes("429") || err.message.includes("quota")) {
+          logs.push(`Límite de cuota temporal en ${modelName}. Probando alternativa...`);
+        } else {
+          logs.push(`Modelo ${modelName} omitido (${err.message.slice(0, 60)}...). Probando siguiente alternativa...`);
+        }
       }
     }
-  }
   }
 
   // Fallback Heurístico si los modelos fallan por cuota
@@ -602,6 +890,8 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
         nombre: item.title,
         rubro: rubro,
         zona: zona,
+        pais: scraped?.detectedPais || "Argentina",
+        es_argentina: scraped?.esArgentina ?? true,
         descripcion_trabajos: item.snippet || "Proveedor localizado en rastreo web para el rubro solicitado.",
         clientes_proyectos: scraped?.pageSnippet || "Clientes comerciales y corporativos en la zona.",
         email: scraped?.emails[0] || "",

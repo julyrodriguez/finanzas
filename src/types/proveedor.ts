@@ -3,6 +3,8 @@ export interface Proveedor {
   nombre: string;
   rubro: string;
   zona: string;
+  pais?: string;                 // País de radicación (ej. "Argentina", "Colombia", "Chile", etc.)
+  es_argentina?: boolean;        // Indicador si está radicado en Argentina
   descripcion_trabajos: string; // Pequeña información de sus trabajos / especialidad
   clientes_proyectos: string;    // Con quién trabajó o proyectos/clientes destacados
   email: string;                 // Correo de contacto principal

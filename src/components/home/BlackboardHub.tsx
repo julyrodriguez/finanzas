@@ -136,6 +136,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
   const [activeTool, setActiveTool] = useState<"chalk" | "eraser" | "pointer">("chalk");
   const [chalkColor, setChalkColor] = useState<string>("#f8fafc");
   const [chalkWidth, setChalkWidth] = useState<number>(4);
+  const [eraserWidth, setEraserWidth] = useState<number>(45);
   const [hasChalkStrokes, setHasChalkStrokes] = useState<boolean>(false);
 
   // Pinned Notes State (Sin notas hardcodeadas)
@@ -404,7 +405,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     if (activeTool === "chalk") {
       drawChalkSegment(ctx, pos.x, pos.y, pos.x, pos.y, chalkColor, chalkWidth);
     } else if (activeTool === "eraser") {
-      eraseSegment(ctx, pos.x, pos.y, 28);
+      eraseSegment(ctx, pos.x, pos.y, eraserWidth);
     }
   };
 
@@ -474,7 +475,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     if (activeTool === "chalk") {
       drawChalkSegment(ctx, lastPosRef.current.x, lastPosRef.current.y, pos.x, pos.y, chalkColor, chalkWidth);
     } else if (activeTool === "eraser") {
-      eraseSegment(ctx, pos.x, pos.y, 28);
+      eraseSegment(ctx, pos.x, pos.y, eraserWidth);
     }
 
     lastPosRef.current = pos;
@@ -729,31 +730,6 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
 
           {/* 2. Carita Mascot Layer (Z-20): Perched in center top without any blocking shelf */}
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex flex-col items-center select-none">
-            {/* Speech Bubble */}
-            <AnimatePresence>
-              {isSpeechVisible && caritaSpeech && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.85 }}
-                  className="absolute -top-11 z-40 px-3.5 py-1.5 rounded-2xl bg-white/95 text-slate-900 text-xs font-bold shadow-2xl border border-white/40 flex items-center gap-2 max-w-xs text-center"
-                >
-                  <span>{caritaSpeech}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsSpeechVisible(false);
-                    }}
-                    className="text-slate-400 hover:text-slate-700 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                  <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white/95 rotate-45" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Clickable Carita */}
             <div 
               onClick={handleCaritaClick}
@@ -767,6 +743,31 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                 mood={caritaMood}
               />
             </div>
+
+            {/* Speech Bubble: Colocado debajo de la carita para que NUNCA sea tapado por el marco superior */}
+            <AnimatePresence>
+              {isSpeechVisible && caritaSpeech && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.85 }}
+                  className="absolute top-[125px] z-50 px-4 py-2 rounded-2xl bg-white/95 text-slate-900 text-xs font-bold shadow-2xl border border-white/50 flex items-center gap-2 max-w-sm text-center"
+                >
+                  <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white/95 rotate-45 border-l border-t border-white/50" />
+                  <span>{caritaSpeech}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSpeechVisible(false);
+                    }}
+                    className="text-slate-400 hover:text-slate-800 cursor-pointer ml-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* 3. Pinned Notes Layer (Z-30): Cubre el 100% de la pizarra SIN franjas ni clipping */}
@@ -818,16 +819,17 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                     </div>
 
                     {/* Encabezado de la Nota */}
-                    <div className="flex items-start justify-between gap-2 pt-1 mb-2">
+                    <div className="flex items-center justify-between gap-2 pt-1 mb-2.5 w-full">
                       <input
                         type="text"
                         value={note.title}
                         onChange={(e) => handleUpdateNote(note.id, { title: e.target.value })}
                         placeholder="Título de la nota..."
-                        className={`font-black text-sm bg-transparent border-none focus:outline-none flex-1 truncate ${theme.header} ${theme.placeholder}`}
+                        style={{ backgroundColor: "transparent", color: "#0f172a" }}
+                        className="font-black text-sm !bg-transparent border-none outline-none focus:outline-none flex-1 min-w-0 truncate text-slate-900 placeholder-slate-900/40"
                       />
 
-                      <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-0.5 shrink-0 bg-black/5 hover:bg-black/10 rounded-xl p-0.5 border border-black/10 transition-colors">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -837,7 +839,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                             const nextColor = colorsList[(curIdx + 1) % colorsList.length];
                             handleUpdateNote(note.id, { color: nextColor });
                           }}
-                          className="p-1 text-slate-700 hover:text-black rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
+                          className="p-1 text-slate-700 hover:text-black rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
                           title="Cambiar color de Post-it"
                         >
                           <Palette className="w-3.5 h-3.5" />
@@ -849,7 +851,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                             e.stopPropagation();
                             handleDeleteNote(note.id);
                           }}
-                          className="p-1 text-slate-700 hover:text-rose-600 rounded-lg hover:bg-black/5 transition-colors cursor-pointer"
+                          className="p-1 text-slate-700 hover:text-rose-600 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
                           title="Desclavar y borrar nota"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -863,7 +865,8 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                       onChange={(e) => handleUpdateNote(note.id, { content: e.target.value })}
                       placeholder="Escribí acá tu nota, recordatorio o pendientes..."
                       rows={3}
-                      className={`w-full text-xs font-medium bg-transparent resize-none focus:outline-none leading-relaxed ${theme.text} ${theme.placeholder}`}
+                      style={{ backgroundColor: "transparent", color: "#1e293b" }}
+                      className="w-full text-xs font-semibold !bg-transparent resize-none border-none outline-none focus:outline-none leading-relaxed text-slate-800 placeholder-slate-800/40"
                     />
 
                     {/* Lista de Tareas / Checklist */}
@@ -887,7 +890,8 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                               value={chk.text}
                               onChange={(e) => handleUpdateChecklistText(note.id, chk.id, e.target.value)}
                               placeholder="Ítem de lista..."
-                              className={`flex-1 bg-transparent border-none text-xs focus:outline-none ${theme.text} ${
+                              style={{ backgroundColor: "transparent", color: "#1e293b" }}
+                              className={`flex-1 !bg-transparent border-none text-xs focus:outline-none text-slate-800 ${
                                 chk.done ? "line-through opacity-60" : ""
                               }`}
                             />
@@ -1015,6 +1019,44 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                     }`}
                   >
                     {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Selector de Tamaño de Borrador */}
+          {activeTool === "eraser" && (
+            <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-xl border border-white/10">
+              <span className="text-[10px] font-mono text-amber-300 hidden sm:inline">Borrador:</span>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { w: 20, label: "Fino" },
+                  { w: 45, label: "Medio" },
+                  { w: 85, label: "Grande" },
+                  { w: 140, label: "XL (Rápido)" }
+                ].map((s) => (
+                  <button
+                    key={s.w}
+                    type="button"
+                    onClick={() => {
+                      setEraserWidth(s.w);
+                      triggerCaritaSpeech(`🧽 Borrador ${s.label} (${s.w}px)`);
+                    }}
+                    className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                      eraserWidth === s.w
+                        ? "bg-amber-400 text-slate-950 font-bold shadow-md scale-105"
+                        : "text-slate-300 hover:text-white bg-white/5 hover:bg-white/10"
+                    }`}
+                  >
+                    <span 
+                      className="rounded-full bg-current opacity-80 inline-block" 
+                      style={{ 
+                        width: s.w === 20 ? 4 : s.w === 45 ? 6 : s.w === 85 ? 9 : 12, 
+                        height: s.w === 20 ? 4 : s.w === 45 ? 6 : s.w === 85 ? 9 : 12 
+                      }} 
+                    />
+                    <span>{s.label}</span>
                   </button>
                 ))}
               </div>

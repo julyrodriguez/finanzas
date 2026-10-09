@@ -45,12 +45,12 @@ const RUBRO_SUGGESTIONS = [
 
 const ZONA_SUGGESTIONS = [
   "CABA y GBA",
+  "Todo el país",
   "Córdoba Capital",
   "Mendoza",
   "Rosario, Santa Fe",
   "Neuquén",
   "Salta",
-  "Todo el país",
 ];
 
 export function ProveedorSearchForm({
