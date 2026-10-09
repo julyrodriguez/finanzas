@@ -7,7 +7,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { CotizacionesTicker } from "@/components/CotizacionesTicker";
 import { 
-  ShoppingBag, 
   TrendingUp, 
   ShieldCheck, 
   Building2, 
@@ -116,13 +115,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           hideForOrders: true,
         },
         {
-          name: "Órdenes de Compra",
-          href: "/ordenes-de-compras",
-          icon: ShoppingBag,
-          exact: false,
-          hideForOrders: true,
-        },
-        {
           name: "Pendientes",
           href: "/pendientes",
           icon: ClipboardList,
@@ -206,9 +198,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     }
     if (href === "/") {
       return pathname === "/" || pathname === "/inicio";
-    }
-    if (href === "/ordenes-de-compras") {
-      return pathname === "/ordenes-de-compras";
     }
     if (exact) {
       return pathname === href;
