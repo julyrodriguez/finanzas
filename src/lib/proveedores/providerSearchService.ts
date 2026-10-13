@@ -8,12 +8,12 @@ import {
 } from "@/types/proveedor";
 
 const CANDIDATE_MODELS = [
-  "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
   "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
   "gemini-3.6-flash",
-  "gemini-flash-lite-latest",
   "gemini-flash-latest",
+  "gemini-flash-lite-latest",
 ];
 
 const DISALLOWED_DOMAINS = [
@@ -271,9 +271,9 @@ async function searchWebDuckDuckGo(
     const res = await fetch(`https://html.duckduckgo.com/html/?${params.toString()}`, {
       method: "GET",
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
         "Referer": "https://duckduckgo.com/",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
       },
       signal: AbortSignal.timeout(7000),
@@ -677,8 +677,8 @@ export async function searchProveedores(params: ProveedorSearchParams): Promise<
 
     const systemPrompt = `
 Sos un analista senior de Compras y Contrataciones corporativas para la cadena Cinemark & Hoyts ARGENTINA.
-Tu misión es extraer y estructurar una lista AMPLIA y EXHAUSTIVA de TODOS los proveedores reales identificados en la evidencia web para "${rubro}" en "${zona}".
-Buscá incluir entre 8 y 20 proveedores diferentes si la evidencia lo permite.
+Tu misión es extraer y estructurar una lista AMPLIA y EXHAUSTIVA de TODOS los proveedores reales para "${rubro}" en "${zona}". Prioriza siempre la información y contactos de la evidencia web provista; si la evidencia es escasa o ausente, complementa con proveedores y marcas líderes reales radicadas en Argentina.
+Buscá incluir entre 8 y 20 proveedores diferentes.
 
 🚨 REGLAS ESTRICTAS DE VALIDACIÓN GEOGRÁFICA Y DE PAÍS:
 1. LA EMPRESA CONTRATANTE ES CINEMARK & HOYTS EN ARGENTINA:
@@ -869,11 +869,12 @@ FORMATO DE SALIDA (JSON ÚNICAMENTE):
           break;
         }
       } catch (err: any) {
-        console.warn(`Error con modelo ${modelName}:`, err.message);
-        if (err.message.includes("429") || err.message.includes("quota")) {
+        const errorMsg = String(err?.message || err?.status || err || "Error");
+        console.warn(`Error con modelo ${modelName}:`, errorMsg);
+        if (errorMsg.includes("429") || errorMsg.includes("quota")) {
           logs.push(`Límite de cuota temporal en ${modelName}. Probando alternativa...`);
         } else {
-          logs.push(`Modelo ${modelName} omitido (${err.message.slice(0, 60)}...). Probando siguiente alternativa...`);
+          logs.push(`Modelo ${modelName} omitido (${errorMsg.slice(0, 60)}...). Probando siguiente alternativa...`);
         }
       }
     }

@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       especificaciones: body.especificaciones?.trim(),
       engine: body.engine || "hybrid",
       profundidad: body.profundidad || "profunda",
+      geminiApiKey: body.geminiApiKey?.trim() || process.env.GEMINI_API_KEY,
       firecrawlApiKey: body.firecrawlApiKey?.trim(),
     });
 
