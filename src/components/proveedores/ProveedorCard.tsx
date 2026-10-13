@@ -35,6 +35,7 @@ interface ProveedorCardProps {
   onInvestigate?: (proveedor: Proveedor) => void;
   onOpenDetail?: (proveedor: Proveedor) => void;
   onDelete?: (proveedor: Proveedor) => void;
+  onEnrichWithIa?: (proveedor: Proveedor) => void;
 }
 
 function LinkedinIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -55,6 +56,7 @@ export function ProveedorCard({
   onInvestigate,
   onOpenDetail,
   onDelete,
+  onEnrichWithIa,
 }: ProveedorCardProps) {
   const [copiedAllMails, setCopiedAllMails] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
@@ -206,12 +208,28 @@ export function ProveedorCard({
                   </span>
                 )}
                 {getReliabilityBadge(proveedor.confiabilidad)}
+                {(proveedor as any)._enriched && !isSaved && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg animate-pulse">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Datos IA sin guardar</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Top right actions: AI investigate & Bookmark */}
+          {/* Top right actions: AI enrich, AI investigate & Bookmark */}
           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {onEnrichWithIa && (
+              <button
+                onClick={() => onEnrichWithIa(proveedor)}
+                className="p-2 rounded-xl border border-indigo-500/25 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 hover:text-white transition-all active:scale-[0.92] cursor-pointer"
+                title={`Rellenar ficha de ${proveedor.nombre} con IA`}
+              >
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+              </button>
+            )}
+
             {onInvestigate && (
               <button
                 onClick={() => onInvestigate(proveedor)}
@@ -380,6 +398,17 @@ export function ProveedorCard({
             >
               <span>Ver Ficha</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          )}
+
+          {!isSaved && (proveedor as any)._enriched && onToggleSave && (
+            <button
+              onClick={() => onToggleSave(proveedor)}
+              className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-white border border-amber-500/35 text-xs font-bold transition-all active:scale-[0.98] cursor-pointer"
+              title="Guardar este proveedor en la base de datos MongoDB"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+              <span>Guardar</span>
             </button>
           )}
 

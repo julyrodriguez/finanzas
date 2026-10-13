@@ -24,12 +24,17 @@ const ProveedorDetailModal = dynamic(
   () => import("@/components/proveedores/ProveedorDetailModal").then((m) => m.ProveedorDetailModal),
   { ssr: false }
 );
+const ProveedorEnrichModal = dynamic(
+  () => import("@/components/proveedores/ProveedorEnrichModal").then((m) => m.ProveedorEnrichModal),
+  { ssr: false }
+);
 import {
   fetchProveedoresFromMongo,
   saveProveedorToMongo,
   updateProveedorInMongo,
   deleteProveedorFromMongo,
 } from "@/lib/serverSync";
+import { bulkSaveEnrichedProveedores } from "@/lib/proveedores/providerEnrichService";
 import { 
   Building2, 
   Search, 
@@ -101,6 +106,11 @@ export default function ProveedoresPage() {
   // Detail Modal State
   const [selectedDetailProveedor, setSelectedDetailProveedor] = useState<Proveedor | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  // AI Enrichment Modal State
+  const [isEnrichModalOpen, setIsEnrichModalOpen] = useState(false);
+  const [enrichTargetProveedores, setEnrichTargetProveedores] = useState<Proveedor[]>([]);
+  const [isBulkSavingEnriched, setIsBulkSavingEnriched] = useState(false);
 
   // Load registry from MongoDB and local storage on mount
   useEffect(() => {
@@ -743,6 +753,98 @@ export default function ProveedoresPage() {
     setIsDraftModalOpen(true);
   };
 
+  // AI Enrichment Handlers
+  const handleOpenEnrichModal = () => {
+    const selected = baseList.filter((p) => selectedIds.has(p.id));
+    if (selected.length === 0) {
+      if (filteredList.length === 0) {
+        alert("No hay proveedores disponibles para enriquecer con IA.");
+        return;
+      }
+      setEnrichTargetProveedores(filteredList);
+    } else {
+      setEnrichTargetProveedores(selected);
+    }
+    setIsEnrichModalOpen(true);
+  };
+
+  const handleOpenEnrichForSingle = (item: Proveedor) => {
+    setEnrichTargetProveedores([item]);
+    setIsEnrichModalOpen(true);
+  };
+
+  const handleApplyEnriched = (enrichedList: Proveedor[]) => {
+    if (!Array.isArray(enrichedList) || enrichedList.length === 0) return;
+
+    const enrichedMap = new Map<string, Proveedor>();
+    enrichedList.forEach((p) => {
+      if (p.id) enrichedMap.set(p.id, p);
+      if (p._id) enrichedMap.set(p._id, p);
+      if (p.nombre) enrichedMap.set(p.nombre.toLowerCase().trim(), p);
+      if (p.norm) enrichedMap.set(p.norm.toLowerCase().trim(), p);
+    });
+
+    const mergeList = (prev: Proveedor[]) => {
+      return prev.map((p) => {
+        const match =
+          enrichedMap.get(p.id) ||
+          (p._id ? enrichedMap.get(p._id) : null) ||
+          enrichedMap.get((p.nombre || "").toLowerCase().trim()) ||
+          (p.norm ? enrichedMap.get(p.norm.toLowerCase().trim()) : null);
+
+        return match ? { ...p, ...match } : p;
+      });
+    };
+
+    setRegistryProveedores((prev) => mergeList(prev));
+    setSearchProveedores((prev) => mergeList(prev));
+    setSavedProveedores((prev) => {
+      const next = mergeList(prev);
+      try {
+        localStorage.setItem("cinemark_saved_proveedores", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    // Update local cache
+    try {
+      const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
+      if (cached) {
+        const list = JSON.parse(cached);
+        if (Array.isArray(list)) {
+          const updated = mergeList(list);
+          localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(updated));
+        }
+      }
+    } catch {}
+  };
+
+  const handleSavedToDb = (savedList: Proveedor[]) => {
+    if (!Array.isArray(savedList) || savedList.length === 0) return;
+    const marked = savedList.map((p) => ({ ...p, guardado: true }));
+    handleApplyEnriched(marked);
+  };
+
+  const handleBulkSaveAllEnriched = async () => {
+    const toSave = filteredList.filter((p) => Boolean((p as any)._enriched) && !p.guardado);
+    if (toSave.length === 0) return;
+
+    setIsBulkSavingEnriched(true);
+    try {
+      const { savedCount } = await bulkSaveEnrichedProveedores(toSave);
+      handleSavedToDb(toSave);
+      alert(`✅ Se guardaron con éxito ${savedCount} proveedores en la base de datos MongoDB.`);
+    } catch (err: any) {
+      console.error("Error al guardar proveedores en lote:", err);
+      alert(`Error al guardar proveedores: ${err?.message || "Ocurrió un error inesperado"}`);
+    } finally {
+      setIsBulkSavingEnriched(false);
+    }
+  };
+
+  // Metrics & Counts
+  const unsavedEnrichedCount = filteredList.filter((p) => Boolean((p as any)._enriched) && !p.guardado).length;
+
   // Metrics
   const totalRegistry = registryProveedores.length;
   const totalFromQuotes = registryProveedores.filter((p) => (p.cotizaciones || []).length > 0).length;
@@ -1097,6 +1199,18 @@ export default function ProveedoresPage() {
                   <span>Excel (.xlsx)</span>
                 </button>
 
+                {/* Rellenar con IA */}
+                <button
+                  onClick={handleOpenEnrichModal}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/25 active:scale-95 cursor-pointer"
+                  title="Rellenar ficha y contactos de proveedores con IA y búsqueda web"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
+                  <span>
+                    Rellenar con IA {selectedIds.size > 0 ? `(${selectedIds.size})` : `(${filteredList.length})`}
+                  </span>
+                </button>
+
                 {/* Pedir Cotización */}
                 <button
                   onClick={handleOpenDraftForSelected}
@@ -1110,6 +1224,27 @@ export default function ProveedoresPage() {
                 </button>
               </div>
             </div>
+
+            {/* Aviso y botón de Guardar Todos para proveedores enriquecidos con IA pendientes */}
+            {unsavedEnrichedCount > 0 && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-slate-900 border border-amber-500/30 text-amber-200 shadow-lg">
+                <div className="flex items-center gap-2.5 text-xs">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+                  <span>
+                    <strong>{unsavedEnrichedCount}</strong> proveedor{unsavedEnrichedCount === 1 ? "" : "es"} con información encontrada por IA cargada en pantalla pendiente de guardar.
+                  </span>
+                </div>
+                <button
+                  onClick={handleBulkSaveAllEnriched}
+                  disabled={isBulkSavingEnriched}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md shadow-amber-500/20 self-end sm:self-auto"
+                  title="Guardar todos los proveedores enriquecidos en la base de datos MongoDB"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isBulkSavingEnriched ? "animate-spin" : ""}`} />
+                  <span>{isBulkSavingEnriched ? "Guardando..." : "Guardar Todos en Base de Datos"}</span>
+                </button>
+              </div>
+            )}
 
             {/* Providers Grid */}
             {filteredList.length > 0 ? (
@@ -1130,6 +1265,7 @@ export default function ProveedoresPage() {
                       onInvestigate={handleInvestigateProvider}
                       onOpenDetail={handleOpenDetail}
                       onDelete={handleDeleteProveedor}
+                      onEnrichWithIa={handleOpenEnrichForSingle}
                     />
                   );
                 })}
@@ -1208,6 +1344,16 @@ export default function ProveedoresPage() {
         geminiApiKey={geminiApiKey}
         initialQuery={chatInitialQuery}
         onAddNewProveedores={handleAddNewProveedores}
+      />
+
+      {/* AI Provider Enrichment Modal */}
+      <ProveedorEnrichModal
+        isOpen={isEnrichModalOpen}
+        onClose={() => setIsEnrichModalOpen(false)}
+        selectedProveedores={enrichTargetProveedores}
+        geminiApiKey={geminiApiKey}
+        onApplyEnriched={handleApplyEnriched}
+        onSavedToDb={handleSavedToDb}
       />
     </AppLayout>
   );

@@ -268,14 +268,15 @@ async function searchWebDuckDuckGo(
       params.append("kl", region);
     }
 
-    const res = await fetch("https://html.duckduckgo.com/html/", {
-      method: "POST",
+    const res = await fetch(`https://html.duckduckgo.com/html/?${params.toString()}`, {
+      method: "GET",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Referer": "https://duckduckgo.com/",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
       },
-      body: params.toString(),
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(7000),
     });
 
     if (!res.ok) {
