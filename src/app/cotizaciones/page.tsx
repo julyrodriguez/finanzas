@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
-import { getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { 
   collection, 
@@ -345,24 +345,27 @@ export default function CotizacionesPage() {
       console.warn("MongoDB initial fetch warning in cotizaciones, trying fallback:", err);
     }
 
-    // 2. Firebase Fallback (solo si falla MongoDB)
-    const db = getFirebaseDb();
-    if (db) {
-      try {
-        const q = query(collection(db, "cotizaciones"), orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
-        const list: SavedQuotation[] = [];
-        snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as SavedQuotation);
-        });
-        if (list.length > 0) {
-          setSavedQuotations(list);
-          syncCotizacionesBulkToMongo(list);
-          setLoadingHistory(false);
-          return;
+    // 2. Firebase Fallback (solo si falla MongoDB y Firestore no está desactivado por cuota)
+    if (!isFirestoreDisabled()) {
+      const db = getFirebaseDb();
+      if (db) {
+        try {
+          const q = query(collection(db, "cotizaciones"), orderBy("createdAt", "desc"));
+          const snapshot = await getDocs(q);
+          const list: SavedQuotation[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...docSnap.data() } as SavedQuotation);
+          });
+          if (list.length > 0) {
+            setSavedQuotations(list);
+            syncCotizacionesBulkToMongo(list);
+            setLoadingHistory(false);
+            return;
+          }
+        } catch (fbErr: any) {
+          handleFirestoreError(fbErr);
+          console.warn("⚠️ Error cargando cotizaciones desde Firebase fallback (ignorado):", fbErr);
         }
-      } catch (fbErr) {
-        console.warn("⚠️ Error cargando cotizaciones desde Firebase fallback:", fbErr);
       }
     }
 

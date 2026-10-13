@@ -15,7 +15,7 @@ import {
   Sparkles,
   Info
 } from "lucide-react";
-import { getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
 import { 
   collection, 
   query, 
@@ -114,34 +114,37 @@ export default function CalendarioPage() {
         console.warn("MongoDB initial fetch warning in calendario, trying fallback:", err);
       }
 
-      // B. Fallback: Firebase Firestore solo si MongoDB falló
-      const db = getFirebaseDb();
-      if (db) {
-        try {
-          const colRef = collection(db, "calendar_events");
-          const q = query(colRef);
-          const snapshot = await getDocs(q);
-          if (!isMounted) return;
-          const docs: CalendarEvent[] = snapshot.docs.map((docSnap) => {
-            const data = docSnap.data();
-            return {
-              id: docSnap.id,
-              title: data.title || "",
-              description: data.description || "",
-              date: data.date || "",
-              startTime: data.startTime || "",
-              endTime: data.endTime || "",
-              category: data.category || "finanzas",
-            };
-          });
+      // B. Fallback: Firebase Firestore solo si MongoDB falló y no está desactivado por cuota
+      if (!isFirestoreDisabled()) {
+        const db = getFirebaseDb();
+        if (db) {
+          try {
+            const colRef = collection(db, "calendar_events");
+            const q = query(colRef);
+            const snapshot = await getDocs(q);
+            if (!isMounted) return;
+            const docs: CalendarEvent[] = snapshot.docs.map((docSnap) => {
+              const data = docSnap.data();
+              return {
+                id: docSnap.id,
+                title: data.title || "",
+                description: data.description || "",
+                date: data.date || "",
+                startTime: data.startTime || "",
+                endTime: data.endTime || "",
+                category: data.category || "finanzas",
+              };
+            });
 
-          if (docs.length > 0) {
-            setEvents(docs);
-            syncCalendarEventsBulkToMongo(docs);
-            return;
+            if (docs.length > 0) {
+              setEvents(docs);
+              syncCalendarEventsBulkToMongo(docs);
+              return;
+            }
+          } catch (error: any) {
+            handleFirestoreError(error);
+            console.warn("⚠️ Firestore loading error fallback in calendario (ignorado):", error);
           }
-        } catch (error) {
-          console.warn("⚠️ Firestore loading error fallback in calendario:", error);
         }
       }
 
@@ -273,11 +276,14 @@ export default function CalendarioPage() {
     syncCalendarEventToMongo(fullEvent);
 
     // 3. Dual Write: Firebase Firestore (no bloqueante, protegido ante cuota excedida)
-    const db = getFirebaseDb();
-    if (db) {
-      setDoc(doc(db, "calendar_events", eventId), eventData).catch((err) => {
-        console.warn("⚠️ [Calendario] No se pudo guardar en Firebase (cuota o red):", err?.message || err);
-      });
+    if (!isFirestoreDisabled()) {
+      const db = getFirebaseDb();
+      if (db) {
+        setDoc(doc(db, "calendar_events", eventId), eventData).catch((err) => {
+          handleFirestoreError(err);
+          console.warn("⚠️ [Calendario] No se pudo guardar en Firebase (cuota o red):", err?.message || err);
+        });
+      }
     }
 
     // 4. Copia en LocalStorage
@@ -302,11 +308,14 @@ export default function CalendarioPage() {
     deleteCalendarEventFromMongo(targetId);
 
     // 3. Dual Delete: Firebase Firestore (no bloqueante)
-    const db = getFirebaseDb();
-    if (db) {
-      deleteDoc(doc(db, "calendar_events", targetId)).catch((err) => {
-        console.warn("⚠️ [Calendario] No se pudo borrar en Firebase (cuota o red):", err?.message || err);
-      });
+    if (!isFirestoreDisabled()) {
+      const db = getFirebaseDb();
+      if (db) {
+        deleteDoc(doc(db, "calendar_events", targetId)).catch((err) => {
+          handleFirestoreError(err);
+          console.warn("⚠️ [Calendario] No se pudo borrar en Firebase (cuota o red):", err?.message || err);
+        });
+      }
     }
 
     // 4. Actualizar LocalStorage

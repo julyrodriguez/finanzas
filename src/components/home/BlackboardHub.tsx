@@ -23,7 +23,7 @@ import {
   Loader2
 } from "lucide-react";
 import { EyeTrackerCube } from "./EyeTrackerCube";
-import { getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
 import { 
   collection, 
   doc, 
@@ -177,15 +177,18 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
       }).catch((e) => console.warn("Aviso sync MongoDB nota:", e));
     } catch (e) {}
 
-    // 2. Firebase Firestore
-    try {
-      const db = getFirebaseDb();
-      if (db) {
-        const docRef = doc(db, "pizarron_notas", note.id);
-        await setDoc(docRef, note, { merge: true });
+    // 2. Firebase Firestore (solo si no está deshabilitado por cuota)
+    if (!isFirestoreDisabled()) {
+      try {
+        const db = getFirebaseDb();
+        if (db) {
+          const docRef = doc(db, "pizarron_notas", note.id);
+          await setDoc(docRef, note, { merge: true });
+        }
+      } catch (e: any) {
+        handleFirestoreError(e);
+        console.warn("Aviso sync Firebase nota (ignorado):", e);
       }
-    } catch (e) {
-      console.warn("Aviso sync Firebase nota:", e);
     }
   }, []);
 
@@ -197,15 +200,18 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
       }).catch((e) => console.warn("Aviso delete MongoDB nota:", e));
     } catch (e) {}
 
-    // 2. Firebase Firestore
-    try {
-      const db = getFirebaseDb();
-      if (db) {
-        const docRef = doc(db, "pizarron_notas", noteId);
-        await deleteDoc(docRef);
+    // 2. Firebase Firestore (solo si no está deshabilitado por cuota)
+    if (!isFirestoreDisabled()) {
+      try {
+        const db = getFirebaseDb();
+        if (db) {
+          const docRef = doc(db, "pizarron_notas", noteId);
+          await deleteDoc(docRef);
+        }
+      } catch (e: any) {
+        handleFirestoreError(e);
+        console.warn("Aviso delete Firebase nota (ignorado):", e);
       }
-    } catch (e) {
-      console.warn("Aviso delete Firebase nota:", e);
     }
   }, []);
 
@@ -231,11 +237,11 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
           }
         }
       } catch (err) {
-        console.warn("MongoDB notas no disponible, probando Firebase:", err);
+        console.warn("MongoDB notas no disponible, probando fallback:", err);
       }
 
-      // 2. Fallback con Firebase Firestore
-      if (!loaded) {
+      // 2. Fallback con Firebase Firestore (solo si MongoDB falló y Firestore no está desactivado)
+      if (!loaded && !isFirestoreDisabled()) {
         try {
           const db = getFirebaseDb();
           if (db) {
@@ -250,8 +256,9 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
             setIsLoadedFromDb(true);
             loaded = true;
           }
-        } catch (fbErr) {
-          console.warn("Firebase notas error:", fbErr);
+        } catch (fbErr: any) {
+          handleFirestoreError(fbErr);
+          console.warn("Firebase notas error (ignorado):", fbErr);
         }
       }
 
@@ -272,24 +279,41 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
 
     loadNotesFromDb();
 
-    // Listener Firestore en tiempo real si está disponible
+    // Listener Firestore en tiempo real si está disponible y sin cuota agotada
     let unsubscribe: (() => void) | undefined = undefined;
-    try {
-      const db = getFirebaseDb();
-      if (db) {
-        const colRef = collection(db, "pizarron_notas");
-        unsubscribe = onSnapshot(colRef, (snapshot) => {
-          if (!isMounted) return;
-          const liveNotes: PinnedNote[] = [];
-          snapshot.forEach((d) => {
-            liveNotes.push({ id: d.id, ...d.data() } as PinnedNote);
-          });
-          if (liveNotes.length > 0) {
-            setNotes(liveNotes);
-          }
-        }, (err) => console.warn("Firestore snapshot listener aviso:", err));
+    if (!isFirestoreDisabled()) {
+      try {
+        const db = getFirebaseDb();
+        if (db) {
+          const colRef = collection(db, "pizarron_notas");
+          unsubscribe = onSnapshot(
+            colRef,
+            (snapshot) => {
+              if (!isMounted) return;
+              const liveNotes: PinnedNote[] = [];
+              snapshot.forEach((d) => {
+                liveNotes.push({ id: d.id, ...d.data() } as PinnedNote);
+              });
+              if (liveNotes.length > 0) {
+                setNotes(liveNotes);
+              }
+            },
+            (err) => {
+              console.warn("Firestore snapshot aviso (cuota?):", err);
+              handleFirestoreError(err);
+              if (unsubscribe) {
+                try {
+                  unsubscribe();
+                } catch {}
+                unsubscribe = undefined;
+              }
+            }
+          );
+        }
+      } catch (e) {
+        console.warn("Firestore snapshot init notice:", e);
       }
-    } catch (e) {}
+    }
 
     return () => {
       isMounted = false;

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { markFirestoreDisabled } from "@/lib/firebase";
 
 export default function ProveedoresError({
   error,
@@ -13,23 +14,36 @@ export default function ProveedoresError({
   useEffect(() => {
     console.error("Error en sección Proveedores:", error);
 
+    const msg = String(error?.message || "").toLowerCase();
+    const isFirebaseQuota =
+      msg.includes("quota") ||
+      msg.includes("resource-exhausted") ||
+      msg.includes("firestore") ||
+      msg.includes("firebase");
+
+    if (isFirebaseQuota) {
+      markFirestoreDisabled(error);
+      reset();
+      return;
+    }
+
     const isChunkOrNavError =
       error?.name === "ChunkLoadError" ||
-      error?.message?.includes("Loading chunk") ||
-      error?.message?.includes("Failed to fetch") ||
-      error?.message?.includes("could not load") ||
-      error?.message?.includes("couldn't load") ||
-      error?.message?.includes("dynamically imported module");
+      msg.includes("loading chunk") ||
+      msg.includes("failed to fetch") ||
+      msg.includes("could not load") ||
+      msg.includes("couldn't load") ||
+      msg.includes("dynamically imported module");
 
     if (isChunkOrNavError && typeof window !== "undefined") {
       window.location.reload();
     }
-  }, [error]);
+  }, [error, reset]);
 
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
       <div className="p-8 rounded-2xl bg-slate-950/80 border border-white/10 max-w-md w-full space-y-4 shadow-xl">
-        <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+        <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
           <AlertCircle className="w-6 h-6" />
         </div>
         <div>

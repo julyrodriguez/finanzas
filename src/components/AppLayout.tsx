@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { CotizacionesTicker } from "@/components/CotizacionesTicker";
+import { markFirestoreDisabled } from "@/lib/firebase";
 import { 
   TrendingUp, 
   ShieldCheck, 
@@ -55,6 +56,56 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     } catch {
       // ignore
     }
+  }, []);
+
+  // Escudo global a nivel de layout para prevenir que errores de cuota de Firestore rompan la pantalla
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event?.reason;
+      const msg = String(reason?.message || reason || "").toLowerCase();
+      const code = String(reason?.code || "").toLowerCase();
+      if (
+        code.includes("resource-exhausted") ||
+        msg.includes("quota exceeded") ||
+        msg.includes("quota") ||
+        (msg.includes("firestore") && (msg.includes("exhausted") || msg.includes("quota")))
+      ) {
+        try {
+          event.preventDefault();
+          event.stopImmediatePropagation?.();
+        } catch {}
+        markFirestoreDisabled(reason);
+        console.warn("🛡️ [AppLayout Guard] Interceptado error de cuota de Firestore en navegación. La aplicación continúa estable.");
+      }
+    };
+
+    const handleError = (event: ErrorEvent) => {
+      const msg = String(event?.message || "").toLowerCase();
+      const errorMsg = String(event?.error?.message || "").toLowerCase();
+      const code = String(event?.error?.code || "").toLowerCase();
+      if (
+        code.includes("resource-exhausted") ||
+        msg.includes("quota exceeded") ||
+        errorMsg.includes("quota exceeded") ||
+        msg.includes("quota") ||
+        (msg.includes("firestore") && (msg.includes("exhausted") || msg.includes("quota")))
+      ) {
+        try {
+          event.preventDefault();
+          event.stopImmediatePropagation?.();
+        } catch {}
+        markFirestoreDisabled(event.error);
+        console.warn("🛡️ [AppLayout Guard] Prevenido error global de cuota de Firestore.");
+      }
+    };
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    window.addEventListener("error", handleError);
+
+    return () => {
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+      window.removeEventListener("error", handleError);
+    };
   }, []);
 
   const togglePin = () => {

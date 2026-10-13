@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
-import { getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import {
   collection,
@@ -275,8 +275,8 @@ export default function PendientesPage() {
       setIsServerConnected(false);
     }
 
-    // 2. Si MongoDB falló, respaldo con Firebase
-    if (!loadedFromMongo) {
+    // 2. Si MongoDB falló, respaldo con Firebase (solo si Firestore no está desactivado por cuota)
+    if (!loadedFromMongo && !isFirestoreDisabled()) {
       try {
         if (db) {
           const colRef = collection(db, "pendientes");
@@ -291,8 +291,8 @@ export default function PendientesPage() {
           }
         }
       } catch (fbErr: any) {
-        console.error("Error loading pendientes:", fbErr);
-        setError("No se pudieron cargar los pendientes. Verifica la conexión.");
+        handleFirestoreError(fbErr);
+        console.warn("Aviso loading pendientes desde Firebase fallback (ignorado):", fbErr);
       }
     }
 
