@@ -722,15 +722,25 @@ export async function updateProveedorInMongo(id: string, data: any): Promise<any
   }
 }
 
-export async function deleteProveedorFromMongo(id: string): Promise<boolean> {
+export async function deleteProveedorFromMongo(
+  id: string,
+  metadata?: { nombre?: string; norm?: string; aliases?: string[] }
+): Promise<boolean> {
   try {
-    let res = await fetch(`${PROVEEDORES_API_URL}/${id}`, {
+    const payload = metadata ? JSON.stringify(metadata) : undefined;
+    const headers = metadata ? { "Content-Type": "application/json" } : undefined;
+
+    let res = await fetch(`${PROVEEDORES_API_URL}/${encodeURIComponent(id)}`, {
       method: "DELETE",
+      headers,
+      body: payload,
     }).catch(() => null);
 
     if (!res || !res.ok) {
-      res = await fetch(`/api/proveedores/${id}`, {
+      res = await fetch(`/api/proveedores/${encodeURIComponent(id)}`, {
         method: "DELETE",
+        headers,
+        body: payload,
       }).catch(() => null);
     }
 

@@ -32,8 +32,15 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const res = await fetch(`${TARGET_API_URL}/${id}`, {
+    let body: any = undefined;
+    try {
+      body = await request.json();
+    } catch {}
+
+    const res = await fetch(`${TARGET_API_URL}/${encodeURIComponent(id)}`, {
       method: "DELETE",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
     });
 
     const data = await res.json();

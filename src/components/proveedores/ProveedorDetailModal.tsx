@@ -33,6 +33,7 @@ interface ProveedorDetailModalProps {
   onClose: () => void;
   proveedor: Proveedor | null;
   onSaveProveedor?: (updated: Proveedor) => Promise<void> | void;
+  onDeleteProveedor?: (proveedor: Proveedor) => Promise<void> | void;
   onDraftEmail?: (proveedor: Proveedor) => void;
   onToggleSave?: (proveedor: Proveedor) => void;
   isSaved?: boolean;
@@ -51,6 +52,7 @@ export function ProveedorDetailModal({
   onClose,
   proveedor,
   onSaveProveedor,
+  onDeleteProveedor,
   onDraftEmail,
   onToggleSave,
   isSaved = false,
@@ -276,6 +278,21 @@ export function ProveedorDetailModal({
                 title={isSaved ? "Quitar de guardados" : "Guardar en favoritos"}
               >
                 {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+              </button>
+            )}
+
+            {onDeleteProveedor && (
+              <button
+                onClick={async () => {
+                  if (confirm(`¿Estás seguro de que querés eliminar permanentemente a "${nombre}"? No volverá a aparecer en el registro ni se volverá a vincular con cotizaciones.`)) {
+                    await onDeleteProveedor(proveedor);
+                    onClose();
+                  }
+                }}
+                className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition-all active:scale-95 cursor-pointer"
+                title="Eliminar proveedor permanentemente"
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
 
@@ -742,13 +759,29 @@ export function ProveedorDetailModal({
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-blue-400" />
-                <span>Editar Datos</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Editar Datos</span>
+                </button>
+                {onDeleteProveedor && (
+                  <button
+                    onClick={async () => {
+                      if (confirm(`¿Estás seguro de que querés eliminar a "${nombre}"? No volverá a aparecer en el registro ni se volverá a vincular con cotizaciones.`)) {
+                        await onDeleteProveedor(proveedor);
+                        onClose();
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Eliminar</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

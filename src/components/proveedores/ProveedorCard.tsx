@@ -21,7 +21,8 @@ import {
   CheckCircle2, 
   Sparkles,
   FileText,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from "lucide-react";
 
 interface ProveedorCardProps {
@@ -33,6 +34,7 @@ interface ProveedorCardProps {
   onDraftEmail?: (proveedor: Proveedor) => void;
   onInvestigate?: (proveedor: Proveedor) => void;
   onOpenDetail?: (proveedor: Proveedor) => void;
+  onDelete?: (proveedor: Proveedor) => void;
 }
 
 function LinkedinIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
@@ -52,6 +54,7 @@ export function ProveedorCard({
   onDraftEmail,
   onInvestigate,
   onOpenDetail,
+  onDelete,
 }: ProveedorCardProps) {
   const [copiedAllMails, setCopiedAllMails] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
@@ -231,6 +234,17 @@ export function ProveedorCard({
                 title={isSaved ? "Quitar de guardados" : "Guardar en favoritos"}
               >
                 {isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+              </button>
+            )}
+
+            {/* Delete provider button */}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(proveedor)}
+                className="p-2 rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-all active:scale-[0.92] cursor-pointer shrink-0"
+                title={`Eliminar ${proveedor.nombre} permanentemente`}
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
           </div>

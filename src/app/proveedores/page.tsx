@@ -28,6 +28,7 @@ import {
   fetchProveedoresFromMongo,
   saveProveedorToMongo,
   updateProveedorInMongo,
+  deleteProveedorFromMongo,
 } from "@/lib/serverSync";
 import { 
   Building2, 
@@ -127,6 +128,28 @@ export default function ProveedoresPage() {
     else setIsRegistryLoading(true);
 
     try {
+      const getDeletedList = (): string[] => {
+        if (typeof window === "undefined") return [];
+        try {
+          const raw = localStorage.getItem("finanzas_deleted_proveedores");
+          return raw ? JSON.parse(raw) : [];
+        } catch {
+          return [];
+        }
+      };
+
+      const deletedList = getDeletedList();
+      const filterDeleted = (items: Proveedor[]): Proveedor[] => {
+        if (!Array.isArray(items)) return [];
+        if (deletedList.length === 0) return items;
+        return items.filter((p) => {
+          const id = p.id;
+          const name = (p.nombre || "").toLowerCase().trim();
+          const norm = (p.norm || "").toLowerCase().trim();
+          return !deletedList.includes(id) && !deletedList.includes(name) && (!norm || !deletedList.includes(norm));
+        });
+      };
+
       // 1. Try reading cached registry for 0ms render
       if (!isManualRefresh && typeof window !== "undefined") {
         const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
@@ -134,7 +157,8 @@ export default function ProveedoresPage() {
           try {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setRegistryProveedores(parsed);
+              const cleanCache = filterDeleted(parsed);
+              setRegistryProveedores(cleanCache);
               setIsRegistryLoading(false);
             }
           } catch {}
@@ -144,9 +168,10 @@ export default function ProveedoresPage() {
       // 2. Fetch fresh data from MongoDB
       const list = await fetchProveedoresFromMongo();
       if (list && Array.isArray(list)) {
-        setRegistryProveedores(list);
+        const cleanList = filterDeleted(list);
+        setRegistryProveedores(cleanList);
         try {
-          localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(list));
+          localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(cleanList));
         } catch {}
       }
     } catch (err) {
@@ -348,6 +373,95 @@ export default function ProveedoresPage() {
     } catch (e: any) {
       console.error("Error al guardar proveedor:", e);
       throw e;
+    }
+  };
+
+  // Delete / Unlink a provider permanently so it never reappears or relinks
+  const handleDeleteProveedor = async (item: Proveedor) => {
+    if (!item) return;
+    const confirmMessage = `¿Estás seguro de que querés eliminar a "${item.nombre}"? No volverá a aparecer en el registro ni se volverá a vincular con cotizaciones.`;
+    if (!window.confirm(confirmMessage)) return;
+
+    const targetId = item.id;
+    const targetNorm = item.norm || "";
+    const targetName = item.nombre;
+    const targetAliases = Array.isArray(item.aliases) ? item.aliases : [];
+
+    // 1. Optimistic removal from all states
+    setRegistryProveedores((prev) =>
+      prev.filter((p) => p.id !== targetId && p.nombre !== targetName && (!targetNorm || p.norm !== targetNorm))
+    );
+    setSavedProveedores((prev) => {
+      const updated = prev.filter(
+        (p) => p.id !== targetId && p.nombre !== targetName && (!targetNorm || p.norm !== targetNorm)
+      );
+      try {
+        localStorage.setItem("cinemark_saved_proveedores", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setSearchProveedores((prev) =>
+      prev.filter((p) => p.id !== targetId && p.nombre !== targetName && (!targetNorm || p.norm !== targetNorm))
+    );
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(targetId);
+      return next;
+    });
+
+    // 2. Persist to local blacklist and update unified cache
+    if (typeof window !== "undefined") {
+      try {
+        const deletedRaw = localStorage.getItem("finanzas_deleted_proveedores");
+        const deletedList: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+        const toAdd = [
+          targetId,
+          targetName.toLowerCase().trim(),
+          targetNorm.toLowerCase().trim(),
+          ...targetAliases.map((a) => a.toLowerCase().trim()),
+        ].filter(Boolean);
+
+        toAdd.forEach((entry) => {
+          if (!deletedList.includes(entry)) deletedList.push(entry);
+        });
+        localStorage.setItem("finanzas_deleted_proveedores", JSON.stringify(deletedList));
+
+        const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
+        if (cached) {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list)) {
+            const cleanList = list.filter(
+              (p: any) =>
+                p.id !== targetId &&
+                p.nombre !== targetName &&
+                (!targetNorm || p.norm !== targetNorm)
+            );
+            localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(cleanList));
+          }
+        }
+      } catch (e) {
+        console.warn("Aviso actualizando caché local de eliminados:", e);
+      }
+    }
+
+    // 3. Close modal if active
+    if (
+      selectedDetailProveedor &&
+      (selectedDetailProveedor.id === targetId || selectedDetailProveedor.nombre === targetName)
+    ) {
+      setIsDetailModalOpen(false);
+      setSelectedDetailProveedor(null);
+    }
+
+    // 4. Notify backend to permanently mark as deleted and unlinked in MongoDB
+    try {
+      await deleteProveedorFromMongo(targetId, {
+        nombre: targetName,
+        norm: targetNorm,
+        aliases: targetAliases,
+      });
+    } catch (err) {
+      console.warn("Aviso eliminando proveedor en servidor:", err);
     }
   };
 
@@ -1015,6 +1129,7 @@ export default function ProveedoresPage() {
                       onDraftEmail={handleOpenDraftForSingle}
                       onInvestigate={handleInvestigateProvider}
                       onOpenDetail={handleOpenDetail}
+                      onDelete={handleDeleteProveedor}
                     />
                   );
                 })}
@@ -1057,6 +1172,7 @@ export default function ProveedoresPage() {
         }}
         proveedor={selectedDetailProveedor}
         onSaveProveedor={handleSaveProveedorDetail}
+        onDeleteProveedor={handleDeleteProveedor}
         onDraftEmail={handleOpenDraftForSingle}
         onToggleSave={handleToggleSave}
         isSaved={selectedDetailProveedor ? Boolean(selectedDetailProveedor.guardado) || savedProveedores.some(p => p.nombre === selectedDetailProveedor.nombre) : false}
