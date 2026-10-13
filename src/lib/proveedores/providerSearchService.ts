@@ -926,7 +926,9 @@ export async function generateDraftEmail(
   complejo = "Cinemark & Hoyts",
   fechaLimite?: string
 ): Promise<{ subject: string; body: string; recipients: string[] }> {
-  const recipients = proveedores.map((p) => p.email).filter(Boolean);
+  const recipients: string[] = proveedores
+    .flatMap((p) => (Array.isArray(p.emails) && p.emails.length > 0 ? p.emails : [p.email]))
+    .filter((e): e is string => Boolean(e && e.trim()));
   const nombresProveedores = proveedores.map((p) => p.nombre).join(", ");
 
   const prompt = `

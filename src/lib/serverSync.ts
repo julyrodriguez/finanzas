@@ -634,3 +634,111 @@ export async function deleteCotizacionFromMongo(id: string): Promise<void> {
   }
 }
 
+// ============================================================================
+// PROVEEDORES MONGO REGISTRY SYNC
+// ============================================================================
+const PROVEEDORES_API_URL = process.env.NEXT_PUBLIC_PROVEEDORES_API_BASE || "https://apivacas.jariel.com.ar/api/proveedores";
+
+export async function fetchProveedoresFromMongo(): Promise<any[] | null> {
+  try {
+    let res = await fetch(PROVEEDORES_API_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      res = await fetch("/api/proveedores", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+      }).catch(() => null);
+    }
+
+    if (res && res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.proveedores)) {
+        return data.proveedores;
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn("⚠️ [Mongo Proveedores] Error al consultar proveedores:", err);
+    return null;
+  }
+}
+
+export async function saveProveedorToMongo(proveedor: any): Promise<any | null> {
+  try {
+    let res = await fetch(PROVEEDORES_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(proveedor),
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      res = await fetch("/api/proveedores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(proveedor),
+      }).catch(() => null);
+    }
+
+    if (res && res.ok) {
+      const data = await res.json();
+      return data.proveedor || null;
+    }
+    return null;
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Proveedor Save] Error:", err?.message || err);
+    return null;
+  }
+}
+
+export async function updateProveedorInMongo(id: string, data: any): Promise<any | null> {
+  try {
+    let res = await fetch(`${PROVEEDORES_API_URL}/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      res = await fetch(`/api/proveedores/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).catch(() => null);
+    }
+
+    if (res && res.ok) {
+      const respData = await res.json();
+      return respData.proveedor || null;
+    }
+    return null;
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Proveedor Update] Error:", err?.message || err);
+    return null;
+  }
+}
+
+export async function deleteProveedorFromMongo(id: string): Promise<boolean> {
+  try {
+    let res = await fetch(`${PROVEEDORES_API_URL}/${id}`, {
+      method: "DELETE",
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      res = await fetch(`/api/proveedores/${id}`, {
+        method: "DELETE",
+      }).catch(() => null);
+    }
+
+    return Boolean(res && res.ok);
+  } catch (err: any) {
+    console.warn("⚠️ [Mongo Proveedor Delete] Error:", err?.message || err);
+    return false;
+  }
+}
+
+

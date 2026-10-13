@@ -16,10 +16,12 @@ import {
   ShieldCheck, 
   Briefcase, 
   Users, 
-  ExternalLink,
-  Compass,
-  CheckCircle2,
-  Sparkles
+  ExternalLink, 
+  Compass, 
+  CheckCircle2, 
+  Sparkles,
+  FileText,
+  ChevronRight
 } from "lucide-react";
 
 interface ProveedorCardProps {
@@ -30,6 +32,15 @@ interface ProveedorCardProps {
   onToggleSelect?: (proveedor: Proveedor) => void;
   onDraftEmail?: (proveedor: Proveedor) => void;
   onInvestigate?: (proveedor: Proveedor) => void;
+  onOpenDetail?: (proveedor: Proveedor) => void;
+}
+
+function LinkedinIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+    </svg>
+  );
 }
 
 export function ProveedorCard({
@@ -40,19 +51,36 @@ export function ProveedorCard({
   onToggleSelect,
   onDraftEmail,
   onInvestigate,
+  onOpenDetail,
 }: ProveedorCardProps) {
-  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [copiedAllMails, setCopiedAllMails] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
 
-  const copyToClipboard = (text: string, type: "email" | "phone") => {
+  // Normalize all emails
+  const allEmails = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(proveedor.emails) ? proveedor.emails : []),
+        ...(proveedor.email ? [proveedor.email] : [])
+      ]
+        .map((e) => (e || "").trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  const copyAllEmailsToClipboard = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (allEmails.length === 0) return;
+    navigator.clipboard.writeText(allEmails.join(", "));
+    setCopiedAllMails(true);
+    setTimeout(() => setCopiedAllMails(false), 2000);
+  };
+
+  const copyPhoneToClipboard = (text: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     navigator.clipboard.writeText(text);
-    if (type === "email") {
-      setCopiedEmail(true);
-      setTimeout(() => setCopiedEmail(false), 2000);
-    } else {
-      setCopiedPhone(true);
-      setTimeout(() => setCopiedPhone(false), 2000);
-    }
+    setCopiedPhone(true);
+    setTimeout(() => setCopiedPhone(false), 2000);
   };
 
   const getReliabilityBadge = (conf?: string) => {
@@ -81,6 +109,9 @@ export function ProveedorCard({
     }
   };
 
+  const cotizacionesCount = (proveedor.cotizaciones || []).length;
+  const ubicacionStr = proveedor.ubicacion || proveedor.zona || "";
+
   return (
     <div
       className={`group relative flex flex-col justify-between rounded-2xl border transition-all duration-200 overflow-hidden ${
@@ -97,7 +128,7 @@ export function ProveedorCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
             {onToggleSelect && (
-              <div className="pt-0.5">
+              <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="checkbox"
                   checked={isSelected}
@@ -109,23 +140,47 @@ export function ProveedorCard({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-1.5 truncate">
-                  <span className="truncate">{proveedor.nombre}</span>
-                  {proveedor.sitio_web && (
-                    <a
-                      href={proveedor.sitio_web}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-slate-400 hover:text-blue-400 transition-colors shrink-0"
-                      title="Visitar sitio web oficial"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 inline" />
-                    </a>
-                  )}
-                </h3>
+                <button
+                  type="button"
+                  onClick={() => onOpenDetail && onOpenDetail(proveedor)}
+                  className="text-left text-base sm:text-lg font-bold text-white tracking-tight hover:text-blue-300 transition-colors cursor-pointer truncate max-w-full"
+                >
+                  {proveedor.nombre}
+                </button>
+                {proveedor.sitio_web && (
+                  <a
+                    href={proveedor.sitio_web.startsWith("http") ? proveedor.sitio_web : `https://${proveedor.sitio_web}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-slate-400 hover:text-blue-400 transition-colors shrink-0"
+                    title="Visitar sitio web oficial"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 inline" />
+                  </a>
+                )}
+                {proveedor.linkedin && (
+                  <a
+                    href={proveedor.linkedin.startsWith("http") ? proveedor.linkedin : `https://${proveedor.linkedin}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-slate-400 hover:text-blue-400 transition-colors shrink-0"
+                    title="Perfil de LinkedIn"
+                  >
+                    <LinkedinIcon className="w-3.5 h-3.5 inline text-blue-400" />
+                  </a>
+                )}
               </div>
 
+              {/* Tags / Badges */}
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {cotizacionesCount > 0 && (
+                  <span className="inline-flex items-center gap-1 text-xs text-indigo-300 font-bold bg-indigo-500/15 px-2 py-0.5 rounded-lg border border-indigo-500/30 shadow-sm" title={`Participó en ${cotizacionesCount} cotizaciones registradas`}>
+                    <FileText className="w-3 h-3 text-indigo-400" />
+                    <span>{cotizacionesCount} {cotizacionesCount === 1 ? 'cotización' : 'cotizaciones'}</span>
+                  </span>
+                )}
                 {proveedor?.es_argentina !== false && (!proveedor?.pais || String(proveedor.pais).toLowerCase() === "argentina") ? (
                   <span className="inline-flex items-center gap-1 text-xs text-emerald-300 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/25 shadow-sm" title="Proveedor radicado en Argentina">
                     <span>🇦🇷 Argentina</span>
@@ -135,21 +190,25 @@ export function ProveedorCard({
                     <span>⚠️ {proveedor.pais || "Exterior"}</span>
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1 text-xs text-blue-300 font-semibold bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-500/20">
-                  <Briefcase className="w-3 h-3 text-blue-400" />
-                  <span>{proveedor.rubro}</span>
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs text-slate-300 bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-700/80">
-                  <MapPin className="w-3 h-3 text-slate-400" />
-                  <span>{proveedor.zona}</span>
-                </span>
+                {proveedor.rubro && (
+                  <span className="inline-flex items-center gap-1 text-xs text-blue-300 font-semibold bg-blue-500/10 px-2.5 py-0.5 rounded-lg border border-blue-500/20">
+                    <Briefcase className="w-3 h-3 text-blue-400" />
+                    <span>{proveedor.rubro}</span>
+                  </span>
+                )}
+                {ubicacionStr && (
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-300 bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-700/80">
+                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <span>{ubicacionStr}</span>
+                  </span>
+                )}
                 {getReliabilityBadge(proveedor.confiabilidad)}
               </div>
             </div>
           </div>
 
           {/* Top right actions: AI investigate & Bookmark */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             {onInvestigate && (
               <button
                 onClick={() => onInvestigate(proveedor)}
@@ -178,47 +237,36 @@ export function ProveedorCard({
         </div>
 
         {/* Informacion de sus trabajos / servicios */}
-        <div className="bg-slate-950/50 rounded-xl p-3.5 border border-white/[0.04]">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-            <Building2 className="w-3.5 h-3.5 text-blue-400" />
-            <span>Trabajos & Capacidad Técnica</span>
+        {proveedor.descripcion_trabajos && (
+          <div className="bg-slate-950/50 rounded-xl p-3.5 border border-white/[0.04]">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+              <Building2 className="w-3.5 h-3.5 text-blue-400" />
+              <span>Trabajos & Capacidad Técnica</span>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">
+              {proveedor.descripcion_trabajos}
+            </p>
           </div>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">
-            {proveedor.descripcion_trabajos || "Servicios generales y provisión especializada en el rubro."}
-          </p>
-        </div>
+        )}
 
         {/* Con quién trabajó / Clientes */}
-        <div className="bg-slate-950/50 rounded-xl p-3.5 border border-white/[0.04]">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
-            <Users className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Clientes & Referencias Detectadas</span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">
-            {proveedor.clientes_proyectos || "Cartera comercial y empresas de la zona."}
-          </p>
-        </div>
-
-        {/* Fuente de origen explícita */}
-        {proveedor.fuente && (
-          <div className="bg-slate-950/80 rounded-xl px-3.5 py-2.5 border border-cyan-500/20 flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 min-w-0 truncate">
-              <Compass className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span className="font-semibold text-slate-300">Origen:</span>
-              <span className="text-cyan-300 font-medium truncate">
-                {proveedor.fuente_nombre || "Rastreo Web"}
-              </span>
+        {proveedor.clientes_proyectos && (
+          <div className="bg-slate-950/50 rounded-xl p-3.5 border border-white/[0.04]">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Clientes & Referencias Detectadas</span>
             </div>
-            <a
-              href={proveedor.fuente}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-mono transition-colors shrink-0 ml-auto"
-              title="Abrir URL exacta de origen"
-            >
-              <span>Ver Fuente</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">
+              {proveedor.clientes_proyectos}
+            </p>
+          </div>
+        )}
+
+        {/* Aliases asimilados si no hay trabajos */}
+        {!proveedor.descripcion_trabajos && (proveedor.aliases || []).length > 1 && (
+          <div className="bg-slate-950/40 rounded-xl p-3 border border-white/[0.04] text-xs text-slate-400">
+            <span className="text-slate-500 font-semibold">Variantes en cotizaciones: </span>
+            <span>{(proveedor.aliases || []).join(" • ")}</span>
           </div>
         )}
       </div>
@@ -226,29 +274,35 @@ export function ProveedorCard({
       {/* Contact Channels & Action Footer */}
       <div className="p-5 sm:p-6 pt-3.5 border-t border-white/[0.06] bg-slate-950/30 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Email button */}
-          {proveedor.email ? (
+          {/* Email button: supports single or multiple emails */}
+          {allEmails.length > 0 ? (
             <div className="inline-flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/15 border border-blue-500/20 text-blue-300 text-xs px-2.5 py-1.5 rounded-xl transition-colors group/mail">
               <Mail className="w-3.5 h-3.5 text-blue-400" />
               <a
-                href={`mailto:${proveedor.email}`}
-                className="hover:underline font-mono text-[11px]"
-                title="Enviar correo"
+                href={`mailto:${allEmails[0]}`}
+                onClick={(e) => e.stopPropagation()}
+                className="hover:underline font-mono text-[11px] truncate max-w-[160px]"
+                title={allEmails.join(", ")}
               >
-                {proveedor.email}
+                {allEmails[0]}
+                {allEmails.length > 1 && (
+                  <span className="ml-1 text-[10px] bg-blue-500/20 px-1 py-0.2 rounded text-blue-200">
+                    +{allEmails.length - 1}
+                  </span>
+                )}
               </a>
               <button
-                onClick={() => copyToClipboard(proveedor.email, "email")}
+                onClick={copyAllEmailsToClipboard}
                 className="text-slate-400 hover:text-white ml-1 p-0.5 rounded transition-transform active:scale-90 cursor-pointer"
-                title="Copiar email"
+                title={`Copiar todos los correos (${allEmails.length})`}
               >
-                {copiedEmail ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedAllMails ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
           ) : (
             <span className="text-xs text-slate-500 italic flex items-center gap-1">
               <Mail className="w-3.5 h-3.5 text-slate-600" />
-              Email no publicado en web
+              Email no registrado
             </span>
           )}
 
@@ -258,12 +312,13 @@ export function ProveedorCard({
               <Phone className="w-3.5 h-3.5 text-emerald-400" />
               <a
                 href={`tel:${proveedor.telefono.replace(/\s+/g, "")}`}
+                onClick={(e) => e.stopPropagation()}
                 className="font-mono text-[11px] hover:underline"
               >
                 {proveedor.telefono}
               </a>
               <button
-                onClick={() => copyToClipboard(proveedor.telefono!, "phone")}
+                onClick={(e) => copyPhoneToClipboard(proveedor.telefono!, e)}
                 className="text-slate-400 hover:text-white ml-1 p-0.5 rounded transition-transform active:scale-90 cursor-pointer"
                 title="Copiar teléfono"
               >
@@ -275,43 +330,56 @@ export function ProveedorCard({
           {/* Website link */}
           {proveedor.sitio_web && (
             <a
-              href={proveedor.sitio_web}
+              href={proveedor.sitio_web.startsWith("http") ? proveedor.sitio_web : `https://${proveedor.sitio_web}`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-1 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-white text-xs px-2.5 py-1.5 rounded-xl transition-colors"
             >
               <Globe className="w-3.5 h-3.5 text-slate-400" />
               <span>Sitio Web</span>
             </a>
           )}
+
+          {/* LinkedIn link */}
+          {proveedor.linkedin && (
+            <a
+              href={proveedor.linkedin.startsWith("http") ? proveedor.linkedin : `https://${proveedor.linkedin}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-500/30 text-blue-300 hover:text-white text-xs px-2.5 py-1.5 rounded-xl transition-colors"
+            >
+              <LinkedinIcon className="w-3.5 h-3.5 text-blue-400" />
+              <span>LinkedIn</span>
+            </a>
+          )}
         </div>
 
         {/* Action CTAs */}
-        {(onInvestigate || (onDraftEmail && proveedor.email)) && (
-          <div className="flex items-center gap-2 mt-1">
-            {onInvestigate && (
-              <button
-                onClick={() => onInvestigate(proveedor)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/25 hover:border-blue-500/40 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer shadow-sm shadow-blue-500/5"
-                title={`Consultar antecedentes y más info de ${proveedor.nombre} con IA`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span>Más Info IA</span>
-              </button>
-            )}
+        <div className="flex items-center gap-2 mt-1">
+          {onOpenDetail && (
+            <button
+              onClick={() => onOpenDetail(proveedor)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/10 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer"
+              title="Ver ficha completa del proveedor"
+            >
+              <span>Ver Ficha</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+          )}
 
-            {onDraftEmail && proveedor.email && (
-              <button
-                onClick={() => onDraftEmail(proveedor)}
-                className={`${onInvestigate ? "flex-1" : "w-full"} flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-[0.98] cursor-pointer`}
-                title="Redactar correo de cotización para este proveedor"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{onInvestigate ? "Cotizar" : "Redactar Solicitud"}</span>
-              </button>
-            )}
-          </div>
-        )}
+          {onDraftEmail && allEmails.length > 0 && (
+            <button
+              onClick={() => onDraftEmail({ ...proveedor, emails: allEmails, email: allEmails[0] })}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-[0.98] cursor-pointer"
+              title="Redactar correo de cotización para este proveedor"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Cotizar</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

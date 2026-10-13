@@ -8,7 +8,13 @@ import { ProveedorSearchForm } from "@/components/proveedores/ProveedorSearchFor
 import { ProveedorDraftEmailModal } from "@/components/proveedores/ProveedorDraftEmailModal";
 import { ProveedorSkillsModal } from "@/components/proveedores/ProveedorSkillsModal";
 import { ProveedorAiChatModal } from "@/components/proveedores/ProveedorAiChatModal";
+import { ProveedorDetailModal } from "@/components/proveedores/ProveedorDetailModal";
 import { exportToExcel } from "@/lib/exportToExcel";
+import {
+  fetchProveedoresFromMongo,
+  saveProveedorToMongo,
+  updateProveedorInMongo,
+} from "@/lib/serverSync";
 import { 
   Building2, 
   Search, 
@@ -30,15 +36,29 @@ import {
   X,
   FileSpreadsheet,
   CheckCircle2,
-  Clock
+  Plus,
+  RefreshCw,
+  FileText,
+  Layers,
+  ArrowRight
 } from "lucide-react";
 
 export default function ProveedoresPage() {
-  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  // Registry state (from MongoDB: cotizaciones + saved providers)
+  const [registryProveedores, setRegistryProveedores] = useState<Proveedor[]>([]);
+  const [isRegistryLoading, setIsRegistryLoading] = useState(true);
+  const [isRefreshingRegistry, setIsRefreshingRegistry] = useState(false);
+  const [registryFilter, setRegistryFilter] = useState<"todos" | "cotizaciones" | "guardados" | "con_email">("todos");
+
+  // Search state (from active IA web search)
+  const [searchProveedores, setSearchProveedores] = useState<Proveedor[]>([]);
   const [savedProveedores, setSavedProveedores] = useState<Proveedor[]>([]);
-  const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
+  
+  // Navigation tabs
+  const [activeTab, setActiveTab] = useState<"registry" | "search" | "saved">("registry");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
+  // Search loading & logs
   const [isLoading, setIsLoading] = useState(false);
   const [currentStepMessage, setCurrentStepMessage] = useState("");
   const [searchLogs, setSearchLogs] = useState<string[]>([]);
@@ -63,25 +83,60 @@ export default function ProveedoresPage() {
   const [copiedAllEmails, setCopiedAllEmails] = useState(false);
   const [copiedLogs, setCopiedLogs] = useState(false);
 
-  // Load saved state from localStorage on mount
+  // Detail Modal State
+  const [selectedDetailProveedor, setSelectedDetailProveedor] = useState<Proveedor | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  // Load registry from MongoDB and local storage on mount
   useEffect(() => {
+    loadRegistryFromMongo();
+
     try {
       const storedSaved = localStorage.getItem("cinemark_saved_proveedores");
       if (storedSaved) {
         setSavedProveedores(JSON.parse(storedSaved));
       }
       const storedKey = localStorage.getItem("firecrawl_api_key");
-      if (storedKey) {
-        setFirecrawlApiKey(storedKey);
-      }
+      if (storedKey) setFirecrawlApiKey(storedKey);
       const storedGem = localStorage.getItem("gemini_api_key");
-      if (storedGem) {
-        setGeminiApiKey(storedGem);
-      }
+      if (storedGem) setGeminiApiKey(storedGem);
     } catch (e) {
       console.error("Error loading localStorage:", e);
     }
   }, []);
+
+  const loadRegistryFromMongo = async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshingRegistry(true);
+    else setIsRegistryLoading(true);
+
+    try {
+      // 1. Try reading cached registry for 0ms render
+      if (!isManualRefresh && typeof window !== "undefined") {
+        const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRegistryProveedores(parsed);
+            setIsRegistryLoading(false);
+          }
+        }
+      }
+
+      // 2. Fetch fresh data from MongoDB
+      const list = await fetchProveedoresFromMongo();
+      if (list && Array.isArray(list)) {
+        setRegistryProveedores(list);
+        try {
+          localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(list));
+        } catch {}
+      }
+    } catch (err) {
+      console.warn("Error cargando registro de proveedores:", err);
+    } finally {
+      setIsRegistryLoading(false);
+      setIsRefreshingRegistry(false);
+    }
+  };
 
   const handleSaveFirecrawlKey = (key: string) => {
     setFirecrawlApiKey(key);
@@ -97,21 +152,129 @@ export default function ProveedoresPage() {
     } catch {}
   };
 
-  // Toggle bookmark in savedProveedores
-  const handleToggleSave = (item: Proveedor) => {
+  // Toggle bookmark / save in MongoDB database
+  const handleToggleSave = async (item: Proveedor) => {
+    const isCurrentlySaved = Boolean(item.guardado) || savedProveedores.some((p) => p.nombre === item.nombre);
+    const newSavedStatus = !isCurrentlySaved;
+
+    // Normalizar lista de correos
+    const emailsList = Array.isArray(item.emails) && item.emails.length > 0
+      ? item.emails
+      : item.email ? [item.email] : [];
+
+    const payload = {
+      ...item,
+      guardado: newSavedStatus,
+      emails: emailsList,
+      ubicacion: item.ubicacion || item.zona || "",
+      fuente: item.fuente || (activeTab === "search" ? "busqueda_ia" : "manual")
+    };
+
+    // 1. Optimistic local update in savedProveedores
     setSavedProveedores((prev) => {
       const exists = prev.some((p) => p.nombre === item.nombre);
       let updated: Proveedor[];
       if (exists) {
         updated = prev.filter((p) => p.nombre !== item.nombre);
       } else {
-        updated = [{ ...item, guardado: true }, ...prev];
+        updated = [{ ...item, guardado: true, emails: emailsList }, ...prev];
       }
       try {
         localStorage.setItem("cinemark_saved_proveedores", JSON.stringify(updated));
       } catch {}
       return updated;
     });
+
+    // 2. Optimistic update in registryProveedores
+    setRegistryProveedores((prev) => {
+      const idx = prev.findIndex((p) => p.id === item.id || (p.norm && item.norm && p.norm === item.norm) || p.nombre === item.nombre);
+      if (idx !== -1) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], guardado: newSavedStatus };
+        return next;
+      } else if (newSavedStatus) {
+        return [{ ...item, guardado: true, emails: emailsList }, ...prev];
+      }
+      return prev;
+    });
+
+    // 3. Persist to MongoDB (apivacas.jariel.com.ar)
+    try {
+      await saveProveedorToMongo(payload);
+    } catch (e) {
+      console.warn("No se pudo persistir estado en MongoDB:", e);
+    }
+  };
+
+  // Save changes from Detail Modal
+  const handleSaveProveedorDetail = async (updated: Proveedor) => {
+    try {
+      const savedDoc = await saveProveedorToMongo(updated);
+      
+      const finalItem = {
+        ...updated,
+        id: savedDoc?._id || updated.id,
+        _id: savedDoc?._id || updated._id,
+        guardado: true
+      };
+
+      setRegistryProveedores((prev) => {
+        const idx = prev.findIndex((p) => p.id === updated.id || (p.norm && updated.norm && p.norm === updated.norm) || p.nombre === updated.nombre);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...finalItem };
+          return next;
+        }
+        return [finalItem, ...prev];
+      });
+
+      setSelectedDetailProveedor(finalItem);
+
+      // Sincronizar en caché local
+      try {
+        const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
+        if (cached) {
+          const list = JSON.parse(cached);
+          const i = list.findIndex((p: any) => p.nombre === updated.nombre);
+          if (i !== -1) list[i] = { ...list[i], ...finalItem };
+          else list.unshift(finalItem);
+          localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(list));
+        }
+      } catch {}
+    } catch (e: any) {
+      console.error("Error al guardar proveedor:", e);
+      throw e;
+    }
+  };
+
+  // Open detail modal for a provider
+  const handleOpenDetail = (prov: Proveedor) => {
+    setSelectedDetailProveedor(prov);
+    setIsDetailModalOpen(true);
+  };
+
+  // Open modal to add a brand new supplier
+  const handleOpenAddNewProvider = () => {
+    const blank: Proveedor = {
+      id: `manual-${Date.now()}`,
+      nombre: "",
+      rubro: "",
+      zona: "",
+      ubicacion: "",
+      sitio_web: "",
+      linkedin: "",
+      emails: [],
+      email: "",
+      telefono: "",
+      descripcion_trabajos: "",
+      clientes_proyectos: "",
+      notas: "",
+      guardado: true,
+      fuente: "manual",
+      cotizaciones: []
+    };
+    setSelectedDetailProveedor(blank);
+    setIsDetailModalOpen(true);
   };
 
   // Toggle selection for bulk actions
@@ -135,7 +298,7 @@ export default function ProveedoresPage() {
     setSelectedIds(new Set());
   };
 
-  // Execute Search
+  // Execute IA Web Search
   const handleSearch = async (params: {
     rubro: string;
     zona: string;
@@ -168,7 +331,6 @@ export default function ProveedoresPage() {
       }).catch(() => null);
 
       if (!res || !res.ok) {
-        // Fallback resiliente a ruta interna Next.js
         res = await fetch("/api/proveedores/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -185,7 +347,7 @@ export default function ProveedoresPage() {
         throw new Error(data.error || "Error al procesar la búsqueda de proveedores");
       }
 
-      setProveedores(data.proveedores || []);
+      setSearchProveedores(data.proveedores || []);
       setSearchLogs(data.logs || []);
     } catch (err: any) {
       console.error("Error en búsqueda:", err);
@@ -207,7 +369,7 @@ export default function ProveedoresPage() {
   };
 
   const handleAddNewProveedores = (newOnes: Proveedor[]) => {
-    setProveedores((prev) => {
+    setSearchProveedores((prev) => {
       const existingNames = new Set(prev.map((p) => (p.nombre || "").toLowerCase().trim()));
       const filteredNew = newOnes.filter((p) => !existingNames.has((p.nombre || "").toLowerCase().trim()));
       return [...filteredNew, ...prev];
@@ -215,46 +377,93 @@ export default function ProveedoresPage() {
     setActiveTab("search");
   };
 
-  // List of items currently displayed based on activeTab
-  const currentList = activeTab === "search" ? proveedores : savedProveedores;
+  // Active list according to selected Tab
+  const baseList = useMemo(() => {
+    if (activeTab === "registry") {
+      let list = registryProveedores;
+      if (registryFilter === "cotizaciones") {
+        list = list.filter((p) => (p.cotizaciones || []).length > 0);
+      } else if (registryFilter === "guardados") {
+        list = list.filter((p) => Boolean(p.guardado));
+      } else if (registryFilter === "con_email") {
+        list = list.filter((p) => (Array.isArray(p.emails) && p.emails.length > 0) || Boolean(p.email));
+      }
+      return list;
+    }
+    if (activeTab === "saved") {
+      // Unir guardados de base de datos con locales
+      const dbSaved = registryProveedores.filter((p) => Boolean(p.guardado));
+      const map = new Map<string, Proveedor>();
+      dbSaved.forEach((p) => map.set((p.nombre || "").toLowerCase().trim(), p));
+      savedProveedores.forEach((p) => {
+        const k = (p.nombre || "").toLowerCase().trim();
+        if (!map.has(k)) map.set(k, p);
+      });
+      return Array.from(map.values());
+    }
+    return searchProveedores;
+  }, [activeTab, registryProveedores, savedProveedores, searchProveedores, registryFilter]);
 
   // Filtered list based on search term & email filter
   const filteredList = useMemo(() => {
     const s = (searchTerm || "").toLowerCase().trim();
-    if (!currentList || !Array.isArray(currentList)) return [];
+    if (!baseList || !Array.isArray(baseList)) return [];
 
-    return currentList.filter((p) => {
+    return baseList.filter((p) => {
       if (!p) return false;
       const nombre = (p.nombre || "").toLowerCase();
+      const norm = (p.norm || "").toLowerCase();
+      const aliases = (p.aliases || []).join(" ").toLowerCase();
       const rubro = (p.rubro || "").toLowerCase();
-      const zona = (p.zona || "").toLowerCase();
+      const zona = (p.zona || p.ubicacion || "").toLowerCase();
       const pais = (p.pais || "").toLowerCase();
       const desc = (p.descripcion_trabajos || "").toLowerCase();
       const clientes = (p.clientes_proyectos || "").toLowerCase();
+      const emailsStr = (Array.isArray(p.emails) ? p.emails.join(" ") : p.email || "").toLowerCase();
+      const quotesStr = (p.cotizaciones || []).map((c) => c.name).join(" ").toLowerCase();
 
       const matchesText =
         !s ||
         nombre.includes(s) ||
+        norm.includes(s) ||
+        aliases.includes(s) ||
         rubro.includes(s) ||
         zona.includes(s) ||
         pais.includes(s) ||
         desc.includes(s) ||
-        clientes.includes(s);
+        clientes.includes(s) ||
+        emailsStr.includes(s) ||
+        quotesStr.includes(s);
 
-      const matchesEmail = onlyWithEmail ? Boolean(p.email) : true;
+      const hasEmail = (Array.isArray(p.emails) && p.emails.length > 0) || Boolean(p.email);
+      const matchesEmail = onlyWithEmail ? hasEmail : true;
 
       return matchesText && matchesEmail;
     });
-  }, [currentList, searchTerm, onlyWithEmail]);
+  }, [baseList, searchTerm, onlyWithEmail]);
 
-  // Bulk copy emails
+  // Bulk copy all emails of filtered list
   const handleCopyAllEmails = () => {
-    const emails = filteredList.map((p) => p.email).filter(Boolean);
-    if (emails.length === 0) return;
+    const allMails: string[] = [];
+    filteredList.forEach((p) => {
+      if (Array.isArray(p.emails)) {
+        p.emails.forEach((e) => {
+          if (e && !allMails.includes(e.trim())) allMails.push(e.trim());
+        });
+      }
+      if (p.email && !allMails.includes(p.email.trim())) {
+        allMails.push(p.email.trim());
+      }
+    });
 
-    navigator.clipboard.writeText(emails.join(", "));
+    if (allMails.length === 0) {
+      alert("No hay correos en la selección actual para copiar.");
+      return;
+    }
+
+    navigator.clipboard.writeText(allMails.join(", "));
     setCopiedAllEmails(true);
-    setTimeout(() => setCopiedAllEmails(false), 2000);
+    setTimeout(() => setCopiedAllEmails(false), 2200);
   };
 
   // Copy Logs
@@ -269,22 +478,34 @@ export default function ProveedoresPage() {
   const handleExportExcel = () => {
     if (filteredList.length === 0) return;
 
-    const dataToExport = filteredList.map((p, index) => ({
-      "N°": index + 1,
-      "Empresa / Proveedor": p.nombre,
-      "Rubro / Especialidad": p.rubro,
-      "Zona de Cobertura": p.zona,
-      "Trabajos & Capacidad Técnica": p.descripcion_trabajos,
-      "Con quién trabajó / Clientes": p.clientes_proyectos,
-      "Correo de Contacto": p.email || "No informado",
-      "Teléfono / WhatsApp": p.telefono || "No informado",
-      "Sitio Web": p.sitio_web || "",
-      "Fuente / De dónde se extrajo": p.fuente_nombre ? `${p.fuente_nombre} (${p.fuente})` : p.fuente || "Web",
-      "Nivel Confiabilidad": p.confiabilidad || "media",
-    }));
+    const dataToExport = filteredList.map((p, index) => {
+      const emailList = Array.isArray(p.emails) && p.emails.length > 0
+        ? p.emails.join(", ")
+        : p.email || "No registrado";
 
-    const filename = `Proveedores_${(lastQuery || "Cinemark").replace(/[^a-zA-Z0-9]/g, "_")}`;
-    exportToExcel(dataToExport, filename, "Proveedores");
+      const cotsList = (p.cotizaciones || []).map((c) => c.name).join(" • ");
+
+      return {
+        "N°": index + 1,
+        "Empresa / Proveedor": p.nombre,
+        "Variantes / Nombres Asimilados": (p.aliases || []).join(", "),
+        "Rubro / Especialidad": p.rubro || "General",
+        "Ubicación / Cobertura": p.ubicacion || p.zona || "No especificada",
+        "Correos Electrónicos": emailList,
+        "Teléfono / WhatsApp": p.telefono || "No registrado",
+        "Sitio Web": p.sitio_web || "",
+        "LinkedIn": p.linkedin || "",
+        "Cotizaciones en las que Participó": (p.cotizaciones || []).length,
+        "Nombres de Cotizaciones": cotsList || "Sin cotizaciones previas",
+        "Trabajos & Capacidad Técnica": p.descripcion_trabajos || "",
+        "Clientes & Referencias": p.clientes_proyectos || "",
+        "Origen": p.fuente || "Registro",
+        "Guardado en Favoritos": p.guardado ? "Sí" : "No",
+      };
+    });
+
+    const filename = `Proveedores_${activeTab}_${new Date().toISOString().slice(0, 10)}`;
+    exportToExcel(dataToExport, filename, "Registro de Proveedores");
   };
 
   // Open Draft RFP email modal
@@ -294,9 +515,9 @@ export default function ProveedoresPage() {
   };
 
   const handleOpenDraftForSelected = () => {
-    const selected = currentList.filter((p) => selectedIds.has(p.id));
+    const selected = baseList.filter((p) => selectedIds.has(p.id));
     if (selected.length === 0) {
-      setDraftTargetProveedores(filteredList.filter((p) => Boolean(p.email)));
+      setDraftTargetProveedores(filteredList.filter((p) => (Array.isArray(p.emails) && p.emails.length > 0) || Boolean(p.email)));
     } else {
       setDraftTargetProveedores(selected);
     }
@@ -304,12 +525,13 @@ export default function ProveedoresPage() {
   };
 
   // Metrics
-  const totalFound = currentList.length;
-  const totalWithEmail = currentList.filter((p) => Boolean(p.email)).length;
-  const verifiedCount = currentList.filter((p) => p.confiabilidad === "alta").length;
+  const totalRegistry = registryProveedores.length;
+  const totalFromQuotes = registryProveedores.filter((p) => (p.cotizaciones || []).length > 0).length;
+  const totalSavedCount = registryProveedores.filter((p) => Boolean(p.guardado)).length || savedProveedores.length;
+  const totalWithEmailCount = registryProveedores.filter((p) => (Array.isArray(p.emails) && p.emails.length > 0) || Boolean(p.email)).length;
 
   return (
-    <AppLayout title="Buscador de Proveedores IA" subtitle="Cinemark & Hoyts">
+    <AppLayout title="Registro y Buscador de Proveedores" subtitle="Cinemark & Hoyts">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         
         {/* Hero Section */}
@@ -317,54 +539,184 @@ export default function ProveedoresPage() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-2">
               <Building2 className="w-3.5 h-3.5" />
-              <span>Compras & Contrataciones • Cadena Cinemark & Hoyts</span>
+              <span>Compras & Contrataciones • Base Centralizada MongoDB</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-              Buscador Inteligente de Proveedores con IA
+              Registro & Buscador de Proveedores
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
-              Localizá empresas, contratistas y talleres por rubro y zona, con extracción automática de obras realizadas, clientes atendidos y canales directos de cotización.
+              Padrón inteligente de proveedores con asimilación automática de nombres en cotizaciones, múltiples correos de contacto, LinkedIn, ubicación e historial de comparativas.
             </p>
           </div>
 
           {/* Segmented Tab Switcher */}
-          <div className="flex items-center p-1 bg-slate-950/90 rounded-2xl border border-white/[0.08] self-start md:self-auto shadow-inner">
+          <div className="flex items-center p-1 bg-slate-950/90 rounded-2xl border border-white/[0.08] self-start md:self-auto shadow-inner flex-wrap sm:flex-nowrap gap-1">
+            {/* Tab: Registro Central */}
+            <button
+              onClick={() => setActiveTab("registry")}
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+                activeTab === "registry"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Registro de Proveedores</span>
+              {totalRegistry > 0 && (
+                <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-white/20 text-white leading-tight">
+                  {totalRegistry}
+                </span>
+              )}
+            </button>
+
+            {/* Tab: Búsqueda IA */}
             <button
               onClick={() => setActiveTab("search")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                 activeTab === "search"
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/20"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <Search className="w-3.5 h-3.5" />
-              <span>Búsqueda Activa</span>
-              {proveedores.length > 0 && (
+              <span>Búsqueda Web con IA</span>
+              {searchProveedores.length > 0 && (
                 <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-white/20 text-white leading-tight">
-                  {proveedores.length}
+                  {searchProveedores.length}
                 </span>
               )}
             </button>
+
+            {/* Tab: Guardados */}
             <button
               onClick={() => setActiveTab("saved")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
                 activeTab === "saved"
                   ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-md shadow-amber-600/20"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <Bookmark className="w-3.5 h-3.5" />
-              <span>Mis Guardados</span>
-              {savedProveedores.length > 0 && (
+              <span>Guardados</span>
+              {totalSavedCount > 0 && (
                 <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-white/20 text-white leading-tight">
-                  {savedProveedores.length}
+                  {totalSavedCount}
                 </span>
               )}
             </button>
           </div>
         </div>
 
-        {/* Search Prompt Form */}
+        {/* ================================================================ */}
+        {/* TAB 1: REGISTRO DE PROVEEDORES (Directorio + Cotizaciones) */}
+        {/* ================================================================ */}
+        {activeTab === "registry" && (
+          <div className="space-y-4">
+            {/* Metric Summary Badges */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-base">
+                  {totalRegistry}
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-medium">Total Registrados</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Proveedores</div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-base">
+                  {totalFromQuotes}
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-medium">De Cotizaciones</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Con Historial</div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base">
+                  {totalWithEmailCount}
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-medium">Canales Directos</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Con Correo</div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-base">
+                  {totalSavedCount}
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-medium">Favoritos</div>
+                  <div className="text-sm font-bold text-white tracking-tight">Guardados</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setRegistryFilter("todos")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                  registryFilter === "todos"
+                    ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                    : "bg-slate-900 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                Todos ({totalRegistry})
+              </button>
+              <button
+                onClick={() => setRegistryFilter("cotizaciones")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  registryFilter === "cotizaciones"
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
+                    : "bg-slate-900 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-300" />
+                <span>De Cotizaciones ({totalFromQuotes})</span>
+              </button>
+              <button
+                onClick={() => setRegistryFilter("guardados")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  registryFilter === "guardados"
+                    ? "bg-amber-600 text-white shadow-sm shadow-amber-600/30"
+                    : "bg-slate-900 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                <Bookmark className="w-3.5 h-3.5 text-amber-300" />
+                <span>Guardados ({totalSavedCount})</span>
+              </button>
+              <button
+                onClick={() => setRegistryFilter("con_email")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  registryFilter === "con_email"
+                    ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                    : "bg-slate-900 text-slate-400 hover:text-white border border-white/5"
+                }`}
+              >
+                <Mail className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Con Correo ({totalWithEmailCount})</span>
+              </button>
+
+              <button
+                onClick={() => loadRegistryFromMongo(true)}
+                disabled={isRefreshingRegistry}
+                className="ml-auto px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-white/5 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Actualizar registro desde MongoDB"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingRegistry ? "animate-spin text-blue-400" : ""}`} />
+                <span>{isRefreshingRegistry ? "Sincronizando..." : "Sincronizar"}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* TAB 2: SEARCH FORM (Cuando se selecciona Búsqueda Web con IA) */}
+        {/* ================================================================ */}
         {activeTab === "search" && (
           <ProveedorSearchForm
             onSearch={handleSearch}
@@ -394,7 +746,7 @@ export default function ProveedoresPage() {
                 className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
                 title="Copiar log completo"
               >
-                {copiedLogs ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                {copiedLogs ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedLogs ? "Copiado" : "Copiar"}</span>
               </button>
             </div>
@@ -437,55 +789,13 @@ export default function ProveedoresPage() {
           </div>
         )}
 
-        {/* Results Header, Metrics & Toolbar */}
-        {!isLoading && currentList.length > 0 && (
-          <div className="space-y-4 pt-2">
-            {/* Metric Summary Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-base">
-                  {totalFound}
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-medium">Total Localizados</div>
-                  <div className="text-sm font-bold text-white tracking-tight">Proveedores</div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base">
-                  {totalWithEmail}
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-medium">Canales Directos</div>
-                  <div className="text-sm font-bold text-white tracking-tight">Con Correo</div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-base">
-                  {verifiedCount}
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-medium">Alta Confiabilidad</div>
-                  <div className="text-sm font-bold text-white tracking-tight">Verificados</div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-gradient-to-b from-[#0d1424]/90 to-[#080d18]/90 border border-white/[0.08] flex items-center gap-3.5 shadow-md">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-base">
-                  {savedProveedores.length}
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-medium">Favoritos</div>
-                  <div className="text-sm font-bold text-white tracking-tight">Guardados</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Filtering & Action Toolbar */}
+        {/* ================================================================ */}
+        {/* TOOLBAR COMÚN: BUSCADOR, FILTROS Y ACCIONES GLOBALES */}
+        {/* ================================================================ */}
+        {!isLoading && (
+          <div className="space-y-4 pt-1">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-b from-[#0d1424]/95 to-[#080d18]/95 border border-white/[0.08] shadow-lg">
-              {/* Left: Search input & checkbox */}
+              {/* Left: Input búsqueda & checkbox */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
                 <div className="relative flex-1 max-w-md">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -493,7 +803,7 @@ export default function ProveedoresPage() {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Filtrar por nombre, cliente o especialidad..."
+                    placeholder="Buscar por empresa, alias, cotización, rubro o email..."
                     className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950/70 border border-white/[0.08] hover:border-white/15 focus:border-blue-500/70 text-xs text-white placeholder-slate-500 focus:outline-none transition-all"
                   />
                   {searchTerm && (
@@ -513,12 +823,22 @@ export default function ProveedoresPage() {
                     onChange={(e) => setOnlyWithEmail(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-700 text-blue-600 accent-blue-500 cursor-pointer"
                   />
-                  <span>Solo con correo confirmado</span>
+                  <span>Solo con correo</span>
                 </label>
               </div>
 
               {/* Right: Actions */}
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Botón: Nuevo Proveedor manual */}
+                <button
+                  onClick={handleOpenAddNewProvider}
+                  className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md shadow-blue-600/20"
+                  title="Registrar nuevo proveedor en MongoDB"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nuevo Proveedor</span>
+                </button>
+
                 {/* Select/Deselect all */}
                 {selectedIds.size === filteredList.length && filteredList.length > 0 ? (
                   <button
@@ -538,11 +858,11 @@ export default function ProveedoresPage() {
                   </button>
                 )}
 
-                {/* Copy All Emails */}
+                {/* Copiar todos los correos de la lista */}
                 <button
                   onClick={handleCopyAllEmails}
                   className="px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.08] hover:border-white/20 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                  title="Copiar lista de correos separados por coma"
+                  title="Copiar todos los correos de los proveedores listados"
                 >
                   {copiedAllEmails ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedAllEmails ? "Copiados" : "Copiar Correos"}</span>
@@ -558,21 +878,11 @@ export default function ProveedoresPage() {
                   <span>Excel (.xlsx)</span>
                 </button>
 
-                {/* AI Copilot Button in toolbar */}
-                <button
-                  onClick={() => handleOpenChatFree()}
-                  className="px-3 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/25 text-blue-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm shadow-blue-500/10"
-                  title="Abrir Asistente IA de Proveedores"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Consultar IA</span>
-                </button>
-
-                {/* Draft RFP Email */}
+                {/* Pedir Cotización */}
                 <button
                   onClick={handleOpenDraftForSelected}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/25 active:scale-[0.98] cursor-pointer"
-                  title="Redactar correo formal de solicitud de presupuesto"
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/25 active:scale-[0.98] cursor-pointer"
+                  title="Redactar pliego formal de solicitud de presupuesto"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>
@@ -582,50 +892,11 @@ export default function ProveedoresPage() {
               </div>
             </div>
 
-            {/* Interactive Post-Search Copilot Banner */}
-            {activeTab === "search" && proveedores.length > 0 && (
-              <div className="p-4 sm:p-4.5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900/90 border border-blue-500/25 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-lg shadow-blue-950/20">
-                <div className="flex items-start sm:items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 shadow-inner">
-                    <Sparkles className="w-5 h-5 animate-pulse" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                      <span>Asistente Inteligente de Compras & Proveedores</span>
-                      <span className="text-[10px] font-semibold text-blue-300 bg-blue-500/15 px-2 py-0.5 rounded-full border border-blue-500/20">
-                        IA Activa
-                      </span>
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Podés pedirle más antecedentes de una empresa o que busque <strong>nuevas opciones distintas</strong> a estas.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 w-full md:w-auto shrink-0 flex-wrap">
-                  <button
-                    onClick={() => handleOpenChatFree("Buscá nuevas empresas que no sean las que busco recién y traeme opciones distintas")}
-                    className="flex-1 md:flex-none px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-blue-600/20 active:scale-[0.98] cursor-pointer"
-                  >
-                    <Search className="w-3.5 h-3.5" />
-                    <span>Buscar Nuevas Distintas</span>
-                  </button>
-                  <button
-                    onClick={() => handleOpenChatFree()}
-                    className="flex-1 md:flex-none px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/10 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Preguntar a la IA</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Providers Grid */}
             {filteredList.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {filteredList.map((item) => {
-                  const isSaved = savedProveedores.some((p) => p.nombre === item.nombre);
+                  const isSaved = Boolean(item.guardado) || savedProveedores.some((p) => p.nombre === item.nombre);
                   const isSelected = selectedIds.has(item.id);
 
                   return (
@@ -638,6 +909,7 @@ export default function ProveedoresPage() {
                       onToggleSelect={handleToggleSelect}
                       onDraftEmail={handleOpenDraftForSingle}
                       onInvestigate={handleInvestigateProvider}
+                      onOpenDetail={handleOpenDetail}
                     />
                   );
                 })}
@@ -649,49 +921,17 @@ export default function ProveedoresPage() {
                   Ningún proveedor coincide con los filtros aplicados
                 </div>
                 <p className="text-xs text-slate-500">
-                  Probá desactivando "Solo con correo confirmado" o modificando el término en el buscador.
+                  Probá ajustando el término de búsqueda o cambiando el filtro seleccionado.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Empty State for Search tab when no search made */}
-        {activeTab === "search" && proveedores.length === 0 && !isLoading && (
-          <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-b from-[#0d1424]/60 to-[#070b14]/60 border border-white/[0.06] text-center space-y-4 max-w-2xl mx-auto shadow-xl">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
-              <Sparkles className="w-7 h-7" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Búsqueda Inteligente de Nuevos Proveedores
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mt-1 leading-relaxed">
-                Ingresá el rubro y la zona geográfica en el prompt superior para que la IA rastree la web, extraiga experiencia, clientes previos y canales de cotización.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State for Saved tab when no saved items */}
-        {activeTab === "saved" && savedProveedores.length === 0 && (
-          <div className="p-12 rounded-3xl bg-gradient-to-b from-[#0d1424]/60 to-[#070b14]/60 border border-white/[0.06] text-center space-y-4 max-w-md mx-auto shadow-xl">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
-              <Bookmark className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white tracking-tight">No tenés proveedores guardados</h3>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Hacé clic en el ícono de marcador de cualquier tarjeta para guardar proveedores en tu lista permanente.
-              </p>
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* Floating Copilot Launcher Button */}
-      {proveedores.length > 0 && (
+      {baseList.length > 0 && (
         <button
           onClick={() => handleOpenChatFree()}
           className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:opacity-95 text-white text-xs sm:text-sm font-bold shadow-2xl shadow-blue-600/40 border border-blue-400/30 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
@@ -703,7 +943,21 @@ export default function ProveedoresPage() {
         </button>
       )}
 
-      {/* Modals */}
+      {/* Detail Modal */}
+      <ProveedorDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedDetailProveedor(null);
+        }}
+        proveedor={selectedDetailProveedor}
+        onSaveProveedor={handleSaveProveedorDetail}
+        onDraftEmail={handleOpenDraftForSingle}
+        onToggleSave={handleToggleSave}
+        isSaved={selectedDetailProveedor ? Boolean(selectedDetailProveedor.guardado) || savedProveedores.some(p => p.nombre === selectedDetailProveedor.nombre) : false}
+      />
+
+      {/* Skills & Configuration Modal */}
       <ProveedorSkillsModal
         isOpen={isSkillsModalOpen}
         onClose={() => setIsSkillsModalOpen(false)}
@@ -713,19 +967,21 @@ export default function ProveedoresPage() {
         onSaveGeminiApiKey={handleSaveGeminiKey}
       />
 
+      {/* Draft RFP Email Modal */}
       <ProveedorDraftEmailModal
         isOpen={isDraftModalOpen}
         onClose={() => setIsDraftModalOpen(false)}
         selectedProveedores={draftTargetProveedores}
       />
 
+      {/* AI Chat Copilot Modal */}
       <ProveedorAiChatModal
         isOpen={isChatModalOpen}
         onClose={() => {
           setIsChatModalOpen(false);
           setChatInitialQuery("");
         }}
-        currentProveedores={proveedores}
+        currentProveedores={baseList}
         rubro={currentRubro || lastQuery.split(" en ")[0] || ""}
         zona={currentZona || lastQuery.split(" en ")[1] || ""}
         geminiApiKey={geminiApiKey}
