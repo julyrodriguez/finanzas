@@ -94,7 +94,10 @@ export default function ProveedoresPage() {
     try {
       const storedSaved = localStorage.getItem("cinemark_saved_proveedores");
       if (storedSaved) {
-        setSavedProveedores(JSON.parse(storedSaved));
+        try {
+          const parsed = JSON.parse(storedSaved);
+          if (Array.isArray(parsed)) setSavedProveedores(parsed);
+        } catch {}
       }
       const storedKey = localStorage.getItem("firecrawl_api_key");
       if (storedKey) setFirecrawlApiKey(storedKey);
@@ -114,11 +117,13 @@ export default function ProveedoresPage() {
       if (!isManualRefresh && typeof window !== "undefined") {
         const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
         if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setRegistryProveedores(parsed);
-            setIsRegistryLoading(false);
-          }
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setRegistryProveedores(parsed);
+              setIsRegistryLoading(false);
+            }
+          } catch {}
         }
       }
 
@@ -172,10 +177,10 @@ export default function ProveedoresPage() {
 
     // 1. Optimistic local update in savedProveedores
     setSavedProveedores((prev) => {
-      const exists = prev.some((p) => p.nombre === item.nombre);
+      const exists = prev.some((p) => (p.id && p.id === item.id) || p.nombre === item.nombre);
       let updated: Proveedor[];
       if (exists) {
-        updated = prev.filter((p) => p.nombre !== item.nombre);
+        updated = prev.filter((p) => (p.id ? p.id !== item.id : true) && p.nombre !== item.nombre);
       } else {
         updated = [{ ...item, guardado: true, emails: emailsList }, ...prev];
       }
@@ -185,9 +190,19 @@ export default function ProveedoresPage() {
       return updated;
     });
 
-    // 2. Optimistic update in registryProveedores
+    // 2. Optimistic update in searchProveedores
+    setSearchProveedores((prev) =>
+      prev.map((p) => {
+        if (p.id === item.id || (p._id && item._id && p._id === item._id) || p.nombre === item.nombre) {
+          return { ...p, guardado: newSavedStatus };
+        }
+        return p;
+      })
+    );
+
+    // 3. Optimistic update in registryProveedores
     setRegistryProveedores((prev) => {
-      const idx = prev.findIndex((p) => p.id === item.id || (p.norm && item.norm && p.norm === item.norm) || p.nombre === item.nombre);
+      const idx = prev.findIndex((p) => (p.id && p.id === item.id) || (p._id && item._id && p._id === item._id) || (p.norm && item.norm && p.norm === item.norm) || p.nombre === item.nombre);
       if (idx !== -1) {
         const next = [...prev];
         next[idx] = { ...next[idx], guardado: newSavedStatus };
@@ -198,7 +213,15 @@ export default function ProveedoresPage() {
       return prev;
     });
 
-    // 3. Persist to MongoDB (apivacas.jariel.com.ar)
+    // 4. Optimistic update for open detail modal
+    setSelectedDetailProveedor((prev) => {
+      if (prev && (prev.id === item.id || prev.nombre === item.nombre)) {
+        return { ...prev, guardado: newSavedStatus };
+      }
+      return prev;
+    });
+
+    // 5. Persist to MongoDB (apivacas.jariel.com.ar)
     try {
       await saveProveedorToMongo(payload);
     } catch (e) {
@@ -209,17 +232,36 @@ export default function ProveedoresPage() {
   // Save changes from Detail Modal
   const handleSaveProveedorDetail = async (updated: Proveedor) => {
     try {
-      const savedDoc = await saveProveedorToMongo(updated);
-      
-      const finalItem = {
+      const originalProv = selectedDetailProveedor;
+
+      // Pass previous identifiers so MongoDB updates existing document even if renamed
+      const payloadToSend = {
         ...updated,
-        id: savedDoc?._id || updated.id,
+        originalNombre: originalProv?.nombre || updated.nombre,
+        originalId: originalProv?.id || updated.id,
+        _id: originalProv?._id || updated._id,
+        guardado: true,
+      };
+
+      const savedDoc = await saveProveedorToMongo(payloadToSend);
+      
+      const finalItem: Proveedor = {
+        ...updated,
+        id: savedDoc?._id || updated.id || `prov-${Date.now()}`,
         _id: savedDoc?._id || updated._id,
         guardado: true
       };
 
+      // 1. Update in registry
       setRegistryProveedores((prev) => {
-        const idx = prev.findIndex((p) => p.id === updated.id || (p.norm && updated.norm && p.norm === updated.norm) || p.nombre === updated.nombre);
+        const idx = prev.findIndex((p) =>
+          (originalProv?.id && p.id === originalProv.id) ||
+          (originalProv?._id && p._id === originalProv._id) ||
+          (originalProv?.nombre && (p.nombre || "").toLowerCase().trim() === originalProv.nombre.toLowerCase().trim()) ||
+          (p.id && (p.id === updated.id || p.id === finalItem.id)) ||
+          (p._id && (p._id === updated._id || p._id === finalItem._id)) ||
+          (p.nombre || "").toLowerCase().trim() === updated.nombre.toLowerCase().trim()
+        );
         if (idx !== -1) {
           const next = [...prev];
           next[idx] = { ...next[idx], ...finalItem };
@@ -228,17 +270,65 @@ export default function ProveedoresPage() {
         return [finalItem, ...prev];
       });
 
+      // 2. CRITICAL: Update in active search results so the card on screen immediately displays the edits!
+      setSearchProveedores((prev) =>
+        prev.map((p) => {
+          const isMatch =
+            (originalProv?.id && p.id === originalProv.id) ||
+            (originalProv?._id && p._id === originalProv._id) ||
+            (originalProv?.nombre && (p.nombre || "").toLowerCase().trim() === originalProv.nombre.toLowerCase().trim()) ||
+            (p.id && (p.id === updated.id || p.id === finalItem.id)) ||
+            (p._id && (p._id === updated._id || p._id === finalItem._id)) ||
+            (p.nombre || "").toLowerCase().trim() === updated.nombre.toLowerCase().trim();
+
+          return isMatch ? { ...p, ...finalItem } : p;
+        })
+      );
+
+      // 3. Update in saved providers (and persist to localStorage)
+      setSavedProveedores((prev) => {
+        const idx = prev.findIndex((p) =>
+          (originalProv?.id && p.id === originalProv.id) ||
+          (originalProv?._id && p._id === originalProv._id) ||
+          (originalProv?.nombre && (p.nombre || "").toLowerCase().trim() === originalProv.nombre.toLowerCase().trim()) ||
+          (p.id && (p.id === updated.id || p.id === finalItem.id)) ||
+          (p._id && (p._id === updated._id || p._id === finalItem._id)) ||
+          (p.nombre || "").toLowerCase().trim() === updated.nombre.toLowerCase().trim()
+        );
+        let next: Proveedor[];
+        if (idx !== -1) {
+          next = [...prev];
+          next[idx] = { ...next[idx], ...finalItem };
+        } else {
+          next = [{ ...finalItem, guardado: true }, ...prev];
+        }
+        try {
+          localStorage.setItem("cinemark_saved_proveedores", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      // 4. Update the active modal provider
       setSelectedDetailProveedor(finalItem);
 
-      // Sincronizar en caché local
+      // 5. Update local unified cache
       try {
         const cached = localStorage.getItem("finanzas_proveedores_unified_cache");
         if (cached) {
           const list = JSON.parse(cached);
-          const i = list.findIndex((p: any) => p.nombre === updated.nombre);
-          if (i !== -1) list[i] = { ...list[i], ...finalItem };
-          else list.unshift(finalItem);
-          localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(list));
+          if (Array.isArray(list)) {
+            const i = list.findIndex((p: any) =>
+              (originalProv?.id && p.id === originalProv.id) ||
+              (originalProv?._id && p._id === originalProv._id) ||
+              (originalProv?.nombre && (p.nombre || "").toLowerCase().trim() === originalProv.nombre.toLowerCase().trim()) ||
+              (p.id && (p.id === updated.id || p.id === finalItem.id)) ||
+              (p._id && (p._id === updated._id || p._id === finalItem._id)) ||
+              (p.nombre || "").toLowerCase().trim() === updated.nombre.toLowerCase().trim()
+            );
+            if (i !== -1) list[i] = { ...list[i], ...finalItem };
+            else list.unshift(finalItem);
+            localStorage.setItem("finanzas_proveedores_unified_cache", JSON.stringify(list));
+          }
         }
       } catch {}
     } catch (e: any) {
@@ -413,14 +503,14 @@ export default function ProveedoresPage() {
       if (!p) return false;
       const nombre = (p.nombre || "").toLowerCase();
       const norm = (p.norm || "").toLowerCase();
-      const aliases = (p.aliases || []).join(" ").toLowerCase();
+      const aliases = Array.isArray(p.aliases) ? p.aliases.filter(Boolean).join(" ").toLowerCase() : "";
       const rubro = (p.rubro || "").toLowerCase();
       const zona = (p.zona || p.ubicacion || "").toLowerCase();
       const pais = (p.pais || "").toLowerCase();
       const desc = (p.descripcion_trabajos || "").toLowerCase();
       const clientes = (p.clientes_proyectos || "").toLowerCase();
-      const emailsStr = (Array.isArray(p.emails) ? p.emails.join(" ") : p.email || "").toLowerCase();
-      const quotesStr = (p.cotizaciones || []).map((c) => c.name).join(" ").toLowerCase();
+      const emailsStr = (Array.isArray(p.emails) ? p.emails.filter(Boolean).join(" ") : p.email || "").toLowerCase();
+      const quotesStr = (Array.isArray(p.cotizaciones) ? p.cotizaciones.map((c) => c?.name || "").join(" ") : "").toLowerCase();
 
       const matchesText =
         !s ||

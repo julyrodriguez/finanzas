@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const TARGET_API_URL = process.env.NEXT_PUBLIC_PROVEEDORES_API_BASE || "http://127.0.0.1:3000/api/proveedores";
+const TARGET_API_URL = process.env.NEXT_PUBLIC_PROVEEDORES_API_BASE || "https://apivacas.jariel.com.ar/api/proveedores";
 
 export async function GET(request: NextRequest) {
   try {

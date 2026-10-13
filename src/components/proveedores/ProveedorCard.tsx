@@ -56,14 +56,14 @@ export function ProveedorCard({
   const [copiedAllMails, setCopiedAllMails] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
 
-  // Normalize all emails
+  // Normalize all emails safely
   const allEmails = Array.from(
     new Set(
       [
-        ...(Array.isArray(proveedor.emails) ? proveedor.emails : []),
-        ...(proveedor.email ? [proveedor.email] : [])
+        ...(Array.isArray(proveedor?.emails) ? proveedor.emails : []),
+        ...(typeof proveedor?.email === "string" ? [proveedor.email] : [])
       ]
-        .map((e) => (e || "").trim().toLowerCase())
+        .map((e) => (typeof e === "string" ? e.trim().toLowerCase() : ""))
         .filter(Boolean)
     )
   );
@@ -109,8 +109,8 @@ export function ProveedorCard({
     }
   };
 
-  const cotizacionesCount = (proveedor.cotizaciones || []).length;
-  const ubicacionStr = proveedor.ubicacion || proveedor.zona || "";
+  const cotizacionesCount = Array.isArray(proveedor?.cotizaciones) ? proveedor.cotizaciones.length : 0;
+  const ubicacionStr = proveedor?.ubicacion || proveedor?.zona || "";
 
   return (
     <div

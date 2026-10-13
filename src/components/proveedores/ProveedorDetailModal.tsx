@@ -88,10 +88,10 @@ export function ProveedorDetailModal({
       const emList: string[] = [];
       if (Array.isArray(proveedor.emails)) {
         proveedor.emails.forEach((e) => {
-          if (e && !emList.includes(e.trim())) emList.push(e.trim());
+          if (typeof e === "string" && e.trim() && !emList.includes(e.trim())) emList.push(e.trim());
         });
       }
-      if (proveedor.email && !emList.includes(proveedor.email.trim())) {
+      if (typeof proveedor.email === "string" && proveedor.email.trim() && !emList.includes(proveedor.email.trim())) {
         emList.push(proveedor.email.trim());
       }
       setEmails(emList);
@@ -137,11 +137,13 @@ export function ProveedorDetailModal({
       setEmails([...emails, trimmed]);
     }
     setNewEmailInput("");
+    if (!isEditing) setIsEditing(true);
   };
 
   // Remove email
   const handleRemoveEmail = (idx: number) => {
     setEmails(emails.filter((_, i) => i !== idx));
+    if (!isEditing) setIsEditing(true);
   };
 
   // Save changes
@@ -153,6 +155,17 @@ export function ProveedorDetailModal({
 
     setIsSaving(true);
     try {
+      // Include any email typed in input that wasn't submitted with plus button
+      let finalEmails = [...emails];
+      const pendingEmail = newEmailInput.trim().toLowerCase();
+      if (pendingEmail && pendingEmail.includes("@") && pendingEmail.includes(".")) {
+        if (!finalEmails.includes(pendingEmail)) {
+          finalEmails.push(pendingEmail);
+          setEmails(finalEmails);
+          setNewEmailInput("");
+        }
+      }
+
       const updatedData: Proveedor = {
         ...proveedor,
         nombre: nombre.trim(),
@@ -163,8 +176,8 @@ export function ProveedorDetailModal({
         telefono: telefono.trim(),
         rubro: rubro.trim(),
         notas: notas.trim(),
-        emails: emails,
-        email: emails[0] || "",
+        emails: finalEmails,
+        email: finalEmails[0] || "",
         guardado: true,
       };
 
@@ -609,7 +622,7 @@ export function ProveedorDetailModal({
             {cotizaciones.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {cotizaciones.map((cot, idx) => {
-                  const dateStr = cot.date
+                  const dateStr = cot.date && !isNaN(new Date(cot.date).getTime())
                     ? new Date(cot.date).toLocaleDateString("es-AR", {
                         day: "2-digit",
                         month: "short",
