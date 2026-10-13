@@ -306,6 +306,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
                     <Link
                       key={item.name}
                       href={item.href}
+                      prefetch={false}
                       onClick={() => setSidebarOpen(false)}
                       title={!expanded ? item.name : undefined}
                       className={`group flex items-center h-10 px-2 rounded-xl text-xs font-medium transition-colors relative overflow-hidden ${

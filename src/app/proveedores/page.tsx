@@ -1,15 +1,29 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { AppLayout } from "@/components/AppLayout";
 import { Proveedor, SearchEngineType, SearchDepthType } from "@/types/proveedor";
 import { ProveedorCard } from "@/components/proveedores/ProveedorCard";
 import { ProveedorSearchForm } from "@/components/proveedores/ProveedorSearchForm";
-import { ProveedorDraftEmailModal } from "@/components/proveedores/ProveedorDraftEmailModal";
-import { ProveedorSkillsModal } from "@/components/proveedores/ProveedorSkillsModal";
-import { ProveedorAiChatModal } from "@/components/proveedores/ProveedorAiChatModal";
-import { ProveedorDetailModal } from "@/components/proveedores/ProveedorDetailModal";
-import { exportToExcel } from "@/lib/exportToExcel";
+
+// Dynamically loaded modals to optimize bundle size and avoid chunk load failures
+const ProveedorDraftEmailModal = dynamic(
+  () => import("@/components/proveedores/ProveedorDraftEmailModal").then((m) => m.ProveedorDraftEmailModal),
+  { ssr: false }
+);
+const ProveedorSkillsModal = dynamic(
+  () => import("@/components/proveedores/ProveedorSkillsModal").then((m) => m.ProveedorSkillsModal),
+  { ssr: false }
+);
+const ProveedorAiChatModal = dynamic(
+  () => import("@/components/proveedores/ProveedorAiChatModal").then((m) => m.ProveedorAiChatModal),
+  { ssr: false }
+);
+const ProveedorDetailModal = dynamic(
+  () => import("@/components/proveedores/ProveedorDetailModal").then((m) => m.ProveedorDetailModal),
+  { ssr: false }
+);
 import {
   fetchProveedoresFromMongo,
   saveProveedorToMongo,
@@ -565,7 +579,7 @@ export default function ProveedoresPage() {
   };
 
   // Export to Excel
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (filteredList.length === 0) return;
 
     const dataToExport = filteredList.map((p, index) => {
@@ -595,6 +609,7 @@ export default function ProveedoresPage() {
     });
 
     const filename = `Proveedores_${activeTab}_${new Date().toISOString().slice(0, 10)}`;
+    const { exportToExcel } = await import("@/lib/exportToExcel");
     exportToExcel(dataToExport, filename, "Registro de Proveedores");
   };
 

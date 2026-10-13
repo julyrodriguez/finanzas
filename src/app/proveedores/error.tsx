@@ -12,6 +12,18 @@ export default function ProveedoresError({
 }) {
   useEffect(() => {
     console.error("Error en sección Proveedores:", error);
+
+    const isChunkOrNavError =
+      error?.name === "ChunkLoadError" ||
+      error?.message?.includes("Loading chunk") ||
+      error?.message?.includes("Failed to fetch") ||
+      error?.message?.includes("could not load") ||
+      error?.message?.includes("couldn't load") ||
+      error?.message?.includes("dynamically imported module");
+
+    if (isChunkOrNavError && typeof window !== "undefined") {
+      window.location.reload();
+    }
   }, [error]);
 
   return (
