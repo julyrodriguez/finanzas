@@ -1,107 +1,184 @@
-# INSTRUCTIVO TÉCNICO COMPLETO: AUTOMATIZACIÓN DE INTERBANKING
+# GUÍA TÉCNICA DE REPLICACIÓN Y ARQUITECTURA: AUTOMATIZACIÓN DE INTERBANKING
 
-> **Destinatario:** Documento técnico de referencia para desarrolladores e Inteligencias Artificiales encargadas del mantenimiento, debugging o ampliación del módulo de descarga automatizada de comprobantes de Interbanking.
-> **Versión:** 2.0 (Actualizada a Octubre 2026)
-> **Servidor Backend:** `https://apivacas.jariel.com.ar` (Host local: `/home/julian/vacas-locas/data-processor`)
-> **Frontend:** Módulo Next.js en `/home/julian/vacas-locas/finanzas/src/app/interbanking`
+> **Objetivo de este documento:** Proveer una especificación técnica completa y agnóstica del servidor para que cualquier desarrollador o Inteligencia Artificial pueda **comprender, replicar e implementar desde cero** el motor de automatización y descarga de comprobantes de Interbanking en cualquier infraestructura (VPS, servidor dedicado, contenedor Docker o máquina local).
 
 ---
 
-## 1. RESUMEN EJECUTIVO Y OBJETIVO DEL SISTEMA
+## 1. RESUMEN DEL SISTEMA Y PROBLEMA QUE RESUELVE
 
-El módulo de Interbanking permite a los administradores de finanzas descargar comprobantes de transferencias bancarias de forma desatendida y por lotes (números de lote) para distintas empresas del grupo (**CINEMARK ARGENTINA S.A.**, **HOYTS GENERAL CINEMA DE ARGENTINA SA**, **CINEMARK ARGENTINA SRL**, **BULNES**, etc.).
+El módulo permite la descarga automatizada y masiva de comprobantes de transferencias bancarias (CBU / pagos a proveedores) emitidos por plataformas corporativas de **Interbanking**.
 
-Debido a que el portal bancario de Interbanking carece de una API pública abierta para descarga directa de comprobantes en PDF y opera sobre una plataforma heredada basada en **IFrames, SSO de CAS y formularios JSP clásicos**, la solución implementa un **robot de navegación invisible basado en Puppeteer con técnicas de evasión de detección (Stealth)** alojado en el servidor backend.
+### El Desafío Técnico
+Interbanking no ofrece una API REST pública documentada para la descarga directa de comprobantes en PDF. Su plataforma transaccional (**SIB1**) opera mediante:
+- **Arquitectura de Framesets / IFrames anidados** de Java EE (JSP).
+- Flujo de autenticación multifactor y SSO (**Central Authentication Service - CAS**).
+- Restricciones rígidas de negocio en el backend bancario: **el rango de búsqueda no puede exceder 30 días corridos**.
+- Botones de acción dinámicos basados en elementos `<img>` con nombres generados por servidor.
 
-El sistema soporta:
-1. **Inicio de sesión instantáneo por inyección de cookies de sesión**.
-2. **Fallback automático a login tradicional por formulario (CUIL, Usuario, Password) con navegación SSO**.
-3. **Mapeo inteligente de campos de fecha y lote con soporte para selects dinámicos**.
-4. **Manejo estricto de la regla bancaria de 30 días de rango** (incluyendo doble consulta en meses de 31 días).
-5. **Captura y descarga de archivos ZIP/PDF mediante Chrome DevTools Protocol (CDP)**.
-6. **Renombrado semántico de comprobantes** y transmisión directa al navegador del usuario.
-7. **Encolamiento secuencial de lotes** desde el frontend.
+### La Solución Implementada
+Un microservicio desacoplado con un navegador headless invisible controlado por **Puppeteer** junto al plugin **Stealth** que:
+1. **Inyecta cookies de sesión activas** para saltear el 100% del login y la selección de empresa, accediendo a SIB1 en segundos.
+2. Posee un **mecanismo de fallback a login tradicional** por formulario (CUIL, Usuario, Password) con navegación SSO si las cookies expiran.
+3. **Resuelve el límite de los 30 días** ejecutando búsquedas inteligentes y reintentos automáticos en meses de 31 días.
+4. **Intercepta las descargas directas del navegador mediante Chrome DevTools Protocol (CDP)**, guardando y renombrando los archivos semánticamente para su entrega al cliente.
 
 ---
 
-## 2. ARQUITECTURA GENERAL Y TOPOLOGÍA DE ARCHIVOS
+## 2. REQUISITOS DEL SISTEMA PARA REPLICACIÓN
 
-### 2.1 Diagrama de Arquitectura de Extremo a Extremo
+Para desplegar este servicio en un nuevo servidor (Ubuntu, Debian o similar), se requieren las siguientes dependencias:
 
-```mermaid
-flowchart TD
-    subgraph Frontend ["Frontend (Next.js - finanzas)"]
-        UI["src/app/interbanking/page.tsx\n- Interfaz de usuario\n- Encolador de lotes\n- Polling de estado\n- Consola en tiempo real"]
-    end
+### 2.1 Requisitos de Software
+- **Node.js:** Versión 18 LTS, 20 LTS o 24+.
+- **NPM:** 9+.
+- **Gestor de procesos:** PM2 (`npm install -g pm2`), Docker o Systemd.
+- **Servidor Web / Reverse Proxy:** Nginx, Caddy o Traefik (para SSL/HTTPS y exposición de endpoints).
 
-    subgraph Backend ["Backend API (Node.js - data-processor)"]
-        SRV["server.js\n- Express HTTP API\n- Servidor de estáticos (/public)\n- Proceso PM2: api-backend"]
-        ROUTES["routes/interbankingRoutes.js\n- POST /api/interbanking/run\n- GET /api/interbanking/status/:runId"]
-        SERVICE["services/interbankingService.js\n- Puppeteer + Stealth\n- Inyección & sanitización de cookies\n- Navegación de IFrames SIB1\n- CDP Download Handler"]
-        COOKIES_FILE["cookies.json\n- Persistencia local de cookies de sesión"]
-        ENV[".env\n- INTERBANKING_CUIL\n- INTERBANKING_USER\n- INTERBANKING_PASSWORD"]
-    end
+### 2.2 Dependencias de Sistema Operativo para Chromium / Puppeteer
+En servidores Linux headless (sin entorno gráfico), Chromium requiere bibliotecas compartidas para renderizar. Instalar en Debian/Ubuntu:
 
-    subgraph FS ["Almacenamiento en Servidor (/home/julian/vacas-locas)"]
-        PUB["public/comprobantes/\n- logs_[runId].txt\n- debug_*.png / error_[runId].png\n- [runId]/[lote] - [empresa].zip"]
-    end
-
-    subgraph Bank ["Plataforma Interbanking"]
-        WEB["web.interbanking.com.ar\n- Portal de login principal"]
-        CAS["auth.interbanking.com.ar/cas\n- Central Authentication Service"]
-        SIB1["sib1.interbanking.com.ar\n- index.jsp / application.jsp\n- IFrames: applicationFrame & main\n- Formulario Historiales CBU"]
-    end
-
-    UI -->|"1. POST /api/interbanking/run"| ROUTES
-    ROUTES -->|"2. Dispara runAutomation() async"| SERVICE
-    SERVICE -->|"3. Lee/Actualiza"| COOKIES_FILE
-    SERVICE -->|"3b. Lee credenciales"| ENV
-    SERVICE -->|"4. Navegación / CDP"| Bank
-    Bank -->|"5. Descarga reporte.zip"| SERVICE
-    SERVICE -->|"6. Escribe archivos y logs"| PUB
-    UI -->|"7. Polling GET status/:runId"| ROUTES
-    ROUTES -->|"8. Consulta memoria / logs"| SERVICE
-    UI -->|"9. Descarga directa desde"| PUB
+```bash
+sudo apt-get update && sudo apt-get install -y \
+  ca-certificates \
+  fonts-liberation \
+  libasound2 \
+  libatk-bridge2.0-0 \
+  libatk1.0-0 \
+  libc6 \
+  libcairo2 \
+  libcups2 \
+  libdbus-1-3 \
+  libexpat1 \
+  libfontconfig1 \
+  libgbm1 \
+  libgcc1 \
+  libglib2.0-0 \
+  libgtk-3-0 \
+  libnspr4 \
+  libnss3 \
+  libpango-1.0-0 \
+  libpangocairo-1.0-0 \
+  libstdc++6 \
+  libx11-6 \
+  libx11-xcb1 \
+  libxcb1 \
+  libxcomposite1 \
+  libxcursor1 \
+  libxdamage1 \
+  libxext6 \
+  libxfixes3 \
+  libxi6 \
+  libxrandr2 \
+  libxrender1 \
+  libxss1 \
+  libxtst6 \
+  lsb-release \
+  wget \
+  xdg-utils
 ```
 
-### 2.2 Inventario de Archivos y Responsabilidades
+---
 
-| Ubicación del Archivo | Rol / Responsabilidad |
-| :--- | :--- |
-| **`/home/julian/vacas-locas/finanzas/src/app/interbanking/page.tsx`** | Componente de cliente Next.js. Maneja el formulario de parámetros (empresa, mes, lotes), encolador FIFO de lotes, polling a la API cada 1.5s, visualizador de logs y disparador de descargas automáticas en el navegador. |
-| **`/home/julian/vacas-locas/data-processor/server.js`** | Servidor Express principal. Expone `/api/interbanking` mediante `interbankingRoutes.js` y sirve archivos estáticos (`app.use(express.static(path.join(__dirname, '../public')))`). Corre bajo PM2 (`api-backend`). |
-| **`/home/julian/vacas-locas/data-processor/routes/interbankingRoutes.js`** | Router de Express. Endpoint `POST /run` (inicia el trabajo en segundo plano, genera un `runId` único) y `GET /status/:runId` (reporta progreso, logs y enlaces a los archivos descargados). |
-| **`/home/julian/vacas-locas/data-processor/services/interbankingService.js`** | **Núcleo de la automatización (1,162 líneas)**. Inicia Puppeteer con Stealth, aplica cookies o ejecuta login tradicional, recorre IFrames, completa filtros bancarios, maneja descarga con CDP, renombra el archivo y genera diagnósticos en caso de error. |
-| **`/home/julian/vacas-locas/data-processor/cookies.json`** | Almacén JSON persistente en disco con las cookies de la sesión activa de Interbanking. Permite que múltiples ejecuciones reutilicen la misma sesión sin pedir cookies cada vez. |
-| **`/home/julian/vacas-locas/data-processor/scratch/get_actual_input_names.js`** | Script de diagnóstico y desarrollo. Permite ejecutar una inspección aislada del DOM de SIB1 para validar nombres de inputs y estructuras de frames sin pasar por la API web. |
-| **`/home/julian/vacas-locas/data-processor/.env`** | Variables de entorno con credenciales de fallback: `INTERBANKING_CUIL`, `INTERBANKING_USER`, `INTERBANKING_PASSWORD`. |
-| **`/home/julian/vacas-locas/public/comprobantes/`** | Directorio público donde se almacenan las carpetas de cada corrida (`runId`), los archivos renombrados (`[lote] - [empresa].zip`), los logs de auditoría (`logs_[runId].txt`) y las capturas de error (`error_[runId].png`). |
-| **Proceso PM2 `api-backend`** | Proceso Daemon en el servidor. ID: `0`. Comandos: `pm2 status`, `pm2 logs api-backend`, `pm2 restart api-backend`. |
+## 3. ESTRUCTURA DE DIRECTORIOS MODULAR (PORTABLE)
+
+Al replicar el proyecto en un nuevo entorno, se recomienda la siguiente organización de carpetas:
+
+```text
+proyecto-interbanking/
+├── backend/                              # Microservicio Node.js / Express
+│   ├── package.json
+│   ├── .env                              # Credenciales y configuración
+│   ├── server.js                         # Servidor Express y montaje de rutas
+│   ├── cookies.json                      # Almacén local de cookies activas
+│   ├── routes/
+│   │   └── interbankingRoutes.js         # Endpoints /run y /status/:runId
+│   ├── services/
+│   │   └── interbankingService.js        # Motor central de Puppeteer + Stealth
+│   └── scratch/
+│       └── get_actual_input_names.js     # Script de diagnóstico y test de DOM
+│
+├── public/                               # Carpeta de archivos estáticos
+│   └── comprobantes/                     # Archivos descargados, logs y screenshots
+│       ├── [runId]/                      # Subcarpeta por corrida con los PDFs/ZIPs
+│       ├── logs_[runId].txt              # Log cronológico de cada ejecución
+│       └── error_[runId].png             # Captura de pantalla en caso de fallo
+│
+└── frontend/                             # Aplicación web (Next.js / React)
+    └── src/
+        └── app/
+            └── interbanking/
+                └── page.tsx              # UI, polling, encolador y auto-descarga
+```
 
 ---
 
-## 3. MECANISMO DE COOKIES AL DETALLE
+## 4. VARIABLES DE ENTORNO REQUERIDAS
 
-### 3.1 ¿Por qué se utilizan cookies?
-El portal de Interbanking cuenta con medidas de seguridad complejas:
-- Autenticación multifactor o validación de dispositivo eventual.
-- Redirecciones entre `web.interbanking.com.ar`, `auth.interbanking.com.ar/cas` y `sib1.interbanking.com.ar`.
-- Pantallas intermedias de bienvenida, tutoriales y selección de empresa.
+Crea un archivo `.env` en el directorio `backend/`:
 
-Cuando un operador inicia sesión manualmente en su navegador de oficina (Chrome), las cookies de sesión resultantes otorgan acceso directo al subsistema transaccional **SIB1**. Al inyectar estas cookies en Puppeteer, **el bot omite el 100% de las pantallas de login, SSO y selección de empresa**, ingresando directamente a `https://sib1.interbanking.com.ar/index.jsp` en menos de 5 segundos.
+```env
+# Puerto del servidor backend
+PORT=3000
 
-### 3.2 Formato y Sanitización de Cookies
-Las cookies suelen ser exportadas desde Chrome con extensiones populares como **EditThisCookie** o **Cookie-Editor** en formato JSON.
+# URL pública o dominio donde corre el backend (para construir enlaces de descarga)
+# Ejemplo: https://api.tu-dominio.com o http://localhost:3000
+API_BASE_URL=https://api.tu-dominio.com
 
-Sin embargo, el formato exportado por extensiones de Chrome difiere de las especificaciones de Puppeteer / Chrome DevTools Protocol:
-1. Chrome exporta la propiedad `expirationDate` en punto flotante. Puppeteer requiere la propiedad `expires` en formato numérico entero.
-2. Extensiones como EditThisCookie inyectan metadatos propietarios como `id` y `storeId`. Si estos campos se pasan a `page.setCookie()`, Puppeteer lanzará una excepción.
+# Credenciales de fallback de Interbanking (usadas si no se inyectan cookies válidas)
+INTERBANKING_CUIL=20XXXXXXXXX
+INTERBANKING_USER=usuario_banco
+INTERBANKING_PASSWORD=password_banco
 
-#### Algoritmo de Sanitización implementado en `interbankingService.js`:
+# Opcional: Base de datos si almacenas historial en MongoDB/Postgres
+# MONGO_URI=mongodb://127.0.0.1:27017/mi_db
+```
+
+---
+
+## 5. DEPENDENCIAS DE NODE.JS (`package.json`)
+
+Para el módulo backend, las dependencias esenciales son:
+
+```json
+{
+  "name": "interbanking-automation-service",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer": "^22.0.0"
+  }
+}
+```
+
+Instalación:
+```bash
+npm install
+```
+
+---
+
+## 6. MECANISMO DE COOKIES AL DETALLE
+
+### 6.1 ¿Por qué las cookies son el método principal?
+Interbanking implementa verificaciones de dispositivo y SSO complejo. Al iniciar sesión manualmente una única vez desde una PC con Google Chrome y exportar las cookies, se obtiene acceso directo al portal transaccional **SIB1**, reduciendo el tiempo de ejecución de ~60 segundos a **menos de 5 segundos** y eliminando bloqueos de captcha o desafíos de seguridad.
+
+### 6.2 Normalización y Sanitización de Cookies
+Las extensiones de navegador (como *EditThisCookie* o *Cookie-Editor*) exportan las cookies con metadatos específicos que **deben ser limpiados antes de enviarlos a Puppeteer**:
+
+1. **`expirationDate` vs `expires`:** Chrome exporta la expiración bajo el nombre `expirationDate` en formato float (segundos). Puppeteer requiere estrictamente el nombre `expires` en formato numérico entero.
+2. **Campos propietarios:** Extensiones añaden campos como `id`, `storeId`, `hostOnly`. Puppeteer arroja error si estos campos no se eliminan.
+3. **Dominios requeridos:** Las cookies principales pertenecen a `.interbanking.com.ar` y `sib1.interbanking.com.ar`.
+
+#### Código de Sanitización e Inyección:
 ```javascript
 const sanitizedCookies = cookiesToUse.map(c => {
     const sanitized = { ...c };
-    // Normalizar tiempo de expiración
+    
+    // Normalizar expiración
     if (sanitized.expirationDate !== undefined) {
         sanitized.expires = Number(sanitized.expirationDate);
         delete sanitized.expirationDate;
@@ -109,144 +186,133 @@ const sanitizedCookies = cookiesToUse.map(c => {
     if (sanitized.expires !== undefined) {
         sanitized.expires = Number(sanitized.expires);
     }
-    // Eliminar atributos propietarios incompatibles
+    
+    // Eliminar propiedades incompatibles
     delete sanitized.id;
     delete sanitized.storeId;
+    delete sanitized.hostOnly;
     return sanitized;
 });
 
+// Inyectar en la instancia de página de Puppeteer
 await page.setCookie(...sanitizedCookies);
+
+// Navegar directo a la aplicación bancaria sin pasar por login
+await page.goto('https://sib1.interbanking.com.ar/index.jsp', { waitUntil: 'networkidle2', timeout: 45000 });
 ```
 
-### 3.3 Ciclo de Vida y Persistencia de Cookies
-1. **Recepción desde el Frontend:** Si el usuario ingresa un JSON en el campo "JSON de Cookies (Opcional)" del formulario, este viaja en `req.body.cookies`.
-2. **Escritura en disco:** El servicio guarda automáticamente este JSON en `/home/julian/vacas-locas/data-processor/cookies.json`.
-3. **Reutilización:** En las ejecuciones siguientes, si el usuario no envía cookies nuevas, el backend lee automáticamente `cookies.json`.
-4. **Validación de Expiración:**
-   - Si la sesión caducó, Interbanking suele abrir un `window.alert()` ("Su sesión ha expirado") o redirige a `https://auth.interbanking.com.ar/cas/login`.
-   - El bot escucha diálogos con `page.on('dialog')`. Si detecta `"expir"`, `"sesion"` o `"invalida"`, marca `sessionExpired = true` y conmuta de inmediato al **Flujo de Fallback (Login tradicional)**.
+### 6.3 Persistencia y Detección de Expiración
+- **Persistencia:** Si el backend recibe un array de cookies en la petición HTTP (`req.body.cookies`), las guarda automáticamente en el archivo local `cookies.json` para que las ejecuciones posteriores no necesiten ingresarlas nuevamente.
+- **Detección de fallo de sesión:** 
+  - Si las cookies vencen, Interbanking emite un cuadro de diálogo del navegador (`alert: "Su sesión ha expirado"`) o redirige a `https://auth.interbanking.com.ar/cas/login`.
+  - El código intercepta el evento con `page.on('dialog')`. Si el mensaje contiene `"expir"`, `"sesion"` o `"invalida"`, lo acepta y conmuta de inmediato al **Flujo de Fallback (Login tradicional)**.
 
 ---
 
-## 4. FLUJO DE FALLBACK: LOGIN TRADICIONAL Y SSO
-
-Si las cookies no están disponibles o han expirado, el robot ejecuta la secuencia de autenticación tradicional:
+## 7. ARQUITECTURA DEL MOTOR DE NAVEGACIÓN (SIB1 & IFRAMES)
 
 ```mermaid
-sequenceDiagram
-    participant Bot as Puppeteer (Bot)
-    participant Web as web.interbanking.com.ar
-    participant CAS as auth.interbanking.com.ar/cas
-    participant SIB1 as sib1.interbanking.com.ar
-
-    Bot->>Web: goto('https://web.interbanking.com.ar/')
-    Bot->>Web: Seleccionar Nacionalidad (Argentina)
-    Bot->>Web: Rellenar CUIL (#cuil), Usuario (#usuario), Clave (#clave)
-    Bot->>Web: Clic en 'Ingresar' / submit
-    Web-->>Bot: Pantalla de Selección de Empresas
-    Bot->>Web: Buscar elemento con el nombre de la empresa y hacer clic
-    Bot->>Web: Cerrar modal de bienvenida / tutorial ('Ver más tarde')
-    Bot->>SIB1: goto('https://sib1.interbanking.com.ar/loginSso.do')
-    alt ¿CAS solicita re-autenticación?
-        SIB1-->>Bot: Redirección a CAS Login
-        Bot->>CAS: Re-ingresar CUIL, Usuario y Password
-        Bot->>CAS: Clic en 'Aceptar'
-        CAS-->>SIB1: Retorno autorizado a SIB1
-    else Autenticado directo por SSO
-        SIB1-->>Bot: Carga directa de application.jsp
+flowchart TD
+    START["Inicio de Automatización (runAutomation)"] --> CHECK_COOKIES{"¿Hay cookies en petición o en cookies.json?"}
+    
+    CHECK_COOKIES -->|"Sí"| INJECT["Sanitizar cookies e inyectar con page.setCookie()"]
+    INJECT --> GOTO_SIB1["Navegar a sib1.interbanking.com.ar/index.jsp"]
+    GOTO_SIB1 --> VALID_SESSION{"¿Sesión válida?"}
+    
+    CHECK_COOKIES -->|"No"| TRAD_LOGIN["Login Tradicional"]
+    VALID_SESSION -->|"No (Expirada / CAS)"| TRAD_LOGIN
+    
+    subgraph FallbackLogin ["Flujo de Login Tradicional"]
+        TRAD_LOGIN --> GOTO_WEB["Navegar a web.interbanking.com.ar"]
+        GOTO_WEB --> FILL_CREDENTIALS["Rellenar CUIL, Usuario y Password"]
+        FILL_CREDENTIALS --> SUBMIT_LOGIN["Enviar formulario"]
+        SUBMIT_LOGIN --> SELECT_COMPANY["Seleccionar Empresa de la lista"]
+        SELECT_COMPANY --> CLOSE_MODALS["Cerrar modal de bienvenida / tutorial"]
+        CLOSE_MODALS --> GOTO_SSO["Navegar a sib1.interbanking.com.ar/loginSso.do"]
+        GOTO_SSO --> CAS_CHECK{"¿Requiere re-login CAS?"}
+        CAS_CHECK -->|"Sí"| CAS_REAUTH["Re-ingresar credenciales en formulario CAS"]
+        CAS_CHECK -->|"No"| READY_SIB1["SIB1 Cargado"]
+        CAS_REAUTH --> READY_SIB1
     end
+    
+    VALID_SESSION -->|"Sí"| READY_SIB1
+    
+    subgraph FormularioBancario ["Navegación en SIB1 y Extracción"]
+        READY_SIB1 --> FIND_APP_FRAME["Esperar y localizar frame 'applicationFrame'"]
+        FIND_APP_FRAME --> CLICK_HISTORIALES["Hacer clic en enlace 'Historiales CBU'"]
+        CLICK_HISTORIALES --> FIND_FORM_FRAME["Detectar frame del formulario (inputs desde/hasta/lote)"]
+        FIND_FORM_FRAME --> CALC_DATES["Calcular fechas respetando regla de 30 días"]
+        CALC_DATES --> FILL_FORM["Completar campos (filtro.nroLote, filtro.fechaDesde, etc.)"]
+        FILL_FORM --> CLICK_DOWNLOAD["Clic en botón Descargar Comprobantes"]
+        CLICK_DOWNLOAD --> CHECK_COLUMNS{"¿Apareció checklist de columnas?"}
+        CHECK_COLUMNS -->|"Sí"| SELECT_ALL_COLS["Marcar todas las columnas y confirmar"]
+        CHECK_COLUMNS -->|"No"| WAIT_CDP["Esperar archivo vía CDP"]
+        SELECT_ALL_COLS --> WAIT_CDP
+        WAIT_CDP --> CHECK_EMPTY{"¿Es ZIP de 22 bytes (vacío) y mes de 31 días?"}
+        CHECK_EMPTY -->|"Sí (Intento 1 falló)"| RETRY_31["Reintentar con días 02 al 31"]
+        RETRY_31 --> FILL_FORM
+        CHECK_EMPTY -->|"No (Archivo con datos)"| RENAME_FILE["Renombrar a [lote] - [empresa].zip"]
+    end
+    
+    RENAME_FILE --> SUCCESS["Estado = completed, emitir URL de descarga"]
 ```
 
----
-
-## 5. ESTRUCTURA INTERNA DE SIB1 Y MANEJO DE IFRAMES
-
-El portal bancario transaccional `SIB1` está desarrollado con tecnología Java EE / JSP antigua y depende críticamente de una jerarquía de Framesets.
-
-### 5.1 Jerarquía de Frames
-```text
-Ventana Principal (https://sib1.interbanking.com.ar/index.jsp)
-│
-└── applicationFrame (https://sib1.interbanking.com.ar/application.jsp)
-    │
-    ├── topFrame (Cabecera y logo del banco)
-    ├── menuFrame (Menú lateral de opciones)
-    └── main (Subframe donde se renderizan las pantallas operativas)
-        URL: https://sib1.interbanking.com.ar/menuSelection.do?...
-```
-
-### 5.2 Estrategia de Localización del Formulario
-El bot no asume nombres rígidos de frames que puedan cambiar con actualizaciones del banco. En su lugar, itera dinámicamente sobre `page.frames()` buscando aquel que contenga los inputs característicos de la búsqueda:
-
+### 7.1 Identificación Dinámica de IFrames
+En lugar de depender de índices fijos de frames (los cuales cambian según la versión de SIB1), el bot itera dinámicamente sobre la lista `page.frames()` para encontrar el frame operativo:
 ```javascript
-formFrame = null;
+let formFrame = null;
 for (const frame of page.frames()) {
-    const hasFields = await frame.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('input'));
-        return inputs.some(i => {
-            const name = (i.name || i.id || i.placeholder || '').toLowerCase();
-            return name.includes('desde') || name.includes('lote') || name.includes('hasta');
+    try {
+        const hasFields = await frame.evaluate(() => {
+            const inputs = Array.from(document.querySelectorAll('input'));
+            return inputs.some(i => {
+                const name = (i.name || i.id || i.placeholder || '').toLowerCase();
+                return name.includes('desde') || name.includes('lote') || name.includes('hasta');
+            });
         });
-    });
-    if (hasFields) {
-        formFrame = frame;
-        break;
-    }
+        if (hasFields) {
+            formFrame = frame;
+            break;
+        }
+    } catch (e) {}
 }
 ```
 
-### 5.3 Mapeo y Llenado de Inputs del Formulario de Búsqueda
-En el frame operativo (`main`), el formulario posee los siguientes campos técnicos:
+### 7.2 Mapeo Técnico de Selectores en SIB1
+Dentro del frame de formulario, los elementos poseen estos identificadores clave:
 
-| Campo Visible en Pantalla | Atributo `name` en el HTML | Tipo de Elemento | Valor Asignado |
+| Campo Lógico | Atributo `name` en HTML | Tipo | Comportamiento |
 | :--- | :--- | :--- | :--- |
-| **Fecha Solicitud Desde** | `filtro.fechaSolicitudDesde` | `<select>` o `<input>` | Fecha calculada de inicio (`DD/MM/YYYY`) |
-| **Fecha Solicitud Hasta** | `filtro.fechaSolicitudHasta` | `<select>` o `<input>` | Fecha calculada de fin (`DD/MM/YYYY`) |
-| **Nro. de Lote** | `filtro.nroLote_numeric` | `<input type="text">` | Número de lote provisto (ej: `195`) |
-| **Nro. de Lote (Oculto)** | `filtro.nroLote` | `<input type="hidden">` | Se sincroniza en paralelo con el visible |
-| **Formato de Bajada** | `filtro.formatoBajada` | `<select>` | `COMP_POR_PDF` ("Un comprobante por PDF") |
-
-> [!IMPORTANT]
-> **Inyección dinámica de opciones en `<select>` de fechas:**
-> En SIB1, los campos de fecha suelen presentarse como listas desplegables (`<select>`). Si la fecha solicitada no se encuentra entre las opciones precargadas del banco, el bot **crea dinámicamente un nodo `<option>` con JavaScript en el DOM del iframe** y despacha el evento `change`:
-> ```javascript
-> opt = document.createElement('option');
-> opt.value = val;
-> opt.text = val;
-> select.appendChild(opt);
-> select.value = opt.value;
-> select.dispatchEvent(new Event('change', { bubbles: true }));
-> ```
+| **Fecha Solicitud Desde** | `filtro.fechaSolicitudDesde` | `<select>` o `<input>` | Asigna fecha en formato `DD/MM/YYYY`. Si es select y la opción no existe, la inyecta con DOM API. |
+| **Fecha Solicitud Hasta** | `filtro.fechaSolicitudHasta` | `<select>` o `<input>` | Asigna fecha en formato `DD/MM/YYYY`. |
+| **Nro. de Lote** | `filtro.nroLote_numeric` | `<input type="text">` | Escribe el número de lote y despacha eventos `input`, `change`, `keyup`. |
+| **Nro. de Lote (Hidden)** | `filtro.nroLote` | `<input type="hidden">` | Sincroniza el valor para el submit tradicional de Java Struts. |
+| **Formato de Bajada** | `filtro.formatoBajada` | `<select>` | Selecciona el valor `COMP_POR_PDF` ("Un comprobante por PDF"). |
+| **Botón de Descarga** | `img_boton_descargarComprobantes...` | `<img>` | Localizado con `img[name^="img_boton_descargarComprobantes"]` o `img[alt*="Descargar Comprobante" i]`. |
 
 ---
 
-## 6. REGLAS DE NEGOCIO Y MANEJO DEL LÍMITE DE 30 DÍAS
+## 8. REGLA BANCARIA DE 30 DÍAS Y DOBLE BÚSQUEDA
 
-Interbanking impone una restricción de validación rígida en su servidor: **el rango entre la Fecha Desde y la Fecha Hasta no puede superar los 30 días corridos (inclusive)**. Cualquier consulta con un rango mayor a 30 días es rechazada con un error de validación.
+Interbanking rechaza cualquier consulta donde `(FechaHasta - FechaDesde) > 30 días`.
 
-### Estrategia de Búsqueda en Meses de 31 Días:
-Para consultar un mes completo de 31 días (como enero, marzo, mayo, julio, agosto, octubre o diciembre) sin superar el límite de 30 días, el sistema implementa una **lógica de reintento inteligente en 2 etapas**:
-
-1. **Intento 1 (Días 01 al 30):**
-   - Fecha Desde: `01/MM/YYYY`
-   - Fecha Hasta: `30/MM/YYYY`
-   - Dispara la descarga.
-2. **Verificación de Resultado Vacío:**
-   - Un archivo `reporte.zip` generado por Interbanking que **no contiene comprobantes tiene un tamaño exacto de 22 bytes** (cabecera vacía de PKZIP).
-3. **Intento 2 (Días 02 al 31):**
-   - Si el Intento 1 arrojó un ZIP de 22 bytes o no descargó archivos, el bot elimina el archivo vacío y relanza la búsqueda para el rango restante:
-   - Fecha Desde: `02/MM/YYYY`
-   - Fecha Hasta: `31/MM/YYYY`
-
-### Mes en Curso:
-Si el mes seleccionado coincide con el mes calendario actual, la Fecha Hasta se limita automáticamente a la fecha del día de hoy para evitar consultas sobre fechas futuras.
+### Algoritmo para Meses de 31 Días:
+1. **Paso 1 (Días 01 al 30):**
+   - Fecha Desde: `01/MM/YYYY` | Fecha Hasta: `30/MM/YYYY`
+   - Se ejecuta la búsqueda y descarga.
+2. **Detección de Reporte Vacío:**
+   - Cuando Interbanking no encuentra registros, genera un archivo `reporte.zip` de **exactamente 22 bytes** (cabecera ZIP vacía sin archivos).
+3. **Paso 2 (Reintento Días 02 al 31):**
+   - Si el archivo descargado tiene 22 bytes o no hay archivos, el bot elimina el archivo temporal y repite la búsqueda con:
+   - Fecha Desde: `02/MM/YYYY` | Fecha Hasta: `31/MM/YYYY`
+4. **Mes en Curso:**
+   - Si el mes consultado es el mes actual, la Fecha Hasta se recorta automáticamente a la fecha de hoy para no buscar operaciones en días futuros.
 
 ---
 
-## 7. INTERCEPCIÓN DE DESCARGAS Y PROCESAMIENTO DE ARCHIVOS
+## 9. CONFIGURACIÓN DE DESCARGA VÍA CHROME DEVTOOLS PROTOCOL (CDP)
 
-### 7.1 Configuración de Descarga mediante CDP
-Puppeteer en modo headless bloquea por defecto las descargas directas del navegador. Para solventar esto, se utiliza una sesión de **Chrome DevTools Protocol (CDP)** vinculada a la página:
+Puppeteer headless no cuenta con un diálogo de descargas. Se conecta directamente al protocolo DevTools para habilitar la carpeta de destino:
 
 ```javascript
 const client = await page.target().createCDPSession();
@@ -256,60 +322,36 @@ await client.send('Page.setDownloadBehavior', {
 });
 ```
 
-### 7.2 Disparo del Botón de Descarga
-El botón de descarga en SIB1 es una imagen con nombre dinámico:
-- Selector principal: `img[name^="img_boton_descargarComprobantes"]`
-- Selectores alternativos: `img[alt*="Descargar Comprobante" i]`, `img[src*="descargar_comprobantes" i]`
-- Se realiza scroll al elemento (`scrollIntoView`), evento `hover` y clic físico de Puppeteer, con fallback a `evaluate(el => el.click())`.
-
-### 7.3 Gestión del Checklist de Columnas (si aparece)
-En ciertas empresas y configuraciones de SIB1, al presionar descargar se abre una pantalla intermedia con un checklist de columnas a exportar:
-1. El bot detecta si existen más de 3 checkboxes (`checkboxes.length > 3`).
-2. Localiza el checkbox "Seleccionar todos" (`all`, `todos`, `todas`) o marca todos los checkboxes iterativamente.
-3. Localiza el botón de confirmación (`Aceptar`, `Continuar`, `Exportar`, `Descargar`, `OK`) y lo presiona.
-
-### 7.4 Renombrado y Publicación de Archivos
-1. El archivo descargado inicialmente se llama habitualmente `reporte.zip` en `/home/julian/vacas-locas/public/comprobantes/${runId}/`.
-2. El bot lo renombra a un formato limpio y descriptivo:
-   ```text
-   [lote] - [empresa].[ext]
-   Ejemplo: 195 - HOYTS GENERAL CINEMA DE ARGENTINA SA.zip
-   ```
-3. Se genera la URL de acceso público:
-   `https://apivacas.jariel.com.ar/comprobantes/${runId}/195%20-%20HOYTS%20GENERAL%20CINEMA%20DE%20ARGENTINA%20SA.zip`
-4. Esta URL es devuelta al frontend en el payload de estado.
+### Renombrado Final:
+Al finalizar la descarga de `reporte.zip`, el backend renombra el archivo:
+```text
+[Número de Lote] - [Nombre de la Empresa].[ext]
+Ejemplo: 195 - CINEMARK ARGENTINA SA.zip
+```
+Y lo almacena en la carpeta pública accesible vía web:
+`${API_BASE_URL}/comprobantes/${runId}/195%20-%20CINEMARK%20ARGENTINA%20SA.zip`
 
 ---
 
-## 8. ESPECIFICACIÓN DE LA API BACKEND
+## 10. CONTRATO DE LA API HTTP (BACKEND)
 
-### Endpoint 1: Iniciar Automatización
-- **URL:** `POST https://apivacas.jariel.com.ar/api/interbanking/run`
-- **Headers:** `Content-Type: application/json`
-- **Body Payload:**
+### POST `/api/interbanking/run`
+Inicia el proceso asíncrono en segundo plano.
+- **Request Body:**
   ```json
   {
-    "company": "HOYTS GENERAL CINEMA DE ARGENTINA SA",
+    "company": "CINEMARK ARGENTINA S.A.",
     "lote": "195",
     "monthYear": "2026-06",
     "customCredentials": {
       "cuil": "20XXXXXXXXX",
-      "user": "gpainemal",
-      "pass": "MiPassword123"
+      "user": "mi_usuario",
+      "pass": "mi_clave"
     },
-    "cookies": [
-      {
-        "name": "sib",
-        "value": "...",
-        "domain": ".interbanking.com.ar",
-        "path": "/",
-        "expirationDate": 1788983170
-      }
-    ]
+    "cookies": [ ... ]
   }
   ```
-  *(Nota: `customCredentials` y `cookies` son opcionales).*
-- **Respuesta Exitosa (200 OK):**
+- **Response:**
   ```json
   {
     "success": true,
@@ -318,24 +360,20 @@ En ciertas empresas y configuraciones de SIB1, al presionar descargar se abre un
   }
   ```
 
-### Endpoint 2: Consultar Estado de la Ejecución
-- **URL:** `GET https://apivacas.jariel.com.ar/api/interbanking/status/:runId`
-- **Respuesta en Progreso (200 OK):**
+### GET `/api/interbanking/status/:runId`
+Permite al cliente monitorear el progreso mediante polling.
+- **Response (en progreso):**
   ```json
   {
     "success": true,
     "status": "running",
-    "logs": [
-      "[16:48:53] Iniciando automatización para lote 195...",
-      "[16:48:58] ✅ Sesión establecida correctamente..."
-    ],
+    "logs": ["[14:00:01] Iniciando navegador...", "[14:00:04] Sesión establecida..."],
     "files": [],
     "screenshotUrl": null,
-    "error": null,
-    "updatedAt": "2026-10-15T19:48:58.000Z"
+    "error": null
   }
   ```
-- **Respuesta Completada con Éxito (200 OK):**
+- **Response (completado):**
   ```json
   {
     "success": true,
@@ -343,93 +381,91 @@ En ciertas empresas y configuraciones de SIB1, al presionar descargar se abre un
     "logs": [ ... ],
     "files": [
       {
-        "name": "195 - HOYTS GENERAL CINEMA DE ARGENTINA SA.zip",
-        "url": "https://apivacas.jariel.com.ar/comprobantes/195_1788896933129/195%20-%20HOYTS%20GENERAL%20CINEMA%20DE%20ARGENTINA%20SA.zip",
-        "localPath": "/home/julian/vacas-locas/public/comprobantes/195_1788896933129/195 - HOYTS GENERAL CINEMA DE ARGENTINA SA.zip"
+        "name": "195 - CINEMARK ARGENTINA SA.zip",
+        "url": "https://api.tu-dominio.com/comprobantes/195_1788896933129/195%20-%20CINEMARK%20ARGENTINA%20SA.zip",
+        "localPath": "/ruta/absoluta/public/comprobantes/195_1788896933129/195 - CINEMARK ARGENTINA SA.zip"
       }
     ],
     "screenshotUrl": null,
-    "error": null,
-    "updatedAt": "2026-10-15T19:49:07.000Z"
+    "error": null
   }
   ```
-- **Respuesta de Fallo (200 OK con status 'failed'):**
+- **Response (fallido):**
   ```json
   {
     "success": true,
     "status": "failed",
     "logs": [ ... ],
     "files": [],
-    "screenshotUrl": "https://apivacas.jariel.com.ar/comprobantes/error_195_1788896933129.png",
-    "error": "El banco reporto: 'No existen registros para los criterios ingresados.'",
-    "updatedAt": "2026-10-15T19:49:10.000Z"
+    "screenshotUrl": "https://api.tu-dominio.com/comprobantes/error_195_1788896933129.png",
+    "error": "El banco reportó: 'No existen registros para los criterios ingresados.'"
   }
   ```
 
 ---
 
-## 9. EL FRONTEND EN FINANZAS (NEXT.JS)
+## 11. GUÍA DE DESPLIEGUE PASO A PASO EN UN NUEVO SERVIDOR
 
-El archivo `src/app/interbanking/page.tsx` administra el ciclo de vida del cliente:
-1. **Control de Acceso:** Restringido al usuario `julian` mediante `useAuth()`.
-2. **Encolador de Lotes:** El usuario puede ingresar múltiples lotes separados por coma o espacio (ej: `152, 153, 154`). El estado `queue` toma los números y ejecuta una solicitud a la vez, esperando 5 segundos entre lote y lote para no saturar al banco ni al servidor.
-3. **Consola en Vivo:** Mediante polling cada 1500ms al endpoint de estado, renderiza los logs del servidor con scroll automático (`scrollIntoView`).
-4. **Descarga Transparente:** Tan pronto como `status === "completed"`, el frontend crea un elemento `<a download>` y dispara el clic programático para que el archivo se guarde directamente en la carpeta de descargas del navegador del usuario.
-5. **Diagnóstico con Imagen:** Si la ejecución falla, el frontend muestra la captura de pantalla (`screenshotUrl`) capturada por Puppeteer en el instante del error.
+### Paso 1: Clonar e instalar librerías del sistema
+Instala Node.js y las dependencias de Chromium detalladas en la Sección 2.
 
----
-
-## 10. GUÍA PASO A PASO PARA OTRA IA O DESARROLLADOR
-
-Si necesitas modificar, solucionar problemas o extender este sistema, sigue estas instrucciones estándar:
-
-### 10.1 Cómo actualizar las Cookies de Sesión
-Cuando las cookies expiren (ocurre cada varios días o al cerrar sesión en el navegador):
-1. Inicia sesión normalmente en `https://web.interbanking.com.ar` desde Google Chrome.
-2. Abre la extensión **EditThisCookie** y haz clic en el botón de exportar (copia un JSON al portapapeles).
-3. **Método A (Desde la Web de Finanzas):**
-   - Entra en `/interbanking`.
-   - Abre "Modificar Credenciales de Acceso (Opcional)".
-   - Pega el JSON en "JSON de Cookies (Opcional)" y presiona "Iniciar Descargas".
-   - El backend guardará automáticamente el nuevo contenido en `cookies.json`.
-4. **Método B (Directo en el Servidor):**
-   - Guarda el JSON directamente en `/home/julian/vacas-locas/data-processor/cookies.json`.
-
-### 10.2 Comandos Útiles del Servidor
+### Paso 2: Configurar el backend
 ```bash
-# Ver estado del proceso backend
-pm2 status api-backend
-
-# Ver logs en tiempo real del backend
-pm2 logs api-backend --lines 100
-
-# Reiniciar el servicio tras modificar servicios o rutas
-pm2 restart api-backend
-
-# Inspeccionar logs históricos de una ejecución específica
-cat /home/julian/vacas-locas/public/comprobantes/logs_[runId].txt
-
-# Probar inspección de DOM de SIB1 en forma aislada
-cd /home/julian/vacas-locas/data-processor
-node scratch/get_actual_input_names.js
+cd backend
+npm install
+cp .env.example .env # Configurar PORT, API_BASE_URL y credenciales
 ```
 
-### 10.3 Árbol de Decisión para Debugging
-
-```mermaid
-flowchart TD
-    ERR["Fallo en la Automatización"] --> CHECK_ERR{"Mensaje de error / Screenshot"}
-    
-    CHECK_ERR -->|"Sesión expirada / Redirección a CAS"| C1["Renovar cookies.json con sesión activa de Chrome"]
-    CHECK_ERR -->|"No se encontró frame 'applicationFrame'"| C2["Verificar si el banco cambió la URL o timeout de red (aumentar timeout de waitForNavigation)"]
-    CHECK_ERR -->|"No existen registros para los criterios"| C3["El lote no tiene transferencias en ese mes o la empresa seleccionada no coincide"]
-    CHECK_ERR -->|"ZIP vacío (22 bytes)"| C4["Verificar si el comprobante cae en el día 31 o si requiere rango alternativo"]
-    CHECK_ERR -->|"Timeout esperando selector del botón de descarga"| C5["Ejecutar scratch/get_actual_input_names.js para revisar cambios en los atributos del DOM bancario"]
+### Paso 3: Configurar la carpeta de comprobantes públicos
+Asegúrate de que la carpeta de descargas exista y tenga permisos de escritura:
+```bash
+mkdir -p ../public/comprobantes
+chmod 755 ../public/comprobantes
 ```
+
+### Paso 4: Iniciar el backend con PM2
+```bash
+pm2 start server.js --name "interbanking-api"
+pm2 save
+pm2 startup
+```
+
+### Paso 5: Configurar Reverse Proxy (Ejemplo Nginx)
+```nginx
+server {
+    server_name api.tu-dominio.com;
+
+    # Archivos estáticos de comprobantes descargados
+    location /comprobantes/ {
+        alias /ruta/a/tu/proyecto/public/comprobantes/;
+        autoindex off;
+        expires 7d;
+    }
+
+    # API Node.js
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 180s;
+    }
+}
+```
+
+### Paso 6: Conectar el Frontend
+En el frontend (Next.js), configura la variable `NEXT_PUBLIC_API_URL` apuntando a `https://api.tu-dominio.com` para que el formulario y la cola de descargas consuman los endpoints del nuevo backend.
 
 ---
 
-## 11. CONCLUSIÓN
+## 12. DIAGNÓSTICO Y RESOLUCIÓN DE INCIDENCIAS COMUNES
 
-La arquitectura está diseñada para ser resiliente a fallas transitorias, aislar el consumo de memoria mediante Puppeteer headless efímero (cerrando el navegador al finalizar cada lote) y desacoplar completamente la interfaz de usuario de las complejidades del protocolo bancario heredado.
-Cualquier modificación futura debe respetar el límite de 30 días de rango de fechas y la jerarquía de subframes de SIB1.
+| Síntoma | Causa Probable | Solución |
+| :--- | :--- | :--- |
+| **Error: `Failed to launch the browser process!`** | Faltan bibliotecas compartidas de Chromium en Linux. | Ejecutar el comando `apt-get install` de la Sección 2.2 con las librerías gráficas de X11/NSS. |
+| **Redirección a `cas/login` o alerta de sesión expirada** | Las cookies guardadas en `cookies.json` caducaron. | Iniciar sesión manual en Chrome, exportar el JSON con EditThisCookie y actualizarlo vía web o en `cookies.json`. |
+| **No se detecta el frame `applicationFrame`** | Tiempo de carga elevado de la red bancaria. | Incrementar los timeouts de navegación en `interbankingService.js` de 45s a 60s. |
+| **Error de validación de fechas en el banco** | Se superó el límite de 30 días de rango. | Verificar la función de cálculo de fechas; nunca enviar un rango mayor a 30 días corridos. |
+| **Descarga queda en estado pendiente** | Puppeteer no configuró el CDP antes de la navegación. | Asegurarse de invocar `Page.setDownloadBehavior` inmediatamente después de crear la página con `browser.newPage()`. |
