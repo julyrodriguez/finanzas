@@ -378,14 +378,27 @@ export default function InterbankingPage() {
   return (
     <AppLayout title="Automatización Interbanking" subtitle="Descarga automatizada de comprobantes CBU">
       <div className="space-y-6 max-w-6xl mx-auto pb-12">
-        {/* Banner informativo */}
-        <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex gap-3.5 text-sm text-emerald-300 shadow-xl">
-          <Sparkles className="w-5 h-5 flex-shrink-0 text-emerald-400 mt-0.5" />
-          <div>
-            <p className="font-bold text-white text-base">Automatización de Descargas de CBU</p>
-            <p className="text-gray-400 text-xs mt-1 leading-relaxed">
-              Este módulo ejecuta un navegador automatizado en el servidor (<code className="text-emerald-400">apivacas.jariel.com.ar</code>) que inicia sesión, selecciona la empresa elegida, busca en el historial de CBU por el lote y mes provistos, descarga los archivos en PDF y los transmite directamente a esta página para tu descarga.
-            </p>
+        {/* Banner informativo y descarga de instructivo */}
+        <div className="p-5 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4 text-sm text-emerald-300 shadow-xl">
+          <div className="flex gap-3.5">
+            <Sparkles className="w-5 h-5 flex-shrink-0 text-emerald-400 mt-0.5" />
+            <div>
+              <p className="font-bold text-white text-base">Automatización de Descargas de CBU</p>
+              <p className="text-gray-400 text-xs mt-1 leading-relaxed">
+                Este módulo ejecuta un navegador automatizado en el servidor (<code className="text-emerald-400">apivacas.jariel.com.ar</code>) que inicia sesión, selecciona la empresa elegida, busca en el historial de CBU por el lote y mes provistos, descarga los archivos en PDF y los transmite directamente a esta página para tu descarga.
+              </p>
+            </div>
+          </div>
+          <div className="flex-shrink-0 flex items-center gap-2">
+            <a
+              href="/INSTRUCTIVO_INTERBANKING.md"
+              download="INSTRUCTIVO_INTERBANKING.md"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title="Descargar instructivo técnico completo sobre el funcionamiento de Interbanking, cookies y backend"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Descargar Instructivo</span>
+            </a>
           </div>
         </div>
 
@@ -531,7 +544,7 @@ export default function InterbankingPage() {
                           className="w-full bg-[#0d131f] border border-white/5 rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-emerald-500 font-mono"
                         />
                         <p className="text-[9px] text-gray-500 leading-relaxed">
-                          Al inyectar las cookies se omitirá el proceso de inicio de sesión y selección de empresa en el servidor, yendo directo a la interfaz del banco.
+                          Al inyectar las cookies se omitirá el proceso de inicio de sesión y selección de empresa en el servidor, yendo directo a la interfaz del banco. Consulta o descarga el <a href="/INSTRUCTIVO_INTERBANKING.md" download="INSTRUCTIVO_INTERBANKING.md" className="text-emerald-400 hover:underline font-semibold">instructivo técnico</a> para más detalles.
                         </p>
                       </div>
                     </div>
