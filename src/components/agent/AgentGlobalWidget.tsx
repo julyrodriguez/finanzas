@@ -724,10 +724,14 @@ Puedo ayudarte a automatizar tareas cotidianas:
                     <span>FinanBot</span>
                     <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
-                      Activo
+                      OpenClaw
                     </span>
                   </h3>
-                  <p className="text-[10px] text-slate-400">Cinemark & Hoyts Finanzas</p>
+                  <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <span>Cinemark & Hoyts</span>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-indigo-400 font-mono text-[9px]">Gateway :18789</span>
+                  </p>
                 </div>
               </div>
 

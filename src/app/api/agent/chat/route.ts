@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { syncChatTurnToOpenClaw } from "@/lib/agent/openclawBridge";
 
 export const maxDuration = 60; // Allow up to 60s for deep email parsing
 
@@ -122,6 +123,19 @@ Debes responder SIEMPRE un JSON válido con la siguiente estructura exacta:
       promptContent = message || "Hola";
     }
 
+    // Sincronizar mensaje entrante del usuario en la memoria de OpenClaw
+    syncChatTurnToOpenClaw({
+      role: "user",
+      content: message || "(Análisis de correo arrastrado)",
+      emailContext: emailContext
+        ? {
+            subject: emailContext.subject,
+            from: emailContext.from,
+            date: emailContext.date,
+          }
+        : undefined,
+    }).catch(() => {});
+
     // Build chat history for Gemini
     const contents: any[] = [];
     if (Array.isArray(history) && history.length > 0) {
@@ -178,6 +192,22 @@ Debes responder SIEMPRE un JSON válido con la siguiente estructura exacta:
         suggestedQuickReplies: ["Ver cotizaciones", "Ver recordatorios"],
       };
     }
+
+    // Sincronizar respuesta y acciones del asistente en la memoria de OpenClaw
+    syncChatTurnToOpenClaw({
+      role: "assistant",
+      content: parsedResponse.reply || "",
+      actionCard: parsedResponse.action
+        ? {
+            type: parsedResponse.action.type,
+            title:
+              parsedResponse.action.payload?.name ||
+              parsedResponse.action.payload?.title ||
+              "Acción ejecutada",
+            badgeText: parsedResponse.intent,
+          }
+        : undefined,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,
