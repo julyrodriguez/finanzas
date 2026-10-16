@@ -7,6 +7,7 @@ import { EyeTrackerCube } from "@/components/home/EyeTrackerCube";
 import { BeachWeatherBackdrop } from "@/components/home/BeachWeatherBackdrop";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
 import { BlackboardHub } from "@/components/home/BlackboardHub";
+import { HomeAgendaPendientes } from "@/components/home/HomeAgendaPendientes";
 import { CotizacionDetailModal } from "@/components/cotizaciones/CotizacionDetailModal";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -14,6 +15,9 @@ const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 export default function HomePage() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchModalQuery, setSearchModalQuery] = useState("");
+
+  // Pizarrón mode: "compact" (chiquito por defecto), "expanded", or "minimized"
+  const [boardMode, setBoardMode] = useState<"compact" | "expanded" | "minimized">("compact");
 
   // Modals for detail view
   const [selectedQuoteForDetail, setSelectedQuoteForDetail] = useState<any | null>(null);
@@ -65,10 +69,32 @@ export default function HomePage() {
   }, [isSearchOpen, selectedQuoteForDetail]);
 
   return (
-    <AppLayout title="Pizarrón Principal" subtitle="Cinemark & Hoyts">
-      {/* Pizarrón ocupando la pestaña completa */}
-      <div className="w-full h-[calc(100vh-68px)] overflow-hidden flex flex-col p-1.5 sm:p-2.5">
-        <BlackboardHub onOpenSearch={() => setIsSearchOpen(true)} />
+    <AppLayout title="Inicio" subtitle="Pizarrón & Agenda Operativa">
+      <div className="w-full min-h-[calc(100vh-68px)] flex flex-col p-2 sm:p-4 gap-4 overflow-y-auto">
+        {/* 1. Pizarrón de Control: Chiquito/Compacto por defecto, expandible o minimizable */}
+        <div
+          className={`w-full transition-all duration-300 ${
+            boardMode === "compact"
+              ? "h-[360px] sm:h-[400px] flex-shrink-0"
+              : boardMode === "minimized"
+              ? "h-auto flex-shrink-0"
+              : "h-auto"
+          }`}
+        >
+          <BlackboardHub
+            onOpenSearch={() => setIsSearchOpen(true)}
+            initialMode="compact"
+            viewMode={boardMode}
+            onViewModeChange={setBoardMode}
+          />
+        </div>
+
+        {/* 2. Agenda de Pendientes conectados con el Calendario: Hoy y Mañana */}
+        {boardMode !== "expanded" && (
+          <div className="w-full pb-8">
+            <HomeAgendaPendientes />
+          </div>
+        )}
       </div>
 
       {/* Intelligent Search Modal with Thinking/Searching Carita in Background */}

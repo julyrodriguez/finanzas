@@ -25,7 +25,12 @@ import {
   Undo2,
   Redo2,
   ClipboardList,
-  CalendarPlus
+  CalendarPlus,
+  Maximize2,
+  Minimize2,
+  Minus,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { EyeTrackerCube } from "./EyeTrackerCube";
 import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
@@ -132,12 +137,31 @@ const CARITA_GREETINGS = [
 const API_BASE_URL = "https://apivacas.jariel.com.ar/api/pizarron/notes";
 const CANVAS_API_URL = "https://apivacas.jariel.com.ar/api/pizarron/canvas";
 
-interface BlackboardHubProps {
+export interface BlackboardHubProps {
   onOpenSearch?: () => void;
+  initialMode?: "compact" | "expanded" | "minimized";
+  viewMode?: "compact" | "expanded" | "minimized";
+  onViewModeChange?: (mode: "compact" | "expanded" | "minimized") => void;
 }
 
-export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
+export function BlackboardHub({
+  onOpenSearch,
+  initialMode = "compact",
+  viewMode,
+  onViewModeChange,
+}: BlackboardHubProps) {
   const router = useRouter();
+
+  // Mode State: compact (chiquito), expanded, or minimized
+  const [internalMode, setInternalMode] = useState<"compact" | "expanded" | "minimized">(
+    initialMode
+  );
+  const currentMode = viewMode !== undefined ? viewMode : internalMode;
+
+  const setMode = (newMode: "compact" | "expanded" | "minimized") => {
+    setInternalMode(newMode);
+    if (onViewModeChange) onViewModeChange(newMode);
+  };
   // Canvas State
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -453,6 +477,13 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [initCanvas]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      initCanvas();
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [currentMode, initCanvas]);
 
   const saveCanvasState = () => {
     const canvas = canvasRef.current;
@@ -877,8 +908,51 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     setTimeout(() => setCaritaMood("normal"), 1500);
   };
 
+  // Minimized Bar Mode
+  if (currentMode === "minimized") {
+    return (
+      <div className="w-full rounded-2xl border-2 sm:border-4 border-[#26190e] bg-[#0c141d] p-3 sm:px-5 sm:py-3.5 shadow-xl flex items-center justify-between text-white select-none transition-all">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 font-bold text-base shadow-inner">
+            📌
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              Pizarrón de Control
+              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-white/10 text-slate-300 border border-white/10">
+                {notes.length} {notes.length === 1 ? "nota" : "notas"}
+              </span>
+            </h3>
+            <p className="text-[11px] text-slate-400">Pizarrón minimizado • Haz clic en "Abrir" para restaurarlo</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleAddNote()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Nueva Nota</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("compact")}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-yellow-500/20 transition-all active:scale-95 cursor-pointer"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span>Abrir Pizarrón</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isExpanded = currentMode === "expanded";
+
   return (
-    <div className="relative isolate z-10 w-full h-full flex flex-col select-none">
+    <div className={isExpanded ? "fixed inset-0 z-50 p-2 sm:p-4 bg-black/85 backdrop-blur-md flex flex-col select-none" : "relative isolate z-10 w-full h-full flex flex-col select-none"}>
       {/* Pizarrón que ocupa la pantalla completa */}
       <div 
         ref={boardRef}
@@ -923,7 +997,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
             )}
           </div>
 
-          {/* Right: Notes count & Quick Search */}
+          {/* Right: Notes count, Quick Search & Mode controls */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono text-slate-300 bg-white/10 px-2.5 py-1 rounded-lg border border-white/10">
               📌 {notes.length} {notes.length === 1 ? "nota" : "notas"}
@@ -941,6 +1015,40 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                 <kbd className="text-[10px] bg-black/40 px-1.5 py-0.2 rounded border border-white/10 text-slate-400 font-mono">⌘K</kbd>
               </button>
             )}
+
+            {/* Mode Controls: Expandir / Compacto / Minimizar */}
+            <div className="flex items-center gap-1.5 border-l border-white/10 pl-2">
+              {currentMode === "compact" ? (
+                <button
+                  type="button"
+                  onClick={() => setMode("expanded")}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white rounded-xl text-xs font-semibold border border-white/10 transition-colors cursor-pointer active:scale-95"
+                  title="Expandir Pizarrón a pantalla completa"
+                >
+                  <Maximize2 className="w-3.5 h-3.5 text-amber-300" />
+                  <span className="hidden sm:inline">Expandir</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setMode("compact")}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-xl text-xs font-semibold transition-colors cursor-pointer active:scale-95"
+                  title="Restaurar a tamaño compacto"
+                >
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-300" />
+                  <span className="hidden sm:inline">Compacto</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setMode("minimized")}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl border border-white/10 transition-colors cursor-pointer active:scale-95"
+                title="Minimizar pizarrón"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
