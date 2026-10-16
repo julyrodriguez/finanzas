@@ -506,24 +506,35 @@ Puedo ayudarte a automatizar tareas cotidianas:
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/agent/chat", {
+      const requestPayload = {
+        message: textToSend,
+        history: messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+        emailContext: emailToSend || undefined,
+        currentQuotes: quotesCache.map((q) => ({
+          id: q.id,
+          name: q.name,
+          status: q.status || "borrador",
+          winningProviderId: q.winningProviderId,
+        })),
+      };
+
+      let res = await fetch("/api/agent/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: textToSend,
-          history: messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
-          emailContext: emailToSend || undefined,
-          currentQuotes: quotesCache.map((q) => ({
-            id: q.id,
-            name: q.name,
-            status: q.status || "borrador",
-            winningProviderId: q.winningProviderId,
-          })),
-        }),
-      });
+        body: JSON.stringify(requestPayload),
+      }).catch(() => null);
 
-      if (!res.ok) {
-        throw new Error(`Error en el servidor: HTTP ${res.status}`);
+      if (!res || !res.ok) {
+        // Fallback directo a https://apivacas.jariel.com.ar/api/openclaw-agent/chat si /api/agent/chat falla en Vercel
+        res = await fetch("https://apivacas.jariel.com.ar/api/openclaw-agent/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestPayload),
+        }).catch(() => null);
+      }
+
+      if (!res || !res.ok) {
+        throw new Error(`Error en el servidor: HTTP ${res?.status || 500}`);
       }
 
       const json = await res.json();

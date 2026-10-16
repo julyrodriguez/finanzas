@@ -9,14 +9,39 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { message, history = [], emailContext, currentQuotes = [] } = body;
 
+    // 1. Intentar despachar primero al backend local de OpenClaw en apivacas
+    // donde corre el Gateway de OpenClaw y la memoria persistente en tu PC.
+    const openclawEndpoint = process.env.OPENCLAW_AGENT_API || "https://apivacas.jariel.com.ar/api/openclaw-agent/chat";
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const openclawRes = await fetch(openclawEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (openclawRes.ok) {
+        const json = await openclawRes.json();
+        if (json && json.success) {
+          return NextResponse.json(json);
+        }
+      }
+    } catch (openclawErr: any) {
+      console.warn("⚠️ [OpenClaw Gateway Proxy] Aviso al conectar con apivacas:", openclawErr?.message || openclawErr);
+    }
+
+    // 2. Fallback de alta disponibilidad con Gemini si apivacas no estuviera accesible
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         {
           success: false,
-          error: "GEMINI_API_KEY no configurada en las variables de entorno.",
+          error: "El servicio de OpenClaw (apivacas) no respondió a tiempo y GEMINI_API_KEY no está configurada.",
         },
-        { status: 500 }
+        { status: 503 }
       );
     }
 
