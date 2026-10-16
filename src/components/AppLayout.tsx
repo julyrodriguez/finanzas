@@ -377,6 +377,13 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     !loading && Boolean(user) && Boolean(isOrdenesUser) && pathname !== "/seguimiento-de-ordenes";
   const isForbiddenForOtherUsers = false;
 
+  const [pressedHref, setPressedHref] = useState<string | null>(null);
+  const [tapPulse, setTapPulse] = useState<{ href: string; id: number } | null>(null);
+
+  useEffect(() => {
+    setPressedHref(null);
+  }, [pathname]);
+
   if (loading || (!user && !publicRoute) || isForbiddenForOrdenes || isForbiddenForOtherUsers) {
     return (
       <div className="min-h-screen bg-[#070a12] flex flex-col items-center justify-center p-4">
@@ -393,7 +400,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
     );
   }
 
-  const renderSidebarContent = (expanded: boolean) => (
+  const renderSidebarContent = (expanded: boolean, variant: "desktop" | "mobile" = "desktop") => (
     <div className="flex flex-col h-full bg-[#0a0e17] border-r border-white/10 text-slate-300 overflow-hidden select-none">
       {/* Brand Header */}
       <div className="h-16 px-2.5 border-b border-white/10 shrink-0 flex items-center justify-between overflow-hidden">
@@ -498,43 +505,71 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
               <nav aria-label={section.title} className="space-y-1">
                 {visibleItems.map((item) => {
-                  const active = isActive(item.href, item.exact);
+                  const routeActive = isActive(item.href, item.exact);
+                  const active = pressedHref ? pressedHref === item.href : routeActive;
+                  const isPulsing = tapPulse?.href === item.href;
                   const Icon = item.icon;
                   return (
                     <Link
                       key={item.name}
                       href={item.href}
                       prefetch={false}
-                      onClick={() => setSidebarOpen(false)}
+                      onClick={() => {
+                        setPressedHref(item.href);
+                        setTapPulse({ href: item.href, id: Date.now() });
+                        setSidebarOpen(false);
+                      }}
                       title={!expanded ? item.name : undefined}
-                      className={`group flex items-center h-10 px-2 rounded-xl text-xs font-medium transition-colors relative overflow-hidden ${
+                      className={`group flex items-center h-10 px-2 rounded-xl text-xs font-medium transition-all duration-150 relative overflow-hidden active:scale-[0.93] ${
                         active
-                          ? "text-white font-semibold"
+                          ? "text-white font-semibold shadow-md shadow-blue-600/25"
                           : "text-slate-400 hover:text-slate-100 hover:bg-white/[0.06] border border-transparent"
                       }`}
                     >
                       {active && (
                         <motion.div
-                          layoutId="sidebar-active-pill"
-                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                          className="absolute inset-0 rounded-xl bg-blue-600 border border-blue-500 shadow-sm -z-0"
+                          layoutId={`sidebar-active-pill-${variant}`}
+                          transition={{ type: "spring", stiffness: 500, damping: 32, mass: 0.7 }}
+                          className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 border border-blue-400/50 shadow-sm -z-0"
                         />
                       )}
 
-                      <div className="w-6 h-6 shrink-0 flex items-center justify-center relative z-10">
+                      {/* Luminous Tap Ripple Burst */}
+                      <AnimatePresence>
+                        {isPulsing && (
+                          <motion.span
+                            key={tapPulse.id}
+                            initial={{ opacity: 0.65, scale: 0.3 }}
+                            animate={{ opacity: 0, scale: 2.4 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                            className="absolute inset-0 rounded-xl bg-white/35 pointer-events-none z-20"
+                          />
+                        )}
+                      </AnimatePresence>
+
+                      <motion.div
+                        key={isPulsing ? `icon-${tapPulse.id}` : "icon-idle"}
+                        initial={isPulsing ? { scale: 0.75, rotate: -12 } : false}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 600, damping: 18 }}
+                        className="w-6 h-6 shrink-0 flex items-center justify-center relative z-10"
+                      >
                         <Icon
-                          className={`w-4 h-4 transition-colors ${
-                            active ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+                          className={`w-4 h-4 transition-transform duration-150 group-hover:scale-110 group-active:scale-90 ${
+                            active ? "text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]" : "text-slate-400 group-hover:text-slate-200"
                           }`}
                         />
-                      </div>
+                      </motion.div>
 
                       <div
                         className={`flex items-center justify-between flex-1 min-w-0 ml-3 relative z-10 transition-all duration-300 ease-in-out ${
                           expanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-3 pointer-events-none"
                         }`}
                       >
-                        <span className="truncate whitespace-nowrap">{item.name}</span>
+                        <span className={`truncate whitespace-nowrap transition-transform duration-150 ${isPulsing ? "translate-x-1" : "group-hover:translate-x-0.5"}`}>
+                          {item.name}
+                        </span>
                         {item.badge && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 ml-1.5">
                             {item.badge}
@@ -690,7 +725,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           isExpanded ? "w-64" : "w-16"
         }`}
       >
-        {renderSidebarContent(isExpanded)}
+        {renderSidebarContent(isExpanded, "desktop")}
       </aside>
 
       {/* Mobile Sliding Drawer */}
@@ -700,7 +735,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {renderSidebarContent(true)}
+        {renderSidebarContent(true, "mobile")}
       </aside>
 
       {/* Main Content Area */}
