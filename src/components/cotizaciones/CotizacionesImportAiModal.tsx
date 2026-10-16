@@ -389,6 +389,7 @@ export function CotizacionesImportAiModal({
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       await handleFilesSelected(e.dataTransfer.files);
     }
@@ -1577,7 +1578,10 @@ export function CotizacionesImportAiModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      data-local-dropzone="true"
+      className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+    >
       <div className={`flex flex-col w-full h-full sm:h-[90vh] ${(attachment || isBatchMode) && isAiChatOpen ? "max-w-6xl" : "max-w-4xl"} bg-[#0b101b] border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-200`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-[#101726]/90 shrink-0">
@@ -1679,7 +1683,14 @@ export function CotizacionesImportAiModal({
           {/* File Upload Dropzone */}
           {!attachment && !isAnalyzing && !isBatchMode && (
             <div
-              onDragOver={(e) => e.preventDefault()}
+              data-local-dropzone="true"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer) {
+                  e.dataTransfer.dropEffect = "copy";
+                }
+              }}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-white/15 hover:border-emerald-500/50 rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all bg-white/[0.02] hover:bg-white/[0.04] group"

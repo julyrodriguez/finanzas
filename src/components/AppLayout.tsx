@@ -98,6 +98,12 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
     const onDragEnter = (e: DragEvent) => {
       if (!hasFiles(e)) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-local-dropzone='true']")) {
+        dragCounterRef.current = 0;
+        setIsDraggingFile(false);
+        return;
+      }
       e.preventDefault();
       dragCounterRef.current += 1;
       if (dragCounterRef.current === 1) {
@@ -107,13 +113,33 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
 
     const onDragOver = (e: DragEvent) => {
       if (!hasFiles(e)) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-local-dropzone='true']")) {
+        dragCounterRef.current = 0;
+        setIsDraggingFile(false);
+        return;
+      }
       e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
     };
 
     const onDragLeave = (e: DragEvent) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
       dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+      if (
+        e.clientX <= 0 ||
+        e.clientY <= 0 ||
+        e.clientX >= window.innerWidth ||
+        e.clientY >= window.innerHeight ||
+        !e.relatedTarget
+      ) {
+        dragCounterRef.current = 0;
+        setIsDraggingFile(false);
+        return;
+      }
       if (dragCounterRef.current === 0) {
         setIsDraggingFile(false);
       }
@@ -137,15 +163,22 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       }
     };
 
+    const onDragEnd = () => {
+      dragCounterRef.current = 0;
+      setIsDraggingFile(false);
+    };
+
     window.addEventListener("dragenter", onDragEnter);
     window.addEventListener("dragover", onDragOver);
     window.addEventListener("dragleave", onDragLeave);
     window.addEventListener("drop", onDrop);
+    window.addEventListener("dragend", onDragEnd);
     return () => {
       window.removeEventListener("dragenter", onDragEnter);
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("dragleave", onDragLeave);
       window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragend", onDragEnd);
     };
   }, []);
 
@@ -804,9 +837,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[90] bg-blue-950/70 backdrop-blur-md border-4 border-dashed border-blue-400/70 m-3 rounded-3xl flex flex-col items-center justify-center pointer-events-none"
+            className="fixed inset-0 z-[90] bg-blue-950/70 backdrop-blur-md border-4 border-dashed border-blue-400/70 m-3 rounded-3xl flex flex-col items-center justify-center pointer-events-none select-none [&_*]:pointer-events-none"
           >
-            <div className="p-6 rounded-3xl bg-[#0b1222]/90 border border-blue-400/30 shadow-2xl flex flex-col items-center text-center max-w-md">
+            <div className="p-6 rounded-3xl bg-[#0b1222]/90 border border-blue-400/30 shadow-2xl flex flex-col items-center text-center max-w-md pointer-events-none select-none [&_*]:pointer-events-none">
               <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-blue-300 mb-3">
                 <UploadCloud className="w-7 h-7 animate-bounce" />
               </div>

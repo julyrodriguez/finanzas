@@ -198,33 +198,56 @@ Puedo ayudarte a automatizar tareas cotidianas:
     }
   }, [messages, isOpen, activeTab]);
 
-  // Global drag listener to highlight widget
+  // Global drag listener to highlight widget & safety reset
   useEffect(() => {
-    const handleWindowDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes("Files")) {
-        // Can highlight
-      }
+    const handleGlobalDragReset = () => {
+      widgetDragCounterRef.current = 0;
+      setIsDraggingOverWidget(false);
     };
-    window.addEventListener("dragover", handleWindowDragOver);
-    return () => window.removeEventListener("dragover", handleWindowDragOver);
+    window.addEventListener("dragend", handleGlobalDragReset);
+    window.addEventListener("drop", handleGlobalDragReset);
+    return () => {
+      window.removeEventListener("dragend", handleGlobalDragReset);
+      window.removeEventListener("drop", handleGlobalDragReset);
+    };
   }, []);
 
-  // Handle Drag & Drop on Widget
+  const widgetDragCounterRef = useRef(0);
+
+  // Handle Drag & Drop on Widget without flickering
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    widgetDragCounterRef.current += 1;
+    if (widgetDragCounterRef.current === 1) {
+      setIsDraggingOverWidget(true);
+    }
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingOverWidget(true);
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = "copy";
+    }
+    if (!isDraggingOverWidget) {
+      setIsDraggingOverWidget(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDraggingOverWidget(false);
+    widgetDragCounterRef.current = Math.max(0, widgetDragCounterRef.current - 1);
+    if (widgetDragCounterRef.current === 0) {
+      setIsDraggingOverWidget(false);
+    }
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    widgetDragCounterRef.current = 0;
     setIsDraggingOverWidget(false);
 
     // Open widget if closed
@@ -1264,7 +1287,9 @@ Puedo ayudarte a automatizar tareas cotidianas:
 
       {/* Floating Trigger Button (Always visible at bottom-right) */}
       <div
+        data-local-dropzone="true"
         className="fixed bottom-6 right-6 z-[9990] flex items-center gap-2 select-none"
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -1280,9 +1305,9 @@ Puedo ayudarte a automatizar tareas cotidianas:
             >
               <button
                 onClick={() => setIsOpen(true)}
-                className={`group relative flex items-center gap-3 px-4 py-3 rounded-full shadow-2xl backdrop-blur-2xl transition-all duration-300 ${
+                className={`group relative flex items-center gap-3 px-4 py-3 rounded-full shadow-2xl backdrop-blur-2xl transition-all duration-200 [&_*]:pointer-events-none ${
                   isDraggingOverWidget
-                    ? "bg-indigo-600 border-2 border-white scale-110 shadow-indigo-500/50"
+                    ? "bg-indigo-600 ring-4 ring-indigo-400/50 shadow-indigo-500/50"
                     : "bg-[#0b101d]/95 hover:bg-[#12192e] border border-indigo-500/30 hover:border-indigo-400 shadow-black/80"
                 }`}
                 title="Abrir Asistente Finanzas & Compras (Arrastrá correos aquí)"
@@ -1291,26 +1316,32 @@ Puedo ayudarte a automatizar tareas cotidianas:
                 <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-indigo-500/30 to-purple-500/30 blur-lg group-hover:opacity-100 opacity-60 transition duration-500 pointer-events-none" />
 
                 {/* Bot Icon with glowing pulse */}
-                <div className="relative w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300 group-hover:scale-105 transition-transform">
+                <div className="relative w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300 group-hover:scale-105 transition-transform pointer-events-none">
                   <Bot className="w-4 h-4" />
                   <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
 
-                <div className="text-left hidden sm:block">
+                <div className="text-left hidden sm:block min-w-[130px] pointer-events-none">
                   <p className="text-xs font-black text-white tracking-wide flex items-center gap-1.5">
                     <span>FinanBot</span>
                     <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 font-bold">
                       IA
                     </span>
                   </p>
-                  <p className="text-[10px] text-slate-400 group-hover:text-slate-300">
+                  <p
+                    className={`text-[10px] font-medium transition-colors ${
+                      isDraggingOverWidget
+                        ? "text-indigo-200"
+                        : "text-slate-400 group-hover:text-slate-300"
+                    }`}
+                  >
                     {isDraggingOverWidget ? "¡Soltá el correo aquí!" : "Mails & Recordatorios"}
                   </p>
                 </div>
 
                 {/* Badge for Pending Reminders */}
                 {pendingCount > 0 && (
-                  <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-amber-950 text-[11px] font-black flex items-center justify-center shadow-md shadow-amber-500/40">
+                  <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-amber-950 text-[11px] font-black flex items-center justify-center shadow-md shadow-amber-500/40 pointer-events-none">
                     {pendingCount}
                   </span>
                 )}
@@ -1324,6 +1355,7 @@ Puedo ayudarte a automatizar tareas cotidianas:
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            data-local-dropzone="true"
             initial={{ opacity: 0, scale: 0.94, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 20 }}
@@ -1331,6 +1363,7 @@ Puedo ayudarte a automatizar tareas cotidianas:
             className={`fixed bottom-6 right-4 sm:right-6 z-[9995] w-[95vw] sm:w-[440px] h-[600px] max-h-[85vh] rounded-3xl border border-white/10 bg-[#0a0f1d]/98 backdrop-blur-3xl shadow-2xl shadow-black/90 flex flex-col overflow-hidden ${
               isDraggingOverWidget ? "ring-2 ring-indigo-500 ring-offset-2 ring-offset-[#0a0f1d]" : ""
             }`}
+            onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -1406,7 +1439,7 @@ Puedo ayudarte a automatizar tareas cotidianas:
 
             {/* Drag Overlay Feedback */}
             {isDraggingOverWidget && (
-              <div className="absolute inset-0 z-50 bg-indigo-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-indigo-400 rounded-3xl animate-in fade-in">
+              <div className="absolute inset-0 z-50 bg-indigo-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-indigo-400 rounded-3xl animate-in fade-in pointer-events-none select-none [&_*]:pointer-events-none">
                 <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-400 flex items-center justify-center text-indigo-300 mb-3 shadow-lg shadow-indigo-500/30">
                   <Mail className="w-8 h-8 animate-bounce" />
                 </div>
