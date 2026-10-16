@@ -86,9 +86,10 @@ export default function ProveedoresPage() {
   const [lastQuery, setLastQuery] = useState("");
   const [lastEngine, setLastEngine] = useState<SearchEngineType>("hybrid");
 
-  // Local filtering
+  // Local filtering & sorting
   const [searchTerm, setSearchTerm] = useState("");
   const [onlyWithEmail, setOnlyWithEmail] = useState(false);
+  const [sortBy, setSortBy] = useState<"default" | "rating" | "wins" | "quotes" | "alpha">("default");
 
   // Modals & settings
   const [firecrawlApiKey, setFirecrawlApiKey] = useState("");
@@ -632,12 +633,12 @@ export default function ProveedoresPage() {
     return searchProveedores;
   }, [activeTab, registryProveedores, savedProveedores, searchProveedores, registryFilter]);
 
-  // Filtered list based on search term & email filter
+  // Filtered list based on search term, email filter & sorting
   const filteredList = useMemo(() => {
     const s = (searchTerm || "").toLowerCase().trim();
     if (!baseList || !Array.isArray(baseList)) return [];
 
-    return baseList.filter((p) => {
+    const filtered = baseList.filter((p) => {
       if (!p) return false;
       const nombre = (p.nombre || "").toLowerCase();
       const norm = (p.norm || "").toLowerCase();
@@ -649,6 +650,7 @@ export default function ProveedoresPage() {
       const clientes = (p.clientes_proyectos || "").toLowerCase();
       const emailsStr = (Array.isArray(p.emails) ? p.emails.filter(Boolean).join(" ") : p.email || "").toLowerCase();
       const quotesStr = (Array.isArray(p.cotizaciones) ? p.cotizaciones.map((c) => c?.name || "").join(" ") : "").toLowerCase();
+      const tagsStr = (Array.isArray(p.slaTags) ? p.slaTags.join(" ") : "").toLowerCase();
 
       const matchesText =
         !s ||
@@ -661,14 +663,35 @@ export default function ProveedoresPage() {
         desc.includes(s) ||
         clientes.includes(s) ||
         emailsStr.includes(s) ||
-        quotesStr.includes(s);
+        quotesStr.includes(s) ||
+        tagsStr.includes(s);
 
       const hasEmail = (Array.isArray(p.emails) && p.emails.length > 0) || Boolean(p.email);
       const matchesEmail = onlyWithEmail ? hasEmail : true;
 
       return matchesText && matchesEmail;
     });
-  }, [baseList, searchTerm, onlyWithEmail]);
+
+    if (sortBy === "default") return filtered;
+
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "rating") {
+        return (Number(b.rating || 0) - Number(a.rating || 0)) || ((b.cotizaciones || []).length - (a.cotizaciones || []).length);
+      }
+      if (sortBy === "wins") {
+        const winsA = (a.cotizaciones || []).filter((c) => c.isWinner).length;
+        const winsB = (b.cotizaciones || []).filter((c) => c.isWinner).length;
+        return (winsB - winsA) || ((b.cotizaciones || []).length - (a.cotizaciones || []).length);
+      }
+      if (sortBy === "quotes") {
+        return (b.cotizaciones || []).length - (a.cotizaciones || []).length;
+      }
+      if (sortBy === "alpha") {
+        return (a.nombre || "").localeCompare(b.nombre || "");
+      }
+      return 0;
+    });
+  }, [baseList, searchTerm, onlyWithEmail, sortBy]);
 
   // Bulk copy all emails of filtered list
   const handleCopyAllEmails = () => {
@@ -1086,11 +1109,15 @@ export default function ProveedoresPage() {
         )}
 
         {/* Loading Skeletons */}
-        {isLoading && (
+        {(isLoading || (activeTab === "registry" && isRegistryLoading)) && (
           <div className="space-y-4 pt-2 animate-in fade-in duration-300">
             <div className="flex items-center gap-2 text-sm text-blue-400 font-medium">
               <Sparkles className="w-4 h-4 animate-spin text-blue-400" />
-              <span>Extrayendo candidatos y estructurando proveedores con IA...</span>
+              <span>
+                {isLoading
+                  ? "Extrayendo candidatos y estructurando proveedores con IA..."
+                  : "Cargando padrón unificado de proveedores y cotizaciones..."}
+              </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[1, 2, 3, 4].map((i) => (
@@ -1113,10 +1140,10 @@ export default function ProveedoresPage() {
         {/* ================================================================ */}
         {/* TOOLBAR COMÚN: BUSCADOR, FILTROS Y ACCIONES GLOBALES */}
         {/* ================================================================ */}
-        {!isLoading && (
+        {!isLoading && !(activeTab === "registry" && isRegistryLoading) && (
           <div className="space-y-4 pt-1">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-b from-[#0d1424]/95 to-[#080d18]/95 border border-white/[0.08] shadow-lg">
-              {/* Left: Input búsqueda & checkbox */}
+              {/* Left: Input búsqueda, ordenamiento & checkbox */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
                 <div className="relative flex-1 max-w-md">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1124,7 +1151,7 @@ export default function ProveedoresPage() {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por empresa, alias, cotización, rubro o email..."
+                    placeholder="Buscar por empresa, alias, cotización, SLA, rubro o email..."
                     className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950/70 border border-white/[0.08] hover:border-white/15 focus:border-blue-500/70 text-xs text-white placeholder-slate-500 focus:outline-none transition-all"
                   />
                   {searchTerm && (
@@ -1136,6 +1163,19 @@ export default function ProveedoresPage() {
                     </button>
                   )}
                 </div>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="px-3 py-2 rounded-xl bg-slate-950/80 border border-white/[0.08] text-xs font-semibold text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  title="Ordenar proveedores"
+                >
+                  <option value="default">Orden: Relevancia</option>
+                  <option value="rating">⭐ Mejor Calificación</option>
+                  <option value="wins">🏆 Más Adjudicaciones</option>
+                  <option value="quotes">📄 Más Cotizaciones</option>
+                  <option value="alpha">🔤 Alfabético (A-Z)</option>
+                </select>
 
                 <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none px-2 py-1 rounded-lg hover:bg-white/5 transition-colors">
                   <input

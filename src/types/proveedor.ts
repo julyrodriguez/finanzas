@@ -33,6 +33,8 @@ export interface Proveedor {
   guardado?: boolean;            // Indicador si está guardado en favoritos/registro permanente
   fecha_busqueda?: string;       // Timestamp de cuándo se descubrió
   notas?: string;                // Notas personalizadas de Cinemark & Hoyts
+  rating?: number;               // Calificación interna de 0 a 5 estrellas
+  slaTags?: string[];            // Etiquetas rápidas de cumplimiento / SLA
   cotizaciones?: ProveedorCotizacionParticipacion[]; // Cotizaciones en las que participó
   createdAt?: string | Date;
   updatedAt?: string | Date;

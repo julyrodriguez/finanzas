@@ -334,3 +334,111 @@ table tr:hover {
   mask-image: linear-gradient(to right, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
   -webkit-mask-image: linear-gradient(to right, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
 }
+
+/* ============================================================
+   CINEMA VIP GOLD DESIGN SYSTEM (OBSIDIAN & GOLD)
+   ============================================================ */
+
+.gold-theme {
+  background-color: #0c0a07 !important;
+  color: #fef3c7 !important;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(245, 158, 11, 0.16), transparent),
+    linear-gradient(180deg, #0d0b07 0%, #090705 100%) !important;
+  background-attachment: fixed !important;
+}
+
+.gold-theme aside {
+  background-color: #110e09 !important;
+  border-color: rgba(245, 158, 11, 0.22) !important;
+  box-shadow: 1px 0 0 0 rgba(245, 158, 11, 0.15) !important;
+}
+
+.gold-theme header {
+  background-color: rgba(14, 11, 7, 0.95) !important;
+  border-color: rgba(245, 158, 11, 0.22) !important;
+}
+
+.gold-theme .glass-card,
+.gold-theme .glass-panel {
+  background: #16120b !important;
+  border: 1px solid rgba(245, 158, 11, 0.2) !important;
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.65) !important;
+}
+
+.gold-theme .glass-card:hover {
+  border-color: rgba(245, 158, 11, 0.42) !important;
+}
+
+.gold-theme [class*="bg-[#080c16]"],
+.gold-theme [class*="bg-[#0b0f19]"],
+.gold-theme [class*="bg-[#0e1322]"],
+.gold-theme [class*="bg-[#0d131f]"],
+.gold-theme [class*="bg-[#0d121c]"],
+.gold-theme [class*="bg-[#0a0e17]"] {
+  background-color: #120f09 !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+.gold-theme [class*="bg-[#111726]"],
+.gold-theme [class*="bg-[#141b2d]"],
+.gold-theme [class*="bg-[#0f1422]"] {
+  background-color: #18130c !important;
+  border-color: rgba(245, 158, 11, 0.22) !important;
+}
+
+.gold-theme input,
+.gold-theme select,
+.gold-theme textarea {
+  background-color: #0e0b07 !important;
+  border-color: rgba(245, 158, 11, 0.26) !important;
+  color: #ffffff !important;
+}
+
+.gold-theme input:focus,
+.gold-theme select:focus,
+.gold-theme textarea:focus {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 1px #f59e0b !important;
+}
+
+.gold-theme [class*="bg-blue-600"],
+.gold-theme [class*="bg-indigo-600"] {
+  background: #d97706 !important;
+  color: #ffffff !important;
+  border-color: #fbbf24 !important;
+}
+
+.gold-theme [class*="text-blue-400"],
+.gold-theme [class*="text-indigo-400"],
+.gold-theme [class*="text-indigo-300"] {
+  color: #fbbf24 !important;
+}
+
+.gold-theme thead,
+.gold-theme th {
+  background-color: #17120a !important;
+  color: #fde68a !important;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+
+/* Smooth theme transition & tactile button polish */
+aside,
+header,
+.glass-card,
+.glass-panel {
+  transition: background-color 0.22s var(--ease-out), border-color 0.22s var(--ease-out), box-shadow 0.22s var(--ease-out);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

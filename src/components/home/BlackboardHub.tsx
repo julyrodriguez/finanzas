@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Pin, 
@@ -20,10 +21,16 @@ import {
   X,
   Cloud,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Undo2,
+  Redo2,
+  ClipboardList,
+  CalendarPlus
 } from "lucide-react";
 import { EyeTrackerCube } from "./EyeTrackerCube";
 import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
+import { syncPendienteToMongo, syncCalendarEventToMongo } from "@/lib/serverSync";
+import { toast } from "@/context/ToastContext";
 import { 
   collection, 
   doc, 
@@ -123,12 +130,14 @@ const CARITA_GREETINGS = [
 ];
 
 const API_BASE_URL = "https://apivacas.jariel.com.ar/api/pizarron/notes";
+const CANVAS_API_URL = "https://apivacas.jariel.com.ar/api/pizarron/canvas";
 
 interface BlackboardHubProps {
   onOpenSearch?: () => void;
 }
 
 export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
+  const router = useRouter();
   // Canvas State
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
@@ -138,6 +147,12 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
   const [chalkWidth, setChalkWidth] = useState<number>(4);
   const [eraserWidth, setEraserWidth] = useState<number>(45);
   const [hasChalkStrokes, setHasChalkStrokes] = useState<boolean>(false);
+
+  // Undo / Redo Canvas History
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef<number>(-1);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   // Pinned Notes State (Sin notas hardcodeadas)
   const [notes, setNotes] = useState<PinnedNote[]>([]);
@@ -330,6 +345,32 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     }
   }, [notes]);
 
+  const drawDataUrlToCanvas = useCallback((dataUrl: string) => {
+    const canvas = canvasRef.current;
+    const board = boardRef.current;
+    if (!canvas || !board) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = board.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    if (!dataUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, rect.width, rect.height);
+    };
+    img.src = dataUrl;
+  }, []);
+
+  const syncCanvasToMongo = useCallback((dataUrl: string) => {
+    try {
+      fetch(CANVAS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl }),
+      }).catch(() => {});
+    } catch {}
+  }, []);
+
   // Init and restore Canvas
   const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -350,7 +391,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Restore saved drawing
+    // Restore saved drawing from localStorage first, then check MongoDB
     try {
       const savedDataUrl = localStorage.getItem("finanzas_blackboard_canvas");
       if (savedDataUrl) {
@@ -358,9 +399,33 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
         img.onload = () => {
           ctx.drawImage(img, 0, 0, rect.width, rect.height);
           setHasChalkStrokes(true);
+          historyRef.current = [savedDataUrl];
+          historyIndexRef.current = 0;
         };
         img.src = savedDataUrl;
+      } else {
+        historyRef.current = [""];
+        historyIndexRef.current = 0;
       }
+
+      fetch(CANVAS_API_URL)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.success && data.dataUrl && !savedDataUrl) {
+            const img = new Image();
+            img.onload = () => {
+              ctx.drawImage(img, 0, 0, rect.width, rect.height);
+              setHasChalkStrokes(true);
+              historyRef.current = [data.dataUrl];
+              historyIndexRef.current = 0;
+              try {
+                localStorage.setItem("finanzas_blackboard_canvas", data.dataUrl);
+              } catch {}
+            };
+            img.src = data.dataUrl;
+          }
+        })
+        .catch(() => {});
     } catch (e) {
       console.warn("Error restaurando lienzo de tiza:", e);
     }
@@ -393,11 +458,155 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     try {
-      localStorage.setItem("finanzas_blackboard_canvas", canvas.toDataURL());
+      const dataUrl = canvas.toDataURL();
+      localStorage.setItem("finanzas_blackboard_canvas", dataUrl);
+      syncCanvasToMongo(dataUrl);
       setHasChalkStrokes(true);
+
+      const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+      nextHistory.push(dataUrl);
+      if (nextHistory.length > 25) nextHistory.shift();
+      historyRef.current = nextHistory;
+      historyIndexRef.current = nextHistory.length - 1;
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(false);
     } catch (e) {
       console.warn("Error guardando lienzo de tiza:", e);
     }
+  };
+
+  const handleUndoChalk = useCallback(() => {
+    if (historyIndexRef.current <= 0) return;
+    historyIndexRef.current -= 1;
+    const targetDataUrl = historyRef.current[historyIndexRef.current] || "";
+    drawDataUrlToCanvas(targetDataUrl);
+    try {
+      if (targetDataUrl) {
+        localStorage.setItem("finanzas_blackboard_canvas", targetDataUrl);
+      } else {
+        localStorage.removeItem("finanzas_blackboard_canvas");
+      }
+      syncCanvasToMongo(targetDataUrl);
+    } catch {}
+    setHasChalkStrokes(Boolean(targetDataUrl));
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+  }, [drawDataUrlToCanvas, syncCanvasToMongo]);
+
+  const handleRedoChalk = useCallback(() => {
+    if (historyIndexRef.current >= historyRef.current.length - 1) return;
+    historyIndexRef.current += 1;
+    const targetDataUrl = historyRef.current[historyIndexRef.current] || "";
+    drawDataUrlToCanvas(targetDataUrl);
+    try {
+      if (targetDataUrl) {
+        localStorage.setItem("finanzas_blackboard_canvas", targetDataUrl);
+      }
+      syncCanvasToMongo(targetDataUrl);
+    } catch {}
+    setHasChalkStrokes(Boolean(targetDataUrl));
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+  }, [drawDataUrlToCanvas, syncCanvasToMongo]);
+
+  // Keyboard Ctrl+Z / Ctrl+Y for chalk undo/redo when not typing in input/textarea
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndoChalk();
+      } else if (
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") ||
+        ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "z")
+      ) {
+        e.preventDefault();
+        handleRedoChalk();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleUndoChalk, handleRedoChalk]);
+
+  const handleConvertNoteToPendiente = async (note: PinnedNote) => {
+    const id = `pen-${Date.now()}`;
+    const texto = (note.title && note.title !== "Nueva Nota" ? note.title : note.content.slice(0, 60)) || "Tarea desde Pizarrón";
+    const etapas = (note.checklist || [])
+      .filter((c) => c.text.trim())
+      .map((c, idx) => ({
+        id: c.id || `etapa-${idx}-${Date.now()}`,
+        texto: c.text.trim(),
+        completada: Boolean(c.done),
+      }));
+
+    const newPendiente = {
+      id,
+      firebaseId: id,
+      texto,
+      descripcion: note.content || "",
+      categoria: note.tag || "General",
+      prioridad: "media",
+      completado: false,
+      etapas,
+      creadoPor: "Pizarrón",
+      createdAt: new Date().toISOString(),
+    };
+
+    await syncPendienteToMongo(newPendiente);
+    if (!isFirestoreDisabled()) {
+      try {
+        const db = getFirebaseDb();
+        if (db) {
+          await setDoc(doc(db, "pendientes", id), newPendiente, { merge: true });
+        }
+      } catch (e) {
+        handleFirestoreError(e);
+      }
+    }
+
+    triggerCaritaSpeech("📋 ¡Nota convertida en Tarea Pendiente!");
+    toast.success("Convertido en Pendiente", `"${texto}" se guardó en Pendientes`, {
+      label: "Ver Pendientes →",
+      onClick: () => router.push("/pendientes"),
+    });
+  };
+
+  const handleConvertNoteToCalendar = async (note: PinnedNote) => {
+    const id = `cal-${Date.now()}`;
+    const todayStr = new Date().toISOString().split("T")[0];
+    const title = (note.title && note.title !== "Nueva Nota" ? note.title : note.content.slice(0, 50)) || "Recordatorio Pizarrón";
+    const newEvent = {
+      id,
+      firebaseId: id,
+      title,
+      date: todayStr,
+      time: "10:00",
+      color: "amber",
+      notes: note.content || "",
+      completed: false,
+      notified: false,
+      createdBy: "Pizarrón",
+      createdAt: new Date().toISOString(),
+    };
+
+    await syncCalendarEventToMongo(newEvent);
+    if (!isFirestoreDisabled()) {
+      try {
+        const db = getFirebaseDb();
+        if (db) {
+          await setDoc(doc(db, "calendario_eventos", id), newEvent, { merge: true });
+        }
+      } catch (e) {
+        handleFirestoreError(e);
+      }
+    }
+
+    triggerCaritaSpeech("📅 ¡Nota agendada en el Calendario para hoy!");
+    toast.success("Agendado en Calendario", `"${title}" agendado para hoy (${todayStr})`, {
+      label: "Abrir Calendario →",
+      onClick: () => router.push("/calendario"),
+    });
   };
 
   const getCanvasPos = (e: React.MouseEvent | React.TouchEvent) => {
@@ -521,7 +730,12 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     try {
       localStorage.removeItem("finanzas_blackboard_canvas");
+      syncCanvasToMongo("");
     } catch (e) {}
+    historyRef.current.push("");
+    historyIndexRef.current = historyRef.current.length - 1;
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(false);
     setHasChalkStrokes(false);
     triggerCaritaSpeech("✨ ¡Pizarrón de tiza limpiado por completo!");
   };
@@ -932,16 +1146,45 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
                     )}
 
                     {/* Pie de Nota */}
-                    <div className="flex items-center justify-between pt-2 mt-2 border-t border-black/5 text-[10px] text-slate-700/80 font-mono">
-                      <button
-                        type="button"
-                        onClick={() => handleAddChecklistItem(note.id)}
-                        className="inline-flex items-center gap-1 hover:underline text-slate-800 font-semibold cursor-pointer"
-                      >
-                        <Plus className="w-2.5 h-2.5" />
-                        <span>Agregar tarea</span>
-                      </button>
-                      <span>{note.createdAt}</span>
+                    <div className="flex flex-col gap-1.5 pt-2 mt-2 border-t border-black/10 text-[10px] text-slate-700/80 font-mono">
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => handleAddChecklistItem(note.id)}
+                          className="inline-flex items-center gap-1 hover:underline text-slate-800 font-semibold cursor-pointer"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Agregar tarea</span>
+                        </button>
+                        <span>{note.createdAt}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1 pt-1 border-t border-black/5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConvertNoteToPendiente(note);
+                          }}
+                          className="flex-1 inline-flex items-center justify-center gap-1 py-1 px-1.5 rounded-lg bg-black/5 hover:bg-black/15 text-slate-900 font-bold text-[10px] transition-colors cursor-pointer"
+                          title="Enviar esta nota y sus subtareas a Pendientes"
+                        >
+                          <ClipboardList className="w-3 h-3" />
+                          <span>A Pendiente</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConvertNoteToCalendar(note);
+                          }}
+                          className="flex-1 inline-flex items-center justify-center gap-1 py-1 px-1.5 rounded-lg bg-black/5 hover:bg-black/15 text-slate-900 font-bold text-[10px] transition-colors cursor-pointer"
+                          title="Agendar esta nota en el Calendario para hoy"
+                        >
+                          <CalendarPlus className="w-3 h-3" />
+                          <span>Agendar</span>
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -1087,8 +1330,29 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
             </div>
           )}
 
-          {/* Acciones: Limpiar Tiza y + Clavar Nota */}
-          <div className="flex items-center gap-2">
+          {/* Acciones: Undo/Redo, Limpiar Tiza y + Clavar Nota */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={!canUndo}
+              onClick={handleUndoChalk}
+              className="p-1.5 rounded-xl bg-black/30 hover:bg-black/50 disabled:opacity-30 text-slate-200 border border-white/10 transition-all cursor-pointer disabled:cursor-not-allowed"
+              title="Deshacer trazo de tiza (Ctrl+Z)"
+              aria-label="Deshacer trazo"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={!canRedo}
+              onClick={handleRedoChalk}
+              className="p-1.5 rounded-xl bg-black/30 hover:bg-black/50 disabled:opacity-30 text-slate-200 border border-white/10 transition-all cursor-pointer disabled:cursor-not-allowed"
+              title="Rehacer trazo de tiza (Ctrl+Y)"
+              aria-label="Rehacer trazo"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </button>
+
             {hasChalkStrokes && (
               <button
                 type="button"

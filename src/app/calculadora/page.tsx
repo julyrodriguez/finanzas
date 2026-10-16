@@ -49,6 +49,10 @@ export default function CalculadoraPage() {
   const [convertUsd, setConvertUsd] = useState<string>("100");
   const [convertArs, setConvertArs] = useState<string>("153000");
 
+  // Variación / Inflación (Delta %) State
+  const [precioAnterior, setPrecioAnterior] = useState<string>("");
+  const [precioNuevo, setPrecioNuevo] = useState<string>("");
+
   const activeRate = dolarType === "venta" 
     ? dolarVenta 
     : dolarType === "compra" 
@@ -265,6 +269,22 @@ export default function CalculadoraPage() {
     setWaitingForNewValue(true);
   };
 
+  // APLICAR IVA O DESGLOSAR NETO
+  const handleTaxOperation = (factor: number, label: string) => {
+    const currentVal = parseFloat(display);
+    if (isNaN(currentVal) || currentVal === 0) return;
+    const result = currentVal * factor;
+    const resultStr = cleanNumber(result);
+    const fullExpr = `${cleanNumber(currentVal)} (${label}) =`;
+
+    setExpression(fullExpr);
+    setDisplay(resultStr);
+    addHistoryItem(fullExpr, resultStr);
+    setPreviousValue(null);
+    setOperation(null);
+    setWaitingForNewValue(true);
+  };
+
   const handleCopyResult = () => {
     navigator.clipboard.writeText(display);
     setCopied(true);
@@ -346,6 +366,12 @@ export default function CalculadoraPage() {
     const num = Number(display);
     return isNaN(num) ? display : num.toLocaleString("es-AR");
   };
+
+  const prevPriceNum = parseFloat(precioAnterior) || 0;
+  const newPriceNum = parseFloat(precioNuevo) || 0;
+  const priceDiff = newPriceNum - prevPriceNum;
+  const priceDeltaPct = prevPriceNum > 0 ? ((newPriceNum - prevPriceNum) / prevPriceNum) * 100 : null;
+  const priceDiffUsd = activeRate > 0 ? priceDiff / activeRate : 0;
 
   return (
     <AppLayout
@@ -496,6 +522,42 @@ export default function CalculadoraPage() {
                 >
                   <DollarSign className="w-4 h-4 text-emerald-400" />
                   <span>÷ USD (Monto en USD)</span>
+                </button>
+              </div>
+
+              {/* Tax / IVA Commercial Action Buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTaxOperation(1.21, "+21% IVA")}
+                  className="py-2 px-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-300 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                  title="Sumar 21% de IVA"
+                >
+                  +21% IVA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTaxOperation(1 / 1.21, "Neto ÷1.21")}
+                  className="py-2 px-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                  title="Extraer Neto sin IVA 21% (dividir por 1.21)"
+                >
+                  ÷1.21 (Neto)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTaxOperation(1.105, "+10.5% IVA")}
+                  className="py-2 px-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-300 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                  title="Sumar 10.5% de IVA"
+                >
+                  +10.5% IVA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTaxOperation(1 / 1.105, "Neto ÷1.105")}
+                  className="py-2 px-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                  title="Extraer Neto sin IVA 10.5% (dividir por 1.105)"
+                >
+                  ÷1.105 (Neto)
                 </button>
               </div>
 
@@ -658,7 +720,7 @@ export default function CalculadoraPage() {
             </div>
           </div>
 
-          {/* RIGHT: Quick Dolar Converter & Tape History (lg:col-span-5) */}
+          {/* RIGHT: Quick Dolar Converter, Variación Delta % & Tape History (lg:col-span-5) */}
           <div className="lg:col-span-5 space-y-6">
 
             {/* Quick Converter Box */}
@@ -720,6 +782,69 @@ export default function CalculadoraPage() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Calculadora de Variación / Inflación (Delta %) */}
+            <div className="p-5 rounded-2xl bg-[#0f1422] border border-white/10 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <TrendingUp className="w-4 h-4 text-amber-400" />
+                  <span>Calculadora de Variación / Ajuste (Δ%)</span>
+                </div>
+                {priceDeltaPct !== null && (
+                  <span
+                    className={`text-xs font-mono font-black px-2.5 py-0.5 rounded-lg border ${
+                      priceDeltaPct > 0
+                        ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                        : priceDeltaPct < 0
+                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                        : "bg-slate-800 text-slate-300 border-white/10"
+                    }`}
+                  >
+                    {priceDeltaPct > 0 ? `+${priceDeltaPct.toFixed(2)}%` : `${priceDeltaPct.toFixed(2)}%`}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-[#0a0e18] border border-white/10 focus-within:border-amber-500/50">
+                  <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Precio Anterior ($)</span>
+                  <input
+                    type="number"
+                    value={precioAnterior}
+                    onChange={(e) => setPrecioAnterior(e.target.value)}
+                    placeholder="Ej: 120000"
+                    className="w-full bg-transparent text-sm font-mono font-bold text-white focus:outline-none"
+                  />
+                </div>
+                <div className="p-3 rounded-xl bg-[#0a0e18] border border-white/10 focus-within:border-amber-500/50">
+                  <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1">Precio Nuevo ($)</span>
+                  <input
+                    type="number"
+                    value={precioNuevo}
+                    onChange={(e) => setPrecioNuevo(e.target.value)}
+                    placeholder="Ej: 155000"
+                    className="w-full bg-transparent text-sm font-mono font-bold text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {priceDeltaPct !== null && (
+                <div className="p-3 rounded-xl bg-[#0a0e18]/80 border border-white/5 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Diferencia Nominal</span>
+                    <span className={`font-mono font-bold ${priceDiff >= 0 ? "text-amber-300" : "text-emerald-300"}`}>
+                      {priceDiff >= 0 ? "+" : ""}${priceDiff.toLocaleString("es-AR", { maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Equiv. Diferencia USD</span>
+                    <span className="font-mono font-bold text-indigo-300">
+                      {priceDiffUsd >= 0 ? "+" : ""}USD {priceDiffUsd.toLocaleString("es-AR", { maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Calculations Tape / History */}

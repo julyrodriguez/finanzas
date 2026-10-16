@@ -105,11 +105,30 @@ export default function DistribucionPage() {
   // Flix modal state
   const [showFlixModal, setShowFlixModal] = useState<boolean>(false);
 
+  // Custom Presets state
+  const [customPresets, setCustomPresets] = useState<{ id: string; name: string; codes: string[] }[]>([
+    { id: "preset-flagship", name: "Top 5 Flagship", codes: ["02000", "02004", "00749", "02003", "00733"] },
+    { id: "preset-cordoba-salta", name: "NOA + Córdoba", codes: ["02013", "02007", "02008", "02009"] },
+  ]);
+  const [newPresetName, setNewPresetName] = useState("");
+  const [showNewPresetInput, setShowNewPresetInput] = useState(false);
+
   // Success message toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Load from localStorage on client render
   useEffect(() => {
+    try {
+      const savedPresets = localStorage.getItem("distribucion-custom-presets");
+      if (savedPresets) {
+        const parsedP = JSON.parse(savedPresets);
+        if (Array.isArray(parsedP) && parsedP.length > 0) {
+          setCustomPresets(parsedP);
+        }
+      }
+    } catch {
+      // ignore
+    }
     const saved = localStorage.getItem("complejos-attendance-2026");
     if (saved) {
       try {
@@ -358,6 +377,44 @@ export default function DistribucionPage() {
   const sumPercentage = tableRows.reduce((sum, r) => sum + r.percentage, 0);
   const sumDistributed = tableRows.reduce((sum, r) => sum + r.montoProrrateado, 0);
 
+  const percentCinemark = tableRows
+    .filter(r => !r.isOficina && r.cadena === "Cinemark")
+    .reduce((sum, r) => sum + r.percentage, 0);
+  const percentHoyts = tableRows
+    .filter(r => !r.isOficina && r.cadena === "Hoyts")
+    .reduce((sum, r) => sum + r.percentage, 0);
+  const maxRowPercentage = Math.max(...tableRows.filter(r => !r.isOficina).map(r => r.percentage), 1);
+
+  const handleApplyTaxHelper = (factor: number, label: string) => {
+    const current = parseFloat(montoTotal) || 0;
+    if (current <= 0) return;
+    const updated = Math.round(current * factor * 100) / 100;
+    setMontoTotal(String(updated));
+    showToast(`✨ Aplicado ${label}: $${updated.toLocaleString("es-AR")}`);
+  };
+
+  const handleSaveCustomPreset = () => {
+    const trimmed = newPresetName.trim();
+    if (!trimmed || selectedCustomComplejos.length === 0) return;
+    const next = [
+      ...customPresets,
+      { id: `preset-${Date.now()}`, name: trimmed, codes: [...selectedCustomComplejos] }
+    ];
+    setCustomPresets(next);
+    localStorage.setItem("distribucion-custom-presets", JSON.stringify(next));
+    setNewPresetName("");
+    setShowNewPresetInput(false);
+    showToast(`💾 Preset "${trimmed}" guardado (${selectedCustomComplejos.length} complejos)`);
+  };
+
+  const handleDeleteCustomPreset = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = customPresets.filter(p => p.id !== id);
+    setCustomPresets(next);
+    localStorage.setItem("distribucion-custom-presets", JSON.stringify(next));
+    showToast("🗑️ Preset eliminado");
+  };
+
   // Copy prorated amounts to clipboard (one per line, formatted with comma for Spanish Excel)
   const handleCopyMontos = () => {
     const textToCopy = tableRows
@@ -543,9 +600,43 @@ export default function DistribucionPage() {
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#0a0e18] border border-white/10 text-white font-mono text-xl font-bold focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
                 />
               </div>
-              <p className="text-[10px] text-slate-500 mt-1.5 font-medium">
-                Ingresa el importe total que se subdividirá proporcionalmente entre los cines.
-              </p>
+
+              {/* Asistente Rápido de IVA / Neto */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-0.5">IVA Rápido:</span>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTaxHelper(1.21, "+21% IVA")}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
+                  title="Sumar 21% de IVA al monto actual"
+                >
+                  +21% IVA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTaxHelper(1.105, "+10.5% IVA")}
+                  className="px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 text-[10px] font-bold transition-colors cursor-pointer"
+                  title="Sumar 10.5% de IVA al monto actual"
+                >
+                  +10.5%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTaxHelper(1 / 1.21, "Neto sin IVA 21%")}
+                  className="px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-300 text-[10px] font-bold transition-colors cursor-pointer"
+                  title="Extraer Neto gravado (dividir por 1.21)"
+                >
+                  ÷1.21 (Neto)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyTaxHelper(1 / 1.105, "Neto sin IVA 10.5%")}
+                  className="px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-300 text-[10px] font-bold transition-colors cursor-pointer"
+                  title="Extraer Neto gravado al 10.5% (dividir por 1.105)"
+                >
+                  ÷1.105
+                </button>
+              </div>
             </div>
             
             <div className="pt-2 border-t border-white/5 flex items-center gap-2">
@@ -623,10 +714,90 @@ export default function DistribucionPage() {
                 </select>
               </div>
             </div>
+
+            {/* Custom Presets Bar */}
+            <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Presets Rápidos:</span>
+                {customPresets.map((preset) => {
+                  const isActivePreset =
+                    ambitoFilter === "personalizado" &&
+                    preset.codes.length === selectedCustomComplejos.length &&
+                    preset.codes.every((c) => selectedCustomComplejos.includes(c));
+                  return (
+                    <div
+                      key={preset.id}
+                      onClick={() => {
+                        setAmbitoFilter("personalizado");
+                        setSelectedCustomComplejos(preset.codes);
+                        showToast(`🎯 Preset "${preset.name}" aplicado (${preset.codes.length} cines)`);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                        isActivePreset
+                          ? "bg-indigo-600/25 border-indigo-500/50 text-indigo-200"
+                          : "bg-[#0a0e18] hover:bg-white/5 border-white/10 text-slate-300"
+                      }`}
+                    >
+                      <span>{preset.name}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">({preset.codes.length})</span>
+                      {!preset.id.startsWith("preset-flagship") && !preset.id.startsWith("preset-cordoba") && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteCustomPreset(preset.id, e)}
+                          className="text-slate-500 hover:text-rose-400 ml-0.5 font-bold"
+                          title="Eliminar preset"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {ambitoFilter === "personalizado" && (
+                <div className="flex items-center gap-1.5">
+                  {showNewPresetInput ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={newPresetName}
+                        onChange={(e) => setNewPresetName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSaveCustomPreset()}
+                        placeholder="Nombre del preset..."
+                        className="px-2.5 py-1 rounded-lg bg-[#0a0e18] border border-indigo-500/40 text-xs text-white focus:outline-none w-36"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveCustomPreset}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold cursor-pointer"
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPresetInput(false)}
+                        className="px-2 py-1 rounded-lg bg-white/5 text-slate-400 text-[11px] cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPresetInput(true)}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-[11px] font-bold transition-colors cursor-pointer"
+                    >
+                      + Guardar selección actual ({selectedCustomComplejos.length})
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* 2. Top Summary KPI Widgets */}
+        {/* 2. Top Summary KPI Widgets + Visual Stacked Chain Distribution Bar */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
           <div className="p-4 rounded-xl bg-[#0d121f]/70 border border-white/5 print-card space-y-1 shadow-md">
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Complejos</span>
@@ -664,6 +835,54 @@ export default function DistribucionPage() {
                 maximumFractionDigits: isRoundingApplied ? 0 : 2 
               })}
             </div>
+          </div>
+        </div>
+
+        {/* Visual Stacked Chain Share Bar */}
+        <div className="p-4 rounded-2xl bg-[#0f1422] border border-white/10 space-y-2.5 no-print shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">
+              Participación Proporcional por Cadena
+            </span>
+            <div className="flex items-center gap-4 text-[11px] font-semibold">
+              <span className="flex items-center gap-1.5 text-teal-300">
+                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block" />
+                Cinemark: <strong className="font-mono">{percentCinemark.toFixed(2)}%</strong>
+              </span>
+              <span className="flex items-center gap-1.5 text-purple-300">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" />
+                Hoyts: <strong className="font-mono">{percentHoyts.toFixed(2)}%</strong>
+              </span>
+              {percentOficina > 0 && (
+                <span className="flex items-center gap-1.5 text-amber-300">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                  Oficina Central: <strong className="font-mono">{percentOficina.toFixed(2)}%</strong>
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="w-full h-3 rounded-full bg-[#0a0e18] overflow-hidden flex border border-white/5">
+            {percentCinemark > 0 && (
+              <div
+                style={{ width: `${percentCinemark}%` }}
+                className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 transition-all duration-300"
+                title={`Cinemark: ${percentCinemark.toFixed(2)}%`}
+              />
+            )}
+            {percentHoyts > 0 && (
+              <div
+                style={{ width: `${percentHoyts}%` }}
+                className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-300"
+                title={`Hoyts: ${percentHoyts.toFixed(2)}%`}
+              />
+            )}
+            {percentOficina > 0 && (
+              <div
+                style={{ width: `${percentOficina}%` }}
+                className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-300"
+                title={`Oficina Central: ${percentOficina.toFixed(2)}%`}
+              />
+            )}
           </div>
         </div>
 
@@ -882,9 +1101,23 @@ export default function DistribucionPage() {
                       )}
                     </td>
 
-                    {/* Asignación % */}
+                    {/* Asignación % + Mini Progress Bar */}
                     <td className="px-4 py-4 text-right font-mono font-semibold">
-                      {row.percentage.toFixed(4)}%
+                      <div className="flex flex-col items-end gap-1">
+                        <span>{row.percentage.toFixed(4)}%</span>
+                        <div className="w-20 h-1 rounded-full bg-white/5 overflow-hidden no-print">
+                          <div
+                            style={{ width: `${Math.min(100, (row.percentage / maxRowPercentage) * 100)}%` }}
+                            className={`h-full rounded-full ${
+                              row.isOficina
+                                ? "bg-amber-400"
+                                : row.cadena === "Hoyts"
+                                ? "bg-purple-400"
+                                : "bg-teal-400"
+                            }`}
+                          />
+                        </div>
+                      </div>
                     </td>
 
                     {/* Calculated Amount */}

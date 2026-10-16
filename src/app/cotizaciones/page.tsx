@@ -28,6 +28,7 @@ import {
   fetchPendientesFromMongo,
   syncPendienteToMongo,
   syncPendienteConfigToMongo,
+  fetchProveedoresFromMongo,
   getTimestampSeconds,
 } from "@/lib/serverSync";
 import { 
@@ -84,6 +85,7 @@ import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizacio
 import { CotizacionesImportAiModal, ImportPayload } from "@/components/cotizaciones/CotizacionesImportAiModal";
 import { CotizacionesRequestModal } from "@/components/cotizaciones/CotizacionesRequestModal";
 import { CotizacionesSummaryModal } from "@/components/cotizaciones/CotizacionesSummaryModal";
+import { CotizacionMinutaModal } from "@/components/cotizaciones/CotizacionMinutaModal";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -213,7 +215,7 @@ const DEFAULT_UNITS = [
 export default function CotizacionesPage() {
   const { user } = useAuth();
   const [dbActive, setDbActive] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"editor" | "comparador" | "historial">("historial");
+  const [activeTab, setActiveTab] = useState<"editor" | "comparador" | "historial" | "catalogo">("historial");
 
   // General State
   const [quoteName, setQuoteName] = useState("Cotización de Insumos " + new Date().toLocaleDateString("es-AR"));
@@ -236,6 +238,42 @@ export default function CotizacionesPage() {
   const [aiSummary, setAiSummary] = useState<string>("");
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState<boolean>(false);
   const [activeSummaryText, setActiveSummaryText] = useState<string>("");
+  const [isMinutaModalOpen, setIsMinutaModalOpen] = useState<boolean>(false);
+  const [catalogSearch, setCatalogSearch] = useState<string>("");
+  const [loadingBnaRate, setLoadingBnaRate] = useState<boolean>(false);
+  const [mongoProviderNames, setMongoProviderNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchProveedoresFromMongo()
+      .then((list) => {
+        if (Array.isArray(list)) {
+          const names = list.map((p) => (p.nombre || "").trim()).filter(Boolean);
+          setMongoProviderNames(names);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleFetchBnaRate = async () => {
+    if (isLocked || loadingBnaRate) return;
+    setLoadingBnaRate(true);
+    try {
+      const res = await fetch("https://apivacas.jariel.com.ar/api/bna/dolar");
+      if (!res.ok) throw new Error("Error consultando BNA");
+      const data = await res.json();
+      const venta = Number(data?.venta || data?.valor || data?.rate);
+      if (venta && venta > 0) {
+        setExchangeRate(venta);
+        showToast(`TC actualizado a BNA Oficial ($${venta})`, "success");
+      } else {
+        showToast("No se pudo obtener cotización BNA", "error");
+      }
+    } catch {
+      showToast("Error al conectar con API BNA", "error");
+    } finally {
+      setLoadingBnaRate(false);
+    }
+  };
 
   const toggleMinimizeProvider = (providerId: string) => {
     setMinimizedProviders((prev) => {
@@ -266,6 +304,102 @@ export default function CotizacionesPage() {
   const [savedQuotations, setSavedQuotations] = useState<SavedQuotation[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+
+  const allKnownProviderNames = useMemo(() => {
+    const set = new Set<string>();
+    mongoProviderNames.forEach((n) => {
+      if (n.trim()) set.add(n.trim());
+    });
+    savedQuotations.forEach((q) => {
+      (q.providers || []).forEach((p) => {
+        if (p.name && p.name.trim()) set.add(p.name.trim());
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [mongoProviderNames, savedQuotations]);
+
+  const historicalCatalog = useMemo(() => {
+    interface CatalogEntry {
+      key: string;
+      name: string;
+      baseUnit: string;
+      quotesCount: number;
+      minUnitARS: number;
+      minUnitUSD: number;
+      sumUnitARS: number;
+      lastUnitARS: number;
+      lastTimestamp: number;
+      lastDateStr: string;
+      bestProviderName: string;
+      bestQuoteName: string;
+    }
+    const map = new Map<string, CatalogEntry>();
+
+    savedQuotations.forEach((sq) => {
+      const rate = sq.exchangeRate && sq.exchangeRate > 0 ? sq.exchangeRate : 1400;
+      const ts = getTimestampSeconds(sq.createdAt);
+      const dateStr = ts > 0 ? new Date(ts * 1000).toLocaleDateString("es-AR") : "Reciente";
+
+      (sq.items || []).forEach((it) => {
+        const cleanName = (it.name || "").trim();
+        if (!cleanName) return;
+        const normKey = cleanName.toLowerCase();
+
+        (sq.providers || []).forEach((prov) => {
+          const q = prov.quotes?.[it.id];
+          if (!q || !q.price || q.price <= 0) return;
+
+          const netPresentationPrice = q.price * (1 - (q.discount || 0) / 100);
+          const units = q.presentationType === "package" ? Math.max(1, q.unitsPerPresentation || 1) : 1;
+          const unitPriceOrig = netPresentationPrice / units;
+          const unitARS = q.currency === "USD" ? unitPriceOrig * rate : unitPriceOrig;
+          const unitUSD = q.currency === "ARS" ? unitPriceOrig / rate : unitPriceOrig;
+
+          const existing = map.get(normKey);
+          if (!existing) {
+            map.set(normKey, {
+              key: normKey,
+              name: cleanName,
+              baseUnit: it.baseUnit || "U",
+              quotesCount: 1,
+              minUnitARS: unitARS,
+              minUnitUSD: unitUSD,
+              sumUnitARS: unitARS,
+              lastUnitARS: unitARS,
+              lastTimestamp: ts,
+              lastDateStr: dateStr,
+              bestProviderName: prov.name || "Proveedor",
+              bestQuoteName: sq.name || "Cotización",
+            });
+          } else {
+            existing.quotesCount += 1;
+            existing.sumUnitARS += unitARS;
+            if (unitARS < existing.minUnitARS) {
+              existing.minUnitARS = unitARS;
+              existing.minUnitUSD = unitUSD;
+              existing.bestProviderName = prov.name || "Proveedor";
+              existing.bestQuoteName = sq.name || "Cotización";
+            }
+            if (ts >= existing.lastTimestamp) {
+              existing.lastTimestamp = ts;
+              existing.lastUnitARS = unitARS;
+              existing.lastDateStr = dateStr;
+            }
+          }
+        });
+      });
+    });
+
+    const q = catalogSearch.trim().toLowerCase();
+    return Array.from(map.values())
+      .filter((entry) =>
+        !q ||
+        entry.name.toLowerCase().includes(q) ||
+        entry.bestProviderName.toLowerCase().includes(q) ||
+        entry.bestQuoteName.toLowerCase().includes(q)
+      )
+      .sort((a, b) => b.quotesCount - a.quotesCount || a.name.localeCompare(b.name, "es"));
+  }, [savedQuotations, catalogSearch]);
 
   // Rubro / Categoría & Linking with Pendiente state
   const [quoteCategoria, setQuoteCategoria] = useState<string>("");
@@ -3038,6 +3172,33 @@ export default function CotizacionesPage() {
               )}
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("catalogo")}
+            className={`relative flex items-center gap-2 px-4.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-150 cursor-pointer ${
+              activeTab === "catalogo"
+                ? "text-white"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+            title="Explorar catálogo histórico de ítems y precios cotizados"
+          >
+            {activeTab === "catalogo" && (
+              <motion.div
+                layoutId="activeCotizacionesTab"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30"
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5" />
+              <span>Catálogo & Precios</span>
+              {historicalCatalog.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-white/15 text-slate-200">
+                  {historicalCatalog.length}
+                </span>
+              )}
+            </span>
+          </button>
         </div>
 
         {/* Global Action Buttons */}
@@ -3146,9 +3307,23 @@ export default function CotizacionesPage() {
             <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-3">
               {/* TC Mayorista */}
               <div className="space-y-1 bg-[#080b15] p-2.5 rounded-xl border border-white/[0.06]">
-                <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
-                  TC Mayorista (ARS)
-                </label>
+                <div className="flex items-center justify-between gap-1">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">
+                    TC Mayorista (ARS)
+                  </label>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={handleFetchBnaRate}
+                      disabled={loadingBnaRate}
+                      title="Actualizar con cotización Dólar Oficial BNA"
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/25 transition-colors cursor-pointer flex items-center gap-0.5"
+                    >
+                      <RefreshCw className={`w-2.5 h-2.5 ${loadingBnaRate ? "animate-spin" : ""}`} />
+                      <span>BNA</span>
+                    </button>
+                  )}
+                </div>
                 <div className="relative flex items-center">
                   <span className="text-slate-500 text-xs font-bold mr-1">$</span>
                   <input
@@ -3656,6 +3831,7 @@ export default function CotizacionesPage() {
                           {/* Provider Name Input */}
                           <input
                             type="text"
+                            list="proveedores-known-list"
                             value={prov.name}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -4147,6 +4323,15 @@ export default function CotizacionesPage() {
                 secondBest && secondBest.totalBC > 0
                   ? Math.round((savings / secondBest.totalBC) * 100)
                   : 0;
+              const validComps = providerCostComparisons.filter((c) => c.totalBC > 0);
+              const avgTotalBC =
+                validComps.length > 1
+                  ? validComps.reduce((acc, c) => acc + c.totalBC, 0) / validComps.length
+                  : 0;
+              const savingsVsAvg =
+                avgTotalBC > 0 && bestCostData ? Math.max(0, avgTotalBC - bestCostData.totalBC) : 0;
+              const savingsVsAvgPct =
+                avgTotalBC > 0 && savingsVsAvg > 0 ? Math.round((savingsVsAvg / avgTotalBC) * 100) : 0;
 
               return (
                 <div className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/30 shadow-2xl backdrop-blur-xl">
@@ -4162,14 +4347,21 @@ export default function CotizacionesPage() {
                         <h3 className="text-lg font-black text-white tracking-tight">
                           {bestProv?.name || "Proveedor Destacado"}
                         </h3>
-                        <p className="text-xs text-slate-300">
-                          Total General:{" "}
-                          <span className="font-bold font-mono text-emerald-300">
-                            {formatCurrencyValue(bestCostData?.totalBC || 0, baseCurrency)}
+                        <p className="text-xs text-slate-300 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span>
+                            Total General:{" "}
+                            <span className="font-bold font-mono text-emerald-300">
+                              {formatCurrencyValue(bestCostData?.totalBC || 0, baseCurrency)}
+                            </span>
                           </span>
                           {savings > 0 && (
-                            <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                              (Ahorro estimado de {formatCurrencyValue(savings, baseCurrency)} • {savingsPct}%)
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                              (Ahorro vs 2°: {formatCurrencyValue(savings, baseCurrency)} • {savingsPct}%)
+                            </span>
+                          )}
+                          {savingsVsAvgPct > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-bold text-emerald-300">
+                              📉 -{savingsVsAvgPct}% vs promedio ({formatCurrencyValue(savingsVsAvg, baseCurrency)})
                             </span>
                           )}
                         </p>
@@ -4209,19 +4401,31 @@ export default function CotizacionesPage() {
                       </div>
                     </div>
 
-                    {status !== "finalizada" && bestProv && (
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <motion.button
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => {
-                          setStatus("finalizada");
-                          setWinningProviderId(bestProv.id);
-                          showToast(`Adjudicado a ${bestProv.name}`, "success");
-                        }}
-                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/25 cursor-pointer transition-colors"
+                        onClick={() => setIsMinutaModalOpen(true)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-bold text-xs cursor-pointer transition-colors"
+                        title="Generar Minuta de Adjudicación formal para imprimir o guardar en PDF"
                       >
-                        Adjudicar a este Proveedor
+                        <FileText className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Minuta de Adjudicación</span>
                       </motion.button>
-                    )}
+
+                      {status !== "finalizada" && bestProv && (
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => {
+                            setStatus("finalizada");
+                            setWinningProviderId(bestProv.id);
+                            showToast(`Adjudicado a ${bestProv.name}`, "success");
+                          }}
+                          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/25 cursor-pointer transition-colors"
+                        >
+                          Adjudicar a este Proveedor
+                        </motion.button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -4361,6 +4565,16 @@ export default function CotizacionesPage() {
               >
                 {convertCurrencies ? "Convertido a Moneda Base" : "Moneda Original"}
               </button>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsMinutaModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white border border-amber-500/30 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                title="Generar Minuta de Adjudicación formal para imprimir o exportar PDF"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                <span>Minuta PDF</span>
+              </motion.button>
 
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -5305,6 +5519,136 @@ export default function CotizacionesPage() {
       )}
 
       {/* ============================================================
+          TAB CONTENT: CATÁLOGO & PRECIOS HISTÓRICOS
+          ============================================================ */}
+      {activeTab === "catalogo" && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: EASE_OUT }}
+          className="space-y-6"
+        >
+          <div className="p-6 rounded-3xl bg-[#0d1222]/90 border border-white/[0.08] shadow-2xl backdrop-blur-xl space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-indigo-400" />
+                  <span>Catálogo Histórico de Ítems & Precios</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Base de conocimiento unificada de todos los insumos cotizados históricamente, mejor precio registrado y proveedor destacado.
+                </p>
+              </div>
+              <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Buscar insumo, proveedor o proyecto..."
+                  className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl pl-10 pr-8 py-2 text-xs text-white placeholder-slate-500 outline-none"
+                />
+                {catalogSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCatalogSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {historicalCatalog.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 text-xs">
+                No se encontraron ítems cotizados que coincidan con la búsqueda.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-white/[0.06] bg-[#080b15]">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white/[0.02]">
+                      <th className="py-3 px-4">Insumo / Ítem</th>
+                      <th className="py-3 px-3 text-center">Unidad</th>
+                      <th className="py-3 px-3 text-center">Cotizaciones</th>
+                      <th className="py-3 px-4 text-right">Mejor Precio Unit.</th>
+                      <th className="py-3 px-4 text-right">Promedio Unit.</th>
+                      <th className="py-3 px-4">Mejor Proveedor Histórico</th>
+                      <th className="py-3 px-4 text-right">Acción Rápida</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04]">
+                    {historicalCatalog.map((entry) => {
+                      const avgARS = entry.quotesCount > 0 ? entry.sumUnitARS / entry.quotesCount : entry.minUnitARS;
+                      return (
+                        <tr key={entry.key} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-4 font-bold text-white">
+                            <div>{entry.name}</div>
+                            <div className="text-[10px] text-slate-500 font-normal truncate max-w-xs">
+                              Ref: {entry.bestQuoteName} ({entry.lastDateStr})
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-slate-300">
+                            <span className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[10px]">
+                              {entry.baseUnit}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-indigo-300 font-bold">
+                            {entry.quotesCount}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono">
+                            <div className="font-bold text-emerald-400">
+                              {formatCurrencyValue(entry.minUnitARS, "ARS")}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              ≈ {formatCurrencyValue(entry.minUnitUSD, "USD")}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-slate-300">
+                            {formatCurrencyValue(avgARS, "ARS")}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-semibold text-[11px]">
+                              <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span className="truncate max-w-[160px]">{entry.bestProviderName}</span>
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!hasActiveQuote) {
+                                  handleNewQuotation();
+                                }
+                                const newItem: Item = {
+                                  id: "item-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+                                  name: entry.name,
+                                  baseUnit: entry.baseUnit || "U",
+                                  targetQuantity: 1,
+                                };
+                                setItems((prev) => [...prev, newItem]);
+                                setActiveTab("editor");
+                                showToast(`"${entry.name}" agregado a la cotización activa`, "success");
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/25 font-bold text-[11px] transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Usar en Cotización</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* ============================================================
           MODAL: CATEGORÍAS / CARPETAS
           ============================================================ */}
       <AnimatePresence>
@@ -5679,6 +6023,51 @@ export default function CotizacionesPage() {
         quoteName={quoteName}
         onCopySuccess={() => showToast("¡Resumen copiado al portapapeles!", "success")}
       />
+
+      {/* Cotizaciones Minuta de Adjudicación Modal */}
+      <CotizacionMinutaModal
+        isOpen={isMinutaModalOpen}
+        onClose={() => setIsMinutaModalOpen(false)}
+        quoteName={quoteName}
+        categoria={quoteCategoria}
+        notes={notes}
+        exchangeRate={exchangeRate}
+        baseCurrency={baseCurrency}
+        items={items.map((it) => ({
+          id: it.id,
+          name: it.name,
+          baseUnit: it.baseUnit,
+          targetQuantity: it.targetQuantity,
+        }))}
+        providers={providers
+          .filter((p) => !excludedProviderIds.includes(p.id))
+          .map((p) => {
+            const comp = providerCostComparisons.find((c) => c.providerId === p.id);
+            const quotedCount = items.filter((it) => {
+              const q = p.quotes?.[it.id];
+              return q && q.price > 0;
+            }).length;
+            return {
+              id: p.id,
+              name: p.name,
+              totalBC: comp?.totalBC || 0,
+              itemsQuoted: quotedCount,
+              deliveryTime: p.deliveryTime,
+              paymentTerms: p.paymentTerms,
+              validityPeriod: p.validityPeriod,
+            };
+          })}
+        winningProviderId={winningProviderId}
+        cheapestProviderId={cheapestProviderId}
+        aiSummary={aiSummary}
+      />
+
+      {/* Provider Name Autocomplete Datalist */}
+      <datalist id="proveedores-known-list">
+        {allKnownProviderNames.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
     </AppLayout>
   );
 }

@@ -64,18 +64,6 @@ export default function HomePage() {
     };
   }, [isSearchOpen, selectedQuoteForDetail]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setSearchModalQuery("");
-        setIsSearchOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   return (
     <AppLayout title="Pizarrón Principal" subtitle="Cinemark & Hoyts">
       {/* Pizarrón ocupando la pestaña completa */}

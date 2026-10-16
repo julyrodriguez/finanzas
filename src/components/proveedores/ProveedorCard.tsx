@@ -22,7 +22,9 @@ import {
   Sparkles,
   FileText,
   ChevronRight,
-  Trash2
+  Trash2,
+  Star,
+  Trophy
 } from "lucide-react";
 
 interface ProveedorCardProps {
@@ -115,6 +117,11 @@ export function ProveedorCard({
   };
 
   const cotizacionesCount = Array.isArray(proveedor?.cotizaciones) ? proveedor.cotizaciones.length : 0;
+  const winsCount = Array.isArray(proveedor?.cotizaciones)
+    ? proveedor.cotizaciones.filter((c) => c.isWinner).length
+    : 0;
+  const ratingValue = Number(proveedor?.rating || 0);
+  const slaTags = Array.isArray(proveedor?.slaTags) ? proveedor.slaTags : [];
   const ubicacionStr = proveedor?.ubicacion || proveedor?.zona || "";
 
   return (
@@ -152,6 +159,12 @@ export function ProveedorCard({
                 >
                   {proveedor.nombre}
                 </button>
+                {ratingValue > 0 && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold" title={`Calificación interna: ${ratingValue}/5`}>
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    <span>{ratingValue}</span>
+                  </span>
+                )}
                 {proveedor.sitio_web && (
                   <a
                     href={proveedor.sitio_web.startsWith("http") ? proveedor.sitio_web : `https://${proveedor.sitio_web}`}
@@ -186,6 +199,12 @@ export function ProveedorCard({
                     <span>{cotizacionesCount} {cotizacionesCount === 1 ? 'cotización' : 'cotizaciones'}</span>
                   </span>
                 )}
+                {winsCount > 0 && (
+                  <span className="inline-flex items-center gap-1 text-xs text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded-lg border border-amber-500/35 shadow-sm" title={`Resultó ganador en ${winsCount} de ${cotizacionesCount} cotizaciones`}>
+                    <Trophy className="w-3 h-3 text-amber-400" />
+                    <span>{winsCount} adj. ({Math.round((winsCount / Math.max(1, cotizacionesCount)) * 100)}%)</span>
+                  </span>
+                )}
                 {proveedor?.es_argentina !== false && (!proveedor?.pais || String(proveedor.pais).toLowerCase() === "argentina") ? (
                   <span className="inline-flex items-center gap-1 text-xs text-emerald-300 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/25 shadow-sm" title="Proveedor radicado en Argentina">
                     <span>🇦🇷 Argentina</span>
@@ -208,6 +227,14 @@ export function ProveedorCard({
                   </span>
                 )}
                 {getReliabilityBadge(proveedor.confiabilidad)}
+                {slaTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                  >
+                    {tag}
+                  </span>
+                ))}
                 {(proveedor as any)._enriched && !isSaved && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg animate-pulse">
                     <Sparkles className="w-3 h-3 text-amber-400" />

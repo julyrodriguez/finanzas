@@ -24,9 +24,21 @@ import {
   Sparkles,
   Calendar,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  Star,
+  Trophy
 } from "lucide-react";
 import Link from "next/link";
+
+const AVAILABLE_SLA_TAGS = [
+  "Entrega Rápida",
+  "Factura A",
+  "Cta. Cte. 30 días",
+  "Precio Competitivo",
+  "Garantía Oficial",
+  "Atención 24/7",
+  "Proveedor Estratégico"
+];
 
 interface ProveedorDetailModalProps {
   isOpen: boolean;
@@ -68,6 +80,8 @@ export function ProveedorDetailModal({
   const [telefono, setTelefono] = useState("");
   const [rubro, setRubro] = useState("");
   const [notas, setNotas] = useState("");
+  const [rating, setRating] = useState<number>(0);
+  const [slaTags, setSlaTags] = useState<string[]>([]);
   const [emails, setEmails] = useState<string[]>([]);
   const [newEmailInput, setNewEmailInput] = useState("");
 
@@ -85,6 +99,8 @@ export function ProveedorDetailModal({
       setTelefono(proveedor.telefono || "");
       setRubro(proveedor.rubro || "");
       setNotas(proveedor.notas || "");
+      setRating(Number(proveedor.rating || 0));
+      setSlaTags(Array.isArray(proveedor.slaTags) ? proveedor.slaTags : []);
 
       // Normalize emails list: combine emails array with single email
       const emList: string[] = [];
@@ -148,6 +164,11 @@ export function ProveedorDetailModal({
     if (!isEditing) setIsEditing(true);
   };
 
+  const handleToggleSlaTag = (tag: string) => {
+    setSlaTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    if (!isEditing) setIsEditing(true);
+  };
+
   // Save changes
   const handleSave = async () => {
     if (!nombre.trim()) {
@@ -178,6 +199,8 @@ export function ProveedorDetailModal({
         telefono: telefono.trim(),
         rubro: rubro.trim(),
         notas: notas.trim(),
+        rating,
+        slaTags,
         emails: finalEmails,
         email: finalEmails[0] || "",
         guardado: true,
@@ -195,6 +218,7 @@ export function ProveedorDetailModal({
   };
 
   const cotizaciones = Array.isArray(proveedor.cotizaciones) ? proveedor.cotizaciones : [];
+  const winsCount = cotizaciones.filter((c) => c.isWinner).length;
   const aliases = Array.isArray(proveedor.aliases) ? proveedor.aliases.filter(a => a !== proveedor.nombre) : [];
 
   return (
@@ -653,24 +677,36 @@ export function ProveedorDetailModal({
                   return (
                     <div
                       key={idx}
-                      className="p-3.5 rounded-xl bg-slate-900/80 border border-white/[0.06] hover:border-indigo-500/30 transition-all flex flex-col justify-between gap-2.5"
+                      className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                        cot.isWinner
+                          ? "bg-amber-950/20 border-amber-500/35 hover:border-amber-400/50"
+                          : "bg-slate-900/80 border-white/[0.06] hover:border-indigo-500/30"
+                      }`}
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="text-xs sm:text-sm font-bold text-white tracking-tight line-clamp-2">
                             {cot.name || "Cotización sin nombre"}
                           </h4>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
-                              isFinal
-                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
-                                : isCancel
-                                ? "bg-rose-500/15 text-rose-400 border border-rose-500/20"
-                                : "bg-blue-500/15 text-blue-400 border border-blue-500/20"
-                            }`}
-                          >
-                            {cot.status || "Borrador"}
-                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {cot.isWinner && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/35 flex items-center gap-1">
+                                <Trophy className="w-3 h-3 text-amber-400" />
+                                <span>Ganador</span>
+                              </span>
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
+                                isFinal
+                                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+                                  : isCancel
+                                  ? "bg-rose-500/15 text-rose-400 border border-rose-500/20"
+                                  : "bg-blue-500/15 text-blue-400 border border-blue-500/20"
+                              }`}
+                            >
+                              {cot.status || "Borrador"}
+                            </span>
+                          </div>
                         </div>
 
                         {cot.variantUsed && cot.variantUsed !== nombre && (
@@ -710,6 +746,68 @@ export function ProveedorDetailModal({
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Calificación Interna (1-5 Estrellas) & Etiquetas SLA */}
+          <div className="p-5 rounded-2xl bg-slate-950/70 border border-white/[0.08] space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <Star className="w-4 h-4 text-amber-400" />
+                  <span>Calificación Interna & Etiquetas de Desempeño (SLA)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Hacé clic en las estrellas o etiquetas para evaluar al proveedor (no olvides guardar cambios)
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => {
+                      setRating(rating === star ? 0 : star);
+                      if (!isEditing) setIsEditing(true);
+                    }}
+                    className="p-1 rounded-lg hover:bg-white/5 transition-transform active:scale-90 cursor-pointer"
+                    title={`Calificar con ${star} estrella${star > 1 ? "s" : ""}`}
+                  >
+                    <Star
+                      className={`w-5 h-5 transition-colors ${
+                        star <= rating ? "fill-amber-400 text-amber-400" : "text-slate-600 hover:text-amber-300"
+                      }`}
+                    />
+                  </button>
+                ))}
+                {winsCount > 0 && (
+                  <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold">
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{winsCount} adjudicaci{winsCount === 1 ? "ón" : "ones"}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {AVAILABLE_SLA_TAGS.map((tag) => {
+                const isSelected = slaTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => handleToggleSlaTag(tag)}
+                    className={`px-3 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-sm"
+                        : "bg-slate-900 text-slate-400 border-white/10 hover:text-white"
+                    }`}
+                  >
+                    {isSelected ? `✓ ${tag}` : `+ ${tag}`}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Notas Adicionales */}

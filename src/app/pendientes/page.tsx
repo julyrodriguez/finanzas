@@ -209,6 +209,7 @@ export default function PendientesPage() {
   const [newTitle, setNewTitle] = useState<string>("");
   const [newDescription, setNewDescription] = useState<string>("");
   const [newPriority, setNewPriority] = useState<"alta" | "media" | "baja">("media");
+  const [newFechaLimite, setNewFechaLimite] = useState<string>("");
   const [newInitialSteps, setNewInitialSteps] = useState<{ id: string; titulo: string; createdAt: string }[]>([]);
   const [stepInputVal, setStepInputVal] = useState<string>("");
   const [isSubmittingNew, setIsSubmittingNew] = useState<boolean>(false);
@@ -217,6 +218,7 @@ export default function PendientesPage() {
   const [editTitle, setEditTitle] = useState<string>("");
   const [editDescription, setEditDescription] = useState<string>("");
   const [editPriority, setEditPriority] = useState<"alta" | "media" | "baja">("media");
+  const [editFechaLimite, setEditFechaLimite] = useState<string>("");
   const [editEtapas, setEditEtapas] = useState<Etapa[]>([]);
   const [editNewStepTitle, setEditNewStepTitle] = useState<string>("");
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
@@ -259,11 +261,31 @@ export default function PendientesPage() {
 
     let loadedFromMongo = false;
 
+    const normalizePendientes = (rawList: any[]): Pendiente[] =>
+      rawList.map((r) => ({
+        ...r,
+        id: r.id || r.firebaseId || r._id,
+        titulo: r.titulo || r.texto || "Sin título",
+        descripcion: r.descripcion || "",
+        prioridad: r.prioridad || "media",
+        completado: Boolean(r.completado),
+        fechaLimite: r.fechaLimite || null,
+        etapas: Array.isArray(r.etapas)
+          ? r.etapas.map((e: any, idx: number) => ({
+              id: e.id || `step-${idx}`,
+              titulo: e.titulo || e.texto || "",
+              completado: Boolean(e.completado ?? e.completada),
+              createdAt: e.createdAt || null,
+              completedAt: e.completedAt || null,
+            }))
+          : [],
+      }));
+
     // 1. Intentar cargar directamente del servidor MongoDB
     try {
       const mongoRes = await fetchPendientesFromMongo();
       if (mongoRes && Array.isArray(mongoRes.pendientes)) {
-        setItems(mongoRes.pendientes as Pendiente[]);
+        setItems(normalizePendientes(mongoRes.pendientes));
         setIsServerConnected(true);
         loadedFromMongo = true;
         if (isManualRefresh) {
@@ -281,11 +303,11 @@ export default function PendientesPage() {
         if (db) {
           const colRef = collection(db, "pendientes");
           const snapshot = await getDocs(colRef);
-          const fbItems: Pendiente[] = [];
+          const fbItems: any[] = [];
           snapshot.forEach((d) => {
-            fbItems.push({ id: d.id, ...d.data() } as Pendiente);
+            fbItems.push({ id: d.id, ...d.data() });
           });
-          setItems(fbItems);
+          setItems(normalizePendientes(fbItems));
           if (isManualRefresh) {
             addToast("Cargado desde Firebase (servidor no disponible)", "info");
           }
@@ -350,6 +372,7 @@ export default function PendientesPage() {
     setEditTitle(item.titulo || "");
     setEditDescription(item.descripcion || "");
     setEditPriority(item.prioridad || "media");
+    setEditFechaLimite(item.fechaLimite || "");
     setEditEtapas(item.etapas ? JSON.parse(JSON.stringify(item.etapas)) : []);
     setEditNewStepTitle("");
   };
@@ -557,6 +580,7 @@ export default function PendientesPage() {
       titulo: editTitle.trim(),
       descripcion: editDescription.trim(),
       prioridad: editPriority,
+      fechaLimite: editFechaLimite || null,
       etapas: sanitizedEtapas,
       completado: isCompleted,
       completedAt: isCompleted ? (editingItem.completedAt || (Timestamp.now() as any)) : null,
@@ -639,6 +663,7 @@ export default function PendientesPage() {
       titulo: newTitle.trim(),
       descripcion: newDescription.trim(),
       prioridad: newPriority,
+      fechaLimite: newFechaLimite || null,
       completado: false,
       creadoPor: getCleanUsername(),
       createdAt: Timestamp.now(),
@@ -674,6 +699,7 @@ export default function PendientesPage() {
       setNewTitle("");
       setNewDescription("");
       setNewPriority("media");
+      setNewFechaLimite("");
       setNewInitialSteps([]);
       setStepInputVal("");
     } catch (err) {
@@ -917,15 +943,35 @@ export default function PendientesPage() {
                     }`}
                   >
                     <div className="space-y-3.5">
-                      {/* Card Header: Priority & Quick Complete */}
+                      {/* Card Header: Priority, Deadline & Quick Complete */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border uppercase tracking-wider ${pInfo.badge}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${pInfo.dot}`} />
                             {pInfo.label}
                           </span>
+                          {item.fechaLimite && (() => {
+                            const todayStr = new Date().toISOString().split("T")[0];
+                            const isOverdue = !item.completado && item.fechaLimite < todayStr;
+                            const isToday = !item.completado && item.fechaLimite === todayStr;
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                  isOverdue
+                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                    : isToday
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                    : "bg-indigo-500/10 text-indigo-300 border-indigo-500/25"
+                                }`}
+                                title="Fecha límite"
+                              >
+                                <Calendar className="w-2.5 h-2.5" />
+                                {isOverdue ? `Vencido ${item.fechaLimite}` : isToday ? "Vence Hoy" : item.fechaLimite}
+                              </span>
+                            );
+                          })()}
                           {item.completado && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                               Listo
@@ -1282,18 +1328,32 @@ export default function PendientesPage() {
                   />
                 </div>
 
-                {/* 2. DESCRIPCIÓN */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Descripción
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    placeholder="Escribe una breve descripción del asunto a resolver..."
-                    className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-600 outline-none transition-colors resize-none leading-relaxed"
-                  />
+                {/* 2. DESCRIPCIÓN Y FECHA LÍMITE */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Descripción
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      placeholder="Escribe una breve descripción del asunto a resolver..."
+                      className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-600 outline-none transition-colors resize-none leading-relaxed"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-indigo-400" />
+                      <span>Fecha Límite</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={editFechaLimite}
+                      onChange={(e) => setEditFechaLimite(e.target.value)}
+                      className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-2 text-xs text-white outline-none transition-colors"
+                    />
+                  </div>
                 </div>
 
                 {/* 3. PASOS CIRCULARES */}
@@ -1547,33 +1607,48 @@ export default function PendientesPage() {
                     />
                   </div>
 
-                  {/* Priority */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Prioridad
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["baja", "media", "alta"] as const).map((p) => {
-                        const isSel = newPriority === p;
-                        return (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => setNewPriority(p)}
-                            className={`py-1.5 px-3 rounded-xl text-xs font-bold uppercase border transition-all cursor-pointer ${
-                              isSel
-                                ? p === "alta"
-                                  ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                                  : p === "media"
-                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                  : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                                : "bg-[#080b15] border-white/[0.06] text-slate-400 hover:text-white"
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        );
-                      })}
+                  {/* Priority & Fecha Límite */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Prioridad
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(["baja", "media", "alta"] as const).map((p) => {
+                          const isSel = newPriority === p;
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setNewPriority(p)}
+                              className={`py-1.5 px-2 rounded-xl text-xs font-bold uppercase border transition-all cursor-pointer ${
+                                isSel
+                                  ? p === "alta"
+                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                    : p === "media"
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                  : "bg-[#080b15] border-white/[0.06] text-slate-400 hover:text-white"
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-indigo-400" />
+                        <span>Fecha Límite (Calendario)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={newFechaLimite}
+                        onChange={(e) => setNewFechaLimite(e.target.value)}
+                        className="w-full bg-[#080b15] border border-white/[0.08] focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs text-white outline-none transition-colors"
+                      />
                     </div>
                   </div>
 

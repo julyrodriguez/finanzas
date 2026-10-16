@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import { AppLayout } from "@/components/AppLayout";
 import { 
   Plus, 
@@ -13,7 +15,10 @@ import {
   AlertCircle, 
   Check, 
   Sparkles,
-  Info
+  Info,
+  Repeat,
+  ClipboardList,
+  Scale
 } from "lucide-react";
 import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
 import { 
@@ -29,6 +34,8 @@ import {
   syncCalendarEventToMongo,
   deleteCalendarEventFromMongo,
   syncCalendarEventsBulkToMongo,
+  fetchPendientesFromMongo,
+  fetchCotizacionesFromMongo,
 } from "@/lib/serverSync";
 
 interface CalendarEvent {
@@ -39,6 +46,9 @@ interface CalendarEvent {
   startTime: string; // HH:MM
   endTime: string; // HH:MM
   category: "finanzas" | "reunion" | "operaciones" | "personal";
+  isOverlay?: boolean;
+  overlayType?: "pendiente" | "cotizacion";
+  overlayHref?: string;
 }
 
 const CATEGORY_STYLES = {
@@ -71,10 +81,13 @@ const CATEGORY_STYLES = {
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8:00 to 22:00
 
 export default function CalendarioPage() {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [overlayEvents, setOverlayEvents] = useState<CalendarEvent[]>([]);
+  const [showSystemOverlay, setShowSystemOverlay] = useState<boolean>(true);
   
   // Modal states
   const [showEventModal, setShowEventModal] = useState(false);
@@ -87,6 +100,7 @@ export default function CalendarioPage() {
   const [formStartTime, setFormStartTime] = useState("09:00");
   const [formEndTime, setFormEndTime] = useState("10:00");
   const [formCategory, setFormCategory] = useState<"finanzas" | "reunion" | "operaciones" | "personal">("finanzas");
+  const [formRecurrence, setFormRecurrence] = useState<"none" | "weekly" | "biweekly" | "monthly">("none");
   const [formError, setFormError] = useState<string | null>(null);
 
   // Success toast
@@ -97,17 +111,85 @@ export default function CalendarioPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 1. Initial Load of Events: MongoDB first, then Firebase fallback & LocalStorage fallback
+  // 1. Initial Load of Events: MongoDB first, then Firebase fallback & LocalStorage fallback + System Overlay
   useEffect(() => {
     let isMounted = true;
 
+    const normalizeMongoEvent = (ev: any): CalendarEvent => ({
+      id: ev.id || ev.firebaseId || ev._id || `evt-${Math.random()}`,
+      title: ev.title || "",
+      description: ev.description || ev.notes || "",
+      date: ev.date || "",
+      startTime: ev.startTime || ev.time || "09:00",
+      endTime: ev.endTime || "10:00",
+      category: ev.category || "finanzas",
+    });
+
     const loadEvents = async () => {
+      // Load Pendientes & Cotizaciones overlay in parallel
+      Promise.allSettled([fetchPendientesFromMongo(), fetchCotizacionesFromMongo()]).then(
+        ([penRes, cotRes]) => {
+          if (!isMounted) return;
+          const extras: CalendarEvent[] = [];
+          if (penRes.status === "fulfilled" && penRes.value?.pendientes) {
+            penRes.value.pendientes.forEach((p: any) => {
+              if (p.completado) return;
+              const dateStr =
+                p.fechaLimite ||
+                (typeof p.createdAt === "string" && p.createdAt.includes("T")
+                  ? p.createdAt.split("T")[0]
+                  : "");
+              if (dateStr) {
+                extras.push({
+                  id: `overlay-pen-${p.id || p._id}`,
+                  title: `📋 ${p.titulo || p.texto || "Pendiente"}`,
+                  description: p.descripcion || "Tarea pendiente activa",
+                  date: dateStr,
+                  startTime: "09:00",
+                  endTime: "10:00",
+                  category: "personal",
+                  isOverlay: true,
+                  overlayType: "pendiente",
+                  overlayHref: "/pendientes",
+                });
+              }
+            });
+          }
+          if (cotRes.status === "fulfilled" && Array.isArray(cotRes.value)) {
+            cotRes.value.slice(0, 25).forEach((q: any) => {
+              const rawDate = q.createdAt;
+              let dateStr = "";
+              if (typeof rawDate === "string" && rawDate.includes("T")) {
+                dateStr = rawDate.split("T")[0];
+              } else if (rawDate?.seconds) {
+                dateStr = new Date(rawDate.seconds * 1000).toISOString().split("T")[0];
+              }
+              if (dateStr) {
+                extras.push({
+                  id: `overlay-cot-${q.id || q._id}`,
+                  title: `⚖️ ${q.name || "Cotización"}`,
+                  description: `Estado: ${q.status || "borrador"}`,
+                  date: dateStr,
+                  startTime: "11:00",
+                  endTime: "12:00",
+                  category: "operaciones",
+                  isOverlay: true,
+                  overlayType: "cotizacion",
+                  overlayHref: "/cotizaciones",
+                });
+              }
+            });
+          }
+          setOverlayEvents(extras);
+        }
+      );
+
       // A. Consultar MongoDB primero (Servidor propio)
       try {
         const mongoEvents = await fetchCalendarEventsFromMongo();
         if (!isMounted) return;
         if (mongoEvents && Array.isArray(mongoEvents)) {
-          setEvents(mongoEvents);
+          setEvents(mongoEvents.map(normalizeMongoEvent));
           return;
         }
       } catch (err) {
@@ -130,8 +212,8 @@ export default function CalendarioPage() {
                 title: data.title || "",
                 description: data.description || "",
                 date: data.date || "",
-                startTime: data.startTime || "",
-                endTime: data.endTime || "",
+                startTime: data.startTime || "09:00",
+                endTime: data.endTime || "10:00",
                 category: data.category || "finanzas",
               };
             });
@@ -201,6 +283,7 @@ export default function CalendarioPage() {
     setEditingEvent(null);
     setFormTitle("");
     setFormDescription("");
+    setFormRecurrence("none");
     
     // Date fallback
     if (dateStr) {
@@ -226,6 +309,10 @@ export default function CalendarioPage() {
 
   const openEditModal = (event: CalendarEvent, e: React.MouseEvent) => {
     e.stopPropagation(); // prevent triggering day/slot click
+    if (event.isOverlay && event.overlayHref) {
+      router.push(event.overlayHref);
+      return;
+    }
     setEditingEvent(event);
     setFormTitle(event.title);
     setFormDescription(event.description || "");
@@ -233,6 +320,7 @@ export default function CalendarioPage() {
     setFormStartTime(event.startTime);
     setFormEndTime(event.endTime);
     setFormCategory(event.category);
+    setFormRecurrence("none");
     setFormError(null);
     setShowEventModal(true);
   };
@@ -252,46 +340,70 @@ export default function CalendarioPage() {
       return;
     }
 
-    const eventId = editingEvent ? editingEvent.id : `evt-${Date.now()}`;
-    const eventData = {
-      title: formTitle.trim(),
-      description: formDescription.trim() || "",
-      date: formDate,
-      startTime: formStartTime,
-      endTime: formEndTime,
-      category: formCategory,
+    const generateDates = (baseDateStr: string, recurrence: typeof formRecurrence): string[] => {
+      if (editingEvent || recurrence === "none") return [baseDateStr];
+      const dates: string[] = [];
+      const [y, m, d] = baseDateStr.split("-").map(Number);
+      const count = recurrence === "monthly" ? 6 : 4;
+      for (let i = 0; i < count; i++) {
+        const dt = new Date(y, m - 1, d);
+        if (recurrence === "weekly") dt.setDate(dt.getDate() + i * 7);
+        else if (recurrence === "biweekly") dt.setDate(dt.getDate() + i * 14);
+        else if (recurrence === "monthly") dt.setMonth(dt.getMonth() + i);
+        dates.push(dt.toISOString().split("T")[0]);
+      }
+      return dates;
     };
-    const fullEvent: CalendarEvent = { id: eventId, ...eventData };
+
+    const targetDates = generateDates(formDate, formRecurrence);
+    const createdList: CalendarEvent[] = targetDates.map((dStr, idx) => {
+      const eventId = editingEvent ? editingEvent.id : `evt-${Date.now()}-${idx}`;
+      return {
+        id: eventId,
+        title: formTitle.trim(),
+        description: formDescription.trim() || "",
+        date: dStr,
+        startTime: formStartTime,
+        endTime: formEndTime,
+        category: formCategory,
+      };
+    });
 
     // 1. Optimistic UI Update
     let updatedEvents: CalendarEvent[];
     if (editingEvent) {
-      updatedEvents = events.map((e) => (e.id === editingEvent.id ? fullEvent : e));
+      updatedEvents = events.map((ev) => (ev.id === editingEvent.id ? createdList[0] : ev));
     } else {
-      updatedEvents = [...events, fullEvent];
+      updatedEvents = [...events, ...createdList];
     }
     setEvents(updatedEvents);
 
-    // 2. Dual Write: Servidor propio MongoDB
-    syncCalendarEventToMongo(fullEvent);
-
-    // 3. Dual Write: Firebase Firestore (no bloqueante, protegido ante cuota excedida)
-    if (!isFirestoreDisabled()) {
-      const db = getFirebaseDb();
-      if (db) {
-        setDoc(doc(db, "calendar_events", eventId), eventData).catch((err) => {
-          handleFirestoreError(err);
-          console.warn("⚠️ [Calendario] No se pudo guardar en Firebase (cuota o red):", err?.message || err);
-        });
+    // 2. Dual Write: Servidor propio MongoDB & Firebase
+    createdList.forEach((fullEvent) => {
+      syncCalendarEventToMongo(fullEvent);
+      if (!isFirestoreDisabled()) {
+        const db = getFirebaseDb();
+        if (db) {
+          const { id, ...eventData } = fullEvent;
+          setDoc(doc(db, "calendar_events", id), eventData).catch((err) => {
+            handleFirestoreError(err);
+          });
+        }
       }
-    }
+    });
 
     // 4. Copia en LocalStorage
     try {
       localStorage.setItem("finanzas-calendar-events", JSON.stringify(updatedEvents));
     } catch (e) {}
 
-    showToast(editingEvent ? "📝 Evento actualizado" : "➕ Evento creado");
+    showToast(
+      editingEvent
+        ? "📝 Evento actualizado"
+        : createdList.length > 1
+        ? `➕ ${createdList.length} eventos recurrentes creados`
+        : "➕ Evento creado"
+    );
     setShowEventModal(false);
     setEditingEvent(null);
   };
@@ -407,11 +519,16 @@ export default function CalendarioPage() {
     return date.toISOString().split("T")[0];
   };
 
+  const allCombinedEvents = useMemo(
+    () => (showSystemOverlay ? [...events, ...overlayEvents] : events),
+    [events, overlayEvents, showSystemOverlay]
+  );
+
   const getEventsForDate = (date: Date) => {
     const dateStr = getFormattedDateStr(date);
-    return events
-      .filter(e => e.date === dateStr)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return allCombinedEvents
+      .filter((e) => e.date === dateStr)
+      .sort((a, b) => (a.startTime || "09:00").localeCompare(b.startTime || "09:00"));
   };
 
   // Get localized names
@@ -453,7 +570,7 @@ export default function CalendarioPage() {
       {/* Main Container */}
       <div className="space-y-6">
         {/* 1. Header Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 glass-card p-5 rounded-3xl border border-white/10 shadow-2xl bg-[#0d1322]">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 glass-card p-5 rounded-3xl border border-white/10 shadow-2xl bg-[#0d1322]">
           {/* Month/Week Navigation */}
           <div className="flex items-center gap-2.5">
             <button
@@ -484,30 +601,51 @@ export default function CalendarioPage() {
             </h2>
           </div>
 
-          {/* View Toggles & Add Event */}
-          <div className="flex items-center justify-between sm:justify-end gap-3">
-            {/* Monthly / Weekly toggle */}
+          {/* View Toggles, System Overlay & Add Event */}
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5">
+            {/* System Overlay Toggle (Pendientes + Cotizaciones) */}
+            <button
+              type="button"
+              onClick={() => setShowSystemOverlay((prev) => !prev)}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                showSystemOverlay
+                  ? "bg-amber-500/15 border-amber-500/35 text-amber-300"
+                  : "bg-[#080d18] border-white/10 text-slate-400 hover:text-white"
+              }`}
+              title="Mostrar/ocultar vencimientos de Pendientes y Cotizaciones en el calendario"
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              <span>Pendientes & Cotizaciones ({overlayEvents.length})</span>
+            </button>
+
+            {/* Monthly / Weekly toggle with layoutId */}
             <div className="flex bg-[#080d18] border border-white/10 p-1 rounded-xl gap-1 shadow-inner">
-              <button
-                onClick={() => setViewMode("month")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === "month"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Mensual
-              </button>
-              <button
-                onClick={() => setViewMode("week")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  viewMode === "week"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Semanal
-              </button>
+              {(
+                [
+                  { id: "month", label: "Mensual" },
+                  { id: "week", label: "Semanal" },
+                ] as const
+              ).map((tab) => {
+                const active = viewMode === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setViewMode(tab.id)}
+                    className={`relative px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      active ? "text-white font-bold" : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {active && (
+                      <motion.div
+                        layoutId="calendarViewTab"
+                        transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                        className="absolute inset-0 bg-indigo-600 rounded-lg shadow-md shadow-indigo-600/30"
+                      />
+                    )}
+                    <span className="relative z-10">{tab.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* "+ Nuevo" Button */}
@@ -1080,19 +1218,40 @@ export default function CalendarioPage() {
                 </div>
               </div>
 
-              {/* Category */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">Categoría</label>
-                <select
-                  value={formCategory}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormCategory(e.target.value as "finanzas" | "reunion" | "operaciones" | "personal")}
-                  className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
-                >
-                  <option value="finanzas" className="bg-[#0d131f] text-white">Finanzas (Verde)</option>
-                  <option value="reunion" className="bg-[#0d131f] text-white">Reunión (Azul)</option>
-                  <option value="operaciones" className="bg-[#0d131f] text-white">Operaciones (Morado)</option>
-                  <option value="personal" className="bg-[#0d131f] text-white">Personal (Naranja)</option>
-                </select>
+              {/* Category & Recurrence */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Categoría</label>
+                  <select
+                    value={formCategory}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFormCategory(e.target.value as "finanzas" | "reunion" | "operaciones" | "personal")}
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
+                  >
+                    <option value="finanzas" className="bg-[#0d131f] text-white">Finanzas (Verde)</option>
+                    <option value="reunion" className="bg-[#0d131f] text-white">Reunión (Azul)</option>
+                    <option value="operaciones" className="bg-[#0d131f] text-white">Operaciones (Morado)</option>
+                    <option value="personal" className="bg-[#0d131f] text-white">Personal (Naranja)</option>
+                  </select>
+                </div>
+
+                {!editingEvent && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1 flex items-center gap-1">
+                      <Repeat className="w-3 h-3 text-indigo-400" />
+                      <span>Repetición</span>
+                    </label>
+                    <select
+                      value={formRecurrence}
+                      onChange={(e) => setFormRecurrence(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500/50 bg-[#0d131f]"
+                    >
+                      <option value="none" className="bg-[#0d131f] text-white">No repetir</option>
+                      <option value="weekly" className="bg-[#0d131f] text-white">Semanal (4 semanas)</option>
+                      <option value="biweekly" className="bg-[#0d131f] text-white">Quincenal (4 veces)</option>
+                      <option value="monthly" className="bg-[#0d131f] text-white">Mensual (6 meses)</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Description */}
