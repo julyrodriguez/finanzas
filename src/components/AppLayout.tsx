@@ -10,6 +10,7 @@ import { toast } from "@/context/ToastContext";
 import { CotizacionesTicker } from "@/components/CotizacionesTicker";
 import { HomeSearchModal } from "@/components/home/HomeSearchModal";
 import { CotizacionDetailModal } from "@/components/cotizaciones/CotizacionDetailModal";
+import { AgentGlobalWidget } from "@/components/agent/AgentGlobalWidget";
 import { markFirestoreDisabled } from "@/lib/firebase";
 import {
   TrendingUp,
@@ -925,6 +926,9 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           </div>
         )}
       </AnimatePresence>
+
+      {/* Asistente Global Autónomo & Mini-Lista de Recordatorios */}
+      {!publicRoute && <AgentGlobalWidget />}
     </div>
   );
 }

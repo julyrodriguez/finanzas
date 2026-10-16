@@ -1,0 +1,21 @@
+# MEMORY.md - Memoria Permanente y Hechos Clave
+
+- **Plataforma:** Finanzas & Compras Cinemark & Hoyts Argentina (`/home/julian/vacas-locas/finanzas`).
+- **Framework:** Next.js 16 con React 19, Tailwind CSS v4, Motion (Framer Motion v13), Firebase v12.
+- **Backend Híbrido:**
+  - MongoDB propio en `https://apivacas.jariel.com.ar/api/`.
+  - Google Firebase Firestore como réplica y bus en tiempo real.
+- **Módulos Activos:**
+  - Cotizaciones de Insumos (`/cotizaciones`).
+  - Lista de Pendientes con etapas (`/pendientes`).
+  - Calendario y Recordatorios (`/calendario`).
+  - Directorio Inteligente de Proveedores (`/proveedores`).
+  - Distribución de órdenes Flix (`/distribucion`).
+  - Pizarrón de Control interactivo (`/inicio`).
+  - Calculadora financiera (`/calculadora`).
+  - Generador/Lector Interbanking (`/interbanking`).
+- **Widget de Asistente:**
+  - Componente global en `src/components/agent/AgentGlobalWidget.tsx`.
+  - Soporta arrastre directo de correos `.eml` y texto para armado automático de cotizaciones.
+  - Gestión conversacional del estado de cotizaciones ("ya envié la cotización de X").
+  - Panel lateral de mini-lista de recordatorios en tiempo real.
