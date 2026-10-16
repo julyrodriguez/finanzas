@@ -677,7 +677,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          className="lg:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity"
+          className="lg:hidden fixed inset-0 z-[45] bg-black/70 backdrop-blur-sm transition-opacity"
         />
       )}
 
@@ -686,7 +686,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
         aria-label="Barra lateral de navegación"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-[#0a0e17] border-r border-white/10 shadow-2xl transition-[width] duration-300 ease-in-out overflow-hidden ${
+        className={`hidden lg:flex fixed inset-y-0 left-0 z-[45] flex-col bg-[#0a0e17] border-r border-white/10 shadow-2xl transition-[width] duration-300 ease-in-out overflow-hidden ${
           isExpanded ? "w-64" : "w-16"
         }`}
       >

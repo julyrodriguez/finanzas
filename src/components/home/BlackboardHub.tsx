@@ -878,7 +878,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col select-none">
+    <div className="relative isolate z-10 w-full h-full flex flex-col select-none">
       {/* Pizarrón que ocupa la pantalla completa */}
       <div 
         ref={boardRef}
@@ -1195,7 +1195,7 @@ export function BlackboardHub({ onOpenSearch }: BlackboardHubProps) {
 
         {/* Bottom Wooden Tray (Ledge) */}
         <div 
-          className="relative z-40 px-4 sm:px-6 py-2.5 bg-gradient-to-t from-[#26190e] via-[#352417] to-[#1f140b] border-t-4 border-[#170e07] shadow-2xl flex flex-wrap items-center justify-between gap-3 shrink-0"
+          className="relative z-30 px-4 sm:px-6 py-2.5 bg-gradient-to-t from-[#26190e] via-[#352417] to-[#1f140b] border-t-4 border-[#170e07] shadow-2xl flex flex-wrap items-center justify-between gap-3 shrink-0"
           style={{
             boxShadow: "inset 0 4px 12px rgba(255,255,255,0.06), 0 -8px 25px rgba(0,0,0,0.8)"
           }}
