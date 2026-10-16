@@ -5,6 +5,56 @@ Este archivo contiene la especificación exhaustiva de todas las secciones, mode
 
 ---
 
+## 🛡️ POLÍTICA ESTRICTA DE SEGURIDAD (GUARDRAILS DE INFRAESTRUCTURA)
+
+El agente tiene **poder total y exhaustivo** para controlar, inyectar, modificar y borrar información dentro del **alcance funcional de la plataforma Finanzas**.
+Sin embargo, cuenta con un límite infranqueable de seguridad a nivel infraestructura:
+
+❌ **ESTRICTAMENTE PROHIBIDO:**
+1. Ejecutar comandos de terminal del sistema operativo (bash, sh, exec, rm, sudo, etc.).
+2. Borrar, truncar o destruir bases de datos completas ("drop database", "borrar toda la base de datos", "delete collection").
+3. Modificar o borrar archivos del servidor fuera del scope de la plataforma o exponer claves de entorno (.env).
+4. Si el usuario solicita una acción destructiva fuera del alcance de la página (ej: "borrá la base de datos de mongo", "ejecutá rm -rf"), DEBE SER RECHAZADA DE INMEDIATO devolviendo `intent: "security_violation"`, `action: null` y una advertencia explicando la política de seguridad.
+
+---
+
+## ⚡ PODERES Y ACCIONES OPERATIVAS DISPONIBLES EN LA PÁGINA
+
+El agente puede ejecutar directamente las siguientes 16 acciones operativas en el chat widget:
+
+1. **Cotizaciones (`/cotizaciones`)**:
+   - `create_cotizacion`: Generar cotización con ítems, proveedor, plazos y moneda.
+   - `update_cotizacion_status`: Pasar cotizaciones a `enviada`, `finalizada`, `borrador` o `cancelada`.
+   - `delete_cotizacion`: Eliminar una cotización específica de la base de datos y la vista.
+   - `set_winning_provider`: Adjudicar ganador a una cotización y cerrarla como finalizada.
+
+2. **Pendientes (`/pendientes`)**:
+   - `create_pendiente`: Crear tarea en el tablero con prioridad, categoría y etapas/checklist.
+   - `toggle_pendiente`: Marcar como completada o reactivar una tarea pendiente.
+   - `delete_pendiente`: Eliminar una tarea del tablero de pendientes.
+   - `add_etapa_pendiente`: Agregar un nuevo paso/checklist a una tarea existente.
+
+3. **Recordatorios & Calendario (`/calendario` y Mini-Lista)**:
+   - `create_recordatorio`: Agendar compromiso con fecha (YYYY-MM-DD), hora y categoría.
+   - `toggle_recordatorio`: Tildar o destildar un recordatorio como realizado.
+   - `delete_recordatorio`: Eliminar un recordatorio de la lista y el calendario.
+
+4. **Pizarrón de Control (`/inicio`)**:
+   - `create_pizarron_note`: Clavar una nueva nota adhesiva (con color, pin y checklist).
+   - `delete_pizarron_note`: Retirar o desclavar una nota adhesiva existente.
+
+5. **Proveedores (`/proveedores`)**:
+   - `create_proveedor`: Registrar un nuevo proveedor en el directorio comercial.
+   - `search_proveedores`: Buscar proveedores por rubro y zona geográfica.
+
+6. **Navegación & Interfaz**:
+   - `navigate`: Dirigir al usuario automáticamente a cualquier sección de la app (`path: "/cotizaciones"`, etc.).
+
+7. **Cálculos Financieros**:
+   - `calculate_financial`: Computar IVA, retenciones impositivas y conversiones cambiarias según el dólar oficial BNA.
+
+---
+
 ## 1. Arquitectura de Datos y Estrategia de Persistencia
 
 La plataforma utiliza una estrategia de **Doble Escritura (Dual-Write) No Bloqueante**:

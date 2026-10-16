@@ -43,9 +43,14 @@ import {
 import {
   fetchCotizacionesFromMongo,
   syncCotizacionToMongo,
+  deleteCotizacionFromMongo,
+  fetchPendientesFromMongo,
+  syncPendienteToMongo,
+  deletePendienteFromMongo,
+  saveProveedorToMongo,
 } from "@/lib/serverSync";
 import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -60,7 +65,7 @@ interface ChatMessage {
     date: string;
   };
   actionCard?: {
-    type: "cotizacion_creada" | "cotizacion_enviada" | "recordatorio_creado" | "pendiente_creado";
+    type: string;
     title: string;
     subtitle?: string;
     linkHref?: string;
@@ -452,7 +457,138 @@ Puedo ayudarte a automatizar tareas cotidianas:
         }
       }
 
-      // 3. ACTION: CREATE RECORDATORIO
+      // 3. ACTION: DELETE COTIZACION
+      if (action.type === "delete_cotizacion") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetQuoteId || "").toLowerCase().trim();
+
+        const target = quotesCache.find(
+          (q) =>
+            q.id === payload.targetQuoteId ||
+            (q.name && q.name.toLowerCase().includes(queryText)) ||
+            (Array.isArray(q.providers) &&
+              q.providers.some((p: any) => p.name && p.name.toLowerCase().includes(queryText)))
+        );
+
+        if (target) {
+          try {
+            await deleteCotizacionFromMongo(target.id);
+          } catch (e) {
+            console.warn("Aviso Mongo delete cotizacion:", e);
+          }
+
+          if (!isFirestoreDisabled()) {
+            const db = getFirebaseDb();
+            if (db && !target.id.startsWith("local-")) {
+              await deleteDoc(doc(db, "cotizaciones", target.id)).catch(handleFirestoreError);
+            }
+          }
+
+          try {
+            const local = localStorage.getItem("finanzas-cotizaciones");
+            if (local) {
+              const list = JSON.parse(local);
+              localStorage.setItem(
+                "finanzas-cotizaciones",
+                JSON.stringify(list.filter((q: any) => q.id !== target.id))
+              );
+            }
+          } catch {}
+
+          reloadQuotesCache();
+          toast.success("Cotización eliminada", `Se eliminó "${target.name}".`);
+
+          return {
+            type: "cotizacion_eliminada",
+            title: target.name,
+            subtitle: "Cotización eliminada del sistema",
+            linkHref: "/cotizaciones",
+            linkLabel: "Ver Cotizaciones",
+            badgeText: "ELIMINADA",
+          };
+        } else {
+          toast.warning("No encontrada", `No se encontró cotización con "${queryText}".`);
+        }
+      }
+
+      // 4. ACTION: SET WINNING PROVIDER
+      if (action.type === "set_winning_provider") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetQuoteId || "").toLowerCase().trim();
+        const provQuery = (payload.providerName || payload.providerId || "").toLowerCase().trim();
+
+        let target = quotesCache.find(
+          (q) =>
+            q.id === payload.targetQuoteId ||
+            (q.name && q.name.toLowerCase().includes(queryText)) ||
+            (Array.isArray(q.providers) &&
+              q.providers.some((p: any) => p.name && p.name.toLowerCase().includes(queryText)))
+        );
+
+        if (!target && quotesCache.length > 0) target = quotesCache[0];
+
+        if (target) {
+          const winnerProv = Array.isArray(target.providers)
+            ? target.providers.find(
+                (p: any) =>
+                  p.id === payload.providerId ||
+                  (p.name && p.name.toLowerCase().includes(provQuery))
+              )
+            : null;
+
+          const winningProviderId = winnerProv?.id || payload.providerId || (target.providers?.[0]?.id ?? "");
+          const winningProviderName = winnerProv?.name || payload.providerName || "Proveedor Adjudicado";
+
+          const updatedQuote = {
+            ...target,
+            status: "finalizada",
+            winningProviderId,
+          };
+
+          try {
+            await syncCotizacionToMongo(updatedQuote);
+          } catch (e) {
+            console.warn("Aviso Mongo set winning provider:", e);
+          }
+
+          if (!isFirestoreDisabled()) {
+            const db = getFirebaseDb();
+            if (db) {
+              await updateDoc(doc(db, "cotizaciones", target.id), {
+                status: "finalizada",
+                winningProviderId,
+              }).catch(handleFirestoreError);
+            }
+          }
+
+          try {
+            const local = localStorage.getItem("finanzas-cotizaciones");
+            if (local) {
+              const list = JSON.parse(local);
+              localStorage.setItem(
+                "finanzas-cotizaciones",
+                JSON.stringify(list.map((q: any) => (q.id === target.id ? updatedQuote : q)))
+              );
+            }
+          } catch {}
+
+          reloadQuotesCache();
+          toast.success("Ganador adjudicado", `Cotización "${target.name}" adjudicada a "${winningProviderName}".`);
+
+          return {
+            type: "cotizacion_adjudicada",
+            title: target.name,
+            subtitle: `Ganador: ${winningProviderName} • Estado: FINALIZADA`,
+            linkHref: "/cotizaciones",
+            linkLabel: "Ver en Cotizaciones",
+            badgeText: "ADJUDICADA",
+          };
+        } else {
+          toast.warning("No encontrada", `No se encontró cotización para adjudicar.`);
+        }
+      }
+
+      // 5. ACTION: CREATE RECORDATORIO
       if (action.type === "create_recordatorio") {
         const payload = action.payload || {};
         const saved = await saveRecordatorio({
@@ -473,6 +609,469 @@ Puedo ayudarte a automatizar tareas cotidianas:
           title: saved.titulo,
           subtitle: `Programado para el ${saved.fecha} a las ${saved.hora} hs`,
           badgeText: "RECORDATORIO",
+        };
+      }
+
+      // 6. ACTION: TOGGLE RECORDATORIO
+      if (action.type === "toggle_recordatorio") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetId || "").toLowerCase().trim();
+        const isCompletado = payload.completado !== false;
+
+        const target = recordatorios.find(
+          (r) =>
+            r.id === payload.targetId ||
+            (r.titulo && r.titulo.toLowerCase().includes(queryText))
+        );
+
+        if (target) {
+          await toggleRecordatorioStatus(target.id, isCompletado);
+          reloadRecordatorios();
+          toast.success(
+            isCompletado ? "Recordatorio completado" : "Recordatorio reactivado",
+            `"${target.titulo}" actualizado.`
+          );
+
+          return {
+            type: "recordatorio_actualizado",
+            title: target.titulo,
+            subtitle: `Estado: ${isCompletado ? "COMPLETADO ✅" : "PENDIENTE ⏰"}`,
+            badgeText: isCompletado ? "COMPLETADO" : "RECORDATORIO",
+          };
+        } else {
+          toast.warning("No encontrado", `No se encontró el recordatorio "${queryText}".`);
+        }
+      }
+
+      // 7. ACTION: DELETE RECORDATORIO
+      if (action.type === "delete_recordatorio") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetId || "").toLowerCase().trim();
+
+        const target = recordatorios.find(
+          (r) =>
+            r.id === payload.targetId ||
+            (r.titulo && r.titulo.toLowerCase().includes(queryText))
+        );
+
+        if (target) {
+          await deleteRecordatorio(target.id);
+          reloadRecordatorios();
+          toast.success("Recordatorio eliminado", `"${target.titulo}" borrado.`);
+
+          return {
+            type: "recordatorio_eliminado",
+            title: target.titulo,
+            subtitle: "Recordatorio eliminado de la lista y calendario",
+            badgeText: "ELIMINADO",
+          };
+        } else {
+          toast.warning("No encontrado", `No se encontró el recordatorio "${queryText}".`);
+        }
+      }
+
+      // 8. ACTION: CREATE PENDIENTE
+      if (action.type === "create_pendiente") {
+        const payload = action.payload || {};
+        const pendId = `pend-${Date.now()}`;
+        const rawEtapas = Array.isArray(payload.etapas) ? payload.etapas : [];
+        const etapas = rawEtapas.map((et: string | any, idx: number) => ({
+          id: `step-${Date.now()}-${idx}`,
+          titulo: typeof et === "string" ? et : et.titulo || `Paso ${idx + 1}`,
+          completado: false,
+          createdAt: new Date().toISOString(),
+        }));
+
+        const newPendiente: any = {
+          id: pendId,
+          firebaseId: pendId,
+          titulo: payload.titulo || "Nueva tarea pendiente",
+          descripcion: payload.descripcion || "",
+          prioridad: payload.prioridad || "media",
+          categoria: payload.categoria || "General",
+          completado: false,
+          creadoPor: "FinanBot (Asistente IA)",
+          fechaLimite: payload.fechaLimite || null,
+          etapas,
+          createdAt: new Date().toISOString(),
+          completedAt: null,
+        };
+
+        try {
+          await syncPendienteToMongo(newPendiente);
+        } catch (e) {
+          console.warn("Aviso Mongo sync pendiente:", e);
+        }
+
+        if (!isFirestoreDisabled()) {
+          const db = getFirebaseDb();
+          if (db) {
+            await setDoc(doc(db, "pendientes", pendId), newPendiente).catch(handleFirestoreError);
+          }
+        }
+
+        toast.success("Tarea creada en Pendientes", `"${newPendiente.titulo}" agregada.`);
+
+        return {
+          type: "pendiente_creado",
+          title: newPendiente.titulo,
+          subtitle: `Prioridad: ${newPendiente.prioridad.toUpperCase()} • ${etapas.length} etapas`,
+          linkHref: "/pendientes",
+          linkLabel: "Ver Tablero de Pendientes",
+          badgeText: "PENDIENTE",
+          details: etapas.slice(0, 3).map((e: any) => `• ${e.titulo}`),
+        };
+      }
+
+      // 9. ACTION: TOGGLE PENDIENTE
+      if (action.type === "toggle_pendiente") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetId || "").toLowerCase().trim();
+        const isCompletado = payload.completado !== false;
+
+        const mongoData = await fetchPendientesFromMongo();
+        let target = mongoData?.pendientes.find(
+          (p: any) =>
+            p.id === payload.targetId ||
+            p.firebaseId === payload.targetId ||
+            (p.titulo && p.titulo.toLowerCase().includes(queryText))
+        );
+
+        if (target) {
+          const updated = {
+            ...target,
+            completado: isCompletado,
+            completedAt: isCompletado ? new Date().toISOString() : null,
+          };
+
+          try {
+            await syncPendienteToMongo(updated);
+          } catch (e) {
+            console.warn("Aviso Mongo sync toggle pendiente:", e);
+          }
+
+          if (!isFirestoreDisabled()) {
+            const db = getFirebaseDb();
+            const targetId = target.id || target.firebaseId;
+            if (db && targetId) {
+              await updateDoc(doc(db, "pendientes", targetId), {
+                completado: isCompletado,
+                completedAt: updated.completedAt,
+              }).catch(handleFirestoreError);
+            }
+          }
+
+          toast.success(
+            isCompletado ? "Tarea completada" : "Tarea reactivada",
+            `"${target.titulo}" marcada como ${isCompletado ? "completada" : "pendiente"}.`
+          );
+
+          return {
+            type: "pendiente_actualizado",
+            title: target.titulo,
+            subtitle: `Estado: ${isCompletado ? "COMPLETADA ✅" : "PENDIENTE ⏳"}`,
+            linkHref: "/pendientes",
+            linkLabel: "Ver en Pendientes",
+            badgeText: isCompletado ? "COMPLETADO" : "PENDIENTE",
+          };
+        } else {
+          toast.warning("No encontrado", `No se encontró la tarea "${queryText}".`);
+        }
+      }
+
+      // 10. ACTION: DELETE PENDIENTE
+      if (action.type === "delete_pendiente") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetId || "").toLowerCase().trim();
+
+        const mongoData = await fetchPendientesFromMongo();
+        const target = mongoData?.pendientes.find(
+          (p: any) =>
+            p.id === payload.targetId ||
+            p.firebaseId === payload.targetId ||
+            (p.titulo && p.titulo.toLowerCase().includes(queryText))
+        );
+
+        if (target) {
+          const targetId = target.id || target.firebaseId;
+          try {
+            await deletePendienteFromMongo(targetId);
+          } catch (e) {
+            console.warn("Aviso Mongo delete pendiente:", e);
+          }
+
+          if (!isFirestoreDisabled()) {
+            const db = getFirebaseDb();
+            if (db && targetId) {
+              await deleteDoc(doc(db, "pendientes", targetId)).catch(handleFirestoreError);
+            }
+          }
+
+          toast.success("Tarea eliminada", `Se eliminó "${target.titulo}" de pendientes.`);
+
+          return {
+            type: "pendiente_eliminado",
+            title: target.titulo,
+            subtitle: "Tarea eliminada del tablero",
+            linkHref: "/pendientes",
+            linkLabel: "Ver Tablero",
+            badgeText: "ELIMINADO",
+          };
+        } else {
+          toast.warning("No encontrado", `No se encontró la tarea "${queryText}".`);
+        }
+      }
+
+      // 11. ACTION: ADD ETAPA PENDIENTE
+      if (action.type === "add_etapa_pendiente") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetId || "").toLowerCase().trim();
+        const etapaTitulo = payload.etapaTitulo || "Nuevo paso";
+
+        const mongoData = await fetchPendientesFromMongo();
+        let target = mongoData?.pendientes.find(
+          (p: any) =>
+            p.id === payload.targetId ||
+            p.firebaseId === payload.targetId ||
+            (p.titulo && p.titulo.toLowerCase().includes(queryText))
+        );
+
+        if (!target && mongoData?.pendientes?.length) target = mongoData.pendientes[0];
+
+        if (target) {
+          const existingEtapas = Array.isArray(target.etapas) ? target.etapas : [];
+          const newEtapa = {
+            id: `step-${Date.now()}`,
+            titulo: etapaTitulo,
+            completado: false,
+            createdAt: new Date().toISOString(),
+          };
+          const updated = {
+            ...target,
+            etapas: [...existingEtapas, newEtapa],
+          };
+
+          try {
+            await syncPendienteToMongo(updated);
+          } catch (e) {
+            console.warn("Aviso Mongo add etapa pendiente:", e);
+          }
+
+          if (!isFirestoreDisabled()) {
+            const db = getFirebaseDb();
+            const targetId = target.id || target.firebaseId;
+            if (db && targetId) {
+              await updateDoc(doc(db, "pendientes", targetId), {
+                etapas: updated.etapas,
+              }).catch(handleFirestoreError);
+            }
+          }
+
+          toast.success("Paso agregado", `Se sumó "${etapaTitulo}" a "${target.titulo}".`);
+
+          return {
+            type: "etapa_agregada",
+            title: target.titulo,
+            subtitle: `Paso agregado: ${etapaTitulo}`,
+            linkHref: "/pendientes",
+            linkLabel: "Ver en Pendientes",
+            badgeText: "PASO AGREGADO",
+          };
+        } else {
+          toast.warning("No encontrado", `No se encontró la tarea para agregarle el paso.`);
+        }
+      }
+
+      // 12. ACTION: CREATE PIZARRON NOTE
+      if (action.type === "create_pizarron_note") {
+        const payload = action.payload || {};
+        const noteId = `note-${Date.now()}`;
+        const rawChecklist = Array.isArray(payload.checklist) ? payload.checklist : [];
+        const checklist = rawChecklist.map((c: string | any, idx: number) => ({
+          id: `chk-${Date.now()}-${idx}`,
+          text: typeof c === "string" ? c : c.text || `Item ${idx + 1}`,
+          done: false,
+        }));
+
+        const newNote = {
+          id: noteId,
+          title: payload.title || "Nota Pizarrón",
+          content: payload.content || "",
+          color: payload.color || "yellow",
+          pinColor: payload.pinColor || "red",
+          rotation: Number((Math.random() * 6 - 3).toFixed(1)),
+          x: Math.floor(Math.random() * 180 + 100),
+          y: Math.floor(Math.random() * 120 + 80),
+          createdAt: new Date().toISOString(),
+          checklist: checklist.length > 0 ? checklist : undefined,
+          tag: payload.tag || "FinanBot",
+        };
+
+        try {
+          fetch("https://apivacas.jariel.com.ar/api/pizarron/notes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newNote),
+          }).catch(console.warn);
+        } catch (e) {}
+
+        if (!isFirestoreDisabled()) {
+          const db = getFirebaseDb();
+          if (db) {
+            await setDoc(doc(db, "pizarron_notas", noteId), newNote).catch(handleFirestoreError);
+          }
+        }
+
+        toast.success("Nota clavada en Pizarrón", `"${newNote.title}" agregada.`);
+
+        return {
+          type: "pizarron_nota_creada",
+          title: newNote.title,
+          subtitle: `Nota fijada en el pizarrón de Inicio (${newNote.color})`,
+          linkHref: "/",
+          linkLabel: "Ver en Inicio / Pizarrón",
+          badgeText: "PIZARRÓN",
+          details: newNote.content ? [newNote.content.slice(0, 80)] : undefined,
+        };
+      }
+
+      // 13. ACTION: DELETE PIZARRON NOTE
+      if (action.type === "delete_pizarron_note") {
+        const payload = action.payload || {};
+        const queryText = (payload.query || payload.targetId || "").toLowerCase().trim();
+
+        let targetId = payload.targetId;
+        let targetTitle = payload.query || "Nota";
+
+        try {
+          const res = await fetch("https://apivacas.jariel.com.ar/api/pizarron/notes");
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.notes && Array.isArray(data.notes)) {
+              const found = data.notes.find(
+                (n: any) =>
+                  n.id === payload.targetId ||
+                  (n.title && n.title.toLowerCase().includes(queryText)) ||
+                  (n.content && n.content.toLowerCase().includes(queryText))
+              );
+              if (found) {
+                targetId = found.id;
+                targetTitle = found.title || targetTitle;
+              }
+            }
+          }
+        } catch (e) {}
+
+        if (targetId) {
+          try {
+            fetch(`https://apivacas.jariel.com.ar/api/pizarron/notes/${encodeURIComponent(targetId)}`, {
+              method: "DELETE",
+            }).catch(console.warn);
+          } catch (e) {}
+
+          if (!isFirestoreDisabled()) {
+            const db = getFirebaseDb();
+            if (db) {
+              await deleteDoc(doc(db, "pizarron_notas", targetId)).catch(handleFirestoreError);
+            }
+          }
+
+          toast.success("Nota desclavada", `"${targetTitle}" retirada del pizarrón.`);
+
+          return {
+            type: "pizarron_nota_eliminada",
+            title: targetTitle,
+            subtitle: "Nota retirada del pizarrón de inicio",
+            linkHref: "/",
+            linkLabel: "Ver Pizarrón",
+            badgeText: "RETIRADA",
+          };
+        } else {
+          toast.warning("No encontrada", `No se encontró la nota "${queryText}".`);
+        }
+      }
+
+      // 14. ACTION: CREATE PROVEEDOR
+      if (action.type === "create_proveedor") {
+        const payload = action.payload || {};
+        const provId = `prov-${Date.now()}`;
+        const newProv: any = {
+          id: provId,
+          nombre: payload.nombre || "Nuevo Proveedor",
+          rubro: payload.rubro || "General",
+          zona: payload.zona || "Buenos Aires",
+          email: payload.email || (payload.emails && payload.emails[0]) || "",
+          emails: Array.isArray(payload.emails) ? payload.emails : (payload.email ? [payload.email] : []),
+          telefono: payload.telefono || "",
+          sitio_web: payload.sitio_web || "",
+          guardado: true,
+          rating: payload.rating || 5,
+          slaTags: payload.slaTags || ["Registrado por Asistente"],
+          fuente: "asistente_ia",
+          tipo_fuente: "manual",
+          createdAt: new Date().toISOString(),
+        };
+
+        try {
+          await saveProveedorToMongo(newProv);
+        } catch (e) {
+          console.warn("Aviso Mongo save proveedor:", e);
+        }
+
+        if (!isFirestoreDisabled()) {
+          const db = getFirebaseDb();
+          if (db) {
+            await setDoc(doc(db, "proveedores", provId), newProv).catch(handleFirestoreError);
+          }
+        }
+
+        toast.success("Proveedor registrado", `"${newProv.nombre}" agregado al directorio.`);
+
+        return {
+          type: "proveedor_creado",
+          title: newProv.nombre,
+          subtitle: `Rubro: ${newProv.rubro} • ${newProv.zona}`,
+          linkHref: "/proveedores",
+          linkLabel: "Ver en Directorio de Proveedores",
+          badgeText: "PROVEEDOR",
+          details: [
+            newProv.email ? `Email: ${newProv.email}` : "",
+            newProv.telefono ? `Tel: ${newProv.telefono}` : "",
+          ].filter(Boolean),
+        };
+      }
+
+      // 15. ACTION: NAVIGATE
+      if (action.type === "navigate") {
+        const payload = action.payload || {};
+        const targetPath = payload.path || "/";
+        router.push(targetPath);
+        toast.info("Navegando", `Abriendo ${targetPath}`);
+
+        return {
+          type: "navegacion",
+          title: `Navegación: ${targetPath}`,
+          subtitle: "Página abierta en tu pantalla",
+          linkHref: targetPath,
+          linkLabel: "Ir a la sección",
+          badgeText: "NAVEGACIÓN",
+        };
+      }
+
+      // 16. ACTION: CALCULATE FINANCIAL
+      if (action.type === "calculate_financial") {
+        const payload = action.payload || {};
+        const title = `Cálculo: ${payload.type?.toUpperCase() || "Financiero"}`;
+        const subtitle = payload.resultDescription || `Monto base: $${payload.amount || 0}`;
+
+        return {
+          type: "calculo_financiero",
+          title,
+          subtitle,
+          linkHref: "/calculadora",
+          linkLabel: "Abrir Calculadora Completa",
+          badgeText: "CÁLCULO",
+          details: payload.rate ? [`Tasa / Alícuota aplicada: ${payload.rate}%`] : undefined,
         };
       }
     } catch (err: any) {
@@ -542,11 +1141,23 @@ Puedo ayudarte a automatizar tareas cotidianas:
         throw new Error(json.error || "No se pudo obtener respuesta del asistente.");
       }
 
-      const { reply, action } = json.data;
+      const { reply, action, intent } = json.data;
 
-      // Execute action if provided
+      // Execute action or handle security violation
       let actionCard: ChatMessage["actionCard"] | null = null;
-      if (action && action.type) {
+      if (intent === "security_violation") {
+        actionCard = {
+          type: "security_violation",
+          title: "Acción Fuera de Dominio Bloqueada",
+          subtitle: "Guardrail de Seguridad Activado",
+          badgeText: "SEGURIDAD",
+          details: [
+            "🛡️ FinanBot opera exclusivamente dentro de la aplicación Compras & Finanzas.",
+            "❌ No se permite ejecutar comandos de terminal, alterar bases de datos completas o intervenir recursos fuera de la página.",
+          ],
+        };
+        toast.warning("Operación no permitida", "El asistente opera exclusivamente en las funciones de la web.");
+      } else if (action && action.type) {
         actionCard = await executeAgentAction(action);
       }
 
@@ -846,7 +1457,15 @@ Puedo ayudarte a automatizar tareas cotidianas:
                         {m.actionCard && (
                           <div className="mt-3 pt-2.5 border-t border-white/10 space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                                  m.actionCard.type === "security_violation"
+                                    ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                    : m.actionCard.type?.includes("eliminad") || m.actionCard.badgeText === "RETIRADA"
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                }`}
+                              >
                                 {m.actionCard.badgeText || "ACCIÓN EJECUTADA"}
                               </span>
                               {m.actionCard.linkHref && (
