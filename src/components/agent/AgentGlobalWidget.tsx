@@ -30,6 +30,9 @@ import {
   ArrowRight,
   Maximize2,
   Minimize2,
+  GripVertical,
+  PanelLeft,
+  PanelRight,
 } from "lucide-react";
 import { toast } from "@/context/ToastContext";
 import { parseEmailContent, ParsedEmail } from "@/lib/agent/emailParser";
@@ -53,6 +56,149 @@ import { getFirebaseDb, isFirestoreDisabled, handleFirestoreError } from "@/lib/
 import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
+export type DockWall = "right" | "left" | "top" | "bottom";
+
+export interface DockState {
+  wall: DockWall;
+  ratio: number; // 0 to 1 along that wall
+}
+
+const DEFAULT_DOCK: DockState = {
+  wall: "right",
+  ratio: 1.0, // bottom-right default
+};
+
+const DOCK_STORAGE_KEY = "finanbot_dock_state_v1";
+
+function loadSavedDock(): DockState {
+  if (typeof window === "undefined") return DEFAULT_DOCK;
+  try {
+    const raw = localStorage.getItem(DOCK_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        ["right", "left", "top", "bottom"].includes(parsed.wall) &&
+        typeof parsed.ratio === "number" &&
+        !isNaN(parsed.ratio)
+      ) {
+        return {
+          wall: parsed.wall,
+          ratio: Math.max(0, Math.min(1, parsed.ratio)),
+        };
+      }
+    }
+  } catch {}
+  return DEFAULT_DOCK;
+}
+
+function saveDockState(dock: DockState) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DOCK_STORAGE_KEY, JSON.stringify(dock));
+  } catch {}
+}
+
+function getWallDisplayName(wall: DockWall): string {
+  switch (wall) {
+    case "left":
+      return "izquierda";
+    case "right":
+      return "derecha";
+    case "top":
+      return "superior";
+    case "bottom":
+      return "inferior";
+  }
+}
+
+function getCoordinatesForDock(
+  dock: DockState,
+  elemWidth: number,
+  elemHeight: number,
+  windowWidth: number,
+  windowHeight: number,
+  margin = 20
+): { x: number; y: number } {
+  const maxAvailableX = Math.max(margin, windowWidth - elemWidth - margin);
+  const maxAvailableY = Math.max(margin, windowHeight - elemHeight - margin);
+
+  let x = maxAvailableX;
+  let y = maxAvailableY;
+
+  switch (dock.wall) {
+    case "left":
+      x = margin;
+      y = margin + dock.ratio * (maxAvailableY - margin);
+      break;
+    case "right":
+      x = maxAvailableX;
+      y = margin + dock.ratio * (maxAvailableY - margin);
+      break;
+    case "top":
+      y = margin;
+      x = margin + dock.ratio * (maxAvailableX - margin);
+      break;
+    case "bottom":
+      y = maxAvailableY;
+      x = margin + dock.ratio * (maxAvailableX - margin);
+      break;
+  }
+
+  return {
+    x: Math.round(Math.max(margin, Math.min(maxAvailableX, x))),
+    y: Math.round(Math.max(margin, Math.min(maxAvailableY, y))),
+  };
+}
+
+function getDockFromCoordinates(
+  x: number,
+  y: number,
+  elemWidth: number,
+  elemHeight: number,
+  windowWidth: number,
+  windowHeight: number,
+  margin = 20
+): DockState {
+  const maxAvailableX = Math.max(margin, windowWidth - elemWidth - margin);
+  const maxAvailableY = Math.max(margin, windowHeight - elemHeight - margin);
+
+  const clampedX = Math.max(margin, Math.min(maxAvailableX, x));
+  const clampedY = Math.max(margin, Math.min(maxAvailableY, y));
+
+  const distLeft = clampedX - margin;
+  const distRight = maxAvailableX - clampedX;
+  const distTop = clampedY - margin;
+  const distBottom = maxAvailableY - clampedY;
+
+  const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+
+  const rangeX = Math.max(1, maxAvailableX - margin);
+  const rangeY = Math.max(1, maxAvailableY - margin);
+
+  if (minDist === distLeft) {
+    return {
+      wall: "left",
+      ratio: Math.max(0, Math.min(1, (clampedY - margin) / rangeY)),
+    };
+  } else if (minDist === distRight) {
+    return {
+      wall: "right",
+      ratio: Math.max(0, Math.min(1, (clampedY - margin) / rangeY)),
+    };
+  } else if (minDist === distTop) {
+    return {
+      wall: "top",
+      ratio: Math.max(0, Math.min(1, (clampedX - margin) / rangeX)),
+    };
+  } else {
+    return {
+      wall: "bottom",
+      ratio: Math.max(0, Math.min(1, (clampedX - margin) / rangeX)),
+    };
+  }
+}
 
 interface ChatMessage {
   id: string;
@@ -83,6 +229,27 @@ export function AgentGlobalWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "recordatorios">("chat");
   const [isDraggingOverWidget, setIsDraggingOverWidget] = useState(false);
+
+  // Mount & Dimensions State
+  const [isMounted, setIsMounted] = useState(false);
+  const [windowDimensions, setWindowDimensions] = useState<{ width: number; height: number }>({
+    width: 1280,
+    height: 800,
+  });
+
+  // Wall Docking & Positioning State
+  const [dockState, setDockState] = useState<DockState>(DEFAULT_DOCK);
+  const [isDraggingPill, setIsDraggingPill] = useState(false);
+  const [pillDragPos, setPillDragPos] = useState<{ x: number; y: number } | null>(null);
+
+  const [isDraggingModal, setIsDraggingModal] = useState(false);
+  const [modalDragPos, setModalDragPos] = useState<{ x: number; y: number } | null>(null);
+
+  const pillDragStartRef = useRef<{ clientX: number; clientY: number; initialX: number; initialY: number } | null>(null);
+  const pillHasMovedRef = useRef(false);
+
+  const modalDragStartRef = useRef<{ clientX: number; clientY: number; initialX: number; initialY: number } | null>(null);
+  const modalHasMovedRef = useRef(false);
 
   // Chat State
   const [inputMessage, setInputMessage] = useState("");
@@ -197,6 +364,212 @@ Puedo ayudarte a automatizar tareas cotidianas:
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen, activeTab]);
+
+  // Mount effect & Window resize
+  useEffect(() => {
+    setIsMounted(true);
+    setDockState(loadSavedDock());
+    const handleResize = () => {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const modalWidth = Math.min(440, Math.max(300, windowDimensions.width - 32));
+  const modalHeight = Math.min(600, Math.max(380, windowDimensions.height * 0.85));
+
+  const pillCoords = isDraggingPill && pillDragPos
+    ? pillDragPos
+    : getCoordinatesForDock(
+        dockState,
+        240,
+        54,
+        windowDimensions.width,
+        windowDimensions.height
+      );
+
+  const modalCoords = isDraggingModal && modalDragPos
+    ? modalDragPos
+    : getCoordinatesForDock(
+        dockState,
+        modalWidth,
+        modalHeight,
+        windowDimensions.width,
+        windowDimensions.height
+      );
+
+  const handlePillPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button")) return;
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    pillDragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      initialX: pillCoords.x,
+      initialY: pillCoords.y,
+    };
+    pillHasMovedRef.current = false;
+  };
+
+  const handlePillPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pillDragStartRef.current) return;
+
+    const dx = e.clientX - pillDragStartRef.current.clientX;
+    const dy = e.clientY - pillDragStartRef.current.clientY;
+
+    if (!pillHasMovedRef.current && Math.hypot(dx, dy) > 5) {
+      pillHasMovedRef.current = true;
+      setIsDraggingPill(true);
+    }
+
+    if (pillHasMovedRef.current) {
+      const rawX = pillDragStartRef.current.initialX + dx;
+      const rawY = pillDragStartRef.current.initialY + dy;
+      const clampedX = Math.max(10, Math.min(windowDimensions.width - 240 - 10, rawX));
+      const clampedY = Math.max(10, Math.min(windowDimensions.height - 54 - 10, rawY));
+      setPillDragPos({ x: clampedX, y: clampedY });
+    }
+  };
+
+  const handlePillPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pillDragStartRef.current) return;
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    if (pillHasMovedRef.current && pillDragPos) {
+      const newDock = getDockFromCoordinates(
+        pillDragPos.x,
+        pillDragPos.y,
+        240,
+        54,
+        windowDimensions.width,
+        windowDimensions.height
+      );
+      setDockState(newDock);
+      saveDockState(newDock);
+      toast.info("FinanBot reposicionado", `Fijado en pared ${getWallDisplayName(newDock.wall)}`);
+    } else {
+      setIsOpen(true);
+    }
+
+    pillDragStartRef.current = null;
+    pillHasMovedRef.current = false;
+    setIsDraggingPill(false);
+    setPillDragPos(null);
+  };
+
+  const handlePillPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+    pillDragStartRef.current = null;
+    pillHasMovedRef.current = false;
+    setIsDraggingPill(false);
+    setPillDragPos(null);
+  };
+
+  const handleModalHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("input") || target.closest("a")) return;
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    modalDragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      initialX: modalCoords.x,
+      initialY: modalCoords.y,
+    };
+    modalHasMovedRef.current = false;
+  };
+
+  const handleModalHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!modalDragStartRef.current) return;
+
+    const dx = e.clientX - modalDragStartRef.current.clientX;
+    const dy = e.clientY - modalDragStartRef.current.clientY;
+
+    if (!modalHasMovedRef.current && Math.hypot(dx, dy) > 5) {
+      modalHasMovedRef.current = true;
+      setIsDraggingModal(true);
+    }
+
+    if (modalHasMovedRef.current) {
+      const rawX = modalDragStartRef.current.initialX + dx;
+      const rawY = modalDragStartRef.current.initialY + dy;
+      const clampedX = Math.max(10, Math.min(windowDimensions.width - modalWidth - 10, rawX));
+      const clampedY = Math.max(10, Math.min(windowDimensions.height - modalHeight - 10, rawY));
+      setModalDragPos({ x: clampedX, y: clampedY });
+    }
+  };
+
+  const handleModalHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!modalDragStartRef.current) return;
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    if (modalHasMovedRef.current && modalDragPos) {
+      const newDock = getDockFromCoordinates(
+        modalDragPos.x,
+        modalDragPos.y,
+        modalWidth,
+        modalHeight,
+        windowDimensions.width,
+        windowDimensions.height
+      );
+      setDockState(newDock);
+      saveDockState(newDock);
+      toast.info("FinanBot reposicionado", `Fijado en pared ${getWallDisplayName(newDock.wall)}`);
+    }
+
+    modalDragStartRef.current = null;
+    modalHasMovedRef.current = false;
+    setIsDraggingModal(false);
+    setModalDragPos(null);
+  };
+
+  const handleModalHeaderPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+    modalDragStartRef.current = null;
+    modalHasMovedRef.current = false;
+    setIsDraggingModal(false);
+    setModalDragPos(null);
+  };
+
+  const handleFlipWall = () => {
+    let nextWall: DockWall = "left";
+    if (dockState.wall === "left") nextWall = "right";
+    else if (dockState.wall === "right") nextWall = "left";
+    else if (dockState.wall === "top") nextWall = "bottom";
+    else if (dockState.wall === "bottom") nextWall = "top";
+
+    const nextDock: DockState = {
+      wall: nextWall,
+      ratio: dockState.ratio,
+    };
+    setDockState(nextDock);
+    saveDockState(nextDock);
+    toast.info("FinanBot movido", `Cambiado a pared ${getWallDisplayName(nextWall)}`);
+  };
 
   // Global drag listener to highlight widget & safety reset
   useEffect(() => {
@@ -1270,6 +1643,8 @@ Puedo ayudarte a automatizar tareas cotidianas:
     return true;
   });
 
+  if (!isMounted) return null;
+
   return (
     <>
       {/* File input fallback for dragging / manual picking */}
@@ -1285,35 +1660,62 @@ Puedo ayudarte a automatizar tareas cotidianas:
         className="hidden"
       />
 
-      {/* Floating Trigger Button (Always visible at bottom-right) */}
-      <div
-        data-local-dropzone="true"
-        className="fixed bottom-6 right-6 z-[9990] flex items-center gap-2 select-none"
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <AnimatePresence>
-          {!isOpen && (
+      {/* Floating Trigger Button (Movable along any wall) */}
+      <AnimatePresence>
+        {!isOpen && (
+          <motion.div
+            key="finanbot-pill-outer"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              zIndex: 9990,
+              pointerEvents: "none",
+            }}
+            animate={{
+              x: pillCoords.x,
+              y: pillCoords.y,
+            }}
+            transition={
+              isDraggingPill
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 350, damping: 28 }
+            }
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.85, x: 20 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.85, x: 20 }}
-              transition={{ duration: 0.25, ease: EASE_OUT }}
-              className="flex items-center"
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+              style={{ pointerEvents: "auto" }}
             >
-              <button
-                onClick={() => setIsOpen(true)}
-                className={`group relative flex items-center gap-3 px-4 py-3 rounded-full shadow-2xl backdrop-blur-2xl transition-all duration-200 [&_*]:pointer-events-none ${
-                  isDraggingOverWidget
+              <div
+                data-local-dropzone="true"
+                onPointerDown={handlePillPointerDown}
+                onPointerMove={handlePillPointerMove}
+                onPointerUp={handlePillPointerUp}
+                onPointerCancel={handlePillPointerCancel}
+                onDragEnter={handleDragEnter}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-full shadow-2xl backdrop-blur-2xl transition-all select-none cursor-grab active:cursor-grabbing ${
+                  isDraggingPill
+                    ? "bg-indigo-950/95 ring-2 ring-indigo-400 shadow-indigo-500/40 scale-105 cursor-grabbing"
+                    : isDraggingOverWidget
                     ? "bg-indigo-600 ring-4 ring-indigo-400/50 shadow-indigo-500/50"
                     : "bg-[#0b101d]/95 hover:bg-[#12192e] border border-indigo-500/30 hover:border-indigo-400 shadow-black/80"
                 }`}
-                title="Abrir Asistente Finanzas & Compras (Arrastrá correos aquí)"
+                style={{ touchAction: "none" }}
+                title="FinanBot: Arrastrá a cualquier pared de la pantalla o hacé clic para abrir"
               >
+                {/* Grip Handle */}
+                <div className="flex items-center text-slate-500 group-hover:text-indigo-400 transition-colors pointer-events-none">
+                  <GripVertical className="w-3.5 h-3.5" />
+                </div>
+
                 {/* Glow Ambient */}
-                <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-indigo-500/30 to-purple-500/30 blur-lg group-hover:opacity-100 opacity-60 transition duration-500 pointer-events-none" />
+                <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-indigo-500/30 to-purple-500/30 blur-lg group-hover:opacity-100 opacity-60 transition duration-500 pointer-events-none -z-10" />
 
                 {/* Bot Icon with glowing pulse */}
                 <div className="relative w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300 group-hover:scale-105 transition-transform pointer-events-none">
@@ -1321,7 +1723,7 @@ Puedo ayudarte a automatizar tareas cotidianas:
                   <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
 
-                <div className="text-left hidden sm:block min-w-[130px] pointer-events-none">
+                <div className="text-left hidden sm:block min-w-[120px] pointer-events-none">
                   <p className="text-xs font-black text-white tracking-wide flex items-center gap-1.5">
                     <span>FinanBot</span>
                     <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 font-bold">
@@ -1341,101 +1743,170 @@ Puedo ayudarte a automatizar tareas cotidianas:
 
                 {/* Badge for Pending Reminders */}
                 {pendingCount > 0 && (
-                  <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-amber-950 text-[11px] font-black flex items-center justify-center shadow-md shadow-amber-500/40 pointer-events-none">
+                  <span className="ml-0.5 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-amber-950 text-[11px] font-black flex items-center justify-center shadow-md shadow-amber-500/40 pointer-events-none">
                     {pendingCount}
                   </span>
                 )}
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
 
-      {/* Expanded Floating Assistant Modal */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            data-local-dropzone="true"
-            initial={{ opacity: 0, scale: 0.94, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.94, y: 20 }}
-            transition={{ duration: 0.28, ease: EASE_OUT }}
-            className={`fixed bottom-6 right-4 sm:right-6 z-[9995] w-[95vw] sm:w-[440px] h-[600px] max-h-[85vh] rounded-3xl border border-white/10 bg-[#0a0f1d]/98 backdrop-blur-3xl shadow-2xl shadow-black/90 flex flex-col overflow-hidden ${
-              isDraggingOverWidget ? "ring-2 ring-indigo-500 ring-offset-2 ring-offset-[#0a0f1d]" : ""
-            }`}
-            onDragEnter={handleDragEnter}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {/* Header */}
-            <div className="relative z-10 px-4 py-3.5 border-b border-white/[0.08] bg-white/[0.02] flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shadow-inner">
-                  <Bot className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span>FinanBot</span>
-                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
-                      OpenClaw
-                    </span>
-                  </h3>
-                  <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <span>Cinemark & Hoyts</span>
-                    <span className="text-slate-600">•</span>
-                    <span className="text-indigo-400 font-mono text-[9px]">Gateway :18789</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Tabs Switcher */}
-              <div className="flex items-center gap-1 p-0.5 rounded-xl bg-white/[0.04] border border-white/5">
+                {/* 1-click Quick Flip Wall Button */}
                 <button
-                  onClick={() => setActiveTab("chat")}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${
-                    activeTab === "chat"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-white"
-                  }`}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFlipWall();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-opacity"
+                  title={dockState.wall === "left" ? "Mover a pared derecha" : "Mover a pared izquierda"}
                 >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>Chat</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("recordatorios")}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                    activeTab === "recordatorios"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Recordatorios</span>
-                  {pendingCount > 0 && (
-                    <span
-                      className={`text-[9px] px-1 rounded-full font-black ${
-                        activeTab === "recordatorios"
-                          ? "bg-white text-indigo-700"
-                          : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                      }`}
-                    >
-                      {pendingCount}
-                    </span>
+                  {dockState.wall === "left" ? (
+                    <PanelRight className="w-3.5 h-3.5 text-indigo-300" />
+                  ) : (
+                    <PanelLeft className="w-3.5 h-3.5 text-indigo-300" />
                   )}
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              {/* Controls */}
-              <button
-                onClick={() => setIsOpen(false)}
-                className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-                title="Minimizar asistente"
+      {/* Expanded Floating Assistant Modal (Movable along any wall) */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="finanbot-modal-outer"
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              zIndex: 9995,
+              pointerEvents: "none",
+            }}
+            animate={{
+              x: modalCoords.x,
+              y: modalCoords.y,
+            }}
+            transition={
+              isDraggingModal
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 350, damping: 28 }
+            }
+          >
+            <motion.div
+              data-local-dropzone="true"
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              transition={{ duration: 0.25, ease: EASE_OUT }}
+              style={{
+                pointerEvents: "auto",
+                width: modalWidth,
+                height: modalHeight,
+              }}
+              className={`rounded-3xl border border-white/10 bg-[#0a0f1d]/98 backdrop-blur-3xl shadow-2xl shadow-black/90 flex flex-col overflow-hidden ${
+                isDraggingOverWidget ? "ring-2 ring-indigo-500 ring-offset-2 ring-offset-[#0a0f1d]" : ""
+              } ${isDraggingModal ? "ring-2 ring-indigo-400/60 shadow-indigo-500/40" : ""}`}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {/* Header (Draggable) */}
+              <div
+                onPointerDown={handleModalHeaderPointerDown}
+                onPointerMove={handleModalHeaderPointerMove}
+                onPointerUp={handleModalHeaderPointerUp}
+                onPointerCancel={handleModalHeaderPointerCancel}
+                className="relative z-10 px-4 py-3.5 border-b border-white/[0.08] bg-white/[0.02] flex items-center justify-between cursor-grab active:cursor-grabbing select-none"
+                style={{ touchAction: "none" }}
+                title="Arrastrá desde la barra superior para mover FinanBot a cualquier pared"
               >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
+                <div className="flex items-center gap-2 pointer-events-none">
+                  <div className="flex items-center text-slate-500 group-hover:text-indigo-400 transition-colors">
+                    <GripVertical className="w-4 h-4 opacity-60" />
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shadow-inner">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>FinanBot</span>
+                      <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-ping" />
+                        OpenClaw
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <span>Pared <span className="text-indigo-400 font-semibold capitalize">{getWallDisplayName(dockState.wall)}</span></span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-slate-400 font-mono text-[9px]">Arrastrame</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tabs Switcher & Controls */}
+                <div className="flex items-center gap-2">
+                  {/* Tabs Switcher */}
+                  <div className="flex items-center gap-1 p-0.5 rounded-xl bg-white/[0.04] border border-white/5">
+                    <button
+                      onClick={() => setActiveTab("chat")}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${
+                        activeTab === "chat"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Bot className="w-3.5 h-3.5" />
+                      <span>Chat</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("recordatorios")}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+                        activeTab === "recordatorios"
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Recordatorios</span>
+                      {pendingCount > 0 && (
+                        <span
+                          className={`text-[9px] px-1 rounded-full font-black ${
+                            activeTab === "recordatorios"
+                              ? "bg-white text-indigo-700"
+                              : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          }`}
+                        >
+                          {pendingCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Wall Flip Button */}
+                  <button
+                    onClick={handleFlipWall}
+                    className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                    title={dockState.wall === "left" ? "Mover a pared derecha" : "Mover a pared izquierda"}
+                  >
+                    {dockState.wall === "left" ? (
+                      <PanelRight className="w-4 h-4 text-indigo-400" />
+                    ) : (
+                      <PanelLeft className="w-4 h-4 text-indigo-400" />
+                    )}
+                  </button>
+
+                  {/* Controls */}
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                    title="Minimizar asistente"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
             {/* Drag Overlay Feedback */}
             {isDraggingOverWidget && (
@@ -1793,8 +2264,9 @@ Puedo ayudarte a automatizar tareas cotidianas:
               </div>
             )}
           </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </>
+);
 }
