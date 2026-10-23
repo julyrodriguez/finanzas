@@ -16,6 +16,22 @@ export const STANDARD_AREAS = [
   "Seguridad e Higiene",
 ] as const;
 
+export const DEFAULT_TEAM_MEMBERS = [
+  "Julián",
+  "Tomás Albrecht",
+  "O. Álvarez",
+  "Usuario Órdenes",
+  "Victoria",
+  "Tristán",
+  "Pablo González",
+  "Jorgelina",
+  "Pablo Mondelo",
+  "Darío",
+  "Martín",
+  "Hernán",
+  "Matías",
+] as const;
+
 /**
  * Convierte un email o identificador de creador en un nombre legible para la UI.
  * Ej: "julian@equipo.local" -> "Julián"

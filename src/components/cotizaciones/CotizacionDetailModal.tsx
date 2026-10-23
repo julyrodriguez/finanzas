@@ -20,9 +20,14 @@ import {
   Mail,
   Edit3,
   User,
-  Folder
+  Folder,
+  Check
 } from "lucide-react";
-import { formatCreatorName } from "@/lib/cotizacionesUtils";
+import { formatCreatorName, DEFAULT_TEAM_MEMBERS } from "@/lib/cotizacionesUtils";
+import { syncCotizacionToMongo } from "@/lib/serverSync";
+import { getFirebaseDb } from "@/lib/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { toast } from "@/context/ToastContext";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -110,6 +115,41 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
   const quoteId = quote.id || quote.firebaseId || quote._id;
   const editUrl = quoteId ? `/cotizaciones?id=${quoteId}` : "/cotizaciones";
 
+  const [currentCreator, setCurrentCreator] = React.useState(quote?.createdBy || "");
+  const [isEditingCreator, setIsEditingCreator] = React.useState(false);
+  const [creatorInput, setCreatorInput] = React.useState(quote?.createdBy || "");
+
+  React.useEffect(() => {
+    setCurrentCreator(quote?.createdBy || "");
+    setCreatorInput(quote?.createdBy || "");
+  }, [quote]);
+
+  const handleSaveCreatorModal = async (newVal: string) => {
+    const clean = newVal.trim();
+    setCurrentCreator(clean);
+    setIsEditingCreator(false);
+    if (quote) {
+      quote.createdBy = clean;
+    }
+    const qId = quote?.id || quote?.firebaseId || quote?._id;
+    if (qId) {
+      try {
+        await syncCotizacionToMongo({ id: qId, createdBy: clean });
+        const db = getFirebaseDb();
+        if (db && !String(qId).startsWith("local-")) {
+          setDoc(
+            doc(db, "cotizaciones", qId),
+            { createdBy: clean, updatedAt: serverTimestamp() },
+            { merge: true }
+          ).catch(() => {});
+        }
+        toast.success(`Creador actualizado a "${formatCreatorName(clean)}"`);
+      } catch (err) {
+        console.warn("Error updating creator:", err);
+      }
+    }
+  };
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-5">
@@ -161,11 +201,74 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
                       • Sin área
                     </span>
                   )}
-                  {quote.createdBy && (
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.06]">
+                  {isEditingCreator ? (
+                    <div className="flex items-center gap-1.5 bg-[#080b15] px-2 py-0.5 rounded-lg border border-indigo-500/40 shadow-lg">
+                      <User className="w-3 h-3 text-indigo-400 shrink-0" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={creatorInput}
+                        onChange={(e) => setCreatorInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleSaveCreatorModal(creatorInput);
+                          } else if (e.key === "Escape") {
+                            setIsEditingCreator(false);
+                          }
+                        }}
+                        placeholder="Nombre de creador..."
+                        className="bg-transparent text-[11px] font-semibold text-white outline-none w-28 sm:w-36"
+                      />
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setCreatorInput(e.target.value);
+                            handleSaveCreatorModal(e.target.value);
+                          }
+                        }}
+                        className="bg-transparent text-slate-400 hover:text-white outline-none cursor-pointer text-xs w-4"
+                        title="Elegir creador del equipo"
+                      >
+                        <option value="" disabled className="bg-[#0b0f19]">Elegir...</option>
+                        {DEFAULT_TEAM_MEMBERS.map((m) => (
+                          <option key={m} value={m} className="bg-[#0b0f19]">{m}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCreatorModal(creatorInput)}
+                        className="p-0.5 text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                        title="Guardar creador"
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingCreator(false)}
+                        className="p-0.5 text-slate-400 hover:text-white cursor-pointer"
+                        title="Cancelar"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatorInput(currentCreator);
+                        setIsEditingCreator(true);
+                      }}
+                      className="text-[11px] text-slate-300 hover:text-indigo-300 flex items-center gap-1 font-medium bg-white/[0.04] hover:bg-white/[0.08] px-2 py-0.5 rounded-md border border-white/[0.06] hover:border-indigo-500/30 transition-colors cursor-pointer group/cread"
+                      title="Clic para modificar el creador de esta cotización"
+                    >
                       <User className="w-3 h-3 text-indigo-400" />
-                      <span>Por: <strong className="text-slate-200">{formatCreatorName(quote.createdBy)}</strong></span>
-                    </span>
+                      <span>
+                        Por: <strong className="text-white group-hover/cread:text-indigo-200">{formatCreatorName(currentCreator) || "Asignar"}</strong>
+                      </span>
+                      <Edit3 className="w-2.5 h-2.5 opacity-40 group-hover/cread:opacity-100 transition-opacity ml-0.5" />
+                    </button>
                   )}
                 </div>
                 <h3 className="text-base sm:text-lg font-black text-white tracking-tight truncate mt-0.5">

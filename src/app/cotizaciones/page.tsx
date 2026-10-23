@@ -80,11 +80,13 @@ import {
   Loader2,
   CreditCard,
   User,
-  Tag
+  Tag,
+  Edit3
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { 
   STANDARD_AREAS, 
+  DEFAULT_TEAM_MEMBERS,
   formatCreatorName, 
   resolveUserDisplayName 
 } from "@/lib/cotizacionesUtils";
@@ -430,6 +432,10 @@ export default function CotizacionesPage() {
   const [quickAreaSearch, setQuickAreaSearch] = useState<string>("");
   const quickAreaPickerRef = useRef<HTMLDivElement>(null);
 
+  // Quick Creator Picker Popover state for cards in Historial
+  const [quickCreatorPickerQuoteId, setQuickCreatorPickerQuoteId] = useState<string | null>(null);
+  const quickCreatorPickerRef = useRef<HTMLDivElement>(null);
+
   // Category modal state
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
   const [newCategoryModalInput, setNewCategoryModalInput] = useState<string>("");
@@ -484,19 +490,22 @@ export default function CotizacionesPage() {
     }
   }, [user, quoteCreatedBy]);
 
-  // Cerrar el popover rápido de asignación de área al hacer clic afuera
+  // Cerrar el popover rápido de asignación de área o creador al hacer clic afuera
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (quickAreaPickerRef.current && !quickAreaPickerRef.current.contains(e.target as Node)) {
         setQuickAreaPickerQuoteId(null);
         setQuickAreaSearch("");
       }
+      if (quickCreatorPickerRef.current && !quickCreatorPickerRef.current.contains(e.target as Node)) {
+        setQuickCreatorPickerQuoteId(null);
+      }
     };
-    if (quickAreaPickerQuoteId) {
+    if (quickAreaPickerQuoteId || quickCreatorPickerQuoteId) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [quickAreaPickerQuoteId]);
+  }, [quickAreaPickerQuoteId, quickCreatorPickerQuoteId]);
 
   // Fetch History from MongoDB first, then Firebase or LocalStorage fallback
   const loadHistory = useCallback(async () => {
@@ -639,6 +648,73 @@ export default function CotizacionesPage() {
     });
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [savedQuotations]);
+
+  // Lista unificada de miembros del equipo y creadores conocidos
+  const teamCreatorOptions = useMemo(() => {
+    const set = new Set<string>();
+    DEFAULT_TEAM_MEMBERS.forEach((m) => set.add(m));
+    allCreators.forEach((c) => {
+      if (c.label && c.label !== "Sin creador") {
+        set.add(c.label);
+      }
+    });
+    if (user) {
+      const me = resolveUserDisplayName(user);
+      if (me && me !== "Usuario") set.add(me);
+    }
+    if (quoteCreatedBy && quoteCreatedBy.trim()) {
+      set.add(formatCreatorName(quoteCreatedBy));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [allCreators, user, quoteCreatedBy]);
+
+  // Modificar creador de la cotización activa o de cualquier cotización
+  const handleUpdateCreator = async (newCreator: string, targetQuoteId?: string) => {
+    const clean = newCreator.trim();
+    const idToUpdate = targetQuoteId || currentQuoteId;
+
+    if (!targetQuoteId) {
+      setQuoteCreatedBy(clean);
+    }
+
+    if (idToUpdate) {
+      // 1. Actualización optimista en memoria
+      setSavedQuotations((prev) =>
+        prev.map((q) =>
+          q.id === idToUpdate || q.firebaseId === idToUpdate
+            ? { ...q, createdBy: clean }
+            : q
+        )
+      );
+
+      // 2. Dual Write: Mongo (Servidor propio)
+      try {
+        syncCotizacionToMongo({
+          id: idToUpdate,
+          firebaseId: idToUpdate,
+          createdBy: clean,
+        });
+      } catch (err) {
+        console.warn("⚠️ Error al sincronizar creador en Mongo:", err);
+      }
+
+      // 3. Dual Write: Firebase Firestore
+      try {
+        const db = getFirebaseDb();
+        if (db && !idToUpdate.startsWith("local-")) {
+          setDoc(
+            doc(db, "cotizaciones", idToUpdate),
+            { createdBy: clean, updatedAt: serverTimestamp() },
+            { merge: true }
+          ).catch((err) => console.warn("⚠️ Firebase creator update error:", err));
+        }
+      } catch (fbErr) {
+        console.warn("⚠️ Firebase creator update error:", fbErr);
+      }
+
+      showToast(`Creador actualizado a "${formatCreatorName(clean)}"`, "success");
+    }
+  };
 
   // Asignar área / rubro de forma ultra rápida directamente desde las tarjetas o lista
   const handleQuickAssignArea = async (quote: SavedQuotation, newCategory: string, e?: React.MouseEvent) => {
@@ -3583,20 +3659,65 @@ export default function CotizacionesPage() {
                 </button>
               </div>
 
-              {/* Creador / Autor */}
-              <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+              {/* Creador / Autor (Modificable en cualquier estado) */}
+              <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06] relative group">
                 <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold leading-none">Creado por</span>
-                  <input
-                    type="text"
-                    value={quoteCreatedBy}
-                    onChange={(e) => setQuoteCreatedBy(e.target.value)}
-                    placeholder={resolveUserDisplayName(user)}
-                    disabled={isLocked}
-                    className="bg-transparent text-xs font-semibold text-white outline-none placeholder-slate-600 disabled:opacity-50 leading-tight"
-                  />
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold leading-none mb-0.5">
+                    Creado por
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      list="editor-creators-list"
+                      value={quoteCreatedBy}
+                      onChange={(e) => setQuoteCreatedBy(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && currentQuoteId) {
+                          e.preventDefault();
+                          handleUpdateCreator(quoteCreatedBy);
+                        }
+                      }}
+                      placeholder={resolveUserDisplayName(user)}
+                      className="w-full bg-transparent text-xs font-semibold text-white outline-none placeholder-slate-500 leading-tight"
+                      title="Podés modificar el creador escribiendo su nombre o eligiéndolo de la lista"
+                    />
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleUpdateCreator(e.target.value);
+                        }
+                      }}
+                      className="w-4 bg-transparent text-slate-500 hover:text-white outline-none cursor-pointer text-xs"
+                      title="Elegir creador del equipo"
+                    >
+                      <option value="" disabled className="bg-[#0b0f19]">
+                        Elegir...
+                      </option>
+                      {teamCreatorOptions.map((creator) => (
+                        <option key={creator} value={creator} className="bg-[#0b0f19]">
+                          {creator}
+                        </option>
+                      ))}
+                    </select>
+                    <datalist id="editor-creators-list">
+                      {teamCreatorOptions.map((creator) => (
+                        <option key={creator} value={creator} />
+                      ))}
+                    </datalist>
+                  </div>
                 </div>
+                {currentQuoteId && (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateCreator(quoteCreatedBy)}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-300 border border-indigo-500/30 transition-colors shrink-0 cursor-pointer shadow-sm"
+                    title="Guardar el creador en el servidor"
+                  >
+                    Guardar
+                  </button>
+                )}
               </div>
 
               {/* Pendiente Vinculado */}
@@ -5771,21 +5892,86 @@ export default function CotizacionesPage() {
 
                           {/* Creator & Date info */}
                           <div className="flex items-center gap-1.5 sm:gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const cLabel = formatCreatorName(quote.createdBy);
-                                setFilterCreator(filterCreator.toLowerCase() === cLabel.toLowerCase() ? "todos" : cLabel.toLowerCase());
-                              }}
-                              title={`Creado por: ${formatCreatorName(quote.createdBy)} (Clic para filtrar)`}
-                              className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-indigo-300 bg-white/[0.03] hover:bg-white/[0.07] px-2 py-0.5 rounded-md border border-white/[0.05] transition-colors cursor-pointer group/creator"
-                            >
-                              <User className="w-2.5 h-2.5 text-indigo-400/80 group-hover/creator:text-indigo-300 shrink-0" />
-                              <span className="truncate max-w-[100px] sm:max-w-[120px] font-medium text-slate-300 group-hover/creator:text-indigo-200">
-                                {formatCreatorName(quote.createdBy)}
-                              </span>
-                            </button>
+                            <div className="relative">
+                              <div className="inline-flex items-center bg-white/[0.03] hover:bg-white/[0.07] rounded-md border border-white/[0.05] transition-colors">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const cLabel = formatCreatorName(quote.createdBy);
+                                    setFilterCreator(filterCreator.toLowerCase() === cLabel.toLowerCase() ? "todos" : cLabel.toLowerCase());
+                                  }}
+                                  title={`Creado por: ${formatCreatorName(quote.createdBy)} (Clic para filtrar)`}
+                                  className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-indigo-300 px-2 py-0.5 cursor-pointer group/creator"
+                                >
+                                  <User className="w-2.5 h-2.5 text-indigo-400/80 group-hover/creator:text-indigo-300 shrink-0" />
+                                  <span className="truncate max-w-[85px] sm:max-w-[110px] font-medium text-slate-300 group-hover/creator:text-indigo-200">
+                                    {formatCreatorName(quote.createdBy)}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const qId = quote.id || quote.firebaseId || "";
+                                    setQuickCreatorPickerQuoteId(quickCreatorPickerQuoteId === qId ? null : qId);
+                                  }}
+                                  title="Modificar creador de esta cotización"
+                                  className="p-1 text-slate-500 hover:text-indigo-300 border-l border-white/[0.06] hover:bg-white/[0.05] cursor-pointer"
+                                >
+                                  <Edit3 className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+
+                              {/* Quick Creator Popover */}
+                              {(quickCreatorPickerQuoteId === quote.id || (quote.firebaseId && quickCreatorPickerQuoteId === quote.firebaseId)) && (
+                                <div
+                                  ref={quickCreatorPickerRef}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute right-0 top-full mt-1.5 w-56 bg-[#0d1222] border border-white/15 rounded-2xl shadow-2xl z-50 p-3 space-y-2 backdrop-blur-2xl"
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.08]">
+                                    <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                                      <User className="w-3.5 h-3.5 text-indigo-400" />
+                                      <span>Cambiar Creador</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setQuickCreatorPickerQuoteId(null)}
+                                      className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+
+                                  <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin">
+                                    {teamCreatorOptions.map((creator) => {
+                                      const isCurrent =
+                                        (quote.createdBy || "").toLowerCase() === creator.toLowerCase() ||
+                                        formatCreatorName(quote.createdBy).toLowerCase() === creator.toLowerCase();
+                                      return (
+                                        <button
+                                          key={creator}
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateCreator(creator, quote.id);
+                                            setQuickCreatorPickerQuoteId(null);
+                                          }}
+                                          className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-1.5 transition-colors cursor-pointer ${
+                                            isCurrent
+                                              ? "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 font-bold"
+                                              : "text-slate-300 hover:text-white hover:bg-white/[0.06]"
+                                          }`}
+                                        >
+                                          <span className="truncate">{creator}</span>
+                                          {isCurrent && <Check className="w-3 h-3 text-indigo-400 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                             <span className="text-[10px] text-slate-500 tabular-nums">{quoteDate}</span>
                           </div>
                         </div>
