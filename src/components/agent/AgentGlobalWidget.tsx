@@ -377,7 +377,20 @@ Puedo ayudarte a automatizar tareas cotidianas:
     };
     handleResize();
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+
+    const handleOpenWidget = (e?: any) => {
+      setIsOpen(true);
+      setActiveTab("chat");
+      if (e?.detail?.prompt) {
+        setInputMessage(e.detail.prompt);
+      }
+    };
+    window.addEventListener("open-agent-widget", handleOpenWidget);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("open-agent-widget", handleOpenWidget);
+    };
   }, []);
 
   const modalWidth = Math.min(440, Math.max(300, windowDimensions.width - 32));

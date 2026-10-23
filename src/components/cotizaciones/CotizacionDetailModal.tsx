@@ -34,6 +34,7 @@ const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 interface CotizacionDetailModalProps {
   quote: any | null;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
 function getProviderTotals(prov: any, items: any[]): { ars: number; usd: number; count: number } {
@@ -91,7 +92,7 @@ function getProviderTotals(prov: any, items: any[]): { ars: number; usd: number;
   return { ars: sumARS, usd: sumUSD, count };
 }
 
-export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalProps) {
+export function CotizacionDetailModal({ quote, onClose, readOnly = false }: CotizacionDetailModalProps) {
   React.useEffect(() => {
     if (!quote) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -201,7 +202,14 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
                       • Sin área
                     </span>
                   )}
-                  {isEditingCreator ? (
+                  {readOnly ? (
+                    <div className="text-[11px] text-slate-300 flex items-center gap-1 font-medium bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.06]">
+                      <User className="w-3 h-3 text-indigo-400" />
+                      <span>
+                        Por: <strong className="text-white">{formatCreatorName(currentCreator) || "Sin asignar"}</strong>
+                      </span>
+                    </div>
+                  ) : isEditingCreator ? (
                     <div className="flex items-center gap-1.5 bg-[#080b15] px-2 py-0.5 rounded-lg border border-indigo-500/40 shadow-lg">
                       <User className="w-3 h-3 text-indigo-400 shrink-0" />
                       <input
@@ -278,15 +286,17 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <Link
-                href={editUrl}
-                onClick={onClose}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 text-emerald-300 hover:text-white text-xs font-bold transition-all shadow-sm group"
-                title="Ir al editor de esta cotización"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
-                <span>Ir a edición</span>
-              </Link>
+              {!readOnly && (
+                <Link
+                  href={editUrl}
+                  onClick={onClose}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 text-emerald-300 hover:text-white text-xs font-bold transition-all shadow-sm group"
+                  title="Ir al editor de esta cotización"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-emerald-400 group-hover:text-white" />
+                  <span>Ir a edición</span>
+                </Link>
+              )}
 
               <button
                 type="button"
@@ -446,18 +456,28 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
           {/* Footer Actions */}
           <div className="p-4 border-t border-white/[0.08] bg-[#090d18] flex items-center justify-between gap-3">
             <span className="text-[11px] text-slate-500">
-              Visualización directa de cotización
+              {readOnly ? "Modo de consulta (solo lectura)" : "Visualización directa de cotización"}
             </span>
             <div className="flex items-center gap-2">
-              <Link
-                href={editUrl}
-                onClick={onClose}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg shadow-emerald-500/20 group"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Ir a edición</span>
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
+              {!readOnly ? (
+                <Link
+                  href={editUrl}
+                  onClick={onClose}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg shadow-emerald-500/20 group"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Ir a edición</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              )}
             </div>
           </div>
         </motion.div>

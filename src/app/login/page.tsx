@@ -40,7 +40,7 @@ export default function LoginPage() {
     try {
       await loginWithEmail(fullEmail, password);
       if (fullEmail.toLowerCase().startsWith("ordenes")) {
-        router.push("/seguimiento-de-ordenes");
+        router.push("/cotizaciones");
       } else {
         router.push("/");
       }

@@ -265,7 +265,10 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   };
 
   const { user, loading, logout } = useAuth();
-  const isOrdenesUser = user?.email?.startsWith("ordenes");
+  const isOrdenesUser = Boolean(
+    user?.email?.toLowerCase().startsWith("ordenes") ||
+    user?.displayName?.toLowerCase().includes("ordenes")
+  );
 
   const getCleanUsername = () => {
     if (!user) return "Usuario";
@@ -284,8 +287,8 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       router.push("/login");
       return;
     }
-    if (!loading && user && isOrdenesUser && pathname !== "/seguimiento-de-ordenes") {
-      router.push("/seguimiento-de-ordenes");
+    if (!loading && user && isOrdenesUser && pathname !== "/cotizaciones") {
+      router.push("/cotizaciones");
     }
   }, [user, loading, router, publicRoute, isOrdenesUser, pathname]);
 
@@ -323,7 +326,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           href: "/seguimiento-de-ordenes",
           icon: ShieldCheck,
           exact: false,
-          onlyForOrders: true,
+          hideForOrders: true,
         },
         {
           name: "Calendario",
@@ -342,7 +345,6 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
           href: "/cotizaciones",
           icon: Scale,
           exact: false,
-          hideForOrders: true,
         },
         {
           name: "Proveedores",
@@ -408,7 +410,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
   };
 
   const isForbiddenForOrdenes =
-    !loading && Boolean(user) && Boolean(isOrdenesUser) && pathname !== "/seguimiento-de-ordenes";
+    !loading && Boolean(user) && Boolean(isOrdenesUser) && pathname !== "/cotizaciones";
   const isForbiddenForOtherUsers = false;
 
   const [pressedHref, setPressedHref] = useState<string | null>(null);

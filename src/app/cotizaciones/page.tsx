@@ -95,6 +95,8 @@ import { CotizacionesImportAiModal, ImportPayload } from "@/components/cotizacio
 import { CotizacionesRequestModal } from "@/components/cotizaciones/CotizacionesRequestModal";
 import { CotizacionesSummaryModal } from "@/components/cotizaciones/CotizacionesSummaryModal";
 import { CotizacionMinutaModal } from "@/components/cotizaciones/CotizacionMinutaModal";
+import { CotizacionDetailModal } from "@/components/cotizaciones/CotizacionDetailModal";
+import { CotizacionesCategoriasView } from "@/components/cotizaciones/CotizacionesCategoriasView";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -223,8 +225,14 @@ const DEFAULT_UNITS = [
 
 export default function CotizacionesPage() {
   const { user } = useAuth();
+  const isOrdenesUser = Boolean(
+    user?.email?.toLowerCase().startsWith("ordenes") ||
+    user?.displayName?.toLowerCase().includes("ordenes")
+  );
   const [dbActive, setDbActive] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"editor" | "comparador" | "historial" | "catalogo">("historial");
+  const [viewMode, setViewMode] = useState<"standard" | "categorias">("standard");
+  const [readOnlyDetailQuote, setReadOnlyDetailQuote] = useState<SavedQuotation | null>(null);
 
   // General State
   const [quoteName, setQuoteName] = useState("Cotización de Insumos " + new Date().toLocaleDateString("es-AR"));
@@ -3402,37 +3410,59 @@ export default function CotizacionesPage() {
         </AnimatePresence>
       </div>
 
-      {/* Control Bar / Navigation Dock */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6 p-2.5 rounded-3xl bg-[#0d1222]/80 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
-        {/* Navigation Tabs with Motion layoutId */}
-        <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-2xl overflow-x-auto max-w-full whitespace-nowrap shrink-0">
-          <button
-            onClick={() => {
-              setActiveTab("historial");
-              setCurrentQuoteId(null);
-              setHasActiveQuote(false);
-            }}
-            className={`relative flex items-center gap-2 px-4.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors duration-150 ${
-              activeTab === "historial" ? "text-white" : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            {activeTab === "historial" && (
-              <motion.div
-                layoutId="activeCotizacionesTab"
-                transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30"
-              />
-            )}
-            <span className="relative z-10 flex items-center gap-1.5">
-              <FolderOpen className="w-3.5 h-3.5" />
-              <span>Mis Cotizaciones</span>
-              {savedQuotations.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-white/20 text-white">
-                  {savedQuotations.length}
+      {/* View Switcher: Categorías (para usuario órdenes o selección manual) vs Vista Estándar */}
+      {isOrdenesUser || viewMode === "categorias" ? (
+        <CotizacionesCategoriasView
+          quotations={savedQuotations}
+          allCategories={allCategories}
+          onOpenDetail={(quote) => setReadOnlyDetailQuote(quote as SavedQuotation)}
+          isOrdenesUser={isOrdenesUser}
+          onSwitchToStandard={() => setViewMode("standard")}
+        />
+      ) : (
+        <>
+          {/* Control Bar / Navigation Dock */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-6 p-2.5 rounded-3xl bg-[#0d1222]/80 border border-white/[0.08] shadow-2xl backdrop-blur-xl">
+            {/* Navigation Tabs with Motion layoutId */}
+            <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-2xl overflow-x-auto max-w-full whitespace-nowrap shrink-0">
+              <button
+                onClick={() => {
+                  setActiveTab("historial");
+                  setCurrentQuoteId(null);
+                  setHasActiveQuote(false);
+                }}
+                className={`relative flex items-center gap-2 px-4.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors duration-150 ${
+                  activeTab === "historial" ? "text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {activeTab === "historial" && (
+                  <motion.div
+                    layoutId="activeCotizacionesTab"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/30"
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Mis Cotizaciones</span>
+                  {savedQuotations.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold tabular-nums bg-white/20 text-white">
+                      {savedQuotations.length}
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-          </button>
+              </button>
+
+              {/* Botón para cambiar a Vista por Categorías en Cards */}
+              <button
+                type="button"
+                onClick={() => setViewMode("categorias")}
+                className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+                title="Ver cotizaciones en tarjetas por rubro / categoría"
+              >
+                <Folder className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Por Categorías</span>
+              </button>
 
           <button
             disabled={!hasActiveQuote}
@@ -6328,6 +6358,17 @@ export default function CotizacionesPage() {
             )}
           </div>
         </motion.div>
+      )}
+        </>
+      )}
+
+      {/* Detalle de cotización en modo solo lectura para la vista de categorías */}
+      {readOnlyDetailQuote && (
+        <CotizacionDetailModal
+          quote={readOnlyDetailQuote}
+          onClose={() => setReadOnlyDetailQuote(null)}
+          readOnly={true}
+        />
       )}
 
       {/* ============================================================
