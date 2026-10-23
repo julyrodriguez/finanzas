@@ -78,9 +78,16 @@ import {
   XCircle,
   Clock,
   Loader2,
-  CreditCard
+  CreditCard,
+  User,
+  Tag
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { 
+  STANDARD_AREAS, 
+  formatCreatorName, 
+  resolveUserDisplayName 
+} from "@/lib/cotizacionesUtils";
 import { CotizacionesAiChatModal, QuoteAttachment } from "@/components/cotizaciones/CotizacionesAiChatModal";
 import { CotizacionesImportAiModal, ImportPayload } from "@/components/cotizaciones/CotizacionesImportAiModal";
 import { CotizacionesRequestModal } from "@/components/cotizaciones/CotizacionesRequestModal";
@@ -403,6 +410,7 @@ export default function CotizacionesPage() {
 
   // Rubro / Categoría & Linking with Pendiente state
   const [quoteCategoria, setQuoteCategoria] = useState<string>("");
+  const [quoteCreatedBy, setQuoteCreatedBy] = useState<string>("");
   const [quotePendienteId, setQuotePendienteId] = useState<string>("");
   const [quotePendienteTitulo, setQuotePendienteTitulo] = useState<string>("");
 
@@ -412,9 +420,15 @@ export default function CotizacionesPage() {
 
   // Filters for Historial Tab
   const [filterCategoria, setFilterCategoria] = useState<string>("todas");
+  const [filterCreator, setFilterCreator] = useState<string>("todos");
   const [searchHistory, setSearchHistory] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("pendientes");
   const [filterOnlyLinked, setFilterOnlyLinked] = useState<boolean>(false);
+
+  // Quick Area Picker Popover state for cards in Historial
+  const [quickAreaPickerQuoteId, setQuickAreaPickerQuoteId] = useState<string | null>(null);
+  const [quickAreaSearch, setQuickAreaSearch] = useState<string>("");
+  const quickAreaPickerRef = useRef<HTMLDivElement>(null);
 
   // Category modal state
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState<boolean>(false);
@@ -462,6 +476,27 @@ export default function CotizacionesPage() {
       setDbActive(!!db);
     }, 0);
   }, []);
+
+  // Sincronizar creador con el usuario autenticado cuando está vacío
+  useEffect(() => {
+    if (user && (!quoteCreatedBy || quoteCreatedBy === "Usuario")) {
+      setQuoteCreatedBy(resolveUserDisplayName(user));
+    }
+  }, [user, quoteCreatedBy]);
+
+  // Cerrar el popover rápido de asignación de área al hacer clic afuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (quickAreaPickerRef.current && !quickAreaPickerRef.current.contains(e.target as Node)) {
+        setQuickAreaPickerQuoteId(null);
+        setQuickAreaSearch("");
+      }
+    };
+    if (quickAreaPickerQuoteId) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [quickAreaPickerQuoteId]);
 
   // Fetch History from MongoDB first, then Firebase or LocalStorage fallback
   const loadHistory = useCallback(async () => {
@@ -569,9 +604,10 @@ export default function CotizacionesPage() {
     );
   };
 
-  // Distinct categories available across customCategories, quotations, and pendientes
+  // Distinct categories available across customCategories, quotations, and pendientes + standard areas
   const allCategories = useMemo(() => {
     const catsSet = new Set<string>();
+    STANDARD_AREAS.forEach((a) => catsSet.add(a));
     catsSet.add("PCT/PLIEGOS");
     customCategories.forEach((c) => {
       if (c && c.trim()) catsSet.add(c.trim());
@@ -584,6 +620,82 @@ export default function CotizacionesPage() {
     });
     return Array.from(catsSet).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
   }, [customCategories, savedQuotations, allPendientes]);
+
+  // Creadores únicos disponibles con su conteo de cotizaciones
+  const allCreators = useMemo(() => {
+    const map = new Map<string, { label: string; rawKeys: Set<string>; count: number }>();
+    savedQuotations.forEach((q) => {
+      const raw = (q.createdBy || "Sin creador").trim();
+      const label = formatCreatorName(raw);
+      const key = label.toLowerCase();
+      const item = map.get(key);
+      if (item) {
+        item.rawKeys.add(raw.toLowerCase());
+        item.rawKeys.add(label.toLowerCase());
+        item.count++;
+      } else {
+        map.set(key, { label, rawKeys: new Set([raw.toLowerCase(), label.toLowerCase()]), count: 1 });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [savedQuotations]);
+
+  // Asignar área / rubro de forma ultra rápida directamente desde las tarjetas o lista
+  const handleQuickAssignArea = async (quote: SavedQuotation, newCategory: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetId = quote.id || quote.firebaseId;
+    if (!targetId) return;
+
+    const cleanCat = newCategory.trim();
+
+    // 1. Actualización optimista inmediata en memoria
+    setSavedQuotations((prev) =>
+      prev.map((q) => ((q.id === targetId || q.firebaseId === targetId) ? { ...q, categoria: cleanCat } : q))
+    );
+
+    // Si coincide con la cotización activa en el editor, sincronizar su estado
+    if (currentQuoteId === targetId) {
+      setQuoteCategoria(cleanCat);
+    }
+
+    // Si es una nueva categoría, guardarla en categorías personalizadas
+    if (cleanCat && !customCategories.some((c) => c.toLowerCase() === cleanCat.toLowerCase())) {
+      const updated = [...customCategories, cleanCat];
+      setCustomCategories(updated);
+      syncPendienteConfigToMongo("categorias", { list: updated });
+    }
+
+    // 2. Dual Write: Mongo (Servidor Propio)
+    try {
+      syncCotizacionToMongo({
+        ...quote,
+        id: targetId,
+        firebaseId: targetId,
+        categoria: cleanCat,
+      });
+    } catch (err) {
+      console.warn("⚠️ Error al sincronizar área en Mongo:", err);
+    }
+
+    // 3. Dual Write: Firebase Firestore
+    try {
+      const db = getFirebaseDb();
+      if (db && !targetId.startsWith("local-")) {
+        setDoc(
+          doc(db, "cotizaciones", targetId),
+          { categoria: cleanCat, updatedAt: serverTimestamp() },
+          { merge: true }
+        ).catch((err) => console.warn("⚠️ Firebase category update error:", err));
+      }
+    } catch (fbErr) {
+      console.warn("⚠️ Firebase category error:", fbErr);
+    }
+
+    showToast(
+      cleanCat ? `Área "${cleanCat}" asignada a "${quote.name}"` : `Área removida de "${quote.name}"`,
+      "success"
+    );
+  };
 
   // Link / Unlink Pendiente
   const handleLinkPendiente = (pendId: string) => {
@@ -695,28 +807,41 @@ export default function CotizacionesPage() {
         return false;
       }
 
-      // 3. Only linked filter
+      // 3. Creator filter
+      if (filterCreator !== "todos") {
+        const selCreator = allCreators.find((c) => c.label.toLowerCase() === filterCreator.toLowerCase());
+        const quoteCreatorRaw = (quote.createdBy || "Sin creador").trim().toLowerCase();
+        const quoteCreatorLabel = formatCreatorName(quote.createdBy).toLowerCase();
+        const matches = selCreator
+          ? selCreator.rawKeys.has(quoteCreatorRaw) || selCreator.rawKeys.has(quoteCreatorLabel)
+          : quoteCreatorRaw === filterCreator.toLowerCase() || quoteCreatorLabel === filterCreator.toLowerCase();
+        if (!matches) return false;
+      }
+
+      // 4. Only linked filter
       if (filterOnlyLinked) {
         if (!quote.pendienteId) return false;
       }
 
-      // 4. Search term
+      // 5. Search term (matches name, notes, pendiente, category, creator, items, and providers)
       if (searchHistory.trim()) {
         const term = searchHistory.toLowerCase();
         const matchName = quote.name?.toLowerCase().includes(term);
         const matchNotes = quote.notes?.toLowerCase().includes(term);
         const matchPendiente = quote.pendienteTitulo?.toLowerCase().includes(term);
         const matchCategory = quote.categoria?.toLowerCase().includes(term);
+        const matchCreator = (quote.createdBy && quote.createdBy.toLowerCase().includes(term)) ||
+                             formatCreatorName(quote.createdBy).toLowerCase().includes(term);
         const matchItem = quote.items?.some((i) => i.name.toLowerCase().includes(term));
         const matchProv = quote.providers?.some((p) => p.name.toLowerCase().includes(term));
-        if (!matchName && !matchNotes && !matchPendiente && !matchCategory && !matchItem && !matchProv) {
+        if (!matchName && !matchNotes && !matchPendiente && !matchCategory && !matchCreator && !matchItem && !matchProv) {
           return false;
         }
       }
 
       return true;
     });
-  }, [savedQuotations, filterCategoria, filterStatus, filterOnlyLinked, searchHistory]);
+  }, [savedQuotations, filterCategoria, filterCreator, filterStatus, filterOnlyLinked, searchHistory, allCreators]);
 
   const getCategoryQuoteCount = (catName: string) => {
     return savedQuotations.filter((q) => {
@@ -938,6 +1063,14 @@ export default function CotizacionesPage() {
       setQuoteCategoria("PCT/PLIEGOS");
     }
 
+    const currentUserName = resolveUserDisplayName(user);
+    const existingQuote = currentQuoteId ? savedQuotations.find((q) => q.id === currentQuoteId) : undefined;
+    const finalCreatedBy = (
+      quoteCreatedBy.trim() ||
+      existingQuote?.createdBy ||
+      currentUserName
+    );
+
     const payload: Omit<SavedQuotation, "id"> = {
       name: quoteName,
       notes,
@@ -946,7 +1079,7 @@ export default function CotizacionesPage() {
       useRealLots,
       items,
       providers,
-      createdBy: user?.email || "Usuario Local",
+      createdBy: finalCreatedBy,
       status,
       isFinalized: status === "finalizada",
       winningProviderId: status === "finalizada" ? winningProviderId : "",
@@ -1092,6 +1225,7 @@ export default function CotizacionesPage() {
     setWinningProviderId("");
     setSentAt("");
     setQuoteCategoria("");
+    setQuoteCreatedBy(resolveUserDisplayName(user));
     setQuotePendienteId("");
     setQuotePendienteTitulo("");
     setAttachments([]);
@@ -1119,6 +1253,7 @@ export default function CotizacionesPage() {
     setProviders(quote.providers || []);
     setAttachments(quote.attachments || []);
     setAiSummary(quote.aiSummary || "");
+    setQuoteCreatedBy(quote.createdBy || resolveUserDisplayName(user));
     if (qId && !quote.aiSummary && !String(qId).startsWith("local-") && !String(qId).startsWith("temp_")) {
       fetch(`https://apivacas.jariel.com.ar/api/cotizaciones-ia/summary/${encodeURIComponent(qId)}`)
         .then((res) => res.json())
@@ -1270,6 +1405,7 @@ export default function CotizacionesPage() {
     setStatus("borrador");
     setWinningProviderId("");
     setQuoteCategoria(quote.categoria || "");
+    setQuoteCreatedBy(resolveUserDisplayName(user));
     setQuotePendienteId("");
     setQuotePendienteTitulo("");
     setHasActiveQuote(true);
@@ -3394,102 +3530,146 @@ export default function CotizacionesPage() {
             />
           </div>
 
-          {/* Rubro & Pendientes & Estado */}
-          <div className="pt-3 border-t border-white/[0.06] grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
-            {/* Rubro / Categoría */}
-            <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
-              <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <select
-                value={quoteCategoria}
-                onChange={(e) => setQuoteCategoria(e.target.value)}
-                disabled={isLocked}
-                className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50"
-              >
-                <option value="" className="bg-[#0b0f19]">(Sin rubro / área)</option>
-                {allCategories.map((cat) => (
-                  <option key={cat} value={cat} className="bg-[#0b0f19]">{cat}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setIsCategoryModalOpen(true)}
-                className="text-slate-400 hover:text-white p-0.5"
-                title="Nueva carpeta"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-              </button>
+          {/* Rubro & Creador & Pendientes & Estado */}
+          <div className="pt-3 border-t border-white/[0.06] space-y-2.5">
+            {/* Quick Area Chips */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1 mr-1">
+                <Tag className="w-3 h-3 text-amber-400" />
+                <span>Asignar área rápida:</span>
+              </span>
+              {STANDARD_AREAS.slice(0, 8).map((area) => {
+                const isSelected = quoteCategoria.toLowerCase() === area.toLowerCase();
+                return (
+                  <button
+                    key={area}
+                    type="button"
+                    disabled={isLocked}
+                    onClick={() => setQuoteCategoria(isSelected ? "" : area)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/25 scale-[1.02]"
+                        : "bg-[#080b15] text-slate-400 hover:text-white border border-white/[0.06] hover:border-amber-500/30"
+                    }`}
+                  >
+                    {area}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Pendiente Vinculado */}
-            <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
-              <ListTodo className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-              <select
-                value={quotePendienteId}
-                onChange={(e) => handleLinkPendiente(e.target.value)}
-                disabled={isLocked}
-                className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50 truncate"
-              >
-                <option value="" className="bg-[#0b0f19]">(Sin pendiente vinculado)</option>
-                {allPendientes.map((pend) => (
-                  <option key={pend.id} value={pend.id} className="bg-[#0b0f19]">
-                    {pend.titulo}
-                  </option>
-                ))}
-              </select>
-              {quotePendienteId && (
-                <button
-                  type="button"
-                  onClick={() => handleLinkPendiente("")}
-                  className="text-rose-400 hover:text-rose-300 p-0.5"
-                  title="Desvincular"
-                >
-                  <Unlink className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Estado */}
-            <div className="flex items-center justify-between sm:justify-end gap-2">
-              <select
-                value={status}
-                onChange={(e) => {
-                  const newStatus = e.target.value as any;
-                  setStatus(newStatus);
-                  if (newStatus !== "finalizada") setWinningProviderId("");
-                  else if (providers.length > 0 && !winningProviderId) setWinningProviderId(providers[0].id);
-                  if (newStatus === "enviada" && !sentAt) {
-                    const today = new Date();
-                    setSentAt(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`);
-                  }
-                }}
-                className={`text-xs font-bold px-3 py-1.5 rounded-xl border outline-none cursor-pointer ${
-                  status === "finalizada"
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                    : status === "enviada"
-                    ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
-                    : status === "cancelada"
-                    ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
-                    : "bg-amber-500/15 border-amber-500/30 text-amber-300"
-                }`}
-              >
-                <option value="borrador" className="bg-[#0b0f19]">Borrador (Abierta)</option>
-                <option value="enviada" className="bg-[#0b0f19]">Enviada (Cerrada)</option>
-                <option value="finalizada" className="bg-[#0b0f19]">Finalizada (Adjudicada)</option>
-                <option value="cancelada" className="bg-[#0b0f19]">Cancelada</option>
-              </select>
-
-              {status === "finalizada" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
+              {/* Rubro / Categoría */}
+              <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+                <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <select
-                  value={winningProviderId}
-                  onChange={(e) => setWinningProviderId(e.target.value)}
-                  className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 outline-none cursor-pointer"
+                  value={quoteCategoria}
+                  onChange={(e) => setQuoteCategoria(e.target.value)}
+                  disabled={isLocked}
+                  className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50"
                 >
-                  <option value="" className="bg-[#0b0f19]">Elegir Ganador...</option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-[#0b0f19]">{p.name}</option>
+                  <option value="" className="bg-[#0b0f19]">(Sin rubro / área)</option>
+                  {allCategories.map((cat) => (
+                    <option key={cat} value={cat} className="bg-[#0b0f19]">{cat}</option>
                   ))}
                 </select>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="text-slate-400 hover:text-white p-0.5"
+                  title="Nueva carpeta / área"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Creador / Autor */}
+              <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+                <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold leading-none">Creado por</span>
+                  <input
+                    type="text"
+                    value={quoteCreatedBy}
+                    onChange={(e) => setQuoteCreatedBy(e.target.value)}
+                    placeholder={resolveUserDisplayName(user)}
+                    disabled={isLocked}
+                    className="bg-transparent text-xs font-semibold text-white outline-none placeholder-slate-600 disabled:opacity-50 leading-tight"
+                  />
+                </div>
+              </div>
+
+              {/* Pendiente Vinculado */}
+              <div className="flex items-center gap-2 bg-[#080b15] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+                <ListTodo className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <select
+                  value={quotePendienteId}
+                  onChange={(e) => handleLinkPendiente(e.target.value)}
+                  disabled={isLocked}
+                  className="w-full bg-transparent text-xs font-semibold text-white outline-none cursor-pointer disabled:opacity-50 truncate"
+                >
+                  <option value="" className="bg-[#0b0f19]">(Sin pendiente vinculado)</option>
+                  {allPendientes.map((pend) => (
+                    <option key={pend.id} value={pend.id} className="bg-[#0b0f19]">
+                      {pend.titulo}
+                    </option>
+                  ))}
+                </select>
+                {quotePendienteId && (
+                  <button
+                    type="button"
+                    onClick={() => handleLinkPendiente("")}
+                    className="text-rose-400 hover:text-rose-300 p-0.5"
+                    title="Desvincular"
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Estado */}
+              <div className="flex items-center justify-between sm:justify-end gap-2">
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value as any;
+                    setStatus(newStatus);
+                    if (newStatus !== "finalizada") setWinningProviderId("");
+                    else if (providers.length > 0 && !winningProviderId) setWinningProviderId(providers[0].id);
+                    if (newStatus === "enviada" && !sentAt) {
+                      const today = new Date();
+                      setSentAt(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`);
+                    }
+                  }}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-xl border outline-none cursor-pointer w-full ${
+                    status === "finalizada"
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                      : status === "enviada"
+                      ? "bg-sky-500/15 border-sky-500/30 text-sky-400"
+                      : status === "cancelada"
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
+                      : "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                  }`}
+                >
+                  <option value="borrador" className="bg-[#0b0f19]">Borrador (Abierta)</option>
+                  <option value="enviada" className="bg-[#0b0f19]">Enviada (Cerrada)</option>
+                  <option value="finalizada" className="bg-[#0b0f19]">Finalizada (Adjudicada)</option>
+                  <option value="cancelada" className="bg-[#0b0f19]">Cancelada</option>
+                </select>
+
+                {status === "finalizada" && (
+                  <select
+                    value={winningProviderId}
+                    onChange={(e) => setWinningProviderId(e.target.value)}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 outline-none cursor-pointer"
+                  >
+                    <option value="" className="bg-[#0b0f19]">Elegir Ganador...</option>
+                    {providers.map((p) => (
+                      <option key={p.id} value={p.id} className="bg-[#0b0f19]">{p.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>
@@ -5223,33 +5403,65 @@ export default function CotizacionesPage() {
             </div>
           </div>
 
-          {/* Search & Status Filters */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            {/* Status pills */}
-            <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-xl self-start flex-wrap gap-0.5">
-              {(
-                [
-                  { id: "pendientes", label: "Borradores", count: statusCounts.pendientes, activeClass: "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/25", dot: "bg-amber-400" },
-                  { id: "enviadas", label: "Enviadas", count: statusCounts.enviados, activeClass: "bg-sky-500 text-white font-bold shadow-md shadow-sky-500/30", dot: "bg-sky-300" },
-                  { id: "finalizadas", label: "Finalizadas", count: statusCounts.finalizados, activeClass: "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/30", dot: "bg-emerald-300" },
-                  { id: "todas", label: "Todas", count: statusCounts.todos, activeClass: "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30", dot: "bg-indigo-300" },
-                ] as const
-              ).map((st) => {
-                const isSel = filterStatus === st.id;
-                return (
+          {/* Search & Creator & Status Filters */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Status pills */}
+              <div className="inline-flex p-1 bg-[#090d18] border border-white/[0.06] rounded-xl self-start flex-wrap gap-0.5">
+                {(
+                  [
+                    { id: "pendientes", label: "Borradores", count: statusCounts.pendientes, activeClass: "bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/25", dot: "bg-amber-400" },
+                    { id: "enviadas", label: "Enviadas", count: statusCounts.enviados, activeClass: "bg-sky-500 text-white font-bold shadow-md shadow-sky-500/30", dot: "bg-sky-300" },
+                    { id: "finalizadas", label: "Finalizadas", count: statusCounts.finalizados, activeClass: "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/30", dot: "bg-emerald-300" },
+                    { id: "todas", label: "Todas", count: statusCounts.todos, activeClass: "bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30", dot: "bg-indigo-300" },
+                  ] as const
+                ).map((st) => {
+                  const isSel = filterStatus === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      onClick={() => setFilterStatus(st.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                        isSel ? st.activeClass : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {isSel && <span className={`w-1.5 h-1.5 rounded-full ${st.dot} animate-pulse`} />}
+                      <span>{st.label}</span>
+                      <span className="text-[10px] ml-0.5 opacity-80 tabular-nums font-mono">({st.count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Creator Filter Dropdown */}
+              <div className="flex items-center gap-1.5 bg-[#090d18] border border-white/[0.08] hover:border-white/[0.15] px-2.5 py-1.5 rounded-xl transition-colors shrink-0">
+                <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <select
+                  value={filterCreator}
+                  onChange={(e) => setFilterCreator(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-slate-200 outline-none cursor-pointer max-w-[170px] sm:max-w-[200px] truncate"
+                  title="Filtrar cotizaciones por creador"
+                >
+                  <option value="todos" className="bg-[#0b0f19]">
+                    Todos los creadores ({savedQuotations.length})
+                  </option>
+                  {allCreators.map((c) => (
+                    <option key={c.label} value={c.label.toLowerCase()} className="bg-[#0b0f19]">
+                      {c.label} ({c.count})
+                    </option>
+                  ))}
+                </select>
+                {filterCreator !== "todos" && (
                   <button
-                    key={st.id}
-                    onClick={() => setFilterStatus(st.id)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                      isSel ? st.activeClass : "text-slate-400 hover:text-white"
-                    }`}
+                    type="button"
+                    onClick={() => setFilterCreator("todos")}
+                    className="text-slate-400 hover:text-white p-0.5 ml-0.5 cursor-pointer"
+                    title="Limpiar filtro de creador"
                   >
-                    {isSel && <span className={`w-1.5 h-1.5 rounded-full ${st.dot} animate-pulse`} />}
-                    <span>{st.label}</span>
-                    <span className="text-[10px] ml-0.5 opacity-80 tabular-nums font-mono">({st.count})</span>
+                    <X className="w-3 h-3" />
                   </button>
-                );
-              })}
+                )}
+              </div>
             </div>
 
             {/* Search input & only linked toggle */}
@@ -5258,7 +5470,7 @@ export default function CotizacionesPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre, nota o autor..."
+                  placeholder="Buscar por nombre, nota, área o autor..."
                   value={searchHistory}
                   onChange={(e) => setSearchHistory(e.target.value)}
                   className="w-full bg-[#090d18] border border-white/[0.08] focus:border-indigo-500 rounded-xl py-1.5 pl-9 pr-8 text-xs text-white placeholder-slate-500 outline-none transition-colors"
@@ -5398,7 +5610,7 @@ export default function CotizacionesPage() {
                       <div className={`h-1 w-full rounded-full mb-3.5 ${theme.accentBar}`} />
 
                       <div className="space-y-3">
-                        {/* Header: Status & Category */}
+                        {/* Header: Status & Category & Creator */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span
@@ -5408,14 +5620,174 @@ export default function CotizacionesPage() {
                               <StatusIcon className="w-3 h-3" />
                               <span>{theme.label}</span>
                             </span>
-                            {quote.categoria && (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
-                                <Folder className="w-2.5 h-2.5" />
-                                {quote.categoria}
-                              </span>
-                            )}
+
+                            {/* Quick Area Badge / Button with Interactive Dropdown */}
+                            <div className="relative">
+                              {quote.categoria ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const qId = quote.id || quote.firebaseId || "";
+                                    setQuickAreaPickerQuoteId(quickAreaPickerQuoteId === qId ? null : qId);
+                                    setQuickAreaSearch("");
+                                  }}
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-500/30 flex items-center gap-1 transition-all cursor-pointer group/cat shadow-sm"
+                                  title="Clic para cambiar el área de esta cotización"
+                                >
+                                  <Folder className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>{quote.categoria}</span>
+                                  <ChevronDown className="w-2.5 h-2.5 opacity-60 group-hover/cat:opacity-100 transition-opacity" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const qId = quote.id || quote.firebaseId || "";
+                                    setQuickAreaPickerQuoteId(quickAreaPickerQuoteId === qId ? null : qId);
+                                    setQuickAreaSearch("");
+                                  }}
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-dashed border-amber-500/40 hover:border-amber-400 flex items-center gap-1 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                                  title="Asignar un área a esta cotización"
+                                >
+                                  <Tag className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>+ Asignar Área</span>
+                                </button>
+                              )}
+
+                              {/* Quick Area Popover */}
+                              {(quickAreaPickerQuoteId === quote.id || (quote.firebaseId && quickAreaPickerQuoteId === quote.firebaseId)) && (
+                                <div
+                                  ref={quickAreaPickerRef}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute left-0 top-full mt-1.5 w-64 bg-[#0d1222] border border-white/15 rounded-2xl shadow-2xl z-50 p-3 space-y-2.5 backdrop-blur-2xl"
+                                >
+                                  <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.08]">
+                                    <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                                      <Folder className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>Asignar Área / Rubro</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setQuickAreaPickerQuoteId(null);
+                                        setQuickAreaSearch("");
+                                      }}
+                                      className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+
+                                  {/* Search or create area */}
+                                  <div className="relative">
+                                    <Search className="w-3 h-3 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    <input
+                                      type="text"
+                                      autoFocus
+                                      placeholder="Buscar o nueva área..."
+                                      value={quickAreaSearch}
+                                      onChange={(e) => setQuickAreaSearch(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" && quickAreaSearch.trim()) {
+                                          e.preventDefault();
+                                          handleQuickAssignArea(quote, quickAreaSearch.trim());
+                                          setQuickAreaPickerQuoteId(null);
+                                          setQuickAreaSearch("");
+                                        }
+                                      }}
+                                      className="w-full bg-[#080b15] border border-white/[0.1] focus:border-amber-500 rounded-lg pl-7 pr-2 py-1.5 text-xs text-white placeholder-slate-500 outline-none"
+                                    />
+                                  </div>
+
+                                  {quickAreaSearch.trim() &&
+                                    !allCategories.some((c) => c.toLowerCase() === quickAreaSearch.trim().toLowerCase()) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleQuickAssignArea(quote, quickAreaSearch.trim());
+                                          setQuickAreaPickerQuoteId(null);
+                                          setQuickAreaSearch("");
+                                        }}
+                                        className="w-full text-left px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        <span className="truncate">Crear "{quickAreaSearch.trim()}"</span>
+                                      </button>
+                                    )}
+
+                                  <div className="max-h-44 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin">
+                                    {allCategories
+                                      .filter((c) => c.toLowerCase().includes(quickAreaSearch.toLowerCase().trim()))
+                                      .map((cat) => {
+                                        const isCurrent = (quote.categoria || "").toLowerCase() === cat.toLowerCase();
+                                        return (
+                                          <button
+                                            key={cat}
+                                            type="button"
+                                            onClick={() => {
+                                              handleQuickAssignArea(quote, cat);
+                                              setQuickAreaPickerQuoteId(null);
+                                              setQuickAreaSearch("");
+                                            }}
+                                            className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-1.5 transition-colors cursor-pointer ${
+                                              isCurrent
+                                                ? "bg-amber-500/20 text-amber-200 border border-amber-500/30 font-bold"
+                                                : "text-slate-300 hover:text-white hover:bg-white/[0.06]"
+                                            }`}
+                                          >
+                                            <span className="flex items-center gap-1.5 truncate">
+                                              <Folder className={`w-3 h-3 shrink-0 ${isCurrent ? "text-amber-400" : "text-slate-500"}`} />
+                                              <span className="truncate">{cat}</span>
+                                            </span>
+                                            {isCurrent && <Check className="w-3 h-3 text-amber-400 shrink-0" />}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+
+                                  {quote.categoria && (
+                                    <div className="pt-1.5 border-t border-white/[0.08]">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleQuickAssignArea(quote, "");
+                                          setQuickAreaPickerQuoteId(null);
+                                          setQuickAreaSearch("");
+                                        }}
+                                        className="w-full text-left px-2 py-1 rounded-lg text-[11px] text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        <X className="w-3 h-3" />
+                                        <span>Quitar área asignada</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <span className="text-[10px] text-slate-500 tabular-nums">{quoteDate}</span>
+
+                          {/* Creator & Date info */}
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const cLabel = formatCreatorName(quote.createdBy);
+                                setFilterCreator(filterCreator.toLowerCase() === cLabel.toLowerCase() ? "todos" : cLabel.toLowerCase());
+                              }}
+                              title={`Creado por: ${formatCreatorName(quote.createdBy)} (Clic para filtrar)`}
+                              className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-indigo-300 bg-white/[0.03] hover:bg-white/[0.07] px-2 py-0.5 rounded-md border border-white/[0.05] transition-colors cursor-pointer group/creator"
+                            >
+                              <User className="w-2.5 h-2.5 text-indigo-400/80 group-hover/creator:text-indigo-300 shrink-0" />
+                              <span className="truncate max-w-[100px] sm:max-w-[120px] font-medium text-slate-300 group-hover/creator:text-indigo-200">
+                                {formatCreatorName(quote.createdBy)}
+                              </span>
+                            </button>
+                            <span className="text-[10px] text-slate-500 tabular-nums">{quoteDate}</span>
+                          </div>
                         </div>
 
                         {/* Title */}

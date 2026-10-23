@@ -18,8 +18,11 @@ import {
   ArrowRight,
   FileSpreadsheet,
   Mail,
-  Edit3
+  Edit3,
+  User,
+  Folder
 } from "lucide-react";
+import { formatCreatorName } from "@/lib/cotizacionesUtils";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -148,9 +151,20 @@ export function CotizacionDetailModal({ quote, onClose }: CotizacionDetailModalP
                   }`}>
                     {quote.status || "Borrador"}
                   </span>
-                  {quote.categoria && (
-                    <span className="text-[11px] text-slate-400 font-medium">
-                      • {quote.categoria}
+                  {quote.categoria ? (
+                    <span className="text-[11px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center gap-1">
+                      <Folder className="w-3 h-3 text-amber-400" />
+                      {quote.categoria}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-500 italic">
+                      • Sin área
+                    </span>
+                  )}
+                  {quote.createdBy && (
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.06]">
+                      <User className="w-3 h-3 text-indigo-400" />
+                      <span>Por: <strong className="text-slate-200">{formatCreatorName(quote.createdBy)}</strong></span>
                     </span>
                   )}
                 </div>
