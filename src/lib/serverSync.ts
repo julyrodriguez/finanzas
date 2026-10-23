@@ -417,7 +417,7 @@ const PENDIENTES_API_URL = "https://apivacas.jariel.com.ar/api/pendientes";
 
 export async function fetchPendientesFromMongo(): Promise<{
   pendientes: any[];
-  config: { general: { content: string; updatedAt: any }; categorias: string[] };
+  config: { general: { content: string; updatedAt: any }; categorias: string[]; deleted_categorias?: string[] };
 } | null> {
   try {
     const res = await fetch(PENDIENTES_API_URL, {
@@ -492,7 +492,7 @@ export async function deletePendienteFromMongo(id: string): Promise<boolean> {
 }
 
 export async function syncPendienteConfigToMongo(
-  key: "general" | "categorias",
+  key: "general" | "categorias" | "deleted_categorias" | string,
   payload: { content?: string; list?: string[]; updatedBy?: string }
 ): Promise<void> {
   try {

@@ -418,6 +418,15 @@ export default function CotizacionesPage() {
 
   // Categorías & Pendientes reference data from Firestore
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [deletedCategories, setDeletedCategories] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const local = localStorage.getItem("finanzas-deleted-categories");
+        if (local) return JSON.parse(local);
+      } catch {}
+    }
+    return [];
+  });
   const [allPendientes, setAllPendientes] = useState<Array<{ id: string; titulo: string; categoria?: string; cotizacionesIds?: string[] }>>([]);
 
   // Filters for Historial Tab
@@ -578,6 +587,9 @@ export default function CotizacionesPage() {
         if (data.config?.categorias && Array.isArray(data.config.categorias) && data.config.categorias.length > 0) {
           setCustomCategories(data.config.categorias);
         }
+        if (data.config?.deleted_categorias && Array.isArray(data.config.deleted_categorias)) {
+          setDeletedCategories(data.config.deleted_categorias);
+        }
         if (data.pendientes && Array.isArray(data.pendientes) && data.pendientes.length > 0) {
           const list = data.pendientes.map((p: any) => ({
             id: p.id || p.firebaseId,
@@ -613,7 +625,7 @@ export default function CotizacionesPage() {
     );
   };
 
-  // Distinct categories available across customCategories, quotations, and pendientes + standard areas
+  // Distinct categories available across customCategories, quotations, and pendientes + standard areas (excluding deleted)
   const allCategories = useMemo(() => {
     const catsSet = new Set<string>();
     STANDARD_AREAS.forEach((a) => catsSet.add(a));
@@ -627,8 +639,10 @@ export default function CotizacionesPage() {
     allPendientes.forEach((p) => {
       if (p.categoria && p.categoria.trim()) catsSet.add(p.categoria.trim());
     });
-    return Array.from(catsSet).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  }, [customCategories, savedQuotations, allPendientes]);
+    return Array.from(catsSet)
+      .filter((cat) => !deletedCategories.some((d) => d.toLowerCase() === cat.toLowerCase()))
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [customCategories, savedQuotations, allPendientes, deletedCategories]);
 
   // Creadores únicos disponibles con su conteo de cotizaciones
   const allCreators = useMemo(() => {
@@ -805,8 +819,16 @@ export default function CotizacionesPage() {
     setCustomCategories(updated);
     setQuoteCategoria(trimmed);
 
+    // Remover de deletedCategories si estaba borrada previamente
+    const updatedDeleted = deletedCategories.filter((d) => d.toLowerCase() !== trimmed.toLowerCase());
+    setDeletedCategories(updatedDeleted);
+    try {
+      localStorage.setItem("finanzas-deleted-categories", JSON.stringify(updatedDeleted));
+    } catch {}
+
     // 1. Dual Write: Mongo
     syncPendienteConfigToMongo("categorias", { list: updated });
+    syncPendienteConfigToMongo("deleted_categorias", { list: updatedDeleted });
 
     // 2. Dual Write: Firebase (no bloqueante)
     const db = getFirebaseDb();
@@ -817,6 +839,88 @@ export default function CotizacionesPage() {
       });
     }
     showToast(`Carpeta "${trimmed}" creada`, "success");
+  };
+
+  // Borrar categoría / rubro de las carpetas y desvincular cotizaciones
+  const handleDeleteCategory = async (catToDelete: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const trimmed = catToDelete.trim();
+    if (!trimmed) return;
+
+    const count = savedQuotations.filter(
+      (q) => (q.categoria || "").trim().toLowerCase() === trimmed.toLowerCase()
+    ).length;
+
+    if (count > 0) {
+      const confirmDelete = window.confirm(
+        `¿Eliminar el área "${trimmed}"?\n\nHay ${count} cotización(es) con esta área asignada. Si aceptas, se desvinculará esta área de esas cotizaciones.`
+      );
+      if (!confirmDelete) return;
+
+      // 1. Desvincular de cotizaciones optimísticamente
+      setSavedQuotations((prev) =>
+        prev.map((q) =>
+          (q.categoria || "").trim().toLowerCase() === trimmed.toLowerCase()
+            ? { ...q, categoria: "" }
+            : q
+        )
+      );
+
+      // 2. Sincronizar cotizaciones modificadas en Mongo y Firebase
+      savedQuotations
+        .filter((q) => (q.categoria || "").trim().toLowerCase() === trimmed.toLowerCase())
+        .forEach((q) => {
+          const qId = q.id || q.firebaseId;
+          if (qId) {
+            syncCotizacionToMongo({ ...q, id: qId, categoria: "" });
+            const db = getFirebaseDb();
+            if (db && !String(qId).startsWith("local-")) {
+              setDoc(
+                doc(db, "cotizaciones", qId),
+                { categoria: "", updatedAt: serverTimestamp() },
+                { merge: true }
+              ).catch(() => {});
+            }
+          }
+        });
+    }
+
+    // 3. Registrar en deletedCategories para que no vuelva a reaparecer
+    const updatedDeleted = Array.from(new Set([...deletedCategories, trimmed]));
+    setDeletedCategories(updatedDeleted);
+    try {
+      localStorage.setItem("finanzas-deleted-categories", JSON.stringify(updatedDeleted));
+    } catch {}
+
+    // 4. Remover de customCategories
+    const updatedCustom = customCategories.filter(
+      (c) => c.trim().toLowerCase() !== trimmed.toLowerCase()
+    );
+    setCustomCategories(updatedCustom);
+
+    // 5. Dual Write config a Mongo y Firebase
+    syncPendienteConfigToMongo("categorias", { list: updatedCustom });
+    syncPendienteConfigToMongo("deleted_categorias", { list: updatedDeleted });
+
+    const db = getFirebaseDb();
+    if (db) {
+      const docRef = doc(db, "pendientes_config", "categorias");
+      setDoc(docRef, { list: updatedCustom, updatedAt: serverTimestamp() }, { merge: true }).catch((err) => {
+        console.warn("⚠️ Error saving category deletion to Firebase:", err);
+      });
+    }
+
+    // Si la cotización activa tenía esta categoría, limpiarla
+    if (quoteCategoria.trim().toLowerCase() === trimmed.toLowerCase()) {
+      setQuoteCategoria("");
+    }
+
+    // Si el filtro activo era esta categoría, volver a "todas"
+    if (filterCategoria.trim().toLowerCase() === trimmed.toLowerCase()) {
+      setFilterCategoria("todas");
+    }
+
+    showToast(`Categoría "${trimmed}" eliminada`, "info");
   };
 
   // Filtered quotations for Historial tab
@@ -3614,7 +3718,7 @@ export default function CotizacionesPage() {
                 <Tag className="w-3 h-3 text-amber-400" />
                 <span>Asignar área rápida:</span>
               </span>
-              {STANDARD_AREAS.slice(0, 8).map((area) => {
+              {STANDARD_AREAS.filter((a) => !deletedCategories.some((d) => d.toLowerCase() === a.toLowerCase())).slice(0, 8).map((area) => {
                 const isSelected = quoteCategoria.toLowerCase() === area.toLowerCase();
                 return (
                   <button
@@ -5398,11 +5502,11 @@ export default function CotizacionesPage() {
               <button
                 type="button"
                 onClick={() => setIsCategoryModalOpen(true)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white text-[11px] font-semibold border border-white/[0.06] transition-colors cursor-pointer"
-                title="Crear o administrar carpetas"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white text-[11px] font-semibold border border-white/[0.06] transition-colors cursor-pointer"
+                title="Crear o eliminar carpetas / áreas"
               >
                 <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
-                <span>+ Nueva Carpeta</span>
+                <span>Gestionar Carpetas</span>
               </button>
             </div>
 
@@ -5430,12 +5534,14 @@ export default function CotizacionesPage() {
                 </span>
               </button>
 
-              {/* Botón especial PCT / Pliegos (ÚNICO, sin duplicados) */}
+              {/* Botón especial PCT / Pliegos (Solo si tiene > 0 o está activo) */}
               {(() => {
                 const isPctActive =
                   filterCategoria === "_pct_pliegos_" ||
                   filterCategoria.toUpperCase() === "PCT/PLIEGOS" ||
                   filterCategoria.toUpperCase() === "PCT / PLIEGOS";
+
+                if (pctPliegosQuoteCount === 0 && !isPctActive) return null;
 
                 return (
                   <button
@@ -5462,11 +5568,15 @@ export default function CotizacionesPage() {
                 );
               })()}
 
-              {/* Carpetas por cada rubro (filtrando PCT/PLIEGOS para evitar duplicación) */}
+              {/* Carpetas por cada rubro (filtrando PCT/PLIEGOS y las que tengan 0 cotizaciones) */}
               {allCategories
                 .filter((cat) => {
                   const norm = cat.trim().toUpperCase();
-                  return norm !== "PCT/PLIEGOS" && norm !== "PCT / PLIEGOS";
+                  if (norm === "PCT/PLIEGOS" || norm === "PCT / PLIEGOS") return false;
+                  const count = getCategoryQuoteCount(cat);
+                  const isSel = filterCategoria.toLowerCase() === cat.toLowerCase();
+                  // No mostrar en los filtros las categorías con (0)
+                  return count > 0 || isSel;
                 })
                 .map((cat) => {
                   const count = getCategoryQuoteCount(cat);
@@ -5495,9 +5605,11 @@ export default function CotizacionesPage() {
                   );
                 })}
 
-              {/* Sin Carpeta */}
+              {/* Sin Carpeta (Solo si tiene > 0 o está activo) */}
               {(() => {
                 const isSinCatActive = filterCategoria === "_sin_categoria_";
+                if (uncategorizedQuoteCount === 0 && !isSinCatActive) return null;
+
                 return (
                   <button
                     type="button"
@@ -5869,8 +5981,20 @@ export default function CotizacionesPage() {
                                       })}
                                   </div>
 
-                                  {quote.categoria && (
-                                    <div className="pt-1.5 border-t border-white/[0.08]">
+                                  <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setQuickAreaPickerQuoteId(null);
+                                        setIsCategoryModalOpen(true);
+                                      }}
+                                      className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                                    >
+                                      <FolderPlus className="w-3 h-3 text-amber-400" />
+                                      <span>Gestionar carpetas</span>
+                                    </button>
+
+                                    {quote.categoria && (
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -5878,13 +6002,13 @@ export default function CotizacionesPage() {
                                           setQuickAreaPickerQuoteId(null);
                                           setQuickAreaSearch("");
                                         }}
-                                        className="w-full text-left px-2 py-1 rounded-lg text-[11px] text-rose-400 hover:bg-rose-500/10 transition-colors flex items-center gap-1.5 cursor-pointer"
+                                        className="text-[10px] text-rose-400 hover:text-rose-300 hover:underline flex items-center gap-1 cursor-pointer"
                                       >
-                                        <X className="w-3 h-3" />
-                                        <span>Quitar área asignada</span>
+                                        <X className="w-2.5 h-2.5" />
+                                        <span>Quitar</span>
                                       </button>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -6227,18 +6351,23 @@ export default function CotizacionesPage() {
               transition={{ duration: 0.22, ease: EASE_OUT }}
               className="relative w-full max-w-md bg-[#0d1222] border border-white/[0.1] rounded-3xl shadow-2xl overflow-hidden flex flex-col z-10 p-6 space-y-4"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Folder className="w-4 h-4 text-amber-400" />
-                  <span>Gestionar Carpetas / Rubros</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryModalOpen(false)}
-                  className="p-1 text-slate-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              <div className="pb-3 border-b border-white/[0.08]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Folder className="w-4 h-4 text-amber-400" />
+                    <span>Gestionar Carpetas / Áreas</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(false)}
+                    className="p-1 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Crea o elimina áreas. Las carpetas con (0) cotizaciones no se muestran en los filtros.
+                </p>
               </div>
 
               {/* Add form */}
@@ -6271,22 +6400,37 @@ export default function CotizacionesPage() {
               {/* List */}
               <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
                 {allCategories.length === 0 ? (
-                  <p className="text-xs text-slate-500 text-center py-4">No hay carpetas creadas</p>
+                  <p className="text-xs text-slate-500 text-center py-4">No hay carpetas activas</p>
                 ) : (
-                  allCategories.map((cat) => (
-                    <div
-                      key={cat}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-[#080b15] border border-white/[0.06] text-xs text-white"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Folder className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{cat}</span>
+                  allCategories.map((cat) => {
+                    const count = getCategoryQuoteCount(cat);
+                    return (
+                      <div
+                        key={cat}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-[#080b15] border border-white/[0.06] text-xs text-white group hover:border-white/[0.12] transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span className="truncate font-medium">{cat}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                            count > 0 ? "bg-amber-500/10 text-amber-300 font-semibold" : "bg-white/[0.04] text-slate-500"
+                          }`}>
+                            {count} {count === 1 ? "cotización" : "cotizaciones"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCategory(cat, e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title={`Eliminar carpeta "${cat}"`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {getCategoryQuoteCount(cat)} cotizaciones
-                      </span>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </motion.div>
