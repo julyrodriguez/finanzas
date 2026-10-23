@@ -341,7 +341,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       title: "Compras & Control",
       items: [
         {
-          name: "Cotizaciones",
+          name: "Compras - Cotizaciones",
           href: "/cotizaciones",
           icon: Scale,
           exact: false,
@@ -963,7 +963,7 @@ export function AppLayout({ title, subtitle, children, publicRoute = false }: Ap
       </AnimatePresence>
 
       {/* Asistente Global Autónomo & Mini-Lista de Recordatorios */}
-      {!publicRoute && <AgentGlobalWidget />}
+      {!publicRoute && !isOrdenesUser && <AgentGlobalWidget />}
     </div>
   );
 }

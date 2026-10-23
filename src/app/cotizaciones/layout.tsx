@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cotizaciones Oficiales BNA y Divisas",
-  description: "Monitoreo en tiempo real de tipos de cambio del Banco Nación Argentina: Dólar Oficial, Dólar Tarjeta, Euro y calculadora de conversión.",
+  title: "Compras - Cotizaciones",
+  description: "Gestión, consulta y comparativa de cotizaciones de compras por rubro y proveedor.",
   alternates: {
     canonical: "/cotizaciones",
   },
   openGraph: {
-    title: "Cotizaciones Oficiales BNA | Finanzas",
-    description: "Monitoreo en tiempo real de tipos de cambio del Banco Nación Argentina.",
+    title: "Compras - Cotizaciones | Finanzas",
+    description: "Gestión, consulta y comparativa de cotizaciones de compras por rubro y proveedor.",
     url: "/cotizaciones",
   },
 };

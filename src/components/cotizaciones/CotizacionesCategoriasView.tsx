@@ -264,7 +264,7 @@ export function CotizacionesCategoriasView({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/25 text-amber-300 text-xs font-bold tracking-wide uppercase">
                 <Folder className="w-3.5 h-3.5 text-amber-400" />
-                <span>Cotizaciones por Categoría</span>
+                <span>Compras - Cotizaciones</span>
               </span>
               {isOrdenesUser && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-[11px] font-semibold">
@@ -285,17 +285,19 @@ export function CotizacionesCategoriasView({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Bot Button */}
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={() => handleOpenBot()}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 border border-indigo-400/30 transition-all cursor-pointer group"
-              title="Abrir chat con el Asistente IA"
-            >
-              <Bot className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
-              <span>Asistente IA</span>
-              <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
-            </motion.button>
+            {/* Bot Button (No visible para usuario ordenes) */}
+            {!isOrdenesUser && (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => handleOpenBot()}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 border border-indigo-400/30 transition-all cursor-pointer group"
+                title="Abrir chat con el Asistente IA"
+              >
+                <Bot className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
+                <span>Asistente IA</span>
+                <Sparkles className="w-3 h-3 text-amber-300 animate-pulse" />
+              </motion.button>
+            )}
 
             {/* If non-ordenes user, allow returning to standard view */}
             {!isOrdenesUser && onSwitchToStandard && (
@@ -512,31 +514,33 @@ export function CotizacionesCategoriasView({
           ============================================================ */}
       {selectedCategory && selectedCategoryData && (
         <div className="space-y-6">
-          {/* Quick AI Chips helper inside category */}
-          <div className="flex items-center gap-2 flex-wrap p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Bot className="w-3 h-3 text-indigo-400" />
-              <span>Preguntas rápidas para la IA:</span>
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                handleOpenBot(`¿Qué cotizaciones enviadas tenemos en el área de ${selectedCategory}?`)
-              }
-              className="text-[10px] text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-lg border border-indigo-500/20 transition-colors cursor-pointer"
-            >
-              "¿Qué cotizaciones enviadas hay en {selectedCategory}?"
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                handleOpenBot(`¿Cuántas cotizaciones pendientes quedan en ${selectedCategory} y de qué tratan?`)
-              }
-              className="text-[10px] text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/20 transition-colors cursor-pointer"
-            >
-              "¿Cuáles quedan pendientes?"
-            </button>
-          </div>
+          {/* Quick AI Chips helper inside category (No visible para usuario ordenes) */}
+          {!isOrdenesUser && (
+            <div className="flex items-center gap-2 flex-wrap p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                <Bot className="w-3 h-3 text-indigo-400" />
+                <span>Preguntas rápidas para la IA:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenBot(`¿Qué cotizaciones enviadas tenemos en el área de ${selectedCategory}?`)
+                }
+                className="text-[10px] text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-0.5 rounded-lg border border-indigo-500/20 transition-colors cursor-pointer"
+              >
+                "¿Qué cotizaciones enviadas hay en {selectedCategory}?"
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenBot(`¿Cuántas cotizaciones pendientes quedan en ${selectedCategory} y de qué tratan?`)
+                }
+                className="text-[10px] text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/20 transition-colors cursor-pointer"
+              >
+                "¿Cuáles quedan pendientes?"
+              </button>
+            </div>
+          )}
 
           {/* ============================================================
               BARRA DE FILTROS DE ESTADO (Apenas entra a la categoría)
